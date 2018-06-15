@@ -1,4 +1,3 @@
-(*Add LoadPath "/Users/da28148/Project/spring18/frap".*)
 From Coq Require Import String.
 Require Import Frap.
 
