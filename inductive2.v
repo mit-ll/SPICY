@@ -149,21 +149,35 @@ Fixpoint has_port (requester : user_id) (ch_id : channel_id) users : Prop :=
                       in_list ch_id ports_list
   end.
 
-(* Helper function for WriteToPort (not implemented yet):
+(* Helper function for WriteToPort:
    Returns the list of all users that aren't the writer in the channel *)
 Fixpoint get_receivers (writer : user_id) (ch_id : channel_id) (channels : fmap channel_id channel) : (list user_id) :=
-[].
+  let remove_writer := (fix rmv member_list (writer : user_id) := match member_list with
+                                                                  | [] => member_list
+                                                                  | member::other_members' => if member =? writer
+                                                                                              then other_members'
+                                                                                              else member :: (rmv other_members' writer)
+                                                                  end)
+  in
+  let ch := channels $? ch_id in 
+  match ch with
+  | None => []
+  | Some valid_ch => match valid_ch.(parties) with
+                     | Owner w => []
+                     | Members lst => (remove_writer lst writer)
+                     end
+  end.
 
 (* Implementation not yet finished.
    Check that the writer has the correct port, then write the message to all receiver ports and to the trace *) 
-Inductive WriteToPort :  message -> universe -> universe -> Prop :=
+Inductive WriteToPort :  message -> universe -> universe -> Prop := (* Should also pass port? message -> port_id -> universe -> universe -> Prop *)
 | WriteToGroup : forall (writer : user_id)
                         (msg : message)
-                        (ch_id : channel_id)
+                        (ch_id : channel_id) (* Might replace with port_id. port_id is not used yet by any record. *)
                         (U : universe),
    ch_id \in (dom U.(channels)) -> (* Change this. Writer should exhibit the port, not channel id *)
      has_port writer ch_id U.(users) ->
-       WriteToPort msg U {| users := U.(users)(* send_msg msg (get_receivers writer ch_id U.channels) U.(users) ch_id *) ;
+       WriteToPort msg U {| users := send_msg msg (get_receivers writer ch_id U.(channels)) U.(users) ch_id;
                         channels := U.(channels) ;
                         trace := U.(trace) |}. (* Is something added to the trace after message is sent? *)
    
@@ -173,7 +187,7 @@ Inductive WriteToPort :  message -> universe -> universe -> Prop :=
 Fixpoint check_port (port_reader : user_id) (users : fmap user_id user_data) (ch_id : channel_id) : ((user_id * user_data)) :=
   let rec := users $? port_reader in
   match rec with 
-  | None => (0, {| ports := [] |}) (* reader is not a user *)
+  | None => (0, {| ports := [] |}) (* reader is not a user, return dummy data for now *)
   | Some valid_rec => let ports_list := valid_rec.(ports) in
                       match ports_list with
                       | [] => (port_reader, valid_rec) (* no ports to read from *)
