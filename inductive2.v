@@ -1,5 +1,7 @@
 From Coq Require Import String.
 Require Import Frap.
+Require Import Coq.FSets.FMapInterface.
+Set Implicit Arguments.
 
 (* Defines ideal functionality for creating secure channels between users and sending messages over those channels. *)
 
@@ -47,6 +49,7 @@ Record user_data :=
 Record universe :=
   { users : fmap user_id user_data ;
     channels : fmap channel_id channel ;
+    broadcast_channels : fmap channel_id channel ; (* added in to differentiate *)
     trace : list message }.
 
 (* Helper function for creating a channel
@@ -61,7 +64,7 @@ Fixpoint add_ports (port_receivers : list user_id) (users :  fmap user_id user_d
                              | Some valid_rec => (add_ports port_receivers' users ch_id) $+ (pr, {| ports := new_port ::(valid_rec.(ports))|})
                              end
   end.
-  
+
 (* Helper function for creating a channel       (List.Forall)
    Check that specified users exist *)
 Fixpoint all_existing_users (members : list user_id)  users : Prop :=
@@ -78,6 +81,8 @@ Definition valid_properties attributes : Prop :=
   if attributes.(confidentiality)
   then attributes.(authenticity) = false /\ attributes.(integrity) = false
   else True.
+
+
 
 (* Split channel creation into two cases: creating a channel where everyone has equal privileges to send messages
    with the requested security properties and creating a channel where one owner is able to authenticate messages xor receive 
@@ -96,19 +101,66 @@ Inductive create_channel  : universe -> universe -> Prop :=
                   create_channel U {| users := add_ports (requester :: other_members) U.(users) ch_id;
                                       channels := (U.(channels) $+ (ch_id, {| properties := attributes ;
                                                                               parties := (Members (requester :: other_members)) |})) ;
+                                      broadcast_channels := U.(broadcast_channels);
                                       trace := "new channel" :: U.(trace) |}.
-(*
-| BroadcastChannel : forall (requester : user_id)
-                            (attributes : channel_permissions)
-                            (ch_id : channel_id)
-                            (U : universe),
-    requester \in (dom U.(users)) ->
-                  valid_properties attributes ->
-                  create_channel U {| users := add_ports ( (minus (dom U.(users)) {user_id})) U.(users) ch_id ;
-                                      channels := U.(channels) $+ (ch_id, {| properties := attributes ;
-                                                                              parties := (Owner user_id) |}) ;
-                                      trace := "new channel" :: U.(trace) |}.
-*)
+
+(* Also need to implement passing ports *)
+
+(* not sure if the 3 functions below are correct *)
+
+(* Similar to add_ports but with smaller functionality...
+   Creates new port for the broadcast channel being created. Given user data, will update it with a port for the 
+     new broadcast channel. *)
+Fixpoint add_ports' (ch_id : channel_id) (u_data : option user_data) : user_data :=
+  let new_port := {| ch := ch_id ; unread := [] |} in
+  match u_data with
+  | None => {| ports := [] |} (* Placeholder data *)
+  | Some valid_data => {| ports := new_port :: valid_data.(ports) |}
+  end. (* This function will be added into test (below) after everything is implemented *)
+
+(* Function that checks the relationship between two mappings. 
+   This specific function will check the mapping between the a mapping
+     before and after adding a new broadcast channel. 
+   Two mappings are valid as pre & post mappings after a new user is added if *)
+Inductive test_new_user_added : (fmap user_id user_data) -> (fmap user_id user_data) -> Prop :=
+| test1 : forall (new_ch_id : channel_id)
+                 (m : fmap user_id user_data)
+                 (existing_user : user_id)
+                 (U : universe),
+            m = U.(users) ->
+            existing_user \in dom m ->
+            ~(new_ch_id \in (dom U.(channels))) ->
+              test_new_user_added m (m  $+ (existing_user, (add_ports' new_ch_id (m $? existing_user)))).
+
+Example e := $0 $+ (1, 2) $+ (2, 3).
+Compute FMapInterface.elements e.
+
+Fixpoint add_all_broadcast_channels (u : user_id) (u_data : user_data) (m : fmap channel_id channel) : user_data :=
+{| ports := [] |}.
+
+
+Inductive create_user : universe -> universe -> Prop :=
+| NewChannels : forall (new_user : user_id) (* Does the user_id have to be checked/created here? *)
+                       (new_ch_id : channel_id)
+                       (m : fmap user_id user_data)
+                       (m' : fmap user_id user_data)
+                       (U : universe),
+    ~ (new_user \in (dom U.(users))) ->
+    m = U.(users) -> 
+    test_new_user_added m m' ->
+      create_user U {| users := m' $+ (new_user, add_all_broadcast_channels U.(broadcast_channels));
+                       channels := U.(channels) ;
+                       broadcast_channels := (U.(broadcast_channels) $+ (new_ch_id, {| properties := {| confidentiality := false ;
+                                                                                                        authenticity := true ;
+                                                                                                        integrity := false |} ;
+                                                                                       parties := (Owner new_user) |})) ;
+                       trace :=  "new user added" :: U.(trace) |}.
+
+
+
+
+
+
 
 (* Helper function for WriteToPort:
    Write the specified message to the ports on the given channel for every specified receiver *)
@@ -178,9 +230,10 @@ Inductive WriteToPort :  message -> universe -> universe -> Prop := (* Should al
    ch_id \in (dom U.(channels)) -> (* Change this. Writer should exhibit the port, not channel id *)
      has_port writer ch_id U.(users) ->
        WriteToPort msg U {| users := send_msg msg (get_receivers writer ch_id U.(channels)) U.(users) ch_id;
-                        channels := U.(channels) ;
-                        trace := U.(trace) |}. (* Is something added to the trace after message is sent? *)
-   
+                          channels := U.(channels) ;
+                          broadcast_channels := U.(broadcast_channels);
+                          trace := U.(trace) |}. (* Is something added to the trace after message is sent? *)
+
 (* Implementation not yet finished.
    Updates user data for a reader after they read from a channel. Drops read message from message list. 
    Will eventually pattern match so reader can wait for specific messages. *)
