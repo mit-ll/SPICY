@@ -33,22 +33,24 @@ Definition valuation := fmap var message.
 
 Inductive returns :=
 | Recv (ch_id : channel_id)
-| CreateChannel (sp : security_properties).
+| CreateChannel (sp : security_properties)
+| Var (x : var).
 
 Inductive cmd :=
 | Skip
 | Assign (x : var) (e : returns)
 | Sequence (c1 c2 : cmd)
 | Send (ch_id : channel_id) (m : message).
+(* if? *)
 
 Record user_data :=
   { protocol : cmd ;
     env : valuation }.
 
-Record universe :=
-  { channel_vector := fmap channel_id channel_data ;
-    users := fmap user_id user_data ;
-    trace := list (channel_id * (user_id * message)) }.
+Record universe := construct_universe
+  { channel_vector : fmap channel_id channel_data ;
+    users : fmap user_id user_data ;
+    trace : list (channel_id * (user_id * message)) }.
 
 Fixpoint interp
          (r : returns)
@@ -56,6 +58,7 @@ Fixpoint interp
          (u : user_id)
          (new_id : channel_id)
          (i : msg_index)
+         (v : valuation)
   : option message :=
   let not_sent_by_me := (fix nsbm index msgs :=
                            match msgs with
@@ -71,7 +74,13 @@ Fixpoint interp
                   | None => None
                   | Some ch_d => not_sent_by_me i ch_d.(messages_sent)
                   end
-                    
+  | Var x => v $? x
+                    (* const *)
   end.
 
-Inductive eval : universe -> universe -> Prop.
+Inductive step : universe -> universe -> Prop :=
+| StepSeq2 : forall (U : universe) (v : valuation) (c2 : cmd) (stepped_users : fmap user_id user_data) (u : user_id),
+    (*exists (u : user_id), this doesn't typecheck, why? *)
+      (users U) $? u = Some {| protocol := (Sequence Skip c2) ; env := v |} ->
+      stepped_users = U.(users) $+ (u, {| protocol := c2; env := v |}) ->
+      step U (construct_universe U.(channel_vector) stepped_users U.(trace)).
