@@ -2,7 +2,7 @@ From Coq Require Import String.
 Require Import Frap.
 Set Implicit Arguments.
 
-Definition user_id := nat.
+Definition user_id := var.
 
 Definition channel_id := nat.
 
@@ -49,7 +49,7 @@ Definition memory := fmap user_id message.
 (* The protocol language has two types of instructions: commands with return values
    and commands without return values. *)
 Inductive returns :=
-| Recv (ch_id : channel_id)
+| Recv (ch : returns)
 | CreateChannel (sp : security_properties)
 | Var (x : var).
 
@@ -80,19 +80,21 @@ Fixpoint interp
          (u : user_id)
          (new_id : channel_id)
          (i : msg_index)
-         (v : valuation)
+         (v : memory)
   : option message :=
   let not_sent_by_me := (fix nsbm index msgs :=
                            match msgs with
                            | [] => None
                            | (u', m) :: msgs' => match index with
                                           | S i => nsbm i msgs'
-                                          | O => if u' =? u then nsbm index msgs' else Some m
+                                          | O => if u' ==v u then nsbm index msgs' else Some m
                                           end
                            end) in
   match r with
   | CreateChannel props => Some(ChannelId(new_id, 0))
-  | Recv ch_id => match chs $? ch_id with
+  | Recv ret => match interp ret chs u new_id i v with
+                  | Some m 
+      chs $? (* interp  with
                   | None => None
                   | Some ch_d => not_sent_by_me i ch_d.(messages_sent)
                   end
@@ -101,19 +103,28 @@ Fixpoint interp
   end.
 
 Inductive step : universe -> universe -> Prop :=
-| StepSeq2 : forall (U : universe) (v : valuation) (c2 : cmd) (stepped_users : fmap user_id user_data) (u : user_id),
-    (*exists (u : user_id), this doesn't typecheck, why? *)
-      (users U) $? u = Some {| protocol := (Sequence Skip c2) ; env := v |} ->
-      stepped_users = U.(users) $+ (u, {| protocol := c2; env := v |}) ->
+  (* step send *)
+| StepSeq2 : forall (U : universe) (v : memory) (c2 : cmd) (stepped_users : fmap user_id user_data),
+    (exists (u : user_id),
+      (users U) $? u = Some {| protocol := (Sequence Skip c2) ; mem := v |} ->
+      stepped_users = U.(users) $+ (u, {| protocol := c2; mem := v |})) ->
+      step U (construct_universe U.(channel_vector) stepped_users U.(trace))
+| StepAssignVar : forall  (U : universe) (v : memory) (c2 : cmd) (stepped_users : fmap user_id user_data) x x' val,
+    (exists (u : user_id),
+    (users U) $? u = Some {| protocol := (Assign x (Var x')) ; mem := v |} ->
+    interp (Var x') U.(channel_vector) u (0 : channel_id) (0 : msg_index) v  = Some val ->
+      stepped_users = U.(users) $+ (u, {| protocol := Skip; mem := v $+ (x, val) |})) ->
+      step U (construct_universe U.(channel_vector) stepped_users U.(trace))
+| StepAssignRecv : forall  (U : universe) (v : memory) (c2 : cmd) (stepped_users : fmap user_id user_data) (u : user_id) x id val,
+    (users U) $? u = Some {| protocol := (Assign x (Recv id)) ; mem := v |} ->
+    interp (Recv id) U.(channel_vector) u (0 : channel_id) (0 : msg_index) v  = Some val ->
+      stepped_users = U.(users) $+ (u, {| protocol := Skip; mem := v $+ (x, val) |}) ->
+      step U (construct_universe U.(channel_vector) stepped_users U.(trace))
+| StepAssignChannel : forall  (U : universe) (v : memory) (c2 : cmd) (stepped_users : fmap user_id user_data) (u : user_id) x prop val,
+    (users U) $? u = Some {| protocol := (Assign x (CreateChannel prop)) ; mem := v |} ->
+    interp (CreateChannel prop) U.(channel_vector) u (0 : channel_id) (0 : msg_index) v  = Some val ->
+      stepped_users = U.(users) $+ (u, {| protocol := Skip; mem := v $+ (x, val) |}) ->
       step U (construct_universe U.(channel_vector) stepped_users U.(trace)).
-
-(*
-Inductive eval : universe -> universe -> Prop.
-Admitted.
-*)
-
-
-
 
 (* Universe Generator Stuff *)
 
@@ -146,6 +157,7 @@ Fixpoint add_channels' (plist : list (user_id * user_id))
                        (umap : fmap user_id user_data) : universe :=
 let empty_universe := {| channel_vector := $0 ; users := umap ; trace := [] |} in
 let empty_user_data := {| protocol := Skip ; mem := $0 |} in
+
 match plist with
 | [] => empty_universe
 | pair'::t => match pair' with
