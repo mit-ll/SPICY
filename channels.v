@@ -10,19 +10,27 @@ Definition next_message := nat.
 
 Definition msg_index := nat.
 
-(* Messages *)
+(* A message sent over a channel can either be:
+    A string being sent as part of a protocol between users
+    A channel id granting the recipient access to a channel
+*)
 Inductive message :=
 | ChannelId : (channel_id * next_message) -> message
-| MessageBody : string -> message.
+| ProtocolMsg : string -> message.
 
 Record security_properties :=
   { confidentiality : bool ;
     authenticity : bool ;
     integrity : bool }.
 
+(* Default channels are 1-1 simplex
+     When a user is created, default channels to all other users are created
+   Broadcast channels are 1-many simplex; only the owner can send
+   Symmetric channels are duplex; anyone with the channel_id can send/recv
+*)
 Inductive channel_type :=
-| Broadcast : user_id -> channel_type
 | Default : user_id -> user_id -> channel_type
+| Broadcast : user_id -> channel_type
 | Symmetric : channel_type.
 
 Record channel_data :=
@@ -30,10 +38,16 @@ Record channel_data :=
     type : channel_type ;
     messages_sent : list (user_id * message) }.
 
-(* Definition valuation := fmap var message. *)
-Definition valuation := fmap user_id message. (* Changed to make universe generator work 
-                                               * Ask Adam questions from below. *)
+(* Each user has a heap of protocol memory, represented as a 
+   map from variable names to messages.
+   The map key should be var, not user_id, but we had some issues
+   with the universe generator. See question for Adam below.
+*)
+(* Definition memory := fmap var message. *)
+Definition memory := fmap user_id message. 
 
+(* The protocol language has two types of instructions: commands with return values
+   and commands without return values. *)
 Inductive returns :=
 | Recv (ch_id : channel_id)
 | CreateChannel (sp : security_properties).
@@ -46,8 +60,13 @@ Inductive cmd :=
 
 Record user_data :=
   { protocol : cmd ;
-    env : valuation }.
+    mem : memory }.
 
+(* The universe consists of:
+    Channels (represented as a map from channel_id to channel_data)
+    Users (a map of user_id to user_data)
+    A trace of all messages sent on all channels
+*)s
 Record universe  :=
   { channel_vector : fmap channel_id channel_data ;
     users : fmap user_id user_data ;
@@ -115,7 +134,7 @@ Fixpoint add_channels' (plist : list (user_id * user_id))
                        (ch_id : channel_id)
                        (umap : fmap user_id user_data) : universe :=
 let empty_universe := {| channel_vector := $0 ; users := umap ; trace := [] |} in
-let empty_user_data := {| protocol := Skip ; env := $0 |} in
+let empty_user_data := {| protocol := Skip ; mem := $0 |} in
 match plist with
 | [] => empty_universe
 | pair'::t => match pair' with
@@ -134,9 +153,9 @@ match plist with
                                                                                                    type := Default id1 id2;
                                                                                                    messages_sent := [] |})) ;
                                        users := (next_iter.(users) $+ (id1, {| protocol := id1_data.(protocol);
-                                                                               env := id1_data.(env) $+ (id2, ChannelId (ch_id, 0)) |})
+                                                                               mem := id1_data.(mem) $+ (id2, ChannelId (ch_id, 0)) |})
                                                                    $+ (id2, {| protocol := id2_data.(protocol);
-                                                                               env := id2_data.(env) $+ (id1, ChannelId (ch_id, 0)) |})) ;
+                                                                               mem := id2_data.(mem) $+ (id1, ChannelId (ch_id, 0)) |})) ;
                                                                trace := [] |}
               end
 end.
