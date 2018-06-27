@@ -66,7 +66,7 @@ Record user_data :=
     Channels (represented as a map from channel_id to channel_data)
     Users (a map of user_id to user_data)
     A trace of all messages sent on all channels
-*)s
+*)
 Record universe  :=
   { channel_vector : fmap channel_id channel_data ;
     users : fmap user_id user_data ;
