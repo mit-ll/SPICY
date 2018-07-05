@@ -3,7 +3,6 @@
 COQC=coqc -q -R ../frap Frap
 
 coq:
-	$(COQC) inductive2
-
+	$(COQC) channels
 clean:
 	rm -f *.vo *.glob
