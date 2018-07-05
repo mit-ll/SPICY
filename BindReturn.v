@@ -1,4 +1,5 @@
 From Coq Require Import String.
+From Coq Require Import Bool.Sumbool.
 Require Import Frap.
 Set Implicit Arguments.
 
@@ -72,8 +73,6 @@ Definition inc_pointer ch_d u :=
                user_pointers := (ch_d.(user_pointers) $+ (u, 1)) |}
   end.
 
-     
-
 Inductive cmd :=
 | Return (r : message)
 | Bind (c1 : cmd) (c2 : message -> cmd)
@@ -134,11 +133,8 @@ Inductive step : universe -> universe -> Prop :=
        cmd? i.e., accessing memory from protocol.
  *)
 Example ping :=
-  $0 $+ ("0", {| protocol := (Send (Var "B") (ProtocolMsg  "Good Morning")) ;;
-                                                  ("wait" <- (Recv (Var "1")));
-               mem := $0 $+ ("1", ChannelId (0)) |})
-   $+ ("1", {| protocol := ("wait" <- (Recv (Var "1"))) ;; (Send (Var "A") (ProtocolMsg "Good Morning")) ;
-               mem := $0 $+ ("0", ChannelId (0)) |}).
+  $0 $+ ("0", x <- (Send (ProtocolMsg "Hello") (ChannelId 0)) ; (Recv (ChannelId 0)))
+     $+ ("1", x <- (Recv (ChannelId 0)) ; (Send (ProtocolMsg "Hello") (ChannelId 0))).
 
 Example ping_universe :=
 {| channel_vector := $0 $+ (1, {| properties := {| confidentiality := true ;
@@ -150,6 +146,7 @@ Example ping_universe :=
    users := ping ;
    trace := [] |}.
 Check ping_universe.
+
 
 (* Universe Generator Stuff *)
 
@@ -214,6 +211,48 @@ match plist with
               end
 end.
 
+Notation "'Yes'" := (left _ _).
+Notation "'No'" := (right _ _).
+Notation "'Reduce' x" := (if x then Yes else No) (at level 50).
+
+Print sumbool.
+
+Fixpoint add_Broadcast_helper (user_id_list : list user_id)
+                              (broadcaster : user_id)
+                              (ch_id : channel_id)
+                              (U : universe) : universe :=
+match user_id_list with
+| [] => U
+| uid::tail => let updated_user :=
+               match U.(users) $? uid with
+               | Some udata => {| protocol := udata.(protocol) ; 
+                                  mem := udata.(mem) $+ (append broadcaster " broadcast", ChannelId (ch_id, 0)) |}
+               | None => {| protocol := Skip ;
+                            mem := $0 |}
+               end in
+                {| channel_vector := U.(channel_vector) ;
+                   users := U.(users) $+ (uid, updated_user) ;
+                   trace := [] |}
+end.
+
+Fixpoint add_Broadcast_channels (user_id_list : list user_id)
+                                (ch_id : channel_id)
+                                (U : universe) : universe :=
+match user_id_list with 
+| [] => U
+| uid::tail => let U' := {| channel_vector := U.(channel_vector) $+ (ch_id, {| properties := {| confidentiality := false ;
+                                                                                                authenticity := true ;
+                                                                                                integrity := true |} ;
+                                                                               type := Broadcast uid ;
+                                                                               messages_sent := [] |}) ;
+                            users := U.(users) ;
+                            trace := U.(trace) |}
+               in
+               add_Broadcast_channels tail
+                                      (ch_id + 1)
+                                      (add_Broadcast_helper user_id_list uid ch_id U')
+end.
+
 (* Generates a universe with 1-1 CIA channels between each user. These channels are currently added
  *  to the environment of each user. The channelIds have the corresponding userId as their keys.
  *
@@ -224,4 +263,7 @@ end.
 Fixpoint generate_universe (user_id_list : list user_id) : universe :=
 let pairs_list := (generate_all_pairs user_id_list) in
   let umap := (add_users user_id_list) in
-    add_CIA_channels pairs_list 0 umap.
+   let ch_id' := (length user_id_list) * ((length user_id_list) - 1) / 2 in
+    add_Broadcast_channels user_id_list
+                           ch_id'
+                           (add_CIA_channels pairs_list 0 umap).
