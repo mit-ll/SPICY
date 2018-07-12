@@ -3,12 +3,33 @@ From Coq Require Import Bool.Sumbool.
 Require Import Frap.
 Set Implicit Arguments.
 
-(* Not sure what type key's should be. 
- *  Will they be represented with by a nat, or do we need
- *  an actual bit string?
- *)
-Definition key := nat.
-Definition user_id := var.
+Definition user_id := nat.
+
+Inductive symmetric_usage :=
+| GCM
+| CTR
+| KW
+| HMAC.
+
+Inductive asymmetric_usage :=
+| RSA_E
+| RSA_D
+| ECDSA_S
+| ECDSA_V.
+
+Record symmetric_key :=
+  {s_key_id : nat ;
+   s_generator_id : user_id ;
+   s_usage : symmetric_usage}.
+
+Record asymmetric_key :=
+  {a_key_id : nat ;
+   a_generator_id : user_id ;
+   a_usage : asymmetric_usage}.
+
+Inductive key :=
+| SKey (k : symmetric_key)
+| Akey (k : asymmetric_key).
 
 (* POC type of ciphertypes *)
 Inductive ciphertype := 
@@ -19,29 +40,16 @@ Inductive ciphertype :=
 Inductive message :=
 | Plaintext (txt : string)
 | Ciphertext (msg : message) (cipher : ciphertype) (k : key)
-| Signature (k : key) (txt : string)
-| HMAC (k : key) (txt : string).
+| Key_message (k : key)
+| Signature (k : asymmetric_key) (signer_id : user_id) (msg : message)
+| HMAC_message (k : symmetric_key) (msg : message).
 
-Check Plaintext.
-Check Ciphertext.
-Check Signature.
-Check HMAC.
-
-(* Example of match arguments of ciphertext to know
- * which ciphertype it is, so that the correct key 
- * can be used to decrypt it by a valid reciever.
- *)
-Fixpoint check_message (ctxt : message) : nat := 
-match ctxt with
-| Plaintext txt => 0
-| Ciphertext _ cipher' k => match cipher' with
-                              | type => 1
-                              | type' => 2
-                              | type'' => 3
-                              end
-| Signature k t => 0
-| HMAC k t => 0
-end.
+Record user :=
+  {uid : user_id ;
+   key_heap : fmap var key ;
+   mem_heap : fmap var message ;
+   protocol : list var ;
+   is_admin : bool }.
 
 (* POC newtork_message. Used for modeling
  * the network
@@ -49,10 +57,40 @@ end.
 Inductive network_message :=
 | nmessage (msg : message) (uid : user_id).
 
+Inductive user_cmd :=
+| Return (r : message)
+| Bind (c1 : user_cmd) (c2 : message -> user_cmd)
+| Send (uid : user_id) (msg : message)
+| Recv
+| Decrypt (k : key) (ctxt : message)
+| Encrypt (k : key) (ptxt : message)
+| Sign (k : key) (msg : message)
+| Verify (k : key) (sig : message)
+| Barrier.
 
+Notation "x <- c1 ; c2" := (Bind c1 (fun x => c2)) (right associativity, at level 75).
 
-
-(* Open Questions:
- * 1. For network modeling, how does the network send a message to a destination without
-      a concept of channels? Or in general, how is a message sent?
+(* 
+Work in Progress
  *)
+Record network := construct_network
+  { users : fmap user_id (list message) ;
+    trace : list (user_id * message) }.
+
+
+Inductive step : network -> network -> Prop :=
+| 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
