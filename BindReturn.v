@@ -134,7 +134,7 @@ Inductive step : universe -> universe -> Prop :=
  *)
 Example ping :=
   $0 $+ ("0", x <- (Send (ProtocolMsg "Hello") (ChannelId 0)) ; (Recv (ChannelId 0)))
-     $+ ("1", x <- (Recv (ChannelId 0)) ; (Send (ProtocolMsg "Hello") (ChannelId 0))).
+     $+ ("1", x <- (Recv (ChannelId 0)) ; (Send x (ChannelId 0))).
 
 Example ping_universe :=
 {| channel_vector := $0 $+ (1, {| properties := {| confidentiality := true ;
@@ -155,11 +155,12 @@ Check ping_universe.
  * just adds a skip to the user protocol (not sure what it should be if it
  * has not yet been populated).
  *)
-Fixpoint add_users (user_id_list : list user_id) : fmap user_id user_data :=
+Fixpoint add_users (user_id_list : list user_id) : fmap user_id cmd :=
 match user_id_list with
 | [] => $0
-| id::tail =>  (add_users tail) $+ (id, {| protocol := Skip ;
-                                           mem := $0 |})
+| id::tail =>  (add_users tail) $+ (id, Return (ProtocolMsg "Placeholder")) (* Change later to be the protocols
+                                                                             *  passed in by the user
+                                                                             *)
 end.
 
 (* Helper Function for generate_universe *)
@@ -182,19 +183,19 @@ end.
  *)
 Fixpoint add_CIA_channels (plist : list (user_id * user_id))
                           (ch_id : channel_id)
-                          (umap : fmap user_id user_data) : universe :=
+                          (umap : fmap user_id cmd) : universe :=
 let empty_universe := {| channel_vector := $0 ; users := umap ; trace := [] |} in
-let empty_user_data := {| protocol := Skip ; mem := $0 |} in
+let empty_cmd := Return (ProtocolMsg "Placeholder") in
 match plist with
 | [] => empty_universe
 | pair'::t => match pair' with
               | (pair id1 id2) => let next_iter := (add_CIA_channels t (ch_id + 1) umap) in
                                   let id1_data := match (umap $? id1) with
-                                                  | None => empty_user_data  (* This case should never happen *)
+                                                  | None => empty_cmd  (* This case should never happen *)
                                                   | Some rec => rec
                                                   end in
                                   let id2_data := match (umap $? id2) with
-                                                  | None => empty_user_data (* This case should never happen *)
+                                                  | None => empty_cmd (* This case should never happen *)
                                                   | Some rec => rec
                                                   end in
                                     {| channel_vector := (next_iter.(channel_vector) $+ (ch_id, {| properties := {| confidentiality := true;
@@ -203,36 +204,10 @@ match plist with
                                                                                                    type := Default id1 id2;
                                                                                                    messages_sent := [];
                                                                                                    user_pointers := $0 |})) ;
-                                       users := (next_iter.(users) $+ (id1, {| protocol := id1_data.(protocol);
-                                                                               mem := id1_data.(mem) $+ (id2, ChannelId (ch_id)) |})
-                                                                   $+ (id2, {| protocol := id2_data.(protocol);
-                                                                               mem := id2_data.(mem) $+ (id1, ChannelId (ch_id)) |})) ;
+                                       users := (next_iter.(users) $+ (id1, id1_data)
+                                                                   $+ (id2, id2_data)) ;
                                        trace := [] |}
               end
-end.
-
-Notation "'Yes'" := (left _ _).
-Notation "'No'" := (right _ _).
-Notation "'Reduce' x" := (if x then Yes else No) (at level 50).
-
-Print sumbool.
-
-Fixpoint add_Broadcast_helper (user_id_list : list user_id)
-                              (broadcaster : user_id)
-                              (ch_id : channel_id)
-                              (U : universe) : universe :=
-match user_id_list with
-| [] => U
-| uid::tail => let updated_user :=
-               match U.(users) $? uid with
-               | Some udata => {| protocol := udata.(protocol) ; 
-                                  mem := udata.(mem) $+ (append broadcaster " broadcast", ChannelId (ch_id, 0)) |}
-               | None => {| protocol := Skip ;
-                            mem := $0 |}
-               end in
-                {| channel_vector := U.(channel_vector) ;
-                   users := U.(users) $+ (uid, updated_user) ;
-                   trace := [] |}
 end.
 
 Fixpoint add_Broadcast_channels (user_id_list : list user_id)
@@ -244,23 +219,23 @@ match user_id_list with
                                                                                                 authenticity := true ;
                                                                                                 integrity := true |} ;
                                                                                type := Broadcast uid ;
-                                                                               messages_sent := [] |}) ;
+                                                                               messages_sent := [] ;
+                                                                               user_pointers := $0|}) ; 
                             users := U.(users) ;
                             trace := U.(trace) |}
                in
                add_Broadcast_channels tail
                                       (ch_id + 1)
-                                      (add_Broadcast_helper user_id_list uid ch_id U')
+                                      U'
 end.
 
 (* Generates a universe with 1-1 CIA channels between each user. These channels are currently added
  *  to the environment of each user. The channelIds have the corresponding userId as their keys.
  *
- * Takes a list of user_data as input.
- *  The protocol and environment can be empty. This is just so we know how many users exist.
- *  The code can be changed easily (probably?) to match any other type of input.
+ * Change so that it takes protocols as well so that those can be loaded into memory when the users 
+ *  are created and added to the universe.
  *)
-Fixpoint generate_universe (user_id_list : list user_id) : universe :=
+Fixpoint generate_universe (cmds_list : list cmd) : universe :=
 let pairs_list := (generate_all_pairs user_id_list) in
   let umap := (add_users user_id_list) in
    let ch_id' := (length user_id_list) * ((length user_id_list) - 1) / 2 in
