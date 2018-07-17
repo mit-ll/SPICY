@@ -28,16 +28,20 @@ Record asymmetric_key :=
    a_usage : asymmetric_usage ;
    a_paired_key_id : nat}.
 
+Record error_key :=
+  {error_id : nat}.
+
 Inductive key :=
 | SKey (k : symmetric_key)
-| AKey (k : asymmetric_key).
+| AKey (k : asymmetric_key)
+| EKey (k : error_key).
 
 (* Changing (k : key) to (k_id : nat) in Ciphertext.
  * When a user will decrypt a ciphertext, it will provide a key var.
  *  That key var should map to a key, which has the same key_id that
  *  matches the one necessary for the ciphertext.
  *
- * This change may also need to be done on Signature and HMAC message
+ * This change may also need to be done on HMAC message
  *)
 Inductive message :=
 | Plaintext (txt : string)
@@ -76,6 +80,7 @@ Record user_data :=
 Notation "x <- c1 ; c2" := (Bind c1 (fun x => c2)) (right associativity, at level 75).
 Notation "x <<- c1 ; c2" := (BindSKey c1 (fun x => c2)) (right associativity, at level 75).
 Notation "x >--- c1 ; c2" := (BindAKeys c1 (fun x => c2)) (right associativity, at level 75).
+Notation "x <-k c1 ; c2" := (BindAKeys c1 (fun x => c2)) (right associativity, at level 75).
 
 Record network := construct_network
   { users_msg_buffer : fmap user_id (list message) ;
@@ -174,7 +179,6 @@ match (U.(net)).(users_msg_buffer) $? reading_user with
 | None => U
 end.
 
-(* Changed decrypt_message to change on key_id of symmetric or asymmetric key instead of the key itself *)
 Definition decrypt_message (u_id : user_id) (msg_var msg_var': var) (U : universe) (key_var : var) :=
 match U.(users) $? u_id with
 | Some u_data => match u_data.(mem_heap) $? msg_var with
@@ -221,7 +225,7 @@ match U.(users) $? u_id with
                                                                                  end
                                                   | _ => U (* There was nothing to decrypt *)
                                                   end
-                               | None => U (* Key_var does not correspond to a key *)
+                               | _ => U (* Key_var does not correspond to a key *)
                                end
                  | None => U
                  end
@@ -241,7 +245,7 @@ match U.(users) $? u_id with
                                                    | HMAC => None
                                                    | _ => Some (Ciphertext msg k'.(s_key_id))
                                                    end
-                               | None => None
+                               | _ => None
                                end
                  | None => None
                  end
@@ -280,7 +284,7 @@ match U.(users) $? verifier with
                                                     | _ => None
                                                     end
                                  | Some (SKey k') => None
-                                 | None => None
+                                 | _ => None
                                  end
                  | None => None
                  end
@@ -290,25 +294,61 @@ end.
 
 (* Ping Protocol *)
 
-  (* U.(users) *)
+(* U.(users) *)
+(* In the reciever's protocol, not sure what would be the best to 
+ *  do when a message recieved is not a Key_message for the match 
+ *  statement. Currently using a new error_key type
+ *)
 Example ping_users :=
  $0 $+ (0, {| uid := 0 ;
               key_heap := $0 ;
               mem_heap := $0 ;
-              protocol := (a >--- (GenerateAKeys RSA_E) ; (b <- (Send 1 (Key_message (match a with | (pair p s) => p end))) ; (c <<- (GenerateAKeys ECDSA_S) ; (d <- (Send 1 (Key_message c)) ; (e <- (Sign c (Plaintext "Hello")) ; (f <- (Encrypt (match a with | (pair p s) => p end) e) ; (g <- (Send 1 f) ; Recv))))))) ;
+              protocol := (a >--- (GenerateAKeys RSA_E) ;
+                                  (b <- (Send 1 (Key_message (match a with
+                                                      | (pair p s) => p
+                                                      end))) ;
+                                        (c <<- (GenerateAKeys ECDSA_S) ;
+                                               (d <- (Send 1 (Key_message c)) ;
+                                                     (e <- (Sign c (Plaintext "Hello")) ;
+                                                           (f <- (Encrypt (match a with
+                                                                           | (pair p s) => p
+                                                                           end) e) ;
+                                                                 (g <- (Send 1 f) ;
+                                                                        Recv))))))) ;
               is_admin := false |})
     $+ (1 , {| uid := 1 ;
                key_heap := $0 ;
                mem_heap := $0 ;
-               protocol := Barrier ;
+               protocol := (a <- Recv ;
+                                (b <- Recv ;
+                                     (c <- Recv ;
+                                          (d <- (Verify (match b with
+                                                         | Key_message k => k
+                                                         | _ => EKey {| error_id := 1 |}
+                                                         end) c) ;
+                                                (e <- (Decrypt (match a with
+                                                                | Key_message k' => k'
+                                                                | _ => EKey {| error_id := 1 |}
+                                                                end) d) ;
+                                                      (Send 0 e)))))) ;
                is_admin := false |}).
 
+(* Ping Universe *)
+Example ping_universe :=
+{| users := ping_users ;
+   net := {| users_msg_buffer := $0 $+ (0, []) $+ (1, []) ;
+             trace := [] |} ;
+   key_counter := 0 |}.
 
 
 
 
-
-
-
-
-
+(* Outstanding Questions
+ * 1. What is the best way to keep track of the count of already existing keys? Or, better yet, what
+ *    is the best way to generate random key ids?
+ *
+ * 2. Ping Protocol, Reciever: Question about the error_key. What is the best thing to do when when matching
+ *    on a message, it is not a Key_message?
+ * 3. Sign/Verify: Currently 'signs' by basically encrypting the message instead of appending the signature to the
+ *    original message. Should this be changed?
+ *)
