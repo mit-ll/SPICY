@@ -40,9 +40,11 @@ Inductive message :=
 | Signature (k_id : nat) (signer_id : user_id) (msg : message)
 | HMAC_message (k_id : nat) (msg : message).
 
-Inductive network_message := (* Not even really used at this point? *)
-| nmessage (msg : message) (uid : user_id).
-
+(* Maybe: 
+ * Return' (k : key)
+ * Return'' (p : (key * key))
+ * instead of adding a message type.
+ *)
 Inductive user_cmd :=
 | Return (r : message)
 | Bind (c1 : user_cmd) (c2 : message -> user_cmd)
@@ -375,14 +377,8 @@ Example ping_universe :=
              trace := [] |} ;
    key_counter := 0 |}.
 
-(* Need to enforce using correct types of keys for usages: ProduceHMAC *)
-(* A way to not have the None => true = false is to instead add all variables to the forall...
- *  and enforce that (for example) mem_heap' $? signed_msg_var = signed_msg.
- * This would remove all match statements with true = false.
- * Example of this is shown in StepProduceHMAC and StepVerifyHMAC.
- *)
 Inductive step : universe -> universe -> Prop :=
-| StepSign : forall signee key_var msg_var signed_msg_var U u_data k msg mem_heap' users',
+| StepSign : forall signee key_var msg_var signed_msg_var U u_data k msg mem_heap' users' signed_message,
     U.(users) $? signee = Some u_data ->
     u_data.(key_heap) $? key_var = Some (AKey k) ->
     u_data.(mem_heap) $? msg_var = Some msg ->
@@ -390,14 +386,12 @@ Inductive step : universe -> universe -> Prop :=
     k.(a_usage) = ECDSA_S ->
     u_data.(protocol) = Sign (AKey k) msg ->
     mem_heap' = (sign signee key_var msg_var signed_msg_var U) ->
-    match mem_heap' $? signed_msg_var with
-    | Some signed_message => users' = U.(users) $+ (signee, {| uid := signee ;
-                                                               key_heap := u_data.(key_heap) ;
-                                                               mem_heap := mem_heap' ;
-                                                               protocol := Return signed_message ;
-                                                               is_admin := u_data.(is_admin) |})
-    | None => true = false
-    end ->
+    mem_heap' $? signed_msg_var = Some signed_message -> 
+    users' = U.(users) $+ (signee, {| uid := signee ;
+                                      key_heap := u_data.(key_heap) ;
+                                      mem_heap := mem_heap' ;
+                                      protocol := Return signed_message ;
+                                      is_admin := u_data.(is_admin) |}) ->
       step U {| users := users' ;
                 net := U.(net) ;
                 key_counter := U.(key_counter) |}
@@ -440,34 +434,29 @@ Inductive step : universe -> universe -> Prop :=
     step U {| users := users' ;
               net := U'.(net) ;
               key_counter := U'.(key_counter) |}
-| StepVerify : forall verifier key_var signed_msg_var verified_msg_var U u_data signed_message KeyType U' u_data' users',
-    U.(users) $? verifier = Some u_data -> 
+| StepVerify : forall verifier key_var signed_msg_var verified_msg_var U u_data signed_message KeyType U' u_data' users' k_id msg k signee,
+    U.(users) $? verifier = Some u_data ->
     u_data.(mem_heap) $? signed_msg_var = Some signed_message ->
     u_data.(key_heap) $? key_var = Some KeyType ->
-    match signed_message with
-    | Signature k_id _ msg => match KeyType with
-                              | AKey k => k.(a_key_id) = k_id
-                              | _ => true = false (* Should only be able to verify signature with AKey with same key_id
-                                                   * but this is still bad. *)
-                              end ->
-                              match msg with
-                              | Key_message k => ~ (verified_msg_var \in dom u_data.(mem_heap))
-                              | _ => ~ (verified_msg_var \in dom u_data.(key_heap))
-                              end ->
-                              U' = (verify verifier key_var signed_msg_var verified_msg_var U) ->
-                              U'.(users) $? verifier = Some u_data' ->
-                              users' = U'.(users) $+ (verifier, {| uid := verifier ;
-                                                                   key_heap := u_data'.(key_heap) ;
-                                                                   mem_heap := u_data'.(mem_heap) ;
-                                                                   protocol := Return msg ;
-                                                                   is_admin := u_data'.(is_admin) |})
-    | _ => true = false (* This is bad and you should feel bad *)
-    end -> 
+    signed_message = Signature k_id signee msg ->
+    KeyType = AKey k ->
+    k.(a_key_id) = k_id ->
+    match msg with
+    | Key_message k' => ~ (verified_msg_var \in dom u_data.(mem_heap))
+    | _ => ~ (verified_msg_var \in dom u_data.(key_heap))
+    end ->
+    U' = (verify verifier key_var signed_msg_var verified_msg_var U) ->
+    U'.(users) $? verifier = Some u_data' ->
+    users' = U'.(users) $+ (verifier, {| uid := verifier ;
+                                         key_heap := u_data'.(key_heap) ;
+                                         mem_heap := u_data'.(mem_heap) ;
+                                         protocol := Return msg ;
+                                         is_admin := u_data'.(is_admin) |}) ->
     u_data.(protocol) = Verify (Some KeyType) signed_message ->
       step U {| users := users' ;
                 net := U'.(net) ;
                 key_counter := U'.(key_counter) |}
-| StepEncrypt : forall u_id msg_var msg_var' key_var U u_data msg KeyType mem_heap' users',
+| StepEncrypt : forall u_id msg_var msg_var' key_var U u_data msg KeyType mem_heap' users' encrypted_msg,
     U.(users) $? u_id = Some u_data ->
     u_data.(mem_heap) $? msg_var = Some msg ->
     ~ (msg_var' \in dom u_data.(mem_heap)) ->
@@ -478,14 +467,12 @@ Inductive step : universe -> universe -> Prop :=
     end ->
     u_data.(protocol) = Encrypt KeyType msg ->
     mem_heap' = (encrypt_message u_id msg_var msg_var' key_var U) ->
-    match mem_heap' $? msg_var' with
-    | Some encrypted_msg => users' = U.(users) $+ (u_id, {| uid := u_id ;
-                                                            key_heap := u_data.(key_heap) ;
-                                                            mem_heap := mem_heap' ;
-                                                            protocol := Return encrypted_msg ;
-                                                            is_admin := u_data.(is_admin) |})
-    | None => true = false
-    end ->
+    mem_heap' $? msg_var' = Some encrypted_msg ->
+    users' = U.(users) $+ (u_id, {| uid := u_id ;
+                                    key_heap := u_data.(key_heap) ;
+                                    mem_heap := mem_heap' ;
+                                    protocol := Return encrypted_msg ;
+                                    is_admin := u_data.(is_admin) |}) ->
       step U {| users := users' ;
                 net := U.(net) ;
                 key_counter := U.(key_counter) |}
@@ -512,61 +499,51 @@ Inductive step : universe -> universe -> Prop :=
       step U {| users := users' ;
                 net := U'.(net) ;
                 key_counter := U'.(key_counter) |}
-| StepGenerateAKey : forall generator key_var1 key_var2 U usage u_data key_heap' users',
+| StepGenerateAKey : forall generator key_var1 key_var2 U usage u_data key_heap' users' key1 key2,
     U.(users) $? generator = Some u_data ->
     ~ (key_var1 \in dom u_data.(key_heap)) ->
     ~ (key_var2 \in dom u_data.(key_heap)) ->
     u_data.(protocol) = GenerateAKeys usage ->
     key_heap' = (generate_asymmetric_key generator key_var1 key_var2 U usage) ->
-    match key_heap' $? key_var1 with
-    | Some key1 => match key_heap' $? key_var2 with
-                   | Some key2 => users' = U.(users) $+ (generator, {| uid := generator ;
-                                                                       key_heap := key_heap' ;
-                                                                       mem_heap := u_data.(mem_heap) ;
-                                                                       protocol := Return (Key_pair_message (pair key1 key2)) ;
-                                                                       is_admin := u_data.(is_admin) |})
-                   | None => true = false
-                   end
-    | None => true = false
-    end ->
+    key_heap' $? key_var1 = Some key1 ->
+    key_heap' $? key_var2 = Some key2 ->
+    users' = U.(users) $+ (generator, {| uid := generator ;
+                           key_heap := key_heap' ;
+                           mem_heap := u_data.(mem_heap) ;
+                           protocol := Return (Key_pair_message (pair key1 key2)) ;
+                           is_admin := u_data.(is_admin) |}) ->
       step U {| users := users' ;
                 net := U.(net) ;
                 key_counter := U.(key_counter) + 2 ;|}
-| StepGenerateSKey : forall generator key_var U usage u_data key_heap' users',
+| StepGenerateSKey : forall generator key_var U usage u_data key_heap' users' key,
     U.(users) $? generator = Some u_data ->
     ~ (key_var \in dom u_data.(key_heap)) ->
     u_data.(protocol) = GenerateSKey usage ->
     key_heap' = (generate_symmetric_key generator key_var U usage) ->
-    match key_heap' $? key_var with
-    | Some key => users' = U.(users) $+ (generator, {| uid := generator ;
-                                                       key_heap := key_heap' ;
-                                                       mem_heap := u_data.(mem_heap) ;
-                                                       protocol := Return (Key_message key) ;
-                                                       is_admin := u_data.(is_admin) |})
-    | None => true = false (* If the key_heap = definition, then key_heap $? key_var should return Some key *)
-    end ->
+    key_heap' $? key_var = Some key ->
+    users' = U.(users) $+ (generator, {| uid := generator ;
+                                         key_heap := key_heap' ;
+                                         mem_heap := u_data.(mem_heap) ;
+                                         protocol := Return (Key_message key) ;
+                                         is_admin := u_data.(is_admin) |}) ->
       step U {| users := users' ;
                 net := U.(net) ;
                 key_counter := U.(key_counter) + 1|}
-| StepRecv : forall U recving_user msg_var u_data msg_buffer U' u_data' users',
+| StepRecv : forall U recving_user msg_var u_data msg_buffer U' u_data' users' h t,
     U.(users) $? recving_user = Some u_data ->
     (U.(net)).(users_msg_buffer) $? recving_user = Some msg_buffer ->
-    match msg_buffer with
-    | h::t => match h with
-              | Key_message _ => ~ (msg_var \in dom u_data.(key_heap))
-              | _ => ~ (msg_var \in dom u_data.(mem_heap))
-              end ->
-                     U' = (recv_message recving_user U msg_var) ->
-                     U'.(users) $? recving_user = Some u_data' ->
-                     users' = U.(users) $+ (recving_user, {| uid := recving_user ;
-                                                             key_heap := u_data'.(key_heap) ;
-                                                             mem_heap := u_data'.(mem_heap) ;
-                                                             protocol := Return h ;
-                                                             is_admin := u_data'.(is_admin) ;|})
-    | [] => true = false (* This is bad, and you should feel bad.
-                          * Alternative: [] => ~ (msg_buffer = [])
-                          *  This should also always be false *)
+    msg_buffer = h::t -> 
+    match h with
+    | Key_message _ => ~ (msg_var \in dom u_data.(key_heap))
+    | _ => ~ (msg_var \in dom u_data.(mem_heap))
     end ->
+    U' = (recv_message recving_user U msg_var) ->
+    U'.(users) $? recving_user = Some u_data' ->
+    users' = U.(users) $+ (recving_user, {| uid := recving_user ;
+                                            key_heap := u_data'.(key_heap) ;
+                                            mem_heap := u_data'.(mem_heap) ;
+                                            protocol := Return h ;
+                                            is_admin := u_data'.(is_admin) |}) ->
     u_data.(protocol) = Recv ->
       step U {| users := users' ;
                 net := U'.(net) ;
@@ -586,19 +563,12 @@ Inductive step : universe -> universe -> Prop :=
                 key_counter := U.(key_counter) |}.
 (*
 Need Alice for the ones below.
+| Return
 | Bind
 | BindSKey
 | BindAKey
 | Barrier
 *)
-
-
-
-(* TODO for Daniel
- * What an odd feeling.
- *)
-
-
 
 (* Outstanding Questions
  * 1. What is the best way to keep track of the count of already existing keys? Or, better yet, what
