@@ -425,6 +425,10 @@ Inductive step : universe -> universe -> Prop :=
     HMAC_msg = HMAC_message k_id msg ->
     KeyType = SKey k ->
     k.(s_key_id) = k_id ->
+    match msg with
+    | Key_message k => ~ (verified_msg_var \in dom u_data.(mem_heap))
+    | _ => ~ (verified_msg_var \in dom u_data.(key_heap))
+    end ->
     U' = (verifyHMAC verifier key_var HMAC_var verified_msg_var U) ->
     U'.(users) $? verifier = Some u_data' ->
     users' = U'.(users) $+ (verifier, {| uid := verifier ;
@@ -445,6 +449,10 @@ Inductive step : universe -> universe -> Prop :=
                               | AKey k => k.(a_key_id) = k_id
                               | _ => true = false (* Should only be able to verify signature with AKey with same key_id
                                                    * but this is still bad. *)
+                              end ->
+                              match msg with
+                              | Key_message k => ~ (verified_msg_var \in dom u_data.(mem_heap))
+                              | _ => ~ (verified_msg_var \in dom u_data.(key_heap))
                               end ->
                               U' = (verify verifier key_var signed_msg_var verified_msg_var U) ->
                               U'.(users) $? verifier = Some u_data' ->
