@@ -459,6 +459,7 @@ Inductive step : universe -> universe -> Prop :=
     signed_message = Signature k_id signee msg ->
     KeyType = AsymKey k ->
     k.(asym_key_id) = k_id ->
+    signee = k.(asym_generating_user_id) ->
     match msg with
     | Key_message k' => ~ (verified_msg_var \in dom u_data.(msg_heap))
     | _ => ~ (verified_msg_var \in dom u_data.(key_heap))
