@@ -32,7 +32,8 @@ Record asymmetric_key :=
    asym_usage : asymmetric_usage ;
    asym_paired_key_id : nat}.
 
-(* A master key type *)
+(* A master key type 
+   Q for Adam: is this master type beneficial? *)
 Inductive key :=
 | SymKey (k : symmetric_key)
 | AsymKey (k : asymmetric_key).
@@ -75,7 +76,8 @@ Inductive user_cmd :=
 | GenerateAsymKeys (usage : asymmetric_usage)
 | Barrier.
 
-(* A user has an id, memory heaps for keys and messages, a protocol, and a boolean administrator status *)
+(* A user has an id, memory heaps for keys and messages, a protocol, and a boolean administrator status 
+   Q for Adam: why are these called heaps? *)
 Record user_data :=
   {uid : user_id ;
    key_heap : fmap var key ;
@@ -349,7 +351,8 @@ end.
 
 (* Ping Protocol *)
 
-(* U.(users) *)
+(* U.(users) 
+   Check on both ends that received message == "Hello" *)
 Example ping_users :=
  $0 $+ (0, {| uid := 0 ;
               key_heap := $0 ;
@@ -592,6 +595,7 @@ Need to work with Alice for semantics for the following commands:
   1. Can we implement a notion of "randomness" that will prevent two users from generating the same key id?
   2. What is the correct way to do error handling? Problem observed by reciever during ping protocol.
      Currently using option type.
+  3. Is there a condensed notation that will save us some horizontal space in our semantic implementations?
  *)
 
 (* Not as hard questions
