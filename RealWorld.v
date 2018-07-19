@@ -324,22 +324,24 @@ match U.(users) $? verifier with
                                  | Some (SymKey k) => match HMAC_msg with
                                                     | HMAC_message k_id msg => if k_id =? k.(sym_key_id)
                                                                                then match msg with
-                                                                                    | Key_message key => {| users := U.(users) $+ (verifier, {| uid := verifier ;
-                                                                                                                                                key_heap := u_data.(key_heap) $+ (verified_msg_var, key) ;
-                                                                                                                                                msg_heap := u_data.(msg_heap) ;
-                                                                                                                                                protocol := u_data.(protocol) ;
-                                                                                                                                                is_admin := u_data.(is_admin) |}) ;
-                                                                                                            net := U.(net) ;
-                                                                                                            key_counter := U.(key_counter) |}
-                                                                                    | _ => {| users := U.(users) $+ (verifier, {| uid := verifier ;
-                                                                                                                                  key_heap := u_data.(key_heap) ;
-                                                                                                                                  msg_heap := u_data.(msg_heap) $+ (verified_msg_var, msg) ;
-                                                                                                                                  protocol := u_data.(protocol) ;
-                                                                                                                                  is_admin := u_data.(is_admin) |}) ;
-                                                                                              net := U.(net) ;
-                                                                                              key_counter := U.(key_counter) |}
-                                                                                        end
-                                                                                   else U
+                                                                                    | Key_message key => 
+                                                                                      {| users := U.(users) $+ (verifier, {| uid := verifier ;
+                                                                                                                             key_heap := u_data.(key_heap) $+ (verified_msg_var, key) ;
+                                                                                                                             msg_heap := u_data.(msg_heap) ;
+                                                                                                                             protocol := u_data.(protocol) ;
+                                                                                                                             is_admin := u_data.(is_admin) |}) ;
+                                                                                         net := U.(net) ;
+                                                                                         key_counter := U.(key_counter) |}
+                                                                                    | _ =>
+                                                                                      {| users := U.(users) $+ (verifier, {| uid := verifier ;
+                                                                                                                             key_heap := u_data.(key_heap) ;
+                                                                                                                             msg_heap := u_data.(msg_heap) $+ (verified_msg_var, msg) ;
+                                                                                                                             protocol := u_data.(protocol) ;
+                                                                                                                             is_admin := u_data.(is_admin) |}) ;
+                                                                                         net := U.(net) ;
+                                                                                         key_counter := U.(key_counter) |}
+                                                                                    end
+                                                                               else U
                                                     | _ => U
                                                     end
                                  | _ => U
