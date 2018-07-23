@@ -106,23 +106,27 @@ Record universe := construct_universe
 (* Return : net *)
 Definition send_message (msg_var : var) (from_user to_user : user_id) (U : universe) :=
 match U.(users) $? from_user with
-| Some u_data => match u_data.(msg_heap) $? msg_var with
-                 | Some msg => match (U.(net)).(users_msg_buffer) $? to_user with
-                               | Some msg_lst => {| users_msg_buffer := (U.(net)).(users_msg_buffer) $+ (to_user, msg_lst ++ [msg]) ;
-                                                    trace := (to_user , msg) :: (U.(net)).(trace) |} 
-                               | None => U.(net)
-                               end
-                 | _ => U.(net) (* There was no matching msg to the var *)
-                 end
+| Some u_data =>
+  match u_data.(msg_heap) $? msg_var with
+  | Some msg =>
+    match (U.(net)).(users_msg_buffer) $? to_user with
+    | Some msg_lst => {| users_msg_buffer := (U.(net)).(users_msg_buffer) $+
+                                             (to_user, msg_lst ++ [msg]) ;
+                         trace := (to_user , msg) :: (U.(net)).(trace) |}
+    | None => U.(net)
+    end
+  | _ => U.(net) (* There was no matching msg to the var *)
+  end
 | _ => U.(net) (* The sender is not valid *)
 end.
 
 (* Return : key_heap *)
 Definition generate_symmetric_key (generating_user : user_id) (key_var : var) (U : universe) (usage : symmetric_usage) :=
 match U.(users) $? generating_user with
-| Some u_data => u_data.(key_heap) $+ (key_var, SymKey {| sym_key_id := U.(key_counter) ;
-                                                        sym_generating_user_id := generating_user ;
-                                                        sym_usage := usage |})
+| Some u_data => u_data.(key_heap) $+
+                 (key_var, SymKey {| sym_key_id := U.(key_counter) ;
+                                     sym_generating_user_id := generating_user ;
+                                     sym_usage := usage |})
 | None => $0
 end.
 
@@ -135,219 +139,264 @@ let usage' := match usage with
               | ECDSA_Ver => ECDSA_Sig
               end in
 match U.(users) $? generating_user with
-| Some u_data => u_data.(key_heap) $+ (key_var1, AsymKey {| asym_key_id := U.(key_counter) ;
-                                                         asym_generating_user_id := generating_user ;
-                                                         asym_usage := usage ;
-                                                         asym_paired_key_id := U.(key_counter) + 1 |})
-                                   $+ (key_var2, AsymKey {| asym_key_id := U.(key_counter) + 1 ;
-                                                         asym_generating_user_id := generating_user ;
-                                                         asym_usage := usage' ;
-                                                         asym_paired_key_id := U.(key_counter) |}) 
+| Some u_data => u_data.(key_heap) $+
+                 (key_var1, AsymKey {| asym_key_id := U.(key_counter) ;
+                                       asym_generating_user_id := generating_user ;
+                                       asym_usage := usage ;
+                                       asym_paired_key_id := U.(key_counter) + 1 |}) $+
+                 (key_var2, AsymKey {| asym_key_id := U.(key_counter) + 1 ;
+                                       asym_generating_user_id := generating_user ;
+                                       asym_usage := usage' ;
+                                       asym_paired_key_id := U.(key_counter) |})
 | None => $0
 end.
 
 (* Return : Universe *)
 Definition recv_message (recving_user : user_id) (U : universe) (x : var) :=
 match (U.(net)).(users_msg_buffer) $? recving_user with
-| Some msg_lst => match msg_lst with
-                  | [] => U
-                  | h::t => match U.(users) $? recving_user with 
-                            | Some u_data => match h with
-                                             | Key_message k => {| users := U.(users) $+
-                                                                            (recving_user , {| uid := u_data.(uid) ;
-                                                                                               key_heap := u_data.(key_heap) $+ (x, k) ;
-                                                                                               msg_heap := u_data.(msg_heap) ;
-                                                                                               protocol := u_data.(protocol) ;
-                                                                                               is_admin := u_data.(is_admin) |}) ;
-                                                                   net := {| users_msg_buffer := (U.(net)).(users_msg_buffer) $+ (recving_user, t) ;
-                                                                             trace := (U.(net)).(trace) |} ;
-                                                                   key_counter := U.(key_counter) |}
-                                             | _ => {| users := U.(users) $+ (recving_user , {| uid := u_data.(uid) ;
-                                                                                                key_heap := u_data.(key_heap) ;
-                                                                                                msg_heap := u_data.(msg_heap) $+ (x, h) ;
-                                                                                                protocol := u_data.(protocol) ;
-                                                                                                is_admin := u_data.(is_admin) |}) ;
-                                                       net := {| users_msg_buffer := (U.(net)).(users_msg_buffer) $+ (recving_user, t) ;
-                                                                 trace := (U.(net)).(trace) |} ;
-                                                       key_counter := U.(key_counter) |}
-                                             end
-                            | None => U
-                            end
-                  end
+| Some msg_lst =>
+  match msg_lst with
+  | [] => U
+  | h::t =>
+    match U.(users) $? recving_user with
+    | Some u_data =>
+      match h with
+      | Key_message k => {| users := U.(users) $+
+                                     (recving_user , {| uid := u_data.(uid) ;
+                                                        key_heap := u_data.(key_heap) $+ (x, k) ;
+                                                        msg_heap := u_data.(msg_heap) ;
+                                                        protocol := u_data.(protocol) ;
+                                                        is_admin := u_data.(is_admin) |}) ;
+                            net := {| users_msg_buffer := (U.(net)).(users_msg_buffer) $+ (recving_user, t) ;
+                            trace := (U.(net)).(trace) |} ;
+                            key_counter := U.(key_counter) |}
+      | _ => {| users := U.(users) $+ 
+                           (recving_user , {| uid := u_data.(uid) ;
+                                              key_heap := u_data.(key_heap) ;
+                                              msg_heap := u_data.(msg_heap) $+ (x, h) ;
+                                              protocol := u_data.(protocol) ;
+                                              is_admin := u_data.(is_admin) |}) ;
+                net := {| users_msg_buffer := (U.(net)).(users_msg_buffer) $+ (recving_user, t) ;
+                trace := (U.(net)).(trace) |} ;
+                key_counter := U.(key_counter) |}
+      end
+    | None => U
+    end
+  end
 | None => U
 end.
 
 (* Return : Universe *)
 Definition decrypt_message (u_id : user_id) (msg_var msg_var': var) (U : universe) (key_var : var) :=
 match U.(users) $? u_id with
-| Some u_data => match u_data.(msg_heap) $? msg_var with
-                 | Some msg => match u_data.(key_heap) $? key_var with
-                               | Some (SymKey k) => match msg with
-                                                  | Ciphertext msg' k' => match k.(sym_key_id) with
-                                                                                 | k' => match msg' with
-                                                                                         | Key_message km => {| users := U.(users) $+ (u_id , {| uid := u_id ;
-                                                                                                                                                 key_heap := u_data.(key_heap) $+ (msg_var', km) ;
-                                                                                                                                                 msg_heap := u_data.(msg_heap) ;
-                                                                                                                                                 protocol := u_data.(protocol) ;
-                                                                                                                                                 is_admin := u_data.(is_admin) |}) ;
-                                                                                                                net := U.(net) ;
-                                                                                                                key_counter := U.(key_counter) |}
-                                                                                         | _ => {| users := U.(users) $+ (u_id , {| uid := u_id ;
-                                                                                                                                    key_heap := u_data.(key_heap) ;
-                                                                                                                                    msg_heap := u_data.(msg_heap) $+ (msg_var', msg') ;
-                                                                                                                                    protocol := u_data.(protocol) ;
-                                                                                                                                    is_admin := u_data.(is_admin) |}) ;
-                                                                                                   net := U.(net) ;
-                                                                                                   key_counter := U.(key_counter) |}
-                                                                                         end
-                                                                                 end
-                                                  | _ => U (* There was nothing to decrypt *)
-                                                  end
-                               | Some (AsymKey k) => match msg with
-                                                  | Ciphertext msg' k' => match k.(asym_key_id) with 
-                                                                                 | k' => match msg' with
-                                                                                         | Key_message km => {| users := U.(users) $+ (u_id , {| uid := u_id ;
-                                                                                                                                                 key_heap := u_data.(key_heap) $+ (msg_var', km) ;
-                                                                                                                                                 msg_heap := u_data.(msg_heap) ;
-                                                                                                                                                 protocol := u_data.(protocol) ;
-                                                                                                                                                 is_admin := u_data.(is_admin) |}) ;
-                                                                                                                net := U.(net) ;
-                                                                                                                key_counter := U.(key_counter) |}
-                                                                                         | _ => {| users := U.(users) $+ (u_id , {| uid := u_id ;
-                                                                                                                                    key_heap := u_data.(key_heap) ;
-                                                                                                                                    msg_heap := u_data.(msg_heap) $+ (msg_var', msg') ;
-                                                                                                                                    protocol := u_data.(protocol) ;
-                                                                                                                                    is_admin := u_data.(is_admin) |}) ;
-                                                                                                   net := U.(net) ;
-                                                                                                   key_counter := U.(key_counter) |}
-                                                                                         end
-                                                                                 end
-                                                  | _ => U (* There was nothing to decrypt *)
-                                                  end
-                               | _ => U (* Key_var does not correspond to a key *)
-                               end
-                 | None => U
-                 end
+| Some u_data =>
+  match u_data.(msg_heap) $? msg_var with
+  | Some msg =>
+    match u_data.(key_heap) $? key_var with
+    | Some (SymKey k) =>
+      match msg with
+      | Ciphertext msg' k' =>
+        match k.(sym_key_id) with
+        | k' =>
+          match msg' with
+          | Key_message km => {| users := U.(users) $+
+                                          (u_id , {| uid := u_id ;
+                                                     key_heap := u_data.(key_heap) $+ (msg_var', km) ;
+                                                     msg_heap := u_data.(msg_heap) ;
+                                                     protocol := u_data.(protocol) ;
+                                                     is_admin := u_data.(is_admin) |}) ;
+                                 net := U.(net) ;
+                                 key_counter := U.(key_counter) |}
+          | _ => {| users := U.(users) $+
+                             (u_id , {| uid := u_id ;
+                                        key_heap := u_data.(key_heap) ;
+                                        msg_heap := u_data.(msg_heap) $+ (msg_var', msg') ;
+                                        protocol := u_data.(protocol) ;
+                                        is_admin := u_data.(is_admin) |}) ;
+                    net := U.(net) ;
+                    key_counter := U.(key_counter) |}
+          end
+        end
+      | _ => U (* There was nothing to decrypt *)
+      end
+    | Some (AsymKey k) =>
+      match msg with
+      | Ciphertext msg' k' =>
+        match k.(asym_key_id) with
+        | k' =>
+          match msg' with
+          | Key_message km => {| users := U.(users) $+
+                                          (u_id , {| uid := u_id ;
+                                                     key_heap := u_data.(key_heap) $+ (msg_var', km) ;
+                                                     msg_heap := u_data.(msg_heap) ;
+                                                     protocol := u_data.(protocol) ;
+                                                     is_admin := u_data.(is_admin) |}) ;
+                                 net := U.(net) ;
+                                 key_counter := U.(key_counter) |}
+          | _ => {| users := U.(users) $+
+                             (u_id , {| uid := u_id ;
+                                        key_heap := u_data.(key_heap) ;
+                                        msg_heap := u_data.(msg_heap) $+ (msg_var', msg') ;
+                                        protocol := u_data.(protocol) ;
+                                        is_admin := u_data.(is_admin) |}) ;
+                    net := U.(net) ;
+                    key_counter := U.(key_counter) |}
+          end
+        end
+      | _ => U (* There was nothing to decrypt *)
+      end
+    | _ => U (* Key_var does not correspond to a key *)
+    end
+  | None => U
+  end
 | None => U
 end.
 
 (* Return : msg_heap *)
 Definition encrypt_message (u_id : user_id) (msg_var msg_var': var) (key_var : var) (U : universe) :=
 match U.(users) $? u_id with
-| Some u_data => match u_data.(msg_heap) $? msg_var with
-                 | Some msg => match u_data.(key_heap) $? key_var with
-                               | Some (AsymKey k) => match k.(asym_usage) with
-                                                  | RSA_Enc => u_data.(msg_heap) $+ (msg_var', (Ciphertext msg k.(asym_paired_key_id)))
-                                                  | _ => u_data.(msg_heap)
-                                                  end
-                               | Some (SymKey k') => match k'.(sym_usage) with
-                                                   | HMAC => u_data.(msg_heap)
-                                                   | _ => u_data.(msg_heap) $+ (msg_var', (Ciphertext msg k'.(sym_key_id)))
-                                                   end
-                               | _ => u_data.(msg_heap)
-                               end
-                 | None => u_data.(msg_heap)
-                 end
+| Some u_data => 
+  match u_data.(msg_heap) $? msg_var with
+  | Some msg => 
+    match u_data.(key_heap) $? key_var with
+    | Some (AsymKey k) => 
+      match k.(asym_usage) with
+      | RSA_Enc => u_data.(msg_heap) $+ 
+                   (msg_var', (Ciphertext msg k.(asym_paired_key_id)))
+      | _ => u_data.(msg_heap)
+      end
+    | Some (SymKey k') =>
+      match k'.(sym_usage) with
+      | HMAC => u_data.(msg_heap)
+      | _ => u_data.(msg_heap) $+
+             (msg_var', (Ciphertext msg k'.(sym_key_id)))
+      end
+    | _ => u_data.(msg_heap)
+    end
+  | None => u_data.(msg_heap)
+  end
 | None => $0
 end.
 
 (* Return : msg_heap *)
-Definition sign (signee : user_id) (key_var msg_var signed_msg_var : var) (U : universe) :=
-match U.(users) $? signee with
-| Some u_data => match u_data.(msg_heap) $? msg_var with
-                 | Some msg => match u_data.(key_heap) $? key_var with
-                               | Some (AsymKey k) => match k.(asym_usage) with
-                                                  | ECDSA_Sig => u_data.(msg_heap) $+ (signed_msg_var, (Signature k.(asym_paired_key_id) signee msg))
-                                                  | _ => u_data.(msg_heap)
-                                                  end
-                               | _ => u_data.(msg_heap)
-                               end
-                 | None => u_data.(msg_heap)
-                 end
+Definition sign (signer : user_id) (key_var msg_var signed_msg_var : var) (U : universe) :=
+match U.(users) $? signer with
+| Some u_data =>
+  match u_data.(msg_heap) $? msg_var with
+  | Some msg =>
+    match u_data.(key_heap) $? key_var with
+    | Some (AsymKey k) =>
+      match k.(asym_usage) with
+      | ECDSA_Sig => u_data.(msg_heap) $+
+                     (signed_msg_var, (Signature k.(asym_paired_key_id) signer msg))
+      | _ => u_data.(msg_heap)
+      end
+    | _ => u_data.(msg_heap)
+    end
+  | None => u_data.(msg_heap)
+  end
 | None => $0
 end.
 
 (* Return : msg_heap *)
 Definition produceHMAC (producer : user_id) (key_var msg_var HMAC_var : var) (U : universe) :=
 match U.(users) $? producer with
-| Some u_data => match u_data.(msg_heap) $? msg_var with
-              | Some msg => match u_data.(key_heap) $? key_var with
-                            | Some (SymKey k) => match k.(sym_usage) with
-                                               | HMAC => u_data.(msg_heap) $+ (HMAC_var, (HMAC_message k.(sym_key_id) msg))
-                                               | _ => u_data.(msg_heap)
-                                               end
-                            | _ => u_data.(msg_heap)
-                            end
-              | None => u_data.(msg_heap)
-              end
+| Some u_data => 
+  match u_data.(msg_heap) $? msg_var with
+  | Some msg => 
+    match u_data.(key_heap) $? key_var with
+    | Some (SymKey k) =>
+      match k.(sym_usage) with
+      | HMAC => u_data.(msg_heap) $+
+                (HMAC_var, (HMAC_message k.(sym_key_id) msg))
+      | _ => u_data.(msg_heap)
+      end
+    | _ => u_data.(msg_heap)
+    end
+  | None => u_data.(msg_heap)
+  end
 | None => $0
 end.
 
 (* Return : Universe *)
 Definition verify (verifier : user_id) (key_var signed_msg_var verified_msg_var : var) (U : universe) :=
 match U.(users) $? verifier with
-| Some u_data => match u_data.(msg_heap) $? signed_msg_var with
-                 | Some sym_msg => match u_data.(key_heap) $? key_var with
-                                 | Some (AsymKey k) => match sym_msg with
-                                                    | Signature k_id signee msg => if k_id =? k.(asym_paired_key_id)
-                                                                                   then match msg with
-                                                                                        | Key_message key => {| users := U.(users) $+ (verifier, {| uid := verifier ;
-                                                                                                                                                    key_heap := u_data.(key_heap) $+ (verified_msg_var, key) ;
-                                                                                                                                                    msg_heap := u_data.(msg_heap) ;
-                                                                                                                                                    protocol := u_data.(protocol) ;
-                                                                                                                                                    is_admin := u_data.(is_admin) |}) ;
-                                                                                                                net := U.(net) ;
-                                                                                                                key_counter := U.(key_counter) |}
-                                                                                        | _ => {| users := U.(users) $+ (verifier, {| uid := verifier ;
-                                                                                                                                             key_heap := u_data.(key_heap) ;
-                                                                                                                                             msg_heap := u_data.(msg_heap) $+ (verified_msg_var, msg) ;
-                                                                                                                                             protocol := u_data.(protocol) ;
-                                                                                                                                             is_admin := u_data.(is_admin) |}) ;
-                                                                                                  net := U.(net) ;
-                                                                                                  key_counter := U.(key_counter) |}
-                                                                                        end
-                                                                                   else U
-                                                    | _ => U
-                                                    end
-                                 | _ => U
-                                 end
-                 | None => U
-                 end
+| Some u_data =>
+  match u_data.(msg_heap) $? signed_msg_var with
+  | Some sym_msg =>
+    match u_data.(key_heap) $? key_var with
+    | Some (AsymKey k) =>
+      match sym_msg with
+      | Signature k_id signer msg =>
+        if k_id =? k.(asym_paired_key_id)
+        then match msg with
+             | Key_message key => {| users := U.(users) $+
+                                              (verifier, {| uid := verifier ;
+                                                            key_heap := u_data.(key_heap) $+
+                                                                        (verified_msg_var, key) ;
+                                                            msg_heap := u_data.(msg_heap) ;
+                                                            protocol := u_data.(protocol) ;
+                                                            is_admin := u_data.(is_admin) |}) ;
+                                     net := U.(net) ;
+                                     key_counter := U.(key_counter) |}
+             | _ => {| users := U.(users) $+
+                                (verifier, {| uid := verifier ;
+                                              key_heap := u_data.(key_heap) ;
+                                              msg_heap := u_data.(msg_heap) $+
+                                                          (verified_msg_var, msg) ;
+                                              protocol := u_data.(protocol) ;
+                                              is_admin := u_data.(is_admin) |}) ;
+                       net := U.(net) ;
+                       key_counter := U.(key_counter) |}
+             end
+        else U
+      | _ => U
+      end
+    | _ => U
+    end
+  | None => U
+  end
 | None => U
 end.
 
 (* Return : Universe *)
 Definition verifyHMAC (verifier : user_id) (key_var HMAC_var verified_msg_var : var) (U : universe) :=
 match U.(users) $? verifier with
-| Some u_data => match u_data.(msg_heap) $? HMAC_var with
-                 | Some HMAC_msg => match u_data.(key_heap) $? key_var with
-                                 | Some (SymKey k) => match HMAC_msg with
-                                                    | HMAC_message k_id msg => if k_id =? k.(sym_key_id)
-                                                                               then match msg with
-                                                                                    | Key_message key => 
-                                                                                      {| users := U.(users) $+ (verifier, {| uid := verifier ;
-                                                                                                                             key_heap := u_data.(key_heap) $+ (verified_msg_var, key) ;
-                                                                                                                             msg_heap := u_data.(msg_heap) ;
-                                                                                                                             protocol := u_data.(protocol) ;
-                                                                                                                             is_admin := u_data.(is_admin) |}) ;
-                                                                                         net := U.(net) ;
-                                                                                         key_counter := U.(key_counter) |}
-                                                                                    | _ =>
-                                                                                      {| users := U.(users) $+ (verifier, {| uid := verifier ;
-                                                                                                                             key_heap := u_data.(key_heap) ;
-                                                                                                                             msg_heap := u_data.(msg_heap) $+ (verified_msg_var, msg) ;
-                                                                                                                             protocol := u_data.(protocol) ;
-                                                                                                                             is_admin := u_data.(is_admin) |}) ;
-                                                                                         net := U.(net) ;
-                                                                                         key_counter := U.(key_counter) |}
-                                                                                    end
-                                                                               else U
-                                                    | _ => U
-                                                    end
-                                 | _ => U
-                                 end
-                 | None => U
-                 end
+| Some u_data => 
+  match u_data.(msg_heap) $? HMAC_var with
+  | Some HMAC_msg => 
+    match u_data.(key_heap) $? key_var with
+    | Some (SymKey k) => 
+      match HMAC_msg with
+      | HMAC_message k_id msg => 
+        if k_id =? k.(sym_key_id)
+        then match msg with
+             | Key_message key => {| users := U.(users) $+
+                                              (verifier, {| uid := verifier ;
+                                                            key_heap := u_data.(key_heap) $+ 
+                                                                        (verified_msg_var, key) ;
+                                                            msg_heap := u_data.(msg_heap) ;
+                                                            protocol := u_data.(protocol) ;
+                                                            is_admin := u_data.(is_admin) |}) ;
+                                     net := U.(net) ;
+                                     key_counter := U.(key_counter) |}
+             | _ => {| users := U.(users) $+
+                                (verifier, {| uid := verifier ;
+                                              key_heap := u_data.(key_heap) ;
+                                              msg_heap := u_data.(msg_heap) $+
+                                                          (verified_msg_var, msg) ;
+                                              protocol := u_data.(protocol) ;
+                                              is_admin := u_data.(is_admin) |}) ;
+                       net := U.(net) ;
+                       key_counter := U.(key_counter) |}
+             end
+        else U
+      | _ => U
+      end
+    | _ => U
+    end
+  | None => U
+  end
 | None => U
 end.
 
@@ -359,38 +408,30 @@ Example ping_users :=
  $0 $+ (0, {| uid := 0 ;
               key_heap := $0 ;
               msg_heap := $0 ;
-              protocol := (a <<<- (GenerateAsymKeys RSA_Enc) ;
-                                  (b <- (Send 1 (Key_message (match a with
-                                                      | (pair p s) => p
-                                                      end))) ;
-                                        (c <<<- (GenerateAsymKeys ECDSA_Sig) ;
-                                               (d <- (Send 1 (Key_message (match c with
-                                                                           | (pair p s) => p
-                                                                           end))) ;
-                                                     (e <- (Sign (match c with
-                                                                           | (pair p s) => s
-                                                                           end) (Plaintext "Hello")) ;
-                                                           (f <- (Encrypt (match a with
-                                                                           | (pair p s) => s
-                                                                           end) e) ;
-                                                                 (g <- (Send 1 f) ;
-                                                                        Recv))))))) ;
+              protocol := a <<<- GenerateAsymKeys RSA_Enc ;
+                          b <-   Send 1 (Key_message (fst a)) ;
+                          c <<<- GenerateAsymKeys ECDSA_Sig ;
+                          d <- Send 1 (Key_message (fst c)) ;
+                          e <- Sign (snd c) (Plaintext "Hello") ;
+                          f <- Encrypt (snd a) e ;
+                          g <- Send 1 f ;
+                          Recv ;
               is_admin := false |})
     $+ (1 , {| uid := 1 ;
                key_heap := $0 ;
                msg_heap := $0 ;
-               protocol := (a <- Recv ;
-                                (b <- Recv ;
-                                     (c <- Recv ;
-                                          (d <- (Decrypt (match a with
-                                                                | Key_message k' => Some k'
-                                                                | _ => None
-                                                                end) c) ;
-                                                (e <- (Verify (match b with
-                                                         | Key_message k => Some k
-                                                         | _ => None
-                                                         end) d) ;
-                                                      (Send 0 e)))))) ;
+               protocol := a <- Recv ;
+                           b <- Recv ;
+                           c <- Recv ;
+                           d <- Decrypt (match a with
+                                           | Key_message k' => Some k'
+                                           | _ => None
+                                           end) c ;
+                           e <- Verify (match b with
+                                          | Key_message k => Some k
+                                          | _ => None
+                                          end) d ;
+                           Send 0 e ;
                is_admin := false |}).
 
 (* Ping Universe *)
@@ -401,16 +442,16 @@ Example ping_universe :=
    key_counter := 0 |}.
 
 Inductive step : universe -> universe -> Prop :=
-| StepSign : forall signee key_var msg_var signed_msg_var U u_data k msg msg_heap' users' signed_message,
-    U.(users) $? signee = Some u_data ->
+| StepSign : forall signer key_var msg_var signed_msg_var U u_data k msg msg_heap' users' signed_message,
+    U.(users) $? signer = Some u_data ->
     u_data.(key_heap) $? key_var = Some (AsymKey k) ->
     u_data.(msg_heap) $? msg_var = Some msg ->
     ~ (signed_msg_var \in dom u_data.(msg_heap)) ->
     k.(asym_usage) = ECDSA_Sig ->
     u_data.(protocol) = Sign (AsymKey k) msg ->
-    msg_heap' = (sign signee key_var msg_var signed_msg_var U) ->
+    msg_heap' = (sign signer key_var msg_var signed_msg_var U) ->
     msg_heap' $? signed_msg_var = Some signed_message -> 
-    users' = U.(users) $+ (signee, {| uid := signee ;
+    users' = U.(users) $+ (signer, {| uid := signer ;
                                       key_heap := u_data.(key_heap) ;
                                       msg_heap := msg_heap' ;
                                       protocol := Return signed_message ;
@@ -457,11 +498,11 @@ Inductive step : universe -> universe -> Prop :=
     step U {| users := users' ;
               net := U'.(net) ;
               key_counter := U'.(key_counter) |}
-| StepVerify : forall verifier key_var signed_msg_var verified_msg_var U u_data signed_message KeyType U' u_data' users' k_id msg k signee,
+| StepVerify : forall verifier key_var signed_msg_var verified_msg_var U u_data signed_message KeyType U' u_data' users' k_id msg k signer,
     U.(users) $? verifier = Some u_data ->
     u_data.(msg_heap) $? signed_msg_var = Some signed_message ->
     u_data.(key_heap) $? key_var = Some KeyType ->
-    signed_message = Signature k_id signee msg ->
+    signed_message = Signature k_id signer msg ->
     KeyType = AsymKey k ->
     k.(asym_key_id) = k_id ->
     match msg with
@@ -593,6 +634,14 @@ Need to work with Alice for semantics for the following commands:
 | Barrier
 *)
 
+(*
+ * TODO
+ * 1. Replace any usage of keys by clients to only use key_vars.
+ * 2. Change user_cmd to be polymorphic type instead of just messages.
+ * 3. Implement ability to combine a set of messages to send and parse a set of
+ *    of messages to recv.
+ *)
+
 (* Outstanding Questions
   1. Can we implement a notion of "randomness" that will prevent two users from generating the same key id?
   2. What is the correct way to do error handling? Problem observed by reciever during ping protocol.
@@ -604,6 +653,7 @@ Need to work with Alice for semantics for the following commands:
  * 1. semantic definitions : When key doesn't match, we currently return the original Universe instead of returning an error of
  *                           some kind. I think this can be checked beforehand in the step function...
  * 2. user_cmd : Because sign and verify require [option key], should encrypt and sign require that as well?
+ * 3. Were we removing trace from the models?
  *)
 
 (* Additional functionality to implement:
