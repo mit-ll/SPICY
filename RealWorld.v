@@ -3,6 +3,8 @@ Require Import Frap.
 Set Implicit Arguments.
 
 Definition user_id := nat.
+(* Definition sym_key_id := nat. *)
+(* Definition asym_key_id := nat *)
 
 (* Possible usages for symmetric keys *)
 Inductive symmetric_usage :=
@@ -42,9 +44,10 @@ Inductive key :=
    Note: the key_pair_message constructor is temporary and will be removed *)
 Inductive message :=
 | Plaintext (sender_id : user_id) (txt : string)
-| Ciphertext (sender_id : user_id) (msg : message) (k_id : nat)
 | Key_Message (sender_id : user_id) (k : var) (* Used to be key *)
 | Key_pair_message (sender_id : user_id) (p : (var * var)) (* Used to be key * key *)
+
+| Ciphertext (sender_id : user_id) (msg : message) (k_id : nat)
 | Signature (k_id : nat) (signer_id : user_id) (msg : message)
 | HMAC_Message (sender_id : user_id) (k_id : nat) (msg : message).
 
@@ -61,6 +64,9 @@ Inductive message :=
 Inductive user_cmd :=
 | Return (r : message)
 | Bind (c1 : user_cmd) (c2 : message -> user_cmd)
+| BindSymKey (c1 : user_cmd) (c2 : var -> user_cmd)
+| BindAsymKeys (c1 : user_cmd) (c2 : (var * var) -> user_cmd)
+
 | Send (uid : user_id) (msg : message)
 | Recv
 | Decrypt (k : option var) (ctxt : message)
@@ -69,8 +75,6 @@ Inductive user_cmd :=
 | Verify (k : option var) (sig : message)
 | ProduceHMAC (k : var) (msg : message)
 | VerifyHMAC (k : option var) (mac : message)
-| BindSymKey (c1 : user_cmd) (c2 : var -> user_cmd)
-| BindAsymKeys (c1 : user_cmd) (c2 : (var * var) -> user_cmd)
 | GenerateSymKey (usage : symmetric_usage)
 | GenerateAsymKeys (usage : asymmetric_usage)
 | Barrier.
@@ -79,12 +83,44 @@ Notation "x <- c1 ; c2" := (Bind c1 (fun x => c2)) (right associativity, at leve
 Notation "x <<- c1 ; c2" := (BindSymKey c1 (fun x => c2)) (right associativity, at level 75).
 Notation "x <<<- c1 ; c2" := (BindAsymKeys c1 (fun x => c2)) (right associativity, at level 75).
 
+Inductive cmd' : Set -> Type :=
+  (* Plumbing *)
+| Return' {result : Set} (r : result) : cmd' result
+| Bind' {result result'} (c1 : cmd' result') (c2 : result' -> cmd' result) : cmd' result
+
+| Send' (uid : user_id) (msg : message) : cmd' unit
+| Recv' : cmd' message
+
+| Decrypt' (k : option var) (ctxt : message) : cmd' message (* can message be Ciphertext somehow?? *)
+| Encrypt' (k : var) (ptxt : message) : cmd' message
+
+| Sign' (k : var) (msg : message) : cmd' message
+| Verify' (k : option var) (sig : message) : cmd' message
+
+| ProduceHMAC' (k : var) (msg : message) : cmd' message
+| VerifyHMAC' (k : option var) (mac : message) : cmd' message
+
+| GenerateSymKey' (usage : symmetric_usage) : cmd' var
+| GenerateAsymKeys' (usage : asymmetric_usage) : cmd' (var * var)
+
+| Barrier' {result : Set} : cmd' result.
+
+Notation "x <<<<- c1 ; c2" := (Bind' c1 (fun x => c2)) (right associativity, at level 75).
+
 Record user_data :=
   {uid : user_id ;
    key_heap : fmap var key ;
    msg_heap : fmap var message ;
    protocol : user_cmd ; 
    is_admin : bool }.
+
+Record user_data' :=
+  {uid' : user_id ;
+   key_heap' : fmap var key ;
+   msg_heap' : fmap var message ;
+   protocol' : forall a : Set, cmd' a ; 
+   is_admin' : bool }.
+
 
 (* The network stores message buffers for each user. Any messages sent to a user are stored here until
    the user calls Recv, at which point they are removed from the buffer and added to the user's msg_heap *)
@@ -472,6 +508,45 @@ Example ping_users :=
                                           end) d ;
                            Send 0 e ;
 is_admin := false |}).
+
+
+Example pingUser1 :=
+  a <<<<- GenerateAsymKeys' RSA_Enc ;
+  b <<<<- Send' 1 (Key_Message 0 (fst a)) ;
+  c <<<<- GenerateAsymKeys' ECDSA_Sig ;
+  d <<<<- Send' 1 (Key_Message 0 (fst c)) ;
+  e <<<<- Sign' (snd c) (Plaintext 0 "Hello") ;
+  f <<<<- Encrypt' (snd a) e ;
+  g <<<<- Send' 1 f ;
+  Recv'.
+
+Example pingUser2 :=
+  a <<<<- Recv' ;
+  b <<<<- Recv' ;
+  c <<<<- Recv' ;
+  d <<<<- Decrypt' (match a with
+                    | Key_Message 0 k' => Some k'
+                    | _ => None
+                    end) c;
+  e <<<<- Verify' (match b with
+                   | Key_Message 0 k => Some k
+                   | _ => None
+                   end) d ;
+  Send' 0 e.
+
+(* Example ping_users' := *)
+(*  $0 $+ (0, {| uid' := 0 ; *)
+(*               key_heap' := $0 ; *)
+(*               msg_heap' := $0 ; *)
+(*               protocol' := pingUser1; *)
+(*               is_admin' := false |}). *)
+(*     $+ (1 , {| uid := 1 ; *)
+(*                key_heap := $0 ; *)
+(*                msg_heap := $0 ; *)
+(*                protocol := pingUser2; *)
+(*                is_admin := false |}). *)
+
+
 
 (* Ping Universe *)
 Example ping_universe :=
