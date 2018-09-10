@@ -86,12 +86,12 @@ Notation "x <<<- c1 ; c2" := (BindAsymKeys c1 (fun x => c2)) (right associativit
 Inductive cmd' : Set -> Type :=
   (* Plumbing *)
 | Return' {result : Set} (r : result) : cmd' result
-| Bind' {result result'} (c1 : cmd' result') (c2 : result' -> cmd' result) : cmd' result
+| Bind' {result result' : Set} (c1 : cmd' result') (c2 : result' -> cmd' result) : cmd' result
 
 | Send' (uid : user_id) (msg : message) : cmd' unit
 | Recv' : cmd' message
 
-| Decrypt' (k : option var) (ctxt : message) : cmd' message (* can message be Ciphertext somehow?? *)
+| Decrypt' (k : var) (ctxt : message) : cmd' message (* can message be Ciphertext somehow?? *)
 | Encrypt' (k : var) (ptxt : message) : cmd' message
 
 | Sign' (k : var) (msg : message) : cmd' message
