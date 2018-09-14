@@ -91,18 +91,17 @@ Inductive key :=
 (* Messages ultimately wrap either a string or a key 
    Messages can be encrypted, signed, or HMACed in a nested fashion any number of times 
    Note: the key_pair_message constructor is temporary and will be removed *)
-Inductive message :=
+Inductive message : Set :=
+(* Base Message Types *)
 | Plaintext (txt : string)
-
-(* Re: discussion above, treating the var as the thing you decrypt with and the id (nat) as the thing you
-   encrypt with, so as to provide evidence that you didn't cheat when decrypting *)
-| Sym_Key_Msg  (sender_id : user_id) (k : var) (k_id : symmetric_key_id)
+| Sym_Key_Msg  (k_id : symmetric_key_id)
 (* We assume that asymmetric keys are pre-populated in the users' key stores *)
 (* | Asym_Key_Msg (sender_id : user_id) (k : var) (k_id : asym_pub_key_id) *)
 
-| Ciphertext   (msg : message) (k_id : nat)
-| Signature    (msg : message) (k_id : nat)
-| HMAC_Message (msg : message) (k_id : nat)
+(* In order to decrypt, you need the key *) 
+| Ciphertext   (decrypt : nat -> option message)
+| Signature    (msg : message) (verify : nat -> bool)
+| HMAC_Message (msg : message) (verify : nat -> bool)
 .
  
 (* Maybe: 
@@ -536,6 +535,19 @@ Record universe := mkUniverse {
 
 (* U.(users) 
    Check on both ends that received message == "Hello" *)
+
+Example howAreWeModelingDecryption :=
+  c <- Recv;
+  Return (match c with
+          | Ciphertext msg kid => msg
+          | _                  => c
+         end)
+  .
+
+
+
+
+
 
 Example pingUser1 : user_id -> user_cmd message := fun uid =>
   a <- GenerateAsymKeys RSA_Enc ;
