@@ -3,8 +3,8 @@ Require Import Frap.
 Set Implicit Arguments.
 
 Definition user_id := nat.
-(* Definition sym_key_id := nat. *)
-(* Definition asym_key_id := nat *)
+Definition symmetric_key_id  := nat.
+Definition asymmetric_key_id := nat.
 
 (* Possible usages for symmetric keys *)
 Inductive symmetric_usage :=
@@ -21,17 +21,25 @@ Inductive asymmetric_usage :=
 | ECDSA_Ver.
 
 (* Keys track identifiers, the user_id of the generating user, and a usage *) 
-Record symmetric_key :=
-  {sym_key_id : nat ;
+Record symmetric_key := MkSymmetricKey {
+   sym_key_id : symmetric_key_id ;
    sym_generating_user_id : user_id ;
-   sym_usage : symmetric_usage}.
+   sym_usage : symmetric_usage
+   }.
 
-(* Asymmetric keys track the above as well as the ID of the other key in the pair *)
-Record asymmetric_key :=
-  {asym_key_id : nat ;
+(* Asymmetric keys track the above but have two parts, public and private *)
+
+Record asymmetric_key_part := MkKeyPart {
+  key_part_id : nat;
+  key_part_usage : asymmetric_usage
+  }.
+
+Record asymmetric_key := MkAsymmetricKey {
+   asym_key_id             : asymmetric_key_id ;
    asym_generating_user_id : user_id ;
-   asym_usage : asymmetric_usage ;
-   asym_paired_key_id : nat}.
+   asym_public_key         : asymmetric_key_part;
+   asym_private_key        : asymmetric_key_part;
+  }.
 
 (* A master key type 
    Q for Adam: is this master type beneficial? *)
@@ -39,17 +47,63 @@ Inductive key :=
 | SymKey (k : symmetric_key)
 | AsymKey (k : asymmetric_key).
 
+(** How are we going to model encryption / decryption in this framework?  Each key has
+    associated with it either:
+    - a key id (in the case of a symmetric key)
+    - a public/privite key pair (in the case of an asymmetric key)
+
+    In order for us to share a secret, we need to appropriately hide that secret so that
+    it cannot be viewed by eavesdroppers.  At the same time, for the purposes of this model
+    we are creating, we need to be able to detect very simply whether a decryption has been
+    successful.  The way we are going to do this, conceptually, is to include the key_id as
+    part of the message, and have the decryption command take a "var" which is associated
+    with that key_id.  Let's work out the two cases:  symmetric and asymmetric keys.
+   
+    * Symmetric Key encryption / decryption
+
+    If I want to encrypt something and share it with someone else using a symmetric key, we
+    first have to generate the key and securely share it.  Ignoring things like usage and
+    the actual sharing process, the steps are:
+    - Generate symmetric key:  (private_key_id, private_key_guid) : (nat, var) := (id,guid)
+    - Securely share (id, guid) pair (via asymmetric key protocol??)
+    - Sending user encrypts with "id"
+    - Sending user sends encrypted message to receiving user
+    - Receiving user decrypts with "guid"
+    - System verifies that ("id", "guid") are a valid pair
+
+    * Asymmetric Key encryption / decryption
+
+    Sharing a secret via asymmetric keys has a few more steps, but no 'magical' ones.  Each
+    user generates public/private key pairs, exchange the public parts, and encrypts with
+    a combination of own private key / destination user's public key.  The steps in more
+    detail:
+    - UserA generates key:
+        (pub_key_id, pub_key_guid, priv_key_id, priv_key_guid) : (nat,var,nat,var) := (pubIdA,pubGuidA,privIdA,privGuidA)
+    - UserB generates key:
+        (pub_key_id, pub_key_guid, priv_key_id, priv_key_guid) : (nat,var,nat,var) := (pubIdB,pubGuidB,privIdB,privGuidB)
+    - UserA publicly sends to UserB (pubIdA,pubGuidA)
+    - UserB publicly sends to UserA (pubIdB,pubGuidB)
+    - UserA encrypts message with (privIdA,pubIdB), sends to UserB
+    - UserB decrypts reeived message with (privIdB,pubIdA)
+ *)
+
+
 (* Messages ultimately wrap either a string or a key 
    Messages can be encrypted, signed, or HMACed in a nested fashion any number of times 
    Note: the key_pair_message constructor is temporary and will be removed *)
 Inductive message :=
-| Plaintext (sender_id : user_id) (txt : string)
-| Key_Message (sender_id : user_id) (k : var) (* Used to be key *)
-| Key_pair_message (sender_id : user_id) (p : (var * var)) (* Used to be key * key *)
+| Plaintext (txt : string)
 
-| Ciphertext (sender_id : user_id) (msg : message) (k_id : nat)
-| Signature (k_id : nat) (signer_id : user_id) (msg : message)
-| HMAC_Message (sender_id : user_id) (k_id : nat) (msg : message).
+(* Re: discussion above, treating the var as the thing you decrypt with and the id (nat) as the thing you
+   encrypt with, so as to provide evidence that you didn't cheat when decrypting *)
+| Sym_Key_Msg  (sender_id : user_id) (k : var) (k_id : symmetric_key_id)
+(* We assume that asymmetric keys are pre-populated in the users' key stores *)
+(* | Asym_Key_Msg (sender_id : user_id) (k : var) (k_id : asym_pub_key_id) *)
+
+| Ciphertext   (msg : message) (k_id : nat)
+| Signature    (msg : message) (k_id : nat)
+| HMAC_Message (msg : message) (k_id : nat)
+.
  
 (* Maybe: 
  * Return' (k : key)
@@ -91,21 +145,24 @@ Inductive user_cmd : Set -> Type :=
 | Send (uid : user_id) (msg : message) : user_cmd unit
 | Recv : user_cmd message
 
-| Decrypt (k : var) (ctxt : message) : user_cmd message (* can message be Ciphertext somehow?? *)
+(* Decryption unwraps the ciphertext *)
+| Decrypt (k : var) (ctxt : message) : user_cmd message 
 | Encrypt (k : var) (ptxt : message) : user_cmd message
 
-| Sign (k : var) (msg : message) : user_cmd message
-| Verify (k : option var) (sig : message) : user_cmd message
+| Sign   (k : var) (msg : message) : user_cmd message
+| Verify (k : var) (sig : message) : user_cmd bool
 
 | ProduceHMAC (k : var) (msg : message) : user_cmd message
-| VerifyHMAC (k : option var) (mac : message) : user_cmd message
+| VerifyHMAC  (k : var) (mac : message) : user_cmd bool
 
 | GenerateSymKey (usage : symmetric_usage) : user_cmd var
-| GenerateAsymKeys (usage : asymmetric_usage) : user_cmd (var * var)
+
+(* We assume asymmetric keys are pre-staged *)
+(* | GenerateAsymKeys (usage : asymmetric_usage) : user_cmd (var * var) *)
 
 (* Allow administrator to make some global change to the universe -- revoke keys, etc. *)
 (* This may be a universe level step -- Administrator forces all users to stop *)
-| Barrier {result : Set} : user_cmd result
+(* | Barrier {result : Set} : user_cmd result *)
 .
 
 Notation "x <- c1 ; c2" := (Bind c1 (fun x => c2)) (right associativity, at level 75).
@@ -124,7 +181,7 @@ Record user_data : Type := mkUserData {
    the user calls Recv, at which point they are removed from the buffer and added to the user's msg_heap *)
 Record network := mkNetwork {
     users_msg_buffer : queued_messages ;
-    trace            : list (user_id * message)
+    trace            : list (user_id * message) (* receiver / message *)
 }.
 
 (* The universe consists of some number of users and a network.
