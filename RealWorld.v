@@ -15,10 +15,9 @@ Inductive symmetric_usage :=
 
 (* Possible usages for asymmetric keys *)
 Inductive asymmetric_usage :=
-| RSA_Enc
-| RSA_Dec
-| ECDSA_Sig
-| ECDSA_Ver.
+| RSA_Encryption
+| ECDSA_Signature
+.
 
 (* Keys track identifiers, the user_id of the generating user, and a usage *) 
 Record symmetric_key := MkSymmetricKey {
@@ -30,21 +29,20 @@ Record symmetric_key := MkSymmetricKey {
 (* Asymmetric keys track the above but have two parts, public and private *)
 
 Record asymmetric_key_part := MkKeyPart {
-  key_part_id : nat;
-  key_part_usage : asymmetric_usage
+  key_part_id : nat
   }.
 
 Record asymmetric_key := MkAsymmetricKey {
    asym_key_id             : asymmetric_key_id ;
    asym_generating_user_id : user_id ;
+   asym_usage              : asymmetric_usage;
    asym_public_key         : asymmetric_key_part;
-   asym_private_key        : asymmetric_key_part;
+   asym_private_key        : asymmetric_key_part
   }.
 
-(* A master key type 
-   Q for Adam: is this master type beneficial? *)
+(* A master key type *)
 Inductive key :=
-| SymKey (k : symmetric_key)
+| SymKey  (k : symmetric_key)
 | AsymKey (k : asymmetric_key).
 
 (** How are we going to model encryption / decryption in this framework?  Each key has
@@ -137,7 +135,7 @@ Inductive message : Set :=
 (* Notation "x <<<- c1 ; c2" := (BindAsymKeys c1 (fun x => c2)) (right associativity, at level 75). *)
 
 Inductive user_cmd : Set -> Type :=
-  (* Plumbing *)
+(* Plumbing *)
 | Return {result : Set} (r : result) : user_cmd result
 | Bind {result result' : Set} (c1 : user_cmd result') (c2 : result' -> user_cmd result) : user_cmd result
 
@@ -145,14 +143,14 @@ Inductive user_cmd : Set -> Type :=
 | Recv : user_cmd message
 
 (* Decryption unwraps the ciphertext *)
-| Decrypt (k : var) (ctxt : message) : user_cmd message 
-| Encrypt (k : var) (ptxt : message) : user_cmd message
+| Decrypt (k : nat) (ctxt : message) : user_cmd (option message)
+| Encrypt (k : nat) (ptxt : message) : user_cmd message
 
-| Sign   (k : var) (msg : message) : user_cmd message
-| Verify (k : var) (sig : message) : user_cmd bool
+| Sign   (k : nat) (msg : message) : user_cmd message
+| Verify (k : nat) (sig : message) : user_cmd bool
 
-| ProduceHMAC (k : var) (msg : message) : user_cmd message
-| VerifyHMAC  (k : var) (mac : message) : user_cmd bool
+| ProduceHMAC (k : nat) (msg : message) : user_cmd message
+| VerifyHMAC  (k : nat) (mac : message) : user_cmd bool
 
 | GenerateSymKey (usage : symmetric_usage) : user_cmd var
 
@@ -167,11 +165,11 @@ Inductive user_cmd : Set -> Type :=
 Notation "x <- c1 ; c2" := (Bind c1 (fun x => c2)) (right associativity, at level 75).
 
 Definition queued_messages := fmap user_id (list message).
-Definition user_msg_heap := list (var * message).
+Definition user_msg_heap   := list (user_id * message).
 
-Record user_data : Type := mkUserData {
-   uid      : user_id ;
-   key_heap : fmap var key ;
+Record user_data := {
+   usrid    : user_id ;
+   key_heap : fmap nat key ;
    msg_heap : user_msg_heap ;
    protocol : user_cmd message ; (* todo tbraje: this is wrong, how do we properly handle polymorpic protols?? *)
    is_admin : bool }.
@@ -179,8 +177,8 @@ Record user_data : Type := mkUserData {
 (* The network stores message buffers for each user. Any messages sent to a user are stored here until
    the user calls Recv, at which point they are removed from the buffer and added to the user's msg_heap *)
 Record network := mkNetwork {
-    users_msg_buffer : queued_messages ;
-    trace            : list (user_id * message) (* receiver / message *)
+  users_msg_buffer : queued_messages ;
+  trace            : list (user_id * user_id * message) (* sender / receiver / message *)
 }.
 
 (* The universe consists of some number of users and a network.
@@ -536,84 +534,92 @@ Record universe := mkUniverse {
 (* U.(users) 
    Check on both ends that received message == "Hello" *)
 
-Example howAreWeModelingDecryption :=
-  c <- Recv;
-  Return (match c with
-          | Ciphertext msg kid => msg
-          | _                  => c
-         end)
-  .
+(* Example howAreWeModelingDecryption := *)
+(*   c <- Recv; *)
+(*   Return (match c with *)
+(*           | Ciphertext msg_fn  => msg *)
+(*           | _                  => c *)
+(*          end) *)
+(*   . *)
+
+(* Example pingUser1 : user_id -> user_cmd message := fun uid => *)
+(*   a <- GenerateAsymKeys RSA_Enc ; *)
+(*   b <- Send uid (Key_Message 0 (fst a)) ; *)
+(*   c <- GenerateAsymKeys ECDSA_Sig ; *)
+(*   d <- Send uid (Key_Message 0 (fst c)) ; *)
+(*   e <- Sign (snd c) (Plaintext 0 "Hello") ; *)
+(*   f <- Encrypt (snd a) e ; *)
+(*   g <- Send uid f ; *)
+(*   Recv. (* Had better be Plaintext 1 "Hello" *) *)
+
+(* Example pingUser2 : user_id -> user_cmd message := fun uid => *)
+(*   a <- Recv ; *)
+(*   b <- Recv ; *)
+(*   c <- Recv ; *)
+(*   (* d <- Decrypt a c; *) *)
+(*   (* e <- Verify (match b with *) *)
+(*   (*                  | Key_Message 0 k => Some k *) *)
+(*   (*                  | _ => None *) *)
+(*   (*                  end) d ; *) *)
+(*   (* _ <- Send uid e *) *)
+(*   Return a. (* delete me *) *)
+(*   (* Return e. (* Had better be Plaintext "Hello" *) *) *)
+
+(* Example ping_users := *)
+(*  $0 $+ (0, {| uid := 0 ; *)
+(*               key_heap := $0 ; *)
+(*               msg_heap := nil ; *)
+(*               protocol := pingUser1 1 ; *)
+(*               is_admin := false |}) *)
+(*     $+ (1 , {| uid := 1 ; *)
+(*                key_heap := $0 ; *)
+(*                msg_heap := nil ; *)
+(*                protocol := pingUser2 0 ; *)
+(*                is_admin := false |}). *)
+
+(* (* Ping Universe *) *)
+(* Example ping_universe := *)
+(* {| users := ping_users ; *)
+(*    net := {| users_msg_buffer := $0 $+ (0, []) $+ (1, []) ; *)
+(*              trace := [] |} ; *)
+(*    key_counter := 0 |}. *)
 
 
+Definition multiMapAdd {K V : Set} (k : K)(v : V)(m : fmap K (list V)) : fmap K (list V) :=
+  match m $? k with
+  | None => m $+ (k, [v])
+  | Some vs => m $+ (k, v :: vs)
+  end.
 
+Definition validEncryptionKey (k : key) : bool :=
+  match k with
+  | SymKey k'  => match (sym_usage k')  with | AES_GCM => true | AES_CTR => true | AES_KW => true | _ => false end
+  | AsymKey k' => match (asym_usage k') with | RSA_Encryption => true | _ => false end
+  end.
 
-
-
-Example pingUser1 : user_id -> user_cmd message := fun uid =>
-  a <- GenerateAsymKeys RSA_Enc ;
-  b <- Send uid (Key_Message 0 (fst a)) ;
-  c <- GenerateAsymKeys ECDSA_Sig ;
-  d <- Send uid (Key_Message 0 (fst c)) ;
-  e <- Sign (snd c) (Plaintext 0 "Hello") ;
-  f <- Encrypt (snd a) e ;
-  g <- Send uid f ;
-  Recv. (* Had better be Plaintext 1 "Hello" *)
-
-Example pingUser2 : user_id -> user_cmd message := fun uid =>
-  a <- Recv ;
-  b <- Recv ;
-  c <- Recv ;
-  (* d <- Decrypt a c; *)
-  (* e <- Verify (match b with *)
-  (*                  | Key_Message 0 k => Some k *)
-  (*                  | _ => None *)
-  (*                  end) d ; *)
-  (* _ <- Send uid e *)
-  Return a. (* delete me *)
-  (* Return e. (* Had better be Plaintext "Hello" *) *)
-
-Example ping_users :=
- $0 $+ (0, {| uid := 0 ;
-              key_heap := $0 ;
-              msg_heap := nil ;
-              protocol := pingUser1 1 ;
-              is_admin := false |})
-    $+ (1 , {| uid := 1 ;
-               key_heap := $0 ;
-               msg_heap := nil ;
-               protocol := pingUser2 0 ;
-               is_admin := false |}).
-
-(* Ping Universe *)
-Example ping_universe :=
-{| users := ping_users ;
-   net := {| users_msg_buffer := $0 $+ (0, []) $+ (1, []) ;
-             trace := [] |} ;
-   key_counter := 0 |}.
-
-
-
-Inductive step_user : forall A, queued_messages * user_msg_heap * user_cmd A -> queued_messages * user_msg_heap * user_cmd A -> Prop :=
-  (* Plumbing *)
-| StepBindRecur : forall result result' q q' h h' (cmd1 cmd1' : user_cmd result) (cmd2 : result -> user_cmd result'),
-    step_user (q, h, cmd1) (q', h', cmd1')
-    -> step_user (q, h, Bind cmd1 cmd2) (q', h', Bind cmd1' cmd2)
-| StepBindProceed : forall (result result' : Set) q h (v : result') (cmd : result' -> user_cmd result),
-    step_user (q, h, Bind (Return v) cmd) (q, h, cmd v)
+Inductive step_user : forall A B, queued_messages * user_data * user_cmd A -> queued_messages * user_data * user_cmd B -> Prop :=
+(* Plumbing *)
+| StepBindRecur : forall result result' q q' usrDat usrDat' (cmd1 cmd1' : user_cmd result) (cmd2 : result -> user_cmd result'),
+    step_user (q, usrDat, cmd1) (q', usrDat', cmd1')
+    -> step_user (q, usrDat, Bind cmd1 cmd2) (q', usrDat', Bind cmd1' cmd2)
+| StepBindProceed : forall (result result' : Set) q usrDat (v : result') (cmd : result' -> user_cmd result),
+    step_user (q, usrDat, Bind (Return v) cmd) (q, usrDat, cmd v)
 
 (* Comms *)
-(* | Send (uid : user_id) (msg : message) : user_cmd unit *)
-(* | Recv : user_cmd message *)
-| StepRecv : forall uid q h msg msgs,
-    q $? uid = Some (cons msg msgs) (* we have a message waiting for us! *)
-    -> step_user (q, h, Recv) (q, h, Return msg)
-| StepSend : forall q h uid msg,
-    step_user (q, h, Send uid msg) (q, h, Return tt)
+| StepRecv : forall q usrDat msg msgs,
+    q $? (usrid usrDat) = Some (cons msg msgs) (* we have a message waiting for us! *)
+    -> step_user (q, usrDat, Recv) (q $+ ( (usrid usrDat), msgs ), usrDat, Return msg)
+| StepSend : forall q usrDat u_id msg,
+    step_user (q, usrDat, Send u_id msg) (multiMapAdd u_id msg q, usrDat, Return tt)
 
 (* Crypto! *)
-
-(* | Decrypt (k : var) (ctxt : message) : user_cmd message (* can message be Ciphertext somehow?? *) *)
-(* | Encrypt (k : var) (ptxt : message) : user_cmd message *)
+| StepDecrypt : forall q usrDat msg k_id decr,
+    msg = Ciphertext decr
+    -> step_user (q, usrDat, Decrypt k_id msg) (q, usrDat, Return (decr k_id))
+| StepEncrypt : forall q usrDat k_id msg k,
+    (key_heap usrDat) $? k_id = Some k
+    -> validEncryptionKey k = true
+    -> step_user (q, usrDat, Encrypt k_id msg) (q, usrDat, Return (Ciphertext (fun k => if k ==n k_id then Some msg else None)))
 
 (* | Sign (k : var) (msg : message) : user_cmd message *)
 (* | Verify (k : option var) (sig : message) : user_cmd message *)
