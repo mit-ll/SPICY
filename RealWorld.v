@@ -135,7 +135,7 @@ Notation "x <- c1 ; c2" := (Bind c1 (fun x => c2)) (right associativity, at leve
 Definition queued_messages := fmap user_id (list message).
 Definition user_msg_heap   := list (user_id * message).
 
-Record user_data := {
+Record user_data := mkUserData {
    usrid    : user_id ;
    key_heap : fmap nat key ;
    msg_heap : user_msg_heap ;
@@ -168,11 +168,11 @@ Definition multiMapAdd {K V : Set} (k : K)(v : V)(m : fmap K (list V)) : fmap K 
 
 Definition validEncryptionKey (k : key) : bool :=
   match k with
-  | SymKey k'  => match (sym_usage k')  with | AES_GCM => true | AES_CTR => true | AES_KW => true | _ => false end
-  | AsymKey k' => match (asym_usage k') with | RSA_Encryption => true | _ => false end
+  | SymKey k'  => match (sym_usage k')  with AES_GCM => true | AES_CTR => true | AES_KW => true | _ => false end
+  | AsymKey k' => match (asym_usage k') with RSA_Encryption => true | _ => false end
   end.
 
-Inductive step_user : forall A B, queued_messages * user_data * user_cmd A -> queued_messages * user_data * user_cmd B -> Prop :=
+Inductive step_user : forall A, queued_messages * user_data * user_cmd A -> queued_messages * user_data * user_cmd A -> Prop :=
 (* Plumbing *)
 | StepBindRecur : forall result result' q q' usrDat usrDat' (cmd1 cmd1' : user_cmd result) (cmd2 : result -> user_cmd result'),
     step_user (q, usrDat, cmd1) (q', usrDat', cmd1')
@@ -182,7 +182,8 @@ Inductive step_user : forall A B, queued_messages * user_data * user_cmd A -> qu
 
 (* Comms *)
 | StepRecv : forall q usrDat msg msgs,
-    q $? (usrid usrDat) = Some (cons msg msgs) (* we have a message waiting for us! *)
+    (* if I receive a key message here, should I add it to the key heap!?!?!?!? Probably need two types of Recv steps *)
+    q $? usrDat.(usrid) = Some (cons msg msgs) (* we have a message waiting for us! *)
     -> step_user (q, usrDat, Recv) (q $+ ( (usrid usrDat), msgs ), usrDat, Return msg)
 | StepSend : forall q usrDat u_id msg,
     step_user (q, usrDat, Send u_id msg) (multiMapAdd u_id msg q, usrDat, Return tt)
@@ -194,7 +195,7 @@ Inductive step_user : forall A B, queued_messages * user_data * user_cmd A -> qu
 | StepEncrypt : forall q usrDat k_id msg k,
     (key_heap usrDat) $? k_id = Some k
     -> validEncryptionKey k = true
-    -> step_user (q, usrDat, Encrypt k_id msg) (q, usrDat, Return (Ciphertext (fun k => if k ==n k_id then Some msg else None)))
+    -> step_user (q, usrDat, Encrypt k_id msg) (q, usrDat, Return (Ciphertext (fun k' => if k' ==n k_id then Some msg else None)))
 
 (* | Sign (k : var) (msg : message) : user_cmd message *)
 (* | Verify (k : option var) (sig : message) : user_cmd message *)
@@ -208,7 +209,18 @@ Inductive step_user : forall A B, queued_messages * user_data * user_cmd A -> qu
 (* | Barrier {result : Set} : user_cmd result. *)
 .
 
-
+Inductive step_universe : universe -> universe -> Prop :=
+| StepUser : forall {A} U q q' ud ud' (cmd cmd' : user_cmd A),
+    step_user (q,ud,cmd) (q',ud',cmd')
+    -> step_universe U ( {| users := U.(users) $+ ( ud'.(usrid), ud' ) ;
+                           net   := {|
+                                     users_msg_buffer := q';
+                                     trace            := U.(net).(trace)
+                                   |};
+                           key_counter := U.(key_counter)
+                         |}
+                      )
+.
 
 
 (*
@@ -218,7 +230,6 @@ Inductive step_user : forall A B, queued_messages * user_data * user_cmd A -> qu
  * ******************************************
  * ******************************************
  *)
-
 
 (* Maybe: 
  * Return' (k : key)
