@@ -3,8 +3,16 @@ Require Import Frap.
 Set Implicit Arguments.
 
 Definition user_id := nat.
-Definition symmetric_key_id  := nat.
-Definition asymmetric_key_id := nat.
+
+Definition key_id              := nat.
+Definition symmetric_key_id    := nat.
+Definition asymmetric_key_id   := nat.
+Definition asym_public_key_id  := nat.
+Definition asym_private_key_id := nat.
+
+Definition signed_message_id    := nat.
+Definition encrypted_message_id := nat.
+Definition hmac_message_id      := nat.
 
 (* Possible usages for symmetric keys *)
 Inductive symmetric_usage :=
@@ -21,23 +29,18 @@ Inductive asymmetric_usage :=
 
 (* Keys track identifiers, the user_id of the generating user, and a usage *) 
 Record symmetric_key := MkSymmetricKey {
-   sym_key_id : symmetric_key_id ;
-   sym_generating_user_id : user_id ;
-   sym_usage : symmetric_usage
-   }.
-
-(* Asymmetric keys track the above but have two parts, public and private *)
-
-Record asymmetric_key_part := MkKeyPart {
-  key_part_id : nat
+  sym_key_id : symmetric_key_id ;
+  sym_generating_user_id : user_id ;
+  sym_usage : symmetric_usage
   }.
 
+(* Asymmetric keys track the above but have two parts, public and private *)
 Record asymmetric_key := MkAsymmetricKey {
    asym_key_id             : asymmetric_key_id ;
    asym_generating_user_id : user_id ;
    asym_usage              : asymmetric_usage;
-   asym_public_key         : asymmetric_key_part;
-   asym_private_key        : asymmetric_key_part
+   asym_public_key         : asym_public_key_id;
+   asym_private_key        : asym_private_key_id;
   }.
 
 (* A master key type *)
@@ -89,41 +92,40 @@ Inductive key :=
 (* Messages ultimately wrap either a string or a key 
    Messages can be encrypted, signed, or HMACed in a nested fashion any number of times 
    Note: the key_pair_message constructor is temporary and will be removed *)
-Inductive message : Set :=
+Inductive message : Set -> Type :=
 (* Base Message Types *)
-| Plaintext (txt : string)
-| Sym_Key_Msg  (k_id : symmetric_key_id)
-(* We assume that asymmetric keys are pre-populated in the users' key stores *)
-(* | Asym_Key_Msg (sender_id : user_id) (k : var) (k_id : asym_pub_key_id) *)
+| Plaintext {A : Set} (txt : A) : message A
+| Sym_Key_Msg  (k_id : symmetric_key_id)   : message symmetric_key_id
+| Asym_Key_Msg (k_id : asym_public_key_id) : message asym_public_key_id
 
-(* In order to decrypt, you need the key *) 
-| Ciphertext   (decrypt : nat -> option message)
-| Signature    (msg : message) (verify : nat -> bool)
-| HMAC_Message (msg : message) (verify : nat -> bool)
+| MsgPair {A B : Set} (msg1 : message A) (msg2 : message B) : message (A*B)
+
+| Ciphertext   (msg_id : encrypted_message_id) : message encrypted_message_id
+| Signature    {A : Set} (msg : message A)(sig_id : signed_message_id) : message (A * signed_message_id)
+| HMAC_Message {A : Set} (msg : message A)(hmac_id : hmac_message_id) : message (A * hmac_message_id)
 .
  
-Inductive user_cmd : Set -> Type :=
+Inductive user_cmd : Type -> Type :=
 (* Plumbing *)
-| Return {result : Set} (r : result) : user_cmd result
-| Bind {result result' : Set} (c1 : user_cmd result') (c2 : result' -> user_cmd result) : user_cmd result
+| Return {result : Type} (r : result) : user_cmd result
+| Bind {result result' : Type} (c1 : user_cmd result') (c2 : result' -> user_cmd result) : user_cmd result
 
-| Send (uid : user_id) (msg : message) : user_cmd unit
-| Recv : user_cmd message
+(* Messaging *)
+| Send {A : Set} (uid : user_id) (msg : message A) : user_cmd unit
+| Recv {A : Set}: user_cmd (message A)
 
-(* Decryption unwraps the ciphertext *)
-| Decrypt (k : nat) (ctxt : message) : user_cmd (option message)
-| Encrypt (k : nat) (ptxt : message) : user_cmd message
+(* Crypto!! *)
+| Encrypt {A : Set} (k : key_id) (msg : message A)  : user_cmd (message encrypted_message_id)
+| Decrypt {A : Set} (msg : message encrypted_message_id) : user_cmd (message A)
 
-| Sign   (k : nat) (msg : message) : user_cmd message
-| Verify (k : nat) (sig : message) : user_cmd bool
+| Sign    {A : Set} (k : key_id) (msg : message A) : user_cmd (message (A * signed_message_id))
+| Verify  {A : Set} (secret : signed_message_id) (msg : message A) : user_cmd bool
 
-| ProduceHMAC (k : nat) (msg : message) : user_cmd message
-| VerifyHMAC  (k : nat) (mac : message) : user_cmd bool
+| ProduceHMAC {A : Set} (k : key_id) (msg : message A) : user_cmd (message (A * hmac_message_id))
+| VerifyHMAC  {A : Set} (secret : hmac_message_id) (msg : message A) : user_cmd bool
 
-| GenerateSymKey (usage : symmetric_usage) : user_cmd var
-
-(* We assume asymmetric keys are pre-staged *)
-(* | GenerateAsymKeys (usage : asymmetric_usage) : user_cmd (var * var) *)
+| GenerateSymKey (usage : symmetric_usage) : user_cmd symmetric_key_id
+| GenerateAsymKeys (usage : asymmetric_usage) : user_cmd asymmetric_key_id
 
 (* Allow administrator to make some global change to the universe -- revoke keys, etc. *)
 (* This may be a universe level step -- Administrator forces all users to stop *)
@@ -132,35 +134,51 @@ Inductive user_cmd : Set -> Type :=
 
 Notation "x <- c1 ; c2" := (Bind c1 (fun x => c2)) (right associativity, at level 75).
 
-Definition queued_messages := fmap user_id (list message).
-Definition user_msg_heap   := list (user_id * message).
+(* Exisistential wrapper for message, so we can put it in collections *)
+(* This feels overly complicated to me... *) 
+Inductive exmsg : Type :=
+| Exm {A : Set} (msg : message A) : exmsg.
+
+Check ($0 $+ (1, Exm (Plaintext "foo")) $+ (1, Exm (Plaintext 1))).
+
+Definition queued_messages := fmap user_id (list exmsg).
+Definition user_msg_heap   := list (user_id * exmsg).
 
 Record user_data := mkUserData {
    usrid    : user_id ;
    key_heap : fmap nat key ;
    msg_heap : user_msg_heap ;
-   protocol : user_cmd message ; (* todo tbraje: this is wrong, how do we properly handle polymorpic protols?? *)
-   is_admin : bool }.
+   protocol : user_cmd unit ;
+   (* is_admin : bool *)
+   }.
 
 (* The network stores message buffers for each user. Any messages sent to a user are stored here until
    the user calls Recv, at which point they are removed from the buffer and added to the user's msg_heap *)
-Record network := mkNetwork {
-  users_msg_buffer : queued_messages ;
-  trace            : list (user_id * user_id * message) (* sender / receiver / message *)
-}.
+(* Record network := mkNetwork { *)
+(*   users_msg_buffer : queued_messages ; *)
+(*   trace            : list (user_id * user_id * message) (* sender / receiver / message *) *)
+(* }. *)
+
+Inductive encrypted_message  :=
+| Enc (key_id  : nat) (msg : exmsg) : encrypted_message
+| Sig (key_id  : nat)               : encrypted_message
+| Hmac (key_id : nat)               : encrypted_message
+.
 
 (* The universe consists of some number of users and a network.
    The key_counter is a temporary hack to keep track of key_ids and make sure two users don't generate
    keys with the same id. *)
 Record universe := mkUniverse {
-    users       : fmap user_id user_data ;
-    net         : network ;
-    key_counter : nat
+    users            : fmap user_id user_data ;
+    users_msg_buffer : queued_messages ;
+    encryptions      : fmap nat encrypted_message ; (* used for sigs and hmacs as well *)
+    key_counter      : nat ;
+    crypto_counter   : nat
 }.
 
 (* This is horribly inefficient, but I want the list to act like a queue.  We want
  * first in - first out semantics to keep message order preserved *)
-Definition multiMapAdd {K V : Set} (k : K)(v : V)(m : fmap K (list V)) : fmap K (list V) :=
+Definition multiMapAdd {K V} (k : K)(v : V)(m : fmap K (list V)) : fmap K (list V) :=
   match m $? k with
   | None => m $+ (k, [v])
   | Some vs => m $+ (k, vs ++ [v]) (* add new element to end, to preserve order *)
@@ -172,30 +190,58 @@ Definition validEncryptionKey (k : key) : bool :=
   | AsymKey k' => match (asym_usage k') with RSA_Encryption => true | _ => false end
   end.
 
-Inductive step_user : forall A, queued_messages * user_data * user_cmd A -> queued_messages * user_data * user_cmd A -> Prop :=
+Fixpoint findKeys {A} (msg : message A) : list nat :=
+  match msg with
+  | Plaintext pt       => []
+
+  | Sym_Key_Msg kid    => [kid]
+  | Asym_Key_Msg kid   => [kid]
+  | MsgPair msg1 msg2  => findKeys msg1 ++ findKeys msg2
+  | Ciphertext _       => []
+  | Signature msg _    => findKeys msg
+  | HMAC_Message msg _ => findKeys msg
+  end.
+
+Definition updateUniverseQueuedMsgs (u : universe) (uid : user_id) (msgs : (list exmsg) ) :=
+  {|
+    users            := u.(users)
+  ; users_msg_buffer := u.(users_msg_buffer) $+ (uid, msgs)
+  ; encryptions      := u.(encryptions)
+  ; key_counter      := u.(key_counter)
+  ; crypto_counter   := u.(crypto_counter)
+  |}.
+
+
+
+(* implement me *)
+Fixpoint addKeysHeap (keys : list nat) (ud : user_data) : user_data := ud.
+
+Inductive step_user : forall A, universe * user_data * user_cmd A -> universe * user_data * user_cmd A -> Prop :=
 (* Plumbing *)
-| StepBindRecur : forall result result' q q' usrDat usrDat' (cmd1 cmd1' : user_cmd result) (cmd2 : result -> user_cmd result'),
-    step_user (q, usrDat, cmd1) (q', usrDat', cmd1')
-    -> step_user (q, usrDat, Bind cmd1 cmd2) (q', usrDat', Bind cmd1' cmd2)
-| StepBindProceed : forall (result result' : Set) q usrDat (v : result') (cmd : result' -> user_cmd result),
-    step_user (q, usrDat, Bind (Return v) cmd) (q, usrDat, cmd v)
+| StepBindRecur : forall result result' u u' usrDat usrDat' (cmd1 cmd1' : user_cmd result) (cmd2 : result -> user_cmd result'),
+    step_user (u, usrDat, cmd1) (u', usrDat', cmd1')
+    -> step_user (u, usrDat, Bind cmd1 cmd2) (u', usrDat', Bind cmd1' cmd2)
+| StepBindProceed : forall result result' u usrDat (v : result') (cmd : result' -> user_cmd result),
+    step_user (u, usrDat, Bind (Return v) cmd) (u, usrDat, cmd v)
 
 (* Comms *)
-| StepRecv : forall q usrDat msg msgs,
-    (* if I receive a key message here, should I add it to the key heap!?!?!?!? Probably need two types of Recv steps *)
-    q $? usrDat.(usrid) = Some (cons msg msgs) (* we have a message waiting for us! *)
-    -> step_user (q, usrDat, Recv) (q $+ ( (usrid usrDat), msgs ), usrDat, Return msg)
-| StepSend : forall q usrDat u_id msg,
-    step_user (q, usrDat, Send u_id msg) (multiMapAdd u_id msg q, usrDat, Return tt)
+| StepRecv : forall M u usrDat msg msgs newKeyIds,
+    q $? usrDat.(usrid) = Some ((Exm (msg : message M)) :: msgs) (* we have a message waiting for us! *)
+    -> findKeys msg = newKeyIds (* Need to be added to the user's key store *)
+    -> step_user (u, usrDat, Recv) (u $+ ( usrDat.(usrid), msgs ), addKeysHeap newKeyIds usrDat, Return msg)
+| StepSend : forall A q usrDat u_id (msg : message A),
+    step_user (q, usrDat, Send u_id msg) (multiMapAdd u_id (Exm msg) q, usrDat, Return tt)
 
 (* Crypto! *)
-| StepDecrypt : forall q usrDat msg k_id decr,
-    msg = Ciphertext decr
-    -> step_user (q, usrDat, Decrypt k_id msg) (q, usrDat, Return (decr k_id))
-| StepEncrypt : forall q usrDat k_id msg k,
-    (key_heap usrDat) $? k_id = Some k
+| StepEncrypt : forall q usrDat k_id msg msg_id k,
+    usrDat.(key_heap) $? k_id = Some k
     -> validEncryptionKey k = true
-    -> step_user (q, usrDat, Encrypt k_id msg) (q, usrDat, Return (Ciphertext (fun k' => if k' ==n k_id then Some msg else None)))
+    (* Generate new msg_id and add message to heap *)
+    -> step_user (q, usrDat, Encrypt k_id msg) (q, usrDat, Return (Ciphertext msg_id))
+| StepDecrypt : forall q usrDat msg k_id k enc_id,
+    u.(encryptions) $? enc_id = Some (k_id, msg)
+    -> usrDat.(keys) $? k_id = Some k
+    -> step_user (q, usrDat, Decrypt k_id (Ciphertext enc_id)) (q, usrDat, Return msg)
 
 (* | Sign (k : var) (msg : message) : user_cmd message *)
 (* | Verify (k : option var) (sig : message) : user_cmd message *)
