@@ -117,14 +117,14 @@ Definition buildAsymmetricKey (k_id : asym_private_key_id) (usage : asymmetric_u
 Inductive message : Set -> Type :=
 (* Base Message Types *)
 | Plaintext {A : Set} (txt : A) : message A
-| Sym_Key_Msg  (k : symmetric_key)   : message key
-| Asym_Key_Msg (k : asymmetric_key)  : message key
+| Sym_Key_Msg  (k : symmetric_key)   : message symmetric_key
+| Asym_Key_Msg (k : asymmetric_key)  : message asymmetric_key
 
 | MsgPair {A B : Set} (msg1 : message A) (msg2 : message B) : message (A*B)
 
 | Ciphertext   (msg_id : encrypted_message_id) : message encrypted_message_id
-| Signature    {A : Set} (msg : message A)(sig_id : signed_message_id) : message (A * signed_message_id)
-| HMAC_Message {A : Set} (msg : message A)(hmac_id : hmac_message_id) : message (A * hmac_message_id)
+| Signature    {A : Set} (msg : message A)(sig_id : signed_message_id) : message A
+| HMAC_Message {A : Set} (msg : message A)(hmac_id : hmac_message_id) : message A
 .
  
 Inductive user_cmd : Type -> Type :=
@@ -140,11 +140,11 @@ Inductive user_cmd : Type -> Type :=
 | Encrypt {A : Set} (k : key) (msg : message A)  : user_cmd (message encrypted_message_id)
 | Decrypt {A : Set} (msg : message encrypted_message_id) : user_cmd (message A)
 
-| Sign    {A : Set} (k : key) (msg : message A) : user_cmd (message (A * signed_message_id))
-| Verify  {A : Set} (secret : signed_message_id) (msg : message A) : user_cmd bool
+| Sign    {A : Set} (k : key) (msg : message A) : user_cmd (message A)
+| Verify  {A : Set} (msg : message A) : user_cmd bool
 
-| ProduceHMAC {A : Set} (k : key) (msg : message A) : user_cmd (message (A * hmac_message_id))
-| VerifyHMAC  {A : Set} (secret : hmac_message_id) (msg : message A) : user_cmd bool
+| ProduceHMAC {A : Set} (k : key) (msg : message A) : user_cmd (message A)
+| VerifyHMAC  {A : Set} (msg : message A) : user_cmd bool
 
 | GenerateSymKey (usage : symmetric_usage) : user_cmd symmetric_key
 | GenerateAsymKeys (usage : asymmetric_usage) : user_cmd asymmetric_key
@@ -365,7 +365,7 @@ Inductive step_user : forall A, universe * user_data * user_cmd A -> universe * 
     (*  Make sure that the user has the public part of the looked up key *)
     -> usrDat.(key_heap) $? k.(public_key).(asym_public_key) = Some (AsymPubKey k')
     (* Do I need to check that the public parts of the keys are the same?? *)
-    -> step_user (u, usrDat, Verify sig_id (Signature msg sig_id)) (u, Return true)
+    -> step_user (u, usrDat, Verify (Signature msg sig_id)) (u, Return true)
 
 (* HMAC / Verify HMAC*)
 | StepProduceHMAC : forall A u usrDat (msg : message A) k_id k hmacMsg,
@@ -376,7 +376,7 @@ Inductive step_user : forall A, universe * user_data * user_cmd A -> universe * 
 | StepVerifyHmac : forall A u usrDat (msg : message A) k_id k hmac_id,
     u.(encryptions) $? hmac_id = Some (Hmac k_id)
     -> usrDat.(key_heap) $? k_id = Some (SymKey k)
-    -> step_user (u, usrDat, VerifyHMAC hmac_id (HMAC_Message msg hmac_id)) (u, Return true)
+    -> step_user (u, usrDat, VerifyHMAC (HMAC_Message msg hmac_id)) (u, Return true)
 
 (* Key creation *)
 | StepGenerateSymKey: forall u usrDat usage k,
