@@ -34,19 +34,25 @@ Record symmetric_key := MkSymmetricKey {
   sym_usage : symmetric_usage
   }.
 
+Record asymmetric_public_key := MkAsymmetricPublicKey {
+  asym_public_key         : asym_public_key_id;
+  asym_key_ref            : asymmetric_key_id;
+  asym_generating_user_id : user_id ;
+  asym_usage              : asymmetric_usage;
+  }.
+
 (* Asymmetric keys track the above but have two parts, public and private *)
 Record asymmetric_key := MkAsymmetricKey {
-   asym_key_id             : asym_private_key_id ;
-   asym_generating_user_id : user_id ;
-   asym_usage              : asymmetric_usage;
-   asym_public_key         : asym_public_key_id;
+  asym_key_id        : asymmetric_key_id ;
+  public_key         : asymmetric_public_key ;
+  private_key        : asym_private_key_id
   }.
 
 (* A master key type *)
 Inductive key :=
 | SymKey     (k : symmetric_key)
 | AsymKey    (k : asymmetric_key)
-| AsymPubKey (k : asym_public_key_id).
+| AsymPubKey (k : asymmetric_public_key).
 
 Definition buildSymmetricKey (k_id : symmetric_key_id) (usage : symmetric_usage) (u_id : user_id) :=
   {|
@@ -58,9 +64,11 @@ Definition buildSymmetricKey (k_id : symmetric_key_id) (usage : symmetric_usage)
 Definition buildAsymmetricKey (k_id : asym_private_key_id) (usage : asymmetric_usage) (u_id : user_id) :=
   {|
      asym_key_id             := k_id
-   ; asym_generating_user_id := u_id
-   ; asym_usage              := usage
-   ; asym_public_key         := k_id + 1
+   ; public_key              := {| asym_key_ref    := k_id
+                                 ; asym_public_key := k_id + 1
+                                 ; asym_generating_user_id := u_id
+                                 ; asym_usage := usage |}
+   ; private_key             := k_id + 2
   |}.
 
 (** How are we going to model encryption / decryption in this framework?  Each key has
@@ -72,20 +80,20 @@ Definition buildAsymmetricKey (k_id : asym_private_key_id) (usage : asymmetric_u
     it cannot be viewed by eavesdroppers.  At the same time, for the purposes of this model
     we are creating, we need to be able to detect very simply whether a decryption has been
     successful.  The way we are going to do this, conceptually, is to include the key_id as
-    part of the message, and have the decryption command take a "var" which is associated
-    with that key_id.  Let's work out the two cases:  symmetric and asymmetric keys.
+    part of the message, and have the decryption step relation check whether that key_id
+    exists in the user's key heap.  Let's work out more precisely what happens in the two
+    cases:  symmetric and asymmetric keys.
    
     * Symmetric Key encryption / decryption
 
     If I want to encrypt something and share it with someone else using a symmetric key, we
     first have to generate the key and securely share it.  Ignoring things like usage and
     the actual sharing process, the steps are:
-    - Generate symmetric key:  (private_key_id, private_key_guid) : (nat, var) := (id,guid)
-    - Securely share (id, guid) pair (via asymmetric key protocol??)
-    - Sending user encrypts with "id"
+    - Generate symmetric key: private_key : symmetric_key := k (system adds to user's key heap)
+    - Securely share k (via Sym_Key_Msg, system adds to user's key heap)
+    - Sending user encrypts with k
     - Sending user sends encrypted message to receiving user
-    - Receiving user decrypts with "guid"
-    - System verifies that ("id", "guid") are a valid pair
+    - Receiving user decrypts with k (system verifies k is in decrypting user's key heap)
 
     * Asymmetric Key encryption / decryption
 
@@ -94,15 +102,14 @@ Definition buildAsymmetricKey (k_id : asym_private_key_id) (usage : asymmetric_u
     a combination of own private key / destination user's public key.  The steps in more
     detail:
     - UserA generates key:
-        (pub_key_id, pub_key_guid, priv_key_id, priv_key_guid) : (nat,var,nat,var) := (pubIdA,pubGuidA,privIdA,privGuidA)
+        (pub_key_id, priv_key_id) : (nat,nat) := (pubIdA,privIdA)
     - UserB generates key:
-        (pub_key_id, pub_key_guid, priv_key_id, priv_key_guid) : (nat,var,nat,var) := (pubIdB,pubGuidB,privIdB,privGuidB)
-    - UserA publicly sends to UserB (pubIdA,pubGuidA)
-    - UserB publicly sends to UserA (pubIdB,pubGuidB)
-    - UserA encrypts message with (privIdA,pubIdB), sends to UserB
-    - UserB decrypts reeived message with (privIdB,pubIdA)
+        (pub_key_id, priv_key_id) : (nat,nat) := (pubIdB,privIdB)
+    - UserA publicly sends to UserB pubIdA
+    - UserB publicly sends to UserA pubIdB
+    - UserA encrypts message with pubIdB, sends to UserB
+    - UserB decrypts reeived message with privIdB
  *)
-
 
 (* Messages ultimately wrap either a string or a key 
    Messages can be encrypted, signed, or HMACed in a nested fashion any number of times 
@@ -110,8 +117,8 @@ Definition buildAsymmetricKey (k_id : asym_private_key_id) (usage : asymmetric_u
 Inductive message : Set -> Type :=
 (* Base Message Types *)
 | Plaintext {A : Set} (txt : A) : message A
-| Sym_Key_Msg  (k : symmetric_key)         : message symmetric_key
-| Asym_Key_Msg (k_id : asym_public_key_id) : message asym_public_key_id
+| Sym_Key_Msg  (k : symmetric_key)   : message key
+| Asym_Key_Msg (k : asymmetric_key)  : message key
 
 | MsgPair {A B : Set} (msg1 : message A) (msg2 : message B) : message (A*B)
 
@@ -130,13 +137,13 @@ Inductive user_cmd : Type -> Type :=
 | Recv {A : Set}: user_cmd (message A)
 
 (* Crypto!! *)
-| Encrypt {A : Set} (k : key_id) (msg : message A)  : user_cmd (message encrypted_message_id)
+| Encrypt {A : Set} (k : key) (msg : message A)  : user_cmd (message encrypted_message_id)
 | Decrypt {A : Set} (msg : message encrypted_message_id) : user_cmd (message A)
 
-| Sign    {A : Set} (k : key_id) (msg : message A) : user_cmd (message (A * signed_message_id))
+| Sign    {A : Set} (k : key) (msg : message A) : user_cmd (message (A * signed_message_id))
 | Verify  {A : Set} (secret : signed_message_id) (msg : message A) : user_cmd bool
 
-| ProduceHMAC {A : Set} (k : key_id) (msg : message A) : user_cmd (message (A * hmac_message_id))
+| ProduceHMAC {A : Set} (k : key) (msg : message A) : user_cmd (message (A * hmac_message_id))
 | VerifyHMAC  {A : Set} (secret : hmac_message_id) (msg : message A) : user_cmd bool
 
 | GenerateSymKey (usage : symmetric_usage) : user_cmd symmetric_key
@@ -186,6 +193,7 @@ Inductive encrypted_message : Type :=
 Record universe := mkUniverse {
     users            : fmap user_id user_data ;
     users_msg_buffer : queued_messages ;
+    all_keys         : fmap nat key ;
     encryptions      : fmap nat encrypted_message ; (* used for sigs and hmacs as well *)
     key_counter      : nat ;
     crypto_counter   : nat
@@ -204,51 +212,56 @@ Fixpoint findKeys {A} (msg : message A) : list key :=
   | Plaintext pt       => []
 
   | Sym_Key_Msg k      => [SymKey k]
-  | Asym_Key_Msg k     => [AsymPubKey k]
+  | Asym_Key_Msg k     => [AsymPubKey k.(public_key)]
   | MsgPair msg1 msg2  => findKeys msg1 ++ findKeys msg2
   | Ciphertext _       => []
   | Signature msg _    => findKeys msg
   | HMAC_Message msg _ => findKeys msg
   end.
 
-Definition keyId (k : key) : nat :=
-  match k with
-  | SymKey k'     => k'.(sym_key_id)
-  | AsymKey k'    => k'.(asym_key_id)
-  | AsymPubKey k' => k'
-  end.
+Definition updateUserKeyHeap (keys : list key) (ud : user_data) : user_data :=
+  let addKey (m : fmap nat key) (k : key) :=
+        match k with
+        | SymKey k'     => m $+ (k'.(sym_key_id),   k)
+        (* Add public and private parts of key to user heap *)
+        | AsymKey k'    => m $+ (k'.(private_key), k) $+ (k'.(public_key).(asym_public_key), AsymPubKey k'.(public_key))
+        | AsymPubKey k' => m $+ (k'.(asym_public_key), k)
+        end
+  in
+    {| usrid    := ud.(usrid)
+     ; key_heap := fold_left addKey keys ud.(key_heap)
+     ; protocol := ud.(protocol)
+    |}.
 
-Definition addKeysHeap (keys : list key) (ud : user_data) : user_data :=
-  {| usrid    := ud.(usrid)
-   ; key_heap := fold_left (fun m k => add m (keyId k) k) keys ud.(key_heap)
-   ; protocol := ud.(protocol)
-  |}.
 
 Definition updateUniverseDeliverMsg {A} (u : universe) (user : user_data) (msg : message A) (msgs : (list exmsg) ) :=
   {|
-    users            := u.(users) $+ (user.(usrid), addKeysHeap (findKeys msg) user) (* add sent keys to user's heap *)
-  ; users_msg_buffer := u.(users_msg_buffer) $+ (user.(usrid), msgs)
-  ; encryptions      := u.(encryptions)
-  ; key_counter      := u.(key_counter)
-  ; crypto_counter   := u.(crypto_counter)
+     users            := u.(users) $+ (user.(usrid), updateUserKeyHeap (findKeys msg) user) (* add sent keys to user's heap *)
+   ; users_msg_buffer := u.(users_msg_buffer) $+ (user.(usrid), msgs)
+   ; all_keys         := u.(all_keys)
+   ; encryptions      := u.(encryptions)
+   ; key_counter      := u.(key_counter)
+   ; crypto_counter   := u.(crypto_counter)
   |}.
 
 Definition updateUniverseCipherMsg (u : universe) (uid : user_id) (msg: encrypted_message) :=
   {|
-    users            := u.(users)
-  ; users_msg_buffer := u.(users_msg_buffer)
-  ; encryptions      := u.(encryptions) $+ ( u.(crypto_counter) , msg )
-  ; key_counter      := u.(key_counter)
-  ; crypto_counter   := u.(crypto_counter) + 1
+     users            := u.(users)
+   ; users_msg_buffer := u.(users_msg_buffer)
+   ; all_keys         := u.(all_keys)
+   ; encryptions      := u.(encryptions) $+ ( u.(crypto_counter) , msg )
+   ; key_counter      := u.(key_counter)
+   ; crypto_counter   := u.(crypto_counter) + 1
   |}.
 
 Definition updateUniverseSendMsg {A} (u : universe) (uid : user_id) (msg : message A) :=
   {|
-    users            := u.(users)
-  ; users_msg_buffer := multiMapAdd uid (Exm msg) u.(users_msg_buffer)
-  ; encryptions      := u.(encryptions)
-  ; key_counter      := u.(key_counter)
-  ; crypto_counter   := u.(crypto_counter)
+     users            := u.(users)
+   ; users_msg_buffer := multiMapAdd uid (Exm msg) u.(users_msg_buffer)
+   ; all_keys         := u.(all_keys)
+   ; encryptions      := u.(encryptions)
+   ; key_counter      := u.(key_counter)
+   ; crypto_counter   := u.(crypto_counter)
   |}.
 
 Definition encryptMessage {A} (k : key) (m : message A) : option encrypted_message :=
@@ -259,27 +272,22 @@ Definition encryptMessage {A} (k : key) (m : message A) : option encrypted_messa
                  | AES_KW  => Some (Enc k'.(sym_key_id) m)
                  | _       => None
                  end
-  | AsymKey k' => match (asym_usage k') with
-                 | RSA_Encryption => Some (Enc k'.(asym_public_key) m) (* Need public key to decrypt! *)
-                 | _              => None
-                 end
-  | AsymPubKey _ => None
+  | AsymKey k' => None
+  | AsymPubKey k' => match (asym_usage k') with
+                    | RSA_Encryption => Some (Enc k'.(asym_key_ref) m) (* Need private key to decrypt! *)
+                    | _              => None
+                    end
   end.
 
 Definition updateUniverseNewKey (u : universe) (user : user_data) (incr : nat) (k : key) :=
   {|
-     users            := u.(users) $+ (user.(usrid), addKeysHeap [k] user)
+     users            := u.(users) $+ (user.(usrid), updateUserKeyHeap [k] user)
    ; users_msg_buffer := u.(users_msg_buffer)
+   ; all_keys         := addKeysHeap [k] u.(all_keys)
    ; encryptions      := u.(encryptions)
    ; key_counter      := u.(key_counter) + incr
    ; crypto_counter   := u.(crypto_counter)
   |}.
-
-(* Definition newSymKey (u : universe) (user : user_data) (usage : symmetric_usage) := *)
-(*   SymKey (buildSymmetricKey u.(key_counter) usage user.(usrid)). *)
-
-(* Definition updateUniverseNewAsymKey (u : universe) (user : user_data) (usage : asymmetric_usage) := *)
-(*   updateUniverseNewKey u user 2 (AsymKey (buildAsymmetricKey u.(key_counter) usage user.(usrid))). *)
 
 Inductive step_user : forall A, universe * user_data * user_cmd A -> universe * user_cmd A -> Prop :=
 (* Plumbing *)
@@ -290,22 +298,27 @@ Inductive step_user : forall A, universe * user_data * user_cmd A -> universe * 
     step_user (u, usrDat, Bind (Return v) cmd) (u, cmd v)
 
 (* Comms *)
-| StepRecv : forall A u usrDat msg msgs,
-    u.(users_msg_buffer) $? usrDat.(usrid) = Some ((Exm (msg : message A)) :: msgs) (* we have a message waiting for us! *)
+| StepRecv : forall A u usrDat (msg : message A) msgs,
+    u.(users_msg_buffer) $? usrDat.(usrid) = Some (Exm msg :: msgs) (* we have a message waiting for us! *)
     -> step_user (u, usrDat, Recv) (updateUniverseDeliverMsg u usrDat msg msgs, Return msg)
 | StepSend : forall A u usrDat u_id (msg : message A),
     step_user (u, usrDat, Send u_id msg) (updateUniverseSendMsg u usrDat.(usrid) msg, Return tt)
 
 (* Crypto! *)
-| StepEncrypt : forall A u usrDat k_id msg encMsg k,
+| StepEncrypt : forall A u usrDat k_id (msg : message A) encMsg k,
     usrDat.(key_heap) $? k_id = Some k
     -> encryptMessage k msg = Some encMsg
     (* Generate new msg_id and add message to heap *)
-    -> step_user (u, usrDat, Encrypt k_id (msg : message A))
+    -> step_user (u, usrDat, Encrypt k msg)
                 (updateUniverseCipherMsg u usrDat.(usrid) encMsg, Return (Ciphertext u.(crypto_counter)))
-| StepDecrypt : forall A u usrDat msg k_id k enc_id,
+| StepSymmetricDecrypt : forall A u usrDat msg k_id k enc_id,
     u.(encryptions) $? enc_id = Some (Enc k_id msg)
-    -> usrDat.(key_heap) $? k_id = Some k
+    -> usrDat.(key_heap) $? k_id = Some (SymKey k)
+    -> step_user (u, usrDat, Decrypt (Ciphertext enc_id)) (u, Return (msg : message A))
+| StepAsymmetricDecrypt : forall A u usrDat msg k_id k enc_id,
+    u.(encryptions) $? enc_id = Some (Enc k_id msg)
+    -> usrDat.(key_heap) $? k_id = Some (AsymKey k)
+    -> 
     -> step_user (u, usrDat, Decrypt (Ciphertext enc_id)) (u, Return (msg : message A))
 
 (* | Sign (k : var) (msg : message) : user_cmd message *)
