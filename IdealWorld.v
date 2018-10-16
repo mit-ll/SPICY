@@ -43,7 +43,7 @@ Definition channels := fmap channel_id channel_data.
 Definition send_message m ch_d :=
   {| properties := ch_d.(properties) ;
      type := ch_d.(type) ;
-     messages_sent := m :: ch_d.(messages_sent) ;
+     messages_sent := app ch_d.(messages_sent) [m] ;
      user_pointers := ch_d.(user_pointers) |}.
 
 Fixpoint recv_message' ms (u : user_id) i : option message :=
@@ -74,12 +74,12 @@ Definition inc_pointer ch_d u :=
                user_pointers := (ch_d.(user_pointers) $+ (u, 1)) |}
   end.
 
-Inductive cmd :=
-| Return (r : message)
-| Bind (c1 : cmd) (c2 : message -> cmd)
-| Send (m ch_id : message) (* Message must be a channel id container. *)
-| Recv (ch_id : message) (* Message must be a channel id container. *)
-| CreateChannel (p : security_properties).
+Inductive cmd : Set -> Type :=
+| Return {result : Set} (r : result) : cmd result
+| Bind {result' result} (c1 : cmd result') (c2 : result' -> cmd result) : cmd result
+| Send {msg_ty : Set} (m : msg_ty) (ch_id : channel_id) : cmd unit
+| Recv {msg_ty : Set} (ch_id : channel_id) : cmd msg_ty
+| CreateChannel (p : security_properties) : cmd channel_id.
 
 Notation "x <- c1 ; c2" := (Bind c1 (fun x => c2)) (right associativity, at level 75).
 
@@ -90,36 +90,44 @@ Record universe := construct_universe
     A trace of all messages sent on all channels
 *)
   { channel_vector : fmap channel_id channel_data ;
-    users : fmap user_id cmd}.
+    users : fmap user_id (cmd unit)}.
 
-Inductive step_user : user_id * channels * cmd -> user_id * channels * cmd -> Prop :=
-| StepBindRecur : forall u (c1 c1' : cmd) (c2 : message -> cmd) cv cv',
-    step_user (u, cv, c1) (u, cv', c1') ->
-    step_user (u, cv, (Bind c1 c2)) (u, cv', (Bind c1' c2))
-| StepBindProceed : forall u v (c2 : message -> cmd ) cv,
-    step_user (u, cv, (Bind (Return v) c2)) (u, cv, c2 v)
-| StepCreateChannel : forall ch_id p cv u,
+Inductive step_user : forall A, channels * cmd A -> channels * cmd A -> Prop :=
+| StepBindRecur : forall result result' (c1 c1' : cmd result') (c2 : result' -> cmd result) cv cv',
+    step_user (cv, c1) (cv', c1') ->
+    step_user (cv, (Bind c1 c2)) (cv', (Bind c1' c2))
+| StepBindProceed : forall (result result' : Set) (v : result') (c2 : result' -> cmd result) cv,
+    step_user (cv, (Bind (Return v) c2)) (cv, c2 v)
+| StepCreateChannel : forall ch_id p cv,
     ~(ch_id \in dom cv) ->
-    step_user (u, cv, (CreateChannel p))
-              (u, (cv $+ (ch_id, construct_channel p Symmetric [] $0)), (Return (ChannelId ch_id)))
-| StepSend : forall ch_id m cv ch_d u,
+    step_user (cv, (CreateChannel p))
+              ((cv $+ (ch_id, construct_channel p Symmetric [] $0)), (Return ch_id))
+| StepSendBroadcast : forall cv (ch_id : channel_id) (ch_d : channel_data) {m_ty : Set} (m : m_ty),
     cv $? ch_id = Some ch_d ->
-    step_user (u, cv, Send (ProtocolMsg m) (ChannelId ch_id))
-              (u, cv $+ (ch_id, send_message (u, ProtocolMsg m) ch_d), Return (ProtocolMsg ""))
-| StepRecv : forall ch_id m cv ch_d u,
+    step_user (cv, (Send m ch_id)) (cv, (Return tt))
+| StepSendSymmetric : forall cv cv' (ch_id : channel_id) {m_ty : Set} (m : m_ty) ch_d,
     cv $? ch_id = Some ch_d ->
-    recv_message ch_d u = Some m -> 
-    step_user (u, cv, Recv (ChannelId ch_id)) (u, (cv $+ (ch_id, (inc_pointer ch_d u))), Return m).
+    ch_d.(type) = Symmetric ->
+    step_user (cv, (Send m ch_id)) (cv', (Return tt))
+| StepSendDefault : forall cv ch_d (ch_id : channel_id) {m_ty : Set} (m : m_ty),
+    cv $? ch_id = Some ch_d ->
+    step_user (cv, (Send m ch_id)) (cv, (Return tt))
+| StepRecvBroadcast : forall cv (ch_id : channel_id) {msg_ty : Set} (m : msg_ty) ,
+    step_user (cv, (Recv ch_id)) (cv, (Return m))
+| StepRecvSymmetric : forall cv ch_id {m_ty : Set} (m : m_ty),
+    step_user (cv, (Recv ch_id)) (cv, (Return m))
+| StepRecvDefault : forall cv ch_id {m_ty : Set} (m : m_ty),
+    step_user (cv, (Recv ch_id)) (cv, (Return m)).
 
 Inductive step_universe : universe -> universe -> Prop :=
 | StepUser : forall U u u_d cs' u_d',
     U.(users) $? u = Some u_d ->
-    step_user (u, U.(channel_vector), u_d) (u, cs', u_d') ->
+    step_user (U.(channel_vector), u_d) (cs', u_d') ->
     step_universe U (construct_universe cs' (U.(users) $+ (u, u_d'))).
 
 Example ping :=
-  $0 $+ ("0", x <- (Send (ProtocolMsg "Hello") (ChannelId 0)) ; (Recv (ChannelId 0)))
-     $+ ("1", x <- (Recv (ChannelId 0)) ; (Send x (ChannelId 0))).
+  $0 $+ ("0", x <- (Send (ProtocolMsg "Hello") 0) ; (Recv 0))
+     $+ ("1", x <- (Recv 0) ; if x ==v "Hello" then (Send x 0) else (Send "Huh?" 0)).
 
 Example ping_universe :=
 {| channel_vector := $0 $+ (1, {| properties := {| confidentiality := true ;
@@ -129,98 +137,5 @@ Example ping_universe :=
                                   messages_sent := [] ;
                                   user_pointers := $0 |}) ;
    users := ping |}.
+   
 Check ping_universe.
-
-
-(* Universe Generator Stuff *)
-
-(* This assumes the user_data.(protocol) is empty at the beginning. If this
- * assumption is false, need to re-add list user_data as an input. Currently
- * just adds a skip to the user protocol (not sure what it should be if it
- * has not yet been populated).
- *)
-Fixpoint add_users (user_id_list : list user_id) : fmap user_id cmd :=
-match user_id_list with
-| [] => $0
-| id::tail =>  (add_users tail) $+ (id, Return (ProtocolMsg "Placeholder")) (* Change later to be the protocols
-                                                                             *  passed in by the user
-                                                                             *)
-end.
-
-(* Helper Function for generate_universe *)
-Fixpoint generate_all_pairs (user_id_list : list user_id) : list (user_id * user_id) :=
-let generate_pairs := (fix gp (user_a : user_id)
-                              (pair_user_list : list user_id) : (list (user_id * user_id)) :=
-                       match pair_user_list with
-                       | uId::tail => (pair user_a uId) :: (gp user_a tail)
-                       | [] => []
-                       end) in
-match user_id_list with
-| uId::tail => (generate_all_pairs tail) ++ (generate_pairs uId tail)
-| [] => []
-end.
-
-(* Helper Function for generate_universe 
- * Only adds 1-1 CIA channels for now.
- * Assumes users do not get to choose the channelId, only the var that maps to it in their
- *  memory.
- *)
-Fixpoint add_CIA_channels (plist : list (user_id * user_id))
-                          (ch_id : channel_id)
-                          (umap : fmap user_id cmd) : universe :=
-let empty_universe := {| channel_vector := $0 ; users := umap |} in
-let empty_cmd := Return (ProtocolMsg "Placeholder") in
-match plist with
-| [] => empty_universe
-| pair'::t => match pair' with
-              | (pair id1 id2) => let next_iter := (add_CIA_channels t (ch_id + 1) umap) in
-                                  let id1_data := match (umap $? id1) with
-                                                  | None => empty_cmd  (* This case should never happen *)
-                                                  | Some rec => rec
-                                                  end in
-                                  let id2_data := match (umap $? id2) with
-                                                  | None => empty_cmd (* This case should never happen *)
-                                                  | Some rec => rec
-                                                  end in
-                                    {| channel_vector := (next_iter.(channel_vector) $+ (ch_id, {| properties := {| confidentiality := true;
-                                                                                                                    authenticity := true;
-                                                                                                                    integrity := true |};
-                                                                                                   type := Default id1 id2;
-                                                                                                   messages_sent := [];
-                                                                                                   user_pointers := $0 |})) ;
-                                       users := (next_iter.(users) $+ (id1, id1_data)
-                                                                   $+ (id2, id2_data)) |}
-              end
-end.
-
-Fixpoint add_Broadcast_channels (user_id_list : list user_id)
-                                (ch_id : channel_id)
-                                (U : universe) : universe :=
-match user_id_list with 
-| [] => U
-| uid::tail => let U' := {| channel_vector := U.(channel_vector) $+ (ch_id, {| properties := {| confidentiality := false ;
-                                                                                                authenticity := true ;
-                                                                                                integrity := true |} ;
-                                                                               type := Broadcast uid ;
-                                                                               messages_sent := [] ;
-                                                                               user_pointers := $0|}) ; 
-                            users := U.(users) |}
-               in
-               add_Broadcast_channels tail
-                                      (ch_id + 1)
-                                      U'
-end.
-
-(* Generates a universe with 1-1 CIA channels between each user. These channels are currently added
- *  to the environment of each user. The channelIds have the corresponding userId as their keys.
- *
- * Change so that it takes protocols as well so that those can be loaded into memory when the users 
- *  are created and added to the universe.
- *)
-Fixpoint generate_universe (cmds_list : list cmd) (user_id_list : list user_id) : universe :=
-let pairs_list := (generate_all_pairs user_id_list) in
-  let umap := (add_users user_id_list) in
-   let ch_id' := (length user_id_list) * ((length user_id_list) - 1) / 2 in
-    add_Broadcast_channels user_id_list
-                           ch_id'
-                           (add_CIA_channels pairs_list 0 umap).
