@@ -318,6 +318,19 @@ Definition updateUniverseNewKey (u : universe) (user : user_data) (incr : nat) (
      ; crypto_counter   := u.(crypto_counter)
     |}.
 
+Definition canVerifySignature (u : universe)(usrDat : user_data)(sig_id : signed_message_id)(k_id : nat) : Prop :=
+  forall k k',
+    u.(encryptions) $? sig_id = Some (Sig k_id)
+    (* Look up asymmetric key by its global universe identifier *)
+    /\ u.(all_keys) $? k_id = Some (AsymKey k)
+    (*  Make sure that the user has the public part of the looked up key *)
+    /\ usrDat.(key_heap) $? k.(public_key).(asym_public_key) = Some (AsymPubKey k').
+
+Definition canVerifyHMAC (u: universe) (usrDat : user_data) (hmac_id : hmac_message_id) (k_id : nat) : Prop :=
+  forall k,
+    u.(encryptions) $? hmac_id = Some (Hmac k_id)
+    /\ usrDat.(key_heap) $? k_id = Some (SymKey k).
+
 Inductive step_user : forall A, universe * user_data * user_cmd A -> universe * user_cmd A -> Prop :=
 (* Plumbing *)
 | StepBindRecur : forall result result' u u' usrDat (cmd1 cmd1' : user_cmd result) (cmd2 : result -> user_cmd result'),
@@ -358,14 +371,21 @@ Inductive step_user : forall A, universe * user_data * user_cmd A -> universe * 
     -> signMessage k msg = Some signedMessage
     -> step_user (u, usrDat, Sign k msg)
                 (updateUniverseCipherMsg u usrDat.(usrid) signedMessage, Return (Signature msg u.(crypto_counter)))
-| StepVerify : forall A u usrDat (msg : message A) k k' k_id sig_id,
-    u.(encryptions) $? sig_id = Some (Sig k_id)
-    (* Look up asymmetric key by its global universe identifier *)
-    -> u.(all_keys) $? k_id = Some (AsymKey k)
-    (*  Make sure that the user has the public part of the looked up key *)
-    -> usrDat.(key_heap) $? k.(public_key).(asym_public_key) = Some (AsymPubKey k')
-    (* Do I need to check that the public parts of the keys are the same?? *)
+| StepVerify : forall A u usrDat (msg : message A) k_id sig_id,
+    (* u.(encryptions) $? sig_id = Some (Sig k_id) *)
+    (* (* Look up asymmetric key by its global universe identifier *) *)
+    (* -> u.(all_keys) $? k_id = Some (AsymKey k) *)
+    (* (*  Make sure that the user has the public part of the looked up key *) *)
+    (* -> usrDat.(key_heap) $? k.(public_key).(asym_public_key) = Some (AsymPubKey k') *)
+    (* (* Do I need to check that the public parts of the keys are the same?? *) *)
+    canVerifySignature u usrDat sig_id k_id
     -> step_user (u, usrDat, Verify (Signature msg sig_id)) (u, Return true)
+| StepFailVerify : forall A u usrDat (msg : message A) k_id sig_id,
+    ~ canVerifySignature u usrDat sig_id k_id
+    -> step_user (u, usrDat, Verify (Signature msg sig_id)) (u, Return false)
+| StepFailVerifyUnsigned : forall A u usrDat (msg1 msg2 : message A) sig_id,
+    msg1 <> Signature msg2 sig_id
+    -> step_user (u, usrDat, Verify msg1) (u, Return false)
 
 (* HMAC / Verify HMAC*)
 | StepProduceHMAC : forall A u usrDat (msg : message A) k_id k hmacMsg,
@@ -373,10 +393,17 @@ Inductive step_user : forall A, universe * user_data * user_cmd A -> universe * 
     -> hmacMessage k msg = Some hmacMsg
     -> step_user (u, usrDat, ProduceHMAC k msg)
                 (updateUniverseCipherMsg u usrDat.(usrid) hmacMsg, Return (HMAC_Message msg u.(crypto_counter)))
-| StepVerifyHmac : forall A u usrDat (msg : message A) k_id k hmac_id,
-    u.(encryptions) $? hmac_id = Some (Hmac k_id)
-    -> usrDat.(key_heap) $? k_id = Some (SymKey k)
+| StepVerifyHmac : forall A u usrDat (msg : message A) k_id hmac_id,
+    (* u.(encryptions) $? hmac_id = Some (Hmac k_id) *)
+    (* -> usrDat.(key_heap) $? k_id = Some (SymKey k) *)
+    canVerifyHMAC u usrDat hmac_id k_id
     -> step_user (u, usrDat, VerifyHMAC (HMAC_Message msg hmac_id)) (u, Return true)
+| StepFailVerifyHmac : forall A u usrDat (msg : message A) k_id hmac_id,
+    ~ canVerifyHMAC u usrDat hmac_id k_id
+    -> step_user (u, usrDat, VerifyHMAC (HMAC_Message msg hmac_id)) (u, Return false)
+| StepFailVerifyHmacNotHmaced : forall A u usrDat (msg1 msg2 : message A) hmac_id,
+    msg1 <> HMAC_Message msg2 hmac_id
+    -> step_user (u, usrDat, VerifyHMAC msg1) (u, Return false)
 
 (* Key creation *)
 | StepGenerateSymKey: forall u usrDat usage k,
