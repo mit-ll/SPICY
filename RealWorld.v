@@ -414,15 +414,10 @@ Inductive step_user : forall A, universe * user_data * user_cmd A -> universe * 
 .
 
 Inductive step_universe : universe -> universe -> Prop :=
-| StepUser : forall {A} U q q' ud ud' (cmd cmd' : user_cmd A),
-    step_user (q,ud,cmd) (q',ud',cmd')
-    -> step_universe U ( {| users := U.(users) $+ ( ud'.(usrid), ud' ) ;
-                           net   := {|
-                                     users_msg_buffer := q';
-                                     trace            := U.(net).(trace)
-                                   |};
-                         |}
-                      )
+| StepUser : forall {A} U U' u_id userData (cmd cmd' : user_cmd A),
+    U.(users) $? u_id = Some userData
+    -> step_user (U,userData,cmd) (U',cmd')
+    -> step_universe U U'
 .
 
 
@@ -430,23 +425,3 @@ Inductive step_universe : universe -> universe -> Prop :=
    1. Administration
    2. CA
 *) 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
