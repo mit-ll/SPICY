@@ -232,28 +232,28 @@ Definition updateUserKeyHeap (keys : list key) (ud : user_data) : user_data :=
     |}.
 
 
-Definition updateUniverseDeliverMsg {A} (u : universe) (user : user_data) (msg : message A) (msgs : (list exmsg) ) :=
+Definition updateUniverseDeliverMsg {A} (U : universe) (user : user_data) (msg : message A) (msgs : (list exmsg) ) :=
   {|
-     users            := u.(users) $+ (user.(usrid), updateUserKeyHeap (findKeys msg) user) (* add sent keys to user's heap *)
-   ; users_msg_buffer := u.(users_msg_buffer) $+ (user.(usrid), msgs)
-   ; all_keys         := u.(all_keys)
-   ; encryptions      := u.(encryptions)
+     users            := U.(users) $+ (user.(usrid), updateUserKeyHeap (findKeys msg) user) (* add sent keys to user's heap *)
+   ; users_msg_buffer := U.(users_msg_buffer) $+ (user.(usrid), msgs)
+   ; all_keys         := U.(all_keys)
+   ; encryptions      := U.(encryptions)
   |}.
 
-Definition updateUniverseCipherMsg (u : universe) (uid : user_id) (cipher_id : nat) (msg: encrypted_message) :=
+Definition updateUniverseCipherMsg (U : universe) (uid : user_id) (cipher_id : nat) (msg: encrypted_message) :=
   {|
-     users            := u.(users)
-   ; users_msg_buffer := u.(users_msg_buffer)
-   ; all_keys         := u.(all_keys)
-   ; encryptions      := u.(encryptions) $+ ( cipher_id , msg )
+     users            := U.(users)
+   ; users_msg_buffer := U.(users_msg_buffer)
+   ; all_keys         := U.(all_keys)
+   ; encryptions      := U.(encryptions) $+ ( cipher_id , msg )
   |}.
 
-Definition updateUniverseSendMsg {A} (u : universe) (uid : user_id) (msg : message A) :=
+Definition updateUniverseSendMsg {A} (U : universe) (uid : user_id) (msg : message A) :=
   {|
-     users            := u.(users)
-   ; users_msg_buffer := multiMapAdd uid (Exm msg) u.(users_msg_buffer)
-   ; all_keys         := u.(all_keys)
-   ; encryptions      := u.(encryptions)
+     users            := U.(users)
+   ; users_msg_buffer := multiMapAdd uid (Exm msg) U.(users_msg_buffer)
+   ; all_keys         := U.(all_keys)
+   ; encryptions      := U.(encryptions)
   |}.
 
 Definition encryptMessage {A} (k : key) (m : message A) : option encrypted_message :=
@@ -293,7 +293,7 @@ Definition hmacMessage {A} (k : key) (m : message A) : option encrypted_message 
   | AsymPubKey k' => None
   end.
 
-Definition updateUniverseNewKey (u : universe) (user : user_data) (k : key) :=
+Definition updateUniverseNewKey (U : universe) (user : user_data) (k : key) :=
   let addKey (k : key) (m : fmap nat key) :=
       match k with
       | SymKey k'     => m $+ (k'.(sym_key_id),  k)
@@ -302,17 +302,17 @@ Definition updateUniverseNewKey (u : universe) (user : user_data) (k : key) :=
       end
   in
     {|
-       users            := u.(users) $+ (user.(usrid), updateUserKeyHeap [k] user)
-     ; users_msg_buffer := u.(users_msg_buffer)
-     ; all_keys         := addKey k u.(all_keys)
-     ; encryptions      := u.(encryptions)
+       users            := U.(users) $+ (user.(usrid), updateUserKeyHeap [k] user)
+     ; users_msg_buffer := U.(users_msg_buffer)
+     ; all_keys         := addKey k U.(all_keys)
+     ; encryptions      := U.(encryptions)
     |}.
 
-Definition canVerifySignature (u : universe)(usrDat : user_data)(sig_id : signed_message_id)(k_id : nat) : Prop :=
+Definition canVerifySignature (U : universe)(usrDat : user_data)(sig_id : signed_message_id)(k_id : nat) : Prop :=
   forall k k',
-    u.(encryptions) $? sig_id = Some (Sig k_id)
+    U.(encryptions) $? sig_id = Some (Sig k_id)
     (* Look up asymmetric key by its global universe identifier *)
-    /\ u.(all_keys) $? k_id = Some (AsymKey k)
+    /\ U.(all_keys) $? k_id = Some (AsymKey k)
     (*  Make sure that the user has the public part of the looked up key *)
     /\ usrDat.(key_heap) $? k.(public_key).(asym_public_key) = Some (AsymPubKey k').
 
@@ -323,92 +323,92 @@ Definition canVerifyHMAC (u: universe) (usrDat : user_data) (hmac_id : hmac_mess
 
 Inductive step_user : forall A, universe * user_data * user_cmd A -> universe * user_cmd A -> Prop :=
 (* Plumbing *)
-| StepBindRecur : forall result result' u u' usrDat (cmd1 cmd1' : user_cmd result) (cmd2 : result -> user_cmd result'),
-    step_user (u, usrDat, cmd1) (u', cmd1')
-    -> step_user (u, usrDat, Bind cmd1 cmd2) (u', Bind cmd1' cmd2)
-| StepBindProceed : forall result result' u usrDat (v : result') (cmd : result' -> user_cmd result),
-    step_user (u, usrDat, Bind (Return v) cmd) (u, cmd v)
+| StepBindRecur : forall result result' U U' usrDat (cmd1 cmd1' : user_cmd result) (cmd2 : result -> user_cmd result'),
+    step_user (U, usrDat, cmd1) (U', cmd1')
+    -> step_user (U, usrDat, Bind cmd1 cmd2) (U', Bind cmd1' cmd2)
+| StepBindProceed : forall result result' U usrDat (v : result') (cmd : result' -> user_cmd result),
+    step_user (U, usrDat, Bind (Return v) cmd) (U, cmd v)
 
 (* Comms *)
-| StepRecv : forall A u usrDat (msg : message A) msgs,
-    u.(users_msg_buffer) $? usrDat.(usrid) = Some (Exm msg :: msgs) (* we have a message waiting for us! *)
-    -> step_user (u, usrDat, Recv) (updateUniverseDeliverMsg u usrDat msg msgs, Return msg)
-| StepSend : forall A u usrDat u_id (msg : message A),
-    step_user (u, usrDat, Send u_id msg) (updateUniverseSendMsg u usrDat.(usrid) msg, Return tt)
+| StepRecv : forall A U usrDat (msg : message A) msgs,
+    U.(users_msg_buffer) $? usrDat.(usrid) = Some (Exm msg :: msgs) (* we have a message waiting for us! *)
+    -> step_user (U, usrDat, Recv) (updateUniverseDeliverMsg U usrDat msg msgs, Return msg)
+| StepSend : forall A U usrDat u_id (msg : message A),
+    step_user (U, usrDat, Send u_id msg) (updateUniverseSendMsg U usrDat.(usrid) msg, Return tt)
 
 (* Encryption / Decryption *)
-| StepEncrypt : forall A u usrDat k_id (msg : message A) enc_id encMsg k,
+| StepEncrypt : forall A U usrDat k_id (msg : message A) enc_id encMsg k,
     usrDat.(key_heap) $? k_id = Some k
     -> encryptMessage k msg = Some encMsg
     (* Generate new msg_id and add message to heap *)
-    -> ~(enc_id \in (dom u.(encryptions)))
-    -> step_user (u, usrDat, Encrypt k msg)
-                (updateUniverseCipherMsg u usrDat.(usrid) enc_id encMsg, Return (Ciphertext enc_id))
-| StepSymmetricDecrypt : forall A u usrDat msg k_id k enc_id,
-    u.(encryptions) $? enc_id = Some (Enc k_id msg)
+    -> ~(enc_id \in (dom U.(encryptions)))
+    -> step_user (U, usrDat, Encrypt k msg)
+                (updateUniverseCipherMsg U usrDat.(usrid) enc_id encMsg, Return (Ciphertext enc_id))
+| StepSymmetricDecrypt : forall A U usrDat msg k_id k enc_id,
+    U.(encryptions) $? enc_id = Some (Enc k_id msg)
     -> usrDat.(key_heap) $? k_id = Some (SymKey k)
-    -> step_user (u, usrDat, Decrypt (Ciphertext enc_id)) (u, Return (msg : message A))
-| StepAsymmetricDecrypt : forall A u usrDat msg k_id k enc_id,
-    u.(encryptions) $? enc_id = Some (Enc k_id msg)
+    -> step_user (U, usrDat, Decrypt (Ciphertext enc_id)) (U, Return (msg : message A))
+| StepAsymmetricDecrypt : forall A U usrDat msg k_id k enc_id,
+    U.(encryptions) $? enc_id = Some (Enc k_id msg)
     (* Look up asymmetric key by its global universe identifier *)
-    -> u.(all_keys) $? k_id = Some (AsymKey k)
+    -> U.(all_keys) $? k_id = Some (AsymKey k)
     (*  Make sure that the user has the private part of the looked up key, and they are, in fact, the same key *)
     -> usrDat.(key_heap) $? k.(private_key) = Some (AsymKey k)
-    -> step_user (u, usrDat, Decrypt (Ciphertext enc_id)) (u, Return (msg : message A))
+    -> step_user (U, usrDat, Decrypt (Ciphertext enc_id)) (U, Return (msg : message A))
 
 (* Signing / Verification *)
-| StepSign : forall A u usrDat k_id (msg : message A) k sig_id signedMessage,
+| StepSign : forall A U usrDat k_id (msg : message A) k sig_id signedMessage,
     usrDat.(key_heap) $? k_id = Some k
     -> signMessage k msg = Some signedMessage
-    -> ~(sig_id \in (dom u.(encryptions)))
-    -> step_user (u, usrDat, Sign k msg)
-                (updateUniverseCipherMsg u usrDat.(usrid) sig_id signedMessage, Return (Signature msg sig_id))
-| StepVerify : forall A u usrDat (msg : message A) k_id sig_id,
+    -> ~(sig_id \in (dom U.(encryptions)))
+    -> step_user (U, usrDat, Sign k msg)
+                (updateUniverseCipherMsg U usrDat.(usrid) sig_id signedMessage, Return (Signature msg sig_id))
+| StepVerify : forall A U usrDat (msg : message A) k_id sig_id,
     (* u.(encryptions) $? sig_id = Some (Sig k_id) *)
     (* (* Look up asymmetric key by its global universe identifier *) *)
     (* -> u.(all_keys) $? k_id = Some (AsymKey k) *)
     (* (*  Make sure that the user has the public part of the looked up key *) *)
     (* -> usrDat.(key_heap) $? k.(public_key).(asym_public_key) = Some (AsymPubKey k') *)
     (* (* Do I need to check that the public parts of the keys are the same?? *) *)
-    canVerifySignature u usrDat sig_id k_id
-    -> step_user (u, usrDat, Verify (Signature msg sig_id)) (u, Return true)
-| StepFailVerify : forall A u usrDat (msg : message A) k_id sig_id,
-    ~ canVerifySignature u usrDat sig_id k_id
-    -> step_user (u, usrDat, Verify (Signature msg sig_id)) (u, Return false)
-| StepFailVerifyUnsigned : forall A u usrDat (msg1 msg2 : message A) sig_id,
+    canVerifySignature U usrDat sig_id k_id
+    -> step_user (U, usrDat, Verify (Signature msg sig_id)) (U, Return true)
+| StepFailVerify : forall A U usrDat (msg : message A) k_id sig_id,
+    ~ canVerifySignature U usrDat sig_id k_id
+    -> step_user (U, usrDat, Verify (Signature msg sig_id)) (U, Return false)
+| StepFailVerifyUnsigned : forall A U usrDat (msg1 msg2 : message A) sig_id,
     msg1 <> Signature msg2 sig_id
-    -> step_user (u, usrDat, Verify msg1) (u, Return false)
+    -> step_user (U, usrDat, Verify msg1) (U, Return false)
 
 (* HMAC / Verify HMAC*)
-| StepProduceHMAC : forall A u usrDat (msg : message A) k_id k hmac_id hmacMsg,
+| StepProduceHMAC : forall A U usrDat (msg : message A) k_id k hmac_id hmacMsg,
     usrDat.(key_heap) $? k_id = Some k
     -> hmacMessage k msg = Some hmacMsg
-    -> ~(hmac_id \in (dom u.(encryptions)))
-    -> step_user (u, usrDat, ProduceHMAC k msg)
-                (updateUniverseCipherMsg u usrDat.(usrid) hmac_id hmacMsg, Return (HMAC_Message msg hmac_id))
-| StepVerifyHmac : forall A u usrDat (msg : message A) k_id hmac_id,
+    -> ~(hmac_id \in (dom U.(encryptions)))
+    -> step_user (U, usrDat, ProduceHMAC k msg)
+                (updateUniverseCipherMsg U usrDat.(usrid) hmac_id hmacMsg, Return (HMAC_Message msg hmac_id))
+| StepVerifyHmac : forall A U usrDat (msg : message A) k_id hmac_id,
     (* u.(encryptions) $? hmac_id = Some (Hmac k_id) *)
     (* -> usrDat.(key_heap) $? k_id = Some (SymKey k) *)
-    canVerifyHMAC u usrDat hmac_id k_id
-    -> step_user (u, usrDat, VerifyHMAC (HMAC_Message msg hmac_id)) (u, Return true)
-| StepFailVerifyHmac : forall A u usrDat (msg : message A) k_id hmac_id,
-    ~ canVerifyHMAC u usrDat hmac_id k_id
-    -> step_user (u, usrDat, VerifyHMAC (HMAC_Message msg hmac_id)) (u, Return false)
-| StepFailVerifyHmacNotHmaced : forall A u usrDat (msg1 msg2 : message A) hmac_id,
+    canVerifyHMAC U usrDat hmac_id k_id
+    -> step_user (U, usrDat, VerifyHMAC (HMAC_Message msg hmac_id)) (U, Return true)
+| StepFailVerifyHmac : forall A U usrDat (msg : message A) k_id hmac_id,
+    ~ canVerifyHMAC U usrDat hmac_id k_id
+    -> step_user (U, usrDat, VerifyHMAC (HMAC_Message msg hmac_id)) (U, Return false)
+| StepFailVerifyHmacNotHmaced : forall A U usrDat (msg1 msg2 : message A) hmac_id,
     msg1 <> HMAC_Message msg2 hmac_id
-    -> step_user (u, usrDat, VerifyHMAC msg1) (u, Return false)
+    -> step_user (U, usrDat, VerifyHMAC msg1) (U, Return false)
 
 (* Key creation *)
-| StepGenerateSymKey: forall u usrDat usage k kid,
+| StepGenerateSymKey: forall U usrDat usage k kid,
     buildSymmetricKey kid usage usrDat.(usrid) = k
-    -> ~(kid \in (dom u.(all_keys)))
-    -> step_user (u, usrDat, GenerateSymKey usage) (updateUniverseNewKey u usrDat (SymKey k), Return k)
-| StepGenerateAsymKey: forall u usrDat usage k kid1 kid2 kid3,
+    -> ~(kid \in (dom U.(all_keys)))
+    -> step_user (U, usrDat, GenerateSymKey usage) (updateUniverseNewKey U usrDat (SymKey k), Return k)
+| StepGenerateAsymKey: forall U usrDat usage k kid1 kid2 kid3,
     buildAsymmetricKey kid1 kid2 kid3 usage usrDat.(usrid) = k
-    -> ~(kid1 \in (dom u.(all_keys)))
-    -> ~(kid2 \in (dom u.(all_keys)))
-    -> ~(kid3 \in (dom u.(all_keys)))
-    -> step_user (u, usrDat, GenerateAsymKeys usage) (updateUniverseNewKey u usrDat (AsymKey k), Return k)
+    -> ~(kid1 \in (dom U.(all_keys)))
+    -> ~(kid2 \in (dom U.(all_keys)))
+    -> ~(kid3 \in (dom U.(all_keys)))
+    -> step_user (U, usrDat, GenerateAsymKeys usage) (updateUniverseNewKey U usrDat (AsymKey k), Return k)
  
 (* | Barrier {result : Set} : user_cmd result. *)
 .
