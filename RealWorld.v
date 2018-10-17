@@ -61,14 +61,14 @@ Definition buildSymmetricKey (k_id : symmetric_key_id) (usage : symmetric_usage)
    ; sym_usage              := usage
   |}.
 
-Definition buildAsymmetricKey (k_id : asym_private_key_id) (usage : asymmetric_usage) (u_id : user_id) :=
+Definition buildAsymmetricKey (kid1 kid2 kid3 : asym_private_key_id) (usage : asymmetric_usage) (u_id : user_id) :=
   {|
-     asym_key_id             := k_id
-   ; public_key              := {| asym_key_ref    := k_id
-                                 ; asym_public_key := k_id + 1
+     asym_key_id             := kid1
+   ; public_key              := {| asym_key_ref    := kid1
+                                 ; asym_public_key := kid2
                                  ; asym_generating_user_id := u_id
                                  ; asym_usage := usage |}
-   ; private_key             := k_id + 2
+   ; private_key             := kid3
   |}.
 
 (** How are we going to model encryption / decryption in this framework?  Each key has
@@ -195,8 +195,6 @@ Record universe := mkUniverse {
     users_msg_buffer : queued_messages ;
     all_keys         : fmap nat key ;
     encryptions      : fmap nat encrypted_message ; (* used for sigs and hmacs as well *)
-    key_counter      : nat ;
-    crypto_counter   : nat
 }.
 
 (* This is horribly inefficient, but I want the list to act like a queue.  We want
@@ -240,18 +238,14 @@ Definition updateUniverseDeliverMsg {A} (u : universe) (user : user_data) (msg :
    ; users_msg_buffer := u.(users_msg_buffer) $+ (user.(usrid), msgs)
    ; all_keys         := u.(all_keys)
    ; encryptions      := u.(encryptions)
-   ; key_counter      := u.(key_counter)
-   ; crypto_counter   := u.(crypto_counter)
   |}.
 
-Definition updateUniverseCipherMsg (u : universe) (uid : user_id) (msg: encrypted_message) :=
+Definition updateUniverseCipherMsg (u : universe) (uid : user_id) (cipher_id : nat) (msg: encrypted_message) :=
   {|
      users            := u.(users)
    ; users_msg_buffer := u.(users_msg_buffer)
    ; all_keys         := u.(all_keys)
-   ; encryptions      := u.(encryptions) $+ ( u.(crypto_counter) , msg )
-   ; key_counter      := u.(key_counter)
-   ; crypto_counter   := u.(crypto_counter) + 1
+   ; encryptions      := u.(encryptions) $+ ( cipher_id , msg )
   |}.
 
 Definition updateUniverseSendMsg {A} (u : universe) (uid : user_id) (msg : message A) :=
@@ -260,8 +254,6 @@ Definition updateUniverseSendMsg {A} (u : universe) (uid : user_id) (msg : messa
    ; users_msg_buffer := multiMapAdd uid (Exm msg) u.(users_msg_buffer)
    ; all_keys         := u.(all_keys)
    ; encryptions      := u.(encryptions)
-   ; key_counter      := u.(key_counter)
-   ; crypto_counter   := u.(crypto_counter)
   |}.
 
 Definition encryptMessage {A} (k : key) (m : message A) : option encrypted_message :=
@@ -301,7 +293,7 @@ Definition hmacMessage {A} (k : key) (m : message A) : option encrypted_message 
   | AsymPubKey k' => None
   end.
 
-Definition updateUniverseNewKey (u : universe) (user : user_data) (incr : nat) (k : key) :=
+Definition updateUniverseNewKey (u : universe) (user : user_data) (k : key) :=
   let addKey (k : key) (m : fmap nat key) :=
       match k with
       | SymKey k'     => m $+ (k'.(sym_key_id),  k)
@@ -314,8 +306,6 @@ Definition updateUniverseNewKey (u : universe) (user : user_data) (incr : nat) (
      ; users_msg_buffer := u.(users_msg_buffer)
      ; all_keys         := addKey k u.(all_keys)
      ; encryptions      := u.(encryptions)
-     ; key_counter      := u.(key_counter) + incr
-     ; crypto_counter   := u.(crypto_counter)
     |}.
 
 Definition canVerifySignature (u : universe)(usrDat : user_data)(sig_id : signed_message_id)(k_id : nat) : Prop :=
@@ -347,12 +337,13 @@ Inductive step_user : forall A, universe * user_data * user_cmd A -> universe * 
     step_user (u, usrDat, Send u_id msg) (updateUniverseSendMsg u usrDat.(usrid) msg, Return tt)
 
 (* Encryption / Decryption *)
-| StepEncrypt : forall A u usrDat k_id (msg : message A) encMsg k,
+| StepEncrypt : forall A u usrDat k_id (msg : message A) enc_id encMsg k,
     usrDat.(key_heap) $? k_id = Some k
     -> encryptMessage k msg = Some encMsg
     (* Generate new msg_id and add message to heap *)
+    -> ~(enc_id \in (dom u.(encryptions)))
     -> step_user (u, usrDat, Encrypt k msg)
-                (updateUniverseCipherMsg u usrDat.(usrid) encMsg, Return (Ciphertext u.(crypto_counter)))
+                (updateUniverseCipherMsg u usrDat.(usrid) enc_id encMsg, Return (Ciphertext enc_id))
 | StepSymmetricDecrypt : forall A u usrDat msg k_id k enc_id,
     u.(encryptions) $? enc_id = Some (Enc k_id msg)
     -> usrDat.(key_heap) $? k_id = Some (SymKey k)
@@ -366,11 +357,12 @@ Inductive step_user : forall A, universe * user_data * user_cmd A -> universe * 
     -> step_user (u, usrDat, Decrypt (Ciphertext enc_id)) (u, Return (msg : message A))
 
 (* Signing / Verification *)
-| StepSign : forall A u usrDat k_id (msg : message A) k signedMessage,
+| StepSign : forall A u usrDat k_id (msg : message A) k sig_id signedMessage,
     usrDat.(key_heap) $? k_id = Some k
     -> signMessage k msg = Some signedMessage
+    -> ~(sig_id \in (dom u.(encryptions)))
     -> step_user (u, usrDat, Sign k msg)
-                (updateUniverseCipherMsg u usrDat.(usrid) signedMessage, Return (Signature msg u.(crypto_counter)))
+                (updateUniverseCipherMsg u usrDat.(usrid) sig_id signedMessage, Return (Signature msg sig_id))
 | StepVerify : forall A u usrDat (msg : message A) k_id sig_id,
     (* u.(encryptions) $? sig_id = Some (Sig k_id) *)
     (* (* Look up asymmetric key by its global universe identifier *) *)
@@ -388,11 +380,12 @@ Inductive step_user : forall A, universe * user_data * user_cmd A -> universe * 
     -> step_user (u, usrDat, Verify msg1) (u, Return false)
 
 (* HMAC / Verify HMAC*)
-| StepProduceHMAC : forall A u usrDat (msg : message A) k_id k hmacMsg,
+| StepProduceHMAC : forall A u usrDat (msg : message A) k_id k hmac_id hmacMsg,
     usrDat.(key_heap) $? k_id = Some k
     -> hmacMessage k msg = Some hmacMsg
+    -> ~(hmac_id \in (dom u.(encryptions)))
     -> step_user (u, usrDat, ProduceHMAC k msg)
-                (updateUniverseCipherMsg u usrDat.(usrid) hmacMsg, Return (HMAC_Message msg u.(crypto_counter)))
+                (updateUniverseCipherMsg u usrDat.(usrid) hmac_id hmacMsg, Return (HMAC_Message msg hmac_id))
 | StepVerifyHmac : forall A u usrDat (msg : message A) k_id hmac_id,
     (* u.(encryptions) $? hmac_id = Some (Hmac k_id) *)
     (* -> usrDat.(key_heap) $? k_id = Some (SymKey k) *)
@@ -406,12 +399,16 @@ Inductive step_user : forall A, universe * user_data * user_cmd A -> universe * 
     -> step_user (u, usrDat, VerifyHMAC msg1) (u, Return false)
 
 (* Key creation *)
-| StepGenerateSymKey: forall u usrDat usage k,
-    buildSymmetricKey u.(key_counter) usage usrDat.(usrid) = k
-    -> step_user (u, usrDat, GenerateSymKey usage) (updateUniverseNewKey u usrDat 1 (SymKey k), Return k)
-| StepGenerateAsymKey: forall u usrDat usage k,
-    buildAsymmetricKey u.(key_counter) usage usrDat.(usrid) = k
-    -> step_user (u, usrDat, GenerateAsymKeys usage) (updateUniverseNewKey u usrDat 2 (AsymKey k), Return k)
+| StepGenerateSymKey: forall u usrDat usage k kid,
+    buildSymmetricKey kid usage usrDat.(usrid) = k
+    -> ~(kid \in (dom u.(all_keys)))
+    -> step_user (u, usrDat, GenerateSymKey usage) (updateUniverseNewKey u usrDat (SymKey k), Return k)
+| StepGenerateAsymKey: forall u usrDat usage k kid1 kid2 kid3,
+    buildAsymmetricKey kid1 kid2 kid3 usage usrDat.(usrid) = k
+    -> ~(kid1 \in (dom u.(all_keys)))
+    -> ~(kid2 \in (dom u.(all_keys)))
+    -> ~(kid3 \in (dom u.(all_keys)))
+    -> step_user (u, usrDat, GenerateAsymKeys usage) (updateUniverseNewKey u usrDat (AsymKey k), Return k)
  
 (* | Barrier {result : Set} : user_cmd result. *)
 .
@@ -424,7 +421,6 @@ Inductive step_universe : universe -> universe -> Prop :=
                                      users_msg_buffer := q';
                                      trace            := U.(net).(trace)
                                    |};
-                           key_counter := U.(key_counter)
                          |}
                       )
 .
