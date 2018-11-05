@@ -1,3 +1,7 @@
 -R ./frap Frap
-RealWorld.v
-IdealWorld.v
+-R ./KeyManagement KeyManagement
+
+KeyManagement/Common.v
+KeyManagement/IdealWorld.v
+KeyManagement/RealWorld.v
+KeyManagement/Simulation.v

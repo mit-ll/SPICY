@@ -1,9 +1,8 @@
 From Coq Require Import String.
 From Coq Require Import Bool.Sumbool.
 Require Import Frap.
+Require Import Common.
 Set Implicit Arguments.
-
-Definition user_id := var.
 
 Definition channel_id := nat.
 
@@ -42,7 +41,7 @@ Inductive channel_type :=
 
 (* Exisistential wrapper for message, so we can put it in collections *)
 Inductive exmsg : Type :=
-| Exm {A : Set} (msg : A) : exmsg.
+| Exm {A : Type} (msg : A) : exmsg.
 
 Record channel_data := construct_channel
   { properties : security_properties ;
@@ -72,7 +71,7 @@ Fixpoint recv_message' {A} ms (u : user_id) i : option A :=
   | [] => None
   | (u', m) :: ms'
     => match i with
-       | O => if u ==v u' then recv_message' ms' u O else Some m
+       | O => if u ==n u' then recv_message' ms' u O else Some m
        | S n => recv_message' ms' u n                
        end     
   end.
@@ -126,24 +125,26 @@ Definition is_valid_C_broadcast user1 ch_d :=
 Definition is_IA_broadcast ch_d :=
   forall user, ch_d.(type) = Broadcast user /\ I_A_IA_properties ch_d.(properties).
 
-Inductive cmd : Set -> Type :=
-| Return {result : Set} (r : result) : cmd result
+Inductive cmd : Type -> Type :=
+| Return {result : Type} (r : result) : cmd result
 | Bind {result' result} (c1 : cmd result') (c2 : result' -> cmd result) : cmd result
-| Send {msg_ty : Set} (m : msg_ty) (ch_id : channel_id) : cmd unit
-| Recv {msg_ty : Set} (ch_id : channel_id) : cmd msg_ty
+| Send {msg_ty : Type} (m : msg_ty) (ch_id : channel_id) : cmd unit
+| Recv {msg_ty : Type} (ch_id : channel_id) : cmd msg_ty
 | CreateChannel (p : security_properties) : cmd channel_id.
 
 Notation "x <- c1 ; c2" := (Bind c1 (fun x => c2)) (right associativity, at level 75).
 
-Record universe := construct_universe
-                     { channel_vector : fmap channel_id channel_data ;
-                       users : fmap user_id (cmd unit)}.
+Record universe (A : Type) : Type
+  := construct_universe
+       { channel_vector : fmap channel_id channel_data ;
+         users : user_list (cmd A)
+       }.
 
 Inductive step_user : forall A, user_id * channels * cmd A -> user_id * channels * cmd A -> Prop :=
 | StepBindRecur : forall u result result' (c1 c1' : cmd result') (c2 : result' -> cmd result) cv cv',
     step_user (u, cv, c1) (u, cv', c1') ->
     step_user (u, cv, (Bind c1 c2)) (u, cv', (Bind c1' c2))
-| StepBindProceed : forall u (result result' : Set) (v : result') (c2 : result' -> cmd result) cv,
+| StepBindProceed : forall u (result result' : Type) (v : result') (c2 : result' -> cmd result) cv,
     step_user (u, cv, (Bind (Return v) c2)) (u, cv, c2 v)
 | StepCreateChannel : forall u ch_id p cv,
     ~(ch_id \in dom cv) ->
@@ -151,37 +152,37 @@ Inductive step_user : forall A, user_id * channels * cmd A -> user_id * channels
        there is no way of telling at this stage. *)
     step_user (u, cv, (CreateChannel p))
               (u, (cv $+ (ch_id, construct_channel p Symmetric [] $0)), (Return ch_id))
-| StepSendBroadcast : forall u cv (ch_id : channel_id) (ch_d : channel_data) {m_ty : Set} (m : m_ty),
+| StepSendBroadcast : forall u cv (ch_id : channel_id) (ch_d : channel_data) {m_ty : Type} (m : m_ty),
     cv $? ch_id = Some ch_d ->
     (is_valid_IA_broadcast u ch_d \/ is_C_broadcast ch_d) ->
     step_user (u, cv, (Send m ch_id))
               (u, cv $+ (ch_id, send_message u (Exm m) ch_d), (Return tt))
-| StepSendSymmetric : forall u cv (ch_id : channel_id) {m_ty : Set} (m : m_ty) ch_d,
+| StepSendSymmetric : forall u cv (ch_id : channel_id) {m_ty : Type} (m : m_ty) ch_d,
     cv $? ch_id = Some ch_d ->
     ch_d.(type) = Symmetric ->
     (* check user set of allowed channels for ch_id, check if CIA is valid *)
     step_user (u, cv, Send m ch_id)
               (u, cv $+ (ch_id, send_message u (Exm m) ch_d), Return tt)
-| StepSendDefault : forall u cv ch_d (ch_id : channel_id) {m_ty : Set} (m : m_ty),
+| StepSendDefault : forall u cv ch_d (ch_id : channel_id) {m_ty : Type} (m : m_ty),
     cv $? ch_id = Some ch_d ->
     is_default_channel_owner u ch_d.(type) ->
     step_user (u, cv, Send m ch_id)
               (u, cv $+ (ch_id, send_message u (Exm m) ch_d), Return tt)
-| StepRecvBroadcast : forall u cv ch_d (ch_id : channel_id) {msg_ty : Set} (m : msg_ty) ,
+| StepRecvBroadcast : forall u cv ch_d (ch_id : channel_id) {msg_ty : Type} (m : msg_ty) ,
     (* check if m is a symmetric channel id; add to set of allowed channels *)
     cv $? ch_id = Some ch_d ->
     (is_valid_C_broadcast u ch_d \/ is_IA_broadcast ch_d) ->
     recv_message ch_d u = Some (Exm m) ->
     step_user (u, cv, (Recv ch_id))
               (u, cv $+ (ch_id, inc_pointer ch_d u), (Return m))
-| StepRecvSymmetric : forall u cv ch_d ch_id {m_ty : Set} (m : m_ty),
+| StepRecvSymmetric : forall u cv ch_d ch_id {m_ty : Type} (m : m_ty),
     (* check set of allowed channels for ch_id *)
     cv $? ch_id = Some ch_d ->
     recv_message ch_d u = Some (Exm m) ->
     (* check if m is a symmetric channel id; add to set of allowed channels *)
     step_user (u, cv, (Recv ch_id))
               (u, cv $+ (ch_id, inc_pointer ch_d u), (Return m))
-| StepRecvDefault : forall u cv ch_id ch_d {m_ty : Set} (m : m_ty),
+| StepRecvDefault : forall u cv ch_id ch_d {m_ty : Type} (m : m_ty),
     cv $? ch_id = Some ch_d ->
     is_default_channel_owner u ch_d.(type) ->
     recv_message ch_d u = Some (Exm m) ->
@@ -189,24 +190,25 @@ Inductive step_user : forall A, user_id * channels * cmd A -> user_id * channels
     step_user (u, cv, Recv ch_id)
               (u, cv $+ (ch_id, (inc_pointer ch_d u)), Return m).
 
-Inductive step_universe : universe -> universe -> Prop :=
-| StepUser : forall U u u_d cs' u_d',
-    U.(users) $? u = Some u_d ->
+Inductive step_universe : forall {A : Type}, universe A -> universe A -> Prop :=
+| StepUser : forall A (U : universe A) u u_d cs' u_d',
+    In (u,u_d) U.(users) ->
+    (* U.(users) $? u = Some u_d -> *)
     step_user (u, U.(channel_vector), u_d) (u, cs', u_d') ->
-    step_universe U (construct_universe cs' (U.(users) $+ (u, u_d'))).
+    step_universe U (construct_universe cs' (updateUserList U.(users) u u_d')).
 
-Example ping :=
-  $0 $+ ("0", x <- (Send "Hello" 0) ; (Recv 0))
-     $+ ("1", x <- (Recv 0) ; if x ==v "Hello" then (Send x 0) else (Send "Huh?" 0)).
+Example ping : user_list (cmd nat) :=
+    (0, _ <- (Send 1 1) ; (Recv 1))
+ :: (1, r <- (Recv 0) ; _ <- (Send 0 0) ; Return r)
+ :: [].
 
 Example ping_universe :=
 {| channel_vector := $0 $+ (1, {| properties := {| confidentiality := true ;
                                                    integrity := true ;
                                                    authenticity := true |} ;
-                                  type := Default "1" "2" ;
+                                  type := Default 1 2 ;
                                   messages_sent := [] ;
                                   user_pointers := $0 |}) ;
    users := ping |}.
 
 Check ping_universe.
-
