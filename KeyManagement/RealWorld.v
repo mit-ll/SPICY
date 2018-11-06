@@ -4,8 +4,6 @@ Require Import Common.
 
 Set Implicit Arguments.
 
-
-
 Definition key_identifier := nat.
 Definition cipher_id      := nat.
 
@@ -350,7 +348,6 @@ Section PingProtocol.
   Check ping_universe.
 
 End PingProtocol.
-
 
 (* Additional functionality to implement:
    1. Administration

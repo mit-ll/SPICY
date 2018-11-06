@@ -112,4 +112,3 @@ Definition simulates (R : u -> ku -> Prop) (U : u) (KU : ku) :=
 
 Definition refines (U1 : u) (U2 : ku) :=
   exists R, simulates R U1 U2.
-
