@@ -102,7 +102,12 @@ Inductive user_cmd : Type -> Type :=
 (* | Barrier {result : Set} : user_cmd result *)
 .
 
-Notation "x <- c1 ; c2" := (Bind c1 (fun x => c2)) (right associativity, at level 75).
+Module RealWorldNotations.
+  Notation "x <- c1 ; c2" := (Bind c1 (fun x => c2)) (right associativity, at level 75) : realworld_scope.
+  Delimit Scope realworld_scope with realworld.
+End RealWorldNotations.
+Import  RealWorldNotations.
+Open Scope realworld_scope.
 
 (* Exisistential wrapper for message, so we can put it in collections *)
 (* This feels overly complicated to me... *) 
@@ -202,7 +207,7 @@ Definition signMessage {A} (k : key) (m : message A) (c_id : cipher_id) : option
   end.
 
 Definition canVerifySignature {A} (ciphers : fmap cipher_id cipher)(usrDat : user_data A)(c_id : cipher_id) : Prop :=
-  forall {A} (m : message A) k_id k ,
+  forall (M : Set) (m : message M) k_id k ,
     ciphers $? c_id = Some (Cipher c_id k_id m)
     (*  Make sure that the user has access to the key.  If we are doing asymmetric signatures,
         we only need the public part of the key, so no additional checks necessary! *)
@@ -221,11 +226,12 @@ Inductive step_user : forall A, user_id -> data_step0 A -> data_step0 A -> Prop 
     step_user u_id (cs, ks, msgs, uks, Bind (Return v) cmd) (cs, ks, msgs, uks, cmd v)
 
 (* Comms *)
-| StepRecv : forall {A} u_id cs ks qmsgs uks (msg : message A) msgs newkeys,
+| StepRecv : forall {A} u_id cs ks qmsgs qmsgs' uks (msg : message A) msgs newkeys,
     qmsgs $? u_id = Some (Exm msg :: msgs) (* we have a message waiting for us! *)
+    -> qmsgs' = match msgs with [] => qmsgs $- u_id | _ => qmsgs $+ (u_id,msgs) end
     -> findKeys msg = newkeys
     -> step_user u_id (cs, ks, qmsgs, uks, Recv)
-                     (cs, ks, qmsgs $+ (u_id, msgs), updateKeyHeap newkeys uks, Return msg)
+                     (cs, ks, qmsgs', updateKeyHeap newkeys uks, Return msg)
 | StepSend : forall {A} u_id cs ks qmsgs rec_u_id uks (msg : message A),
     step_user u_id (cs, ks, qmsgs, uks, Send rec_u_id msg)
                    (cs, ks, multiMapAdd rec_u_id (Exm msg) qmsgs, uks, Return tt)
@@ -287,6 +293,17 @@ Inductive step_user : forall A, user_id -> data_step0 A -> data_step0 A -> Prop 
 (* | Barrier {result : Set} : user_cmd result. *)
 .
 
+Lemma StepRecv' : forall {A} u_id cs ks qmsgs qmsgs' uks uks' (msg : message A) msgs newkeys,
+  qmsgs $? u_id = Some (Exm msg :: msgs) (* we have a message waiting for us! *)
+  -> qmsgs' = match msgs with [] => qmsgs $- u_id | _ => qmsgs $+ (u_id,msgs) end
+  -> findKeys msg = newkeys
+  -> uks' = updateKeyHeap newkeys uks
+  -> step_user u_id (cs, ks, qmsgs, uks, Recv)
+                        (cs, ks, qmsgs', uks', Return msg).
+Proof.
+  intros. subst. econstructor; eauto.
+Qed.
+
 Definition updateUniverse {A} (U : universe A) (cs : ciphers) (ks : keys) (qmsgs : queued_messages)
                           (u_id : user_id) (userKeys : keys) (cmd : user_cmd A): universe A :=
   {|
@@ -297,13 +314,26 @@ Definition updateUniverse {A} (U : universe A) (cs : ciphers) (ks : keys) (qmsgs
   |}.
 
 Inductive step_universe {A} : universe A -> universe A -> Prop :=
-| StepUser : forall U u_id userData uks cs ks qmsgs (cmd cmd' : user_cmd A),
+| StepUser : forall U u_id userData uks cs ks qmsgs (cmd' : user_cmd A),
     In (u_id,userData) U.(users)
     (* U.(users) $? u_id = Some userData *)
-    -> step_user u_id (U.(all_ciphers), U.(all_keys), U.(users_msg_buffer), userData.(key_heap), cmd)
+    -> step_user u_id (U.(all_ciphers), U.(all_keys), U.(users_msg_buffer), userData.(key_heap), userData.(protocol))
                      (cs, ks, qmsgs, uks, cmd')
     -> step_universe U (updateUniverse U cs ks qmsgs u_id uks cmd')
 .
+
+
+Lemma StepUser' : forall A U U' u_id userData uks cs ks qmsgs ( cmd' : user_cmd A),
+  In (u_id,userData) U.(users)
+  (* U.(users) $? u_id = Some userData *)
+  -> step_user u_id (U.(all_ciphers), U.(all_keys), U.(users_msg_buffer), userData.(key_heap), userData.(protocol))
+                        (cs, ks, qmsgs, uks, cmd')
+  -> U' = (updateUniverse U cs ks qmsgs u_id uks cmd')
+  -> step_universe U U'.
+Proof.
+  intros. subst. econstructor; eassumption.
+Qed.
+
 
 Definition extractPlainText {A} (msg : message A) : option A :=
   match msg with
@@ -311,25 +341,18 @@ Definition extractPlainText {A} (msg : message A) : option A :=
   | _           => None
   end.
 
-
-
 Section PingProtocol.
 
   Example ping : list (user_data nat) :=
     {| usrid    := 0
      ; key_heap := $0
      ; protocol := (  _ <- Send 1 (Plaintext 1)
-                    ; rec <- Recv (A := nat)
-                    ; Return (match extractPlainText rec with
-                              | (Some msg) => msg
-                              | None       => 99
-                              end))
+                    ; Return 42)
     |}
       ::
     {| usrid    := 1
      ; key_heap := $0
      ; protocol := (  rec <- Recv (A := nat)
-                    ; _ <- Send 0 (Plaintext 0)
                     ; Return (match extractPlainText rec with
                               | Some msg => msg
                               | None     => 98

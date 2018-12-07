@@ -1,3 +1,8 @@
+# Coq build stuff
+Makefile.coq
+Makefile.coq.conf
+
+
 .*.aux
 *.a
 *.cma
