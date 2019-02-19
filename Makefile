@@ -3,7 +3,7 @@
 all: coq
 
 frap:
-	$(MAKE) -C frap
+	$(MAKE) -C frap lib
 
 coq: Makefile.coq frap
 	$(MAKE) -f Makefile.coq

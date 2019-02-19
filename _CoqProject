@@ -5,4 +5,7 @@ KeyManagement/Common.v
 KeyManagement/IdealWorld.v
 KeyManagement/RealWorld.v
 KeyManagement/Simulation.v
-KeyManagement/PingProtocol.v
+KeyManagement/EncPingProtocol.v
+# KeyManagement/PingProtocol.v
+# KeyManagement/SimpleAuth.v
+# KeyManagement/SimpleEnc.v

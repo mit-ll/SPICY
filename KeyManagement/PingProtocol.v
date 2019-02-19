@@ -2,8 +2,7 @@ From Coq Require Import List.
 (* Require Import Frap Eqdep. *)
 Require Import Frap.
 
-Require Import Common.
-Require Import Simulation.
+Require Import Common Simulation.
 Require IdealWorld.
 Require RealWorld.
 
@@ -16,405 +15,323 @@ Section IdealPing.
 
   Import IdealWorld.
 
-  Example ideal_ping_universe : universe nat :=
+  Example ideal_ping_universe : universe unit :=
     {| channel_vector := $0 $+ (0, { })
      ; users := [
         (0, {| perms    := $0 $+ (0, {| read := true ; write := true |})
-             ; protocol := (
-                 _ <- (Send (Content 1) 0)
-               ; Return 42)
+             ; protocol := Send (Content 1) 0
             |})
       ; (1, {| perms    := $0 $+ (0, {| read := true ; write := true |})
              ; protocol := (
-                 r <- (Recv 0)
-               ; Return match extractContent r with Some c => c | None => 43 end)
+                 r <- (Recv (msg_ty := nat) 0)
+               ; Return tt)
             |})
                ]
     |}.
 
-  Check ideal_ping_universe.
+  Example ideal_enc_ping_universe : universe unit :=
+    {| channel_vector := $0 $+ (0, { })
+     ; users := [
+        (0, {| perms    := $0 $+ (0, {| read := true ; write := true |})
+             ; protocol := Send (Content 1) 0
+            |})
+      ; (1, {| perms    := $0 $+ (0, {| read := true ; write := true |})
+             ; protocol := (
+                 r <- (Recv (msg_ty := nat) 0)
+               ; Return tt)
+            |})
+               ]
+    |}.
 
 End IdealPing.
 
 Section RealPing.
 
   Import RealWorld.
+  Definition RA := 0.
+  Definition RB := 1.
 
-  Example real_ping : list (user_data nat) :=
-    {| usrid    := 0
-     ; key_heap := $0
-     ; protocol := (  _ <- Send 1 (Plaintext 1)
-                    ; Return 42)
-    |}
-      ::
-    {| usrid    := 1
-     ; key_heap := $0
-     ; protocol := (  rec <- Recv (A := nat)
-                    ; Return (match extractPlainText rec with
-                              | Some msg => msg
-                              | None     => 98
-                              end))
-    |}
-      :: [].
+  Definition KEYID := 10.
+  Definition KEY   := SymKey (MkCryptoKey KEYID Encryption).
+  Definition KEYS  := $0 $+ (KEYID, KEY).
 
-  Example real_ping_universe : universe nat :=
+  Example real_ping_universe : universe unit :=
     {|
-      users            := map (fun u_d => (u_d.(usrid), u_d)) real_ping
+      users            :=
+        [
+          (RA, {| key_heap := $0
+                ; protocol := Send RB (Plaintext 1)
+               |})
+        ; (RB, {| key_heap := $0
+                ; protocol := (  rec <- Recv (A := nat) (Accept)
+                               ; Return tt)
+               |})
+        ]
     ; users_msg_buffer := $0
     ; all_keys         := $0
     ; all_ciphers      := $0
+    ; adversary        := $0
     |}.
-
-  Check real_ping_universe.
 
 End RealPing.
 
-(** The correctness theorem for the very simple ping protocol  *)
-Section SimplePingProtocolCorrect.
+Section SimplePingProtocolCorrectLabeled.
 
-  Inductive R_ping : RealWorld.universe nat -> IdealWorld.universe nat -> Prop :=
-  | StartPingProtocol :
-      R_ping
-        {|
-          RealWorld.users   := ([
-               (0, {| RealWorld.usrid    := 0
-                    ; RealWorld.key_heap := $0
-                    ; RealWorld.protocol := (
-                        _ <- RealWorld.Send 1 (RealWorld.Plaintext 1)
-                      ; RealWorld.Return 42) |})
+  Definition realUserSilentStep {A} (u_id : user_id) (ds0 ds1 : RealWorld.data_step0 A) :=
+    RealWorld.lstep_user u_id Silent ds0 ds1.
 
-             ; (1, {| RealWorld.usrid    := 1
-                    ; RealWorld.key_heap := $0
-                    ; RealWorld.protocol := (
-                        rec <- RealWorld.Recv (A := nat)
-                      ; RealWorld.Return (match RealWorld.extractPlainText rec with
-                                          | Some msg => msg
-                                          | None     => 98
-                                          end)) |})
-                               ])%realworld
+  Definition realUniverseSilentStep {A} (U1 U2 : RealWorld.universe A) :=
+    RealWorld.lstep_universe U1 Silent U2.
+
+  Definition RUFinal :=
+        {| RealWorld.users   := ([
+               (RA, {| RealWorld.key_heap := $0
+                     ; RealWorld.protocol := RealWorld.Return tt |} )
+
+             ; (RB, {| RealWorld.key_heap := $0
+                     ; RealWorld.protocol := RealWorld.Return tt |} )
+                                ])%realworld
         ; RealWorld.users_msg_buffer := $0
         ; RealWorld.all_keys         := $0
         ; RealWorld.all_ciphers      := $0
-        |}
-        {| IdealWorld.channel_vector := $0 $+ (0, {})
-         ; IdealWorld.users := ([
-              (0, {| IdealWorld.perms    := $0 $+ (0, {| IdealWorld.read := true ; IdealWorld.write := true |})
-                   ; IdealWorld.protocol := (
-                        _ <- (IdealWorld.Send (IdealWorld.Content 1) 0)
-                     ; IdealWorld.Return 42)
-                  |})
-            ; (1, {| IdealWorld.perms    := $0 $+ (0, {| IdealWorld.read := true ; IdealWorld.write := true |})
-                   ; IdealWorld.protocol := (
-                       r <- (IdealWorld.Recv 0)
-                     ; IdealWorld.Return match IdealWorld.extractContent r with Some c => c | None => 43 end)
-                  |})
-                               ])%idealworld
-        |}
+        ; RealWorld.adversary        := $0
+        |}.
 
+  Definition IUFinal :=
+    {| IdealWorld.channel_vector := $0 $+ (0, {Exm (IdealWorld.Content 1)});
+       IdealWorld.users := [
+               (0, {| IdealWorld.perms := $0 $+ (0, {| IdealWorld.read := true ;  IdealWorld.write := true |});
+                      IdealWorld.protocol := IdealWorld.Return tt
+                   |})
+             ; (1, {| IdealWorld.perms := $0 $+ (0, {|  IdealWorld.read := true ;  IdealWorld.write := true |});
+                      IdealWorld.protocol := IdealWorld.Return tt
+                   |})
+               ]
+    |}.
 
-  | SendPing :
-      R_ping
-        {|
-          RealWorld.users   := ([
-               (0, {| RealWorld.usrid    := 0
-                    ; RealWorld.key_heap := $0
-                    ; RealWorld.protocol := _ <- RealWorld.Return tt ; RealWorld.Return 42 |} )
+  Inductive RPingL : RealWorld.universe unit -> IdealWorld.universe unit -> Prop :=
+  | Start :
+      RPingL real_ping_universe ideal_ping_universe
 
-             ; (1, {| RealWorld.usrid    := 1
-                    ; RealWorld.key_heap := $0
-                    ; RealWorld.protocol := (
-                        rec <- RealWorld.Recv (A := nat)
-                      ; RealWorld.Return (match RealWorld.extractPlainText rec with
-                                          | Some msg => msg
-                                          | None     => 98
-                                          end)) |})
-                               ])%realworld
-        ; RealWorld.users_msg_buffer := $0 $+ (1, [RealWorld.Exm (RealWorld.Plaintext 1)])
+  | BeforeReceive : forall RUSent RU,
+      RUSent = {|
+        RealWorld.users := ([
+            (RA, {| RealWorld.key_heap := $0
+                  ; RealWorld.protocol := RealWorld.Return tt
+                 |})
+          ; (RB, {| RealWorld.key_heap := $0
+                  ; RealWorld.protocol := (
+                      rec <- RealWorld.Recv (A := nat) (RealWorld.Accept)
+                    ; RealWorld.Return tt)
+                 |})
+                           ])%realworld
+        ; RealWorld.users_msg_buffer := $0 $+ (1, [Exm (RealWorld.Plaintext 1)])
         ; RealWorld.all_keys         := $0
         ; RealWorld.all_ciphers      := $0
-        |}
-        {| IdealWorld.channel_vector := $0 $+ (0, {IdealWorld.Exm (IdealWorld.Content 1)})
+        ; RealWorld.adversary        := $0
+      |}
+      -> realUniverseSilentStep^* RUSent RU
+      -> RPingL RU
+        {| IdealWorld.channel_vector := $0 $+ (0, {Exm (IdealWorld.Content 1)})
          ; IdealWorld.users := ([
               (0, {| IdealWorld.perms    := $0 $+ (0, {| IdealWorld.read := true ; IdealWorld.write := true |})
-                   ; IdealWorld.protocol := _ <- IdealWorld.Return tt ; IdealWorld.Return 42
+                     ; IdealWorld.protocol := IdealWorld.Return tt
                   |})
             ; (1, {| IdealWorld.perms    := $0 $+ (0, {| IdealWorld.read := true ; IdealWorld.write := true |})
                    ; IdealWorld.protocol := (
-                       r <- (IdealWorld.Recv 0)
-                     ; IdealWorld.Return match IdealWorld.extractContent r with Some c => c | None => 43 end)
+                       r <- IdealWorld.Recv (msg_ty := nat) 0
+                     ; IdealWorld.Return tt)
                   |})
                                ])%idealworld
         |}
-
  
-  | SimplAfterSendPing :
-      R_ping
-        {|
-          RealWorld.users   := ([
-               (0, {| RealWorld.usrid    := 0
-                    ; RealWorld.key_heap := $0
-                    ; RealWorld.protocol := RealWorld.Return 42 |} )
-
-             ; (1, {| RealWorld.usrid    := 1
-                    ; RealWorld.key_heap := $0
-                    ; RealWorld.protocol := (
-                        rec <- RealWorld.Recv (A := nat)
-                      ; RealWorld.Return (match RealWorld.extractPlainText rec with
-                                          | Some msg => msg
-                                          | None     => 98
-                                          end)) |})
-                               ])%realworld
-        ; RealWorld.users_msg_buffer := $0 $+ (1, [RealWorld.Exm (RealWorld.Plaintext 1)])
+  | AfterReceive : forall RURecd RU,
+      RURecd = {|
+        RealWorld.users := ([
+            (RA, {| RealWorld.key_heap := $0
+                  ; RealWorld.protocol := RealWorld.Return tt
+                 |})
+          ; (RB, {| RealWorld.key_heap := $0
+                  ; RealWorld.protocol := (
+                      rec <- RealWorld.Return (RealWorld.Plaintext 1)
+                    ; RealWorld.Return tt)
+                 |})
+                           ])%realworld
+        ; RealWorld.users_msg_buffer := $0
         ; RealWorld.all_keys         := $0
         ; RealWorld.all_ciphers      := $0
-        |}
-        {| IdealWorld.channel_vector := $0 $+ (0, {IdealWorld.Exm (IdealWorld.Content 1)})
+        ; RealWorld.adversary        := $0
+      |}
+      -> realUniverseSilentStep^* RURecd RU
+      -> RU <> RUFinal
+      -> RPingL RU
+        {| IdealWorld.channel_vector := $0 $+ (0, {Exm (IdealWorld.Content 1)})
          ; IdealWorld.users := ([
               (0, {| IdealWorld.perms    := $0 $+ (0, {| IdealWorld.read := true ; IdealWorld.write := true |})
-                   ; IdealWorld.protocol := IdealWorld.Return 42
+                   ; IdealWorld.protocol := IdealWorld.Return tt
                   |})
             ; (1, {| IdealWorld.perms    := $0 $+ (0, {| IdealWorld.read := true ; IdealWorld.write := true |})
                    ; IdealWorld.protocol := (
-                       r <- (IdealWorld.Recv 0)
-                     ; IdealWorld.Return match IdealWorld.extractContent r with Some c => c | None => 43 end)
+                       r <- IdealWorld.Return (IdealWorld.Content 1)
+                     ; IdealWorld.Return tt)
                   |})
                                ])%idealworld
         |}
 
-
-  | ReceivePing :
-      R_ping
-        {|
-          RealWorld.users   := ([
-               (0, {| RealWorld.usrid    := 0
-                    ; RealWorld.key_heap := $0
-                    ; RealWorld.protocol := _ <- RealWorld.Return tt ; RealWorld.Return 42 |} )
-
-             ; (1, {| RealWorld.usrid    := 1
-                    ; RealWorld.key_heap := $0
-                    ; RealWorld.protocol := ( rec <- RealWorld.Return (RealWorld.Plaintext 1)
-                                            ; RealWorld.Return (match RealWorld.extractPlainText rec with
-                                                                | Some msg => msg
-                                                                | None     => 98
-                                                                end)) |})
-                               ])%realworld
-        ; RealWorld.users_msg_buffer := $0
-        ; RealWorld.all_keys         := $0
-        ; RealWorld.all_ciphers      := $0
-        |}
-        {| IdealWorld.channel_vector := $0 $+ (0, {IdealWorld.Exm (IdealWorld.Content 1)})
-         ; IdealWorld.users := ([
-              (0, {| IdealWorld.perms    := $0 $+ (0, {| IdealWorld.read := true ; IdealWorld.write := true |})
-                   ; IdealWorld.protocol := _ <- IdealWorld.Return tt ; IdealWorld.Return 42
-                  |})
-            ; (1, {| IdealWorld.perms    := $0 $+ (0, {| IdealWorld.read := true ; IdealWorld.write := true |})
-                   ; IdealWorld.protocol := ( r <- IdealWorld.Return (IdealWorld.Content 1)
-                                            ; IdealWorld.Return match IdealWorld.extractContent r with Some c => c | None => 43 end)
-                  |})
-                               ])%idealworld
-        |}
-
-
-  | ReceivePingAfterSimplify :
-      R_ping
-        {|
-          RealWorld.users   := ([
-               (0, {| RealWorld.usrid    := 0
-                    ; RealWorld.key_heap := $0
-                    ; RealWorld.protocol := RealWorld.Return 42 |} )
-
-             ; (1, {| RealWorld.usrid    := 1
-                    ; RealWorld.key_heap := $0
-                    ; RealWorld.protocol := ( rec <- RealWorld.Return (RealWorld.Plaintext 1)
-                                            ; RealWorld.Return (match RealWorld.extractPlainText rec with
-                                                                | Some msg => msg
-                                                                | None     => 98
-                                                                end)) |})
-                               ])%realworld
-        ; RealWorld.users_msg_buffer := $0
-        ; RealWorld.all_keys         := $0
-        ; RealWorld.all_ciphers      := $0
-        |}
-        {| IdealWorld.channel_vector := $0 $+ (0, {IdealWorld.Exm (IdealWorld.Content 1)})
-         ; IdealWorld.users := ([
-              (0, {| IdealWorld.perms    := $0 $+ (0, {| IdealWorld.read := true ; IdealWorld.write := true |})
-                   ; IdealWorld.protocol := IdealWorld.Return 42
-                  |})
-            ; (1, {| IdealWorld.perms    := $0 $+ (0, {| IdealWorld.read := true ; IdealWorld.write := true |})
-                   ; IdealWorld.protocol := ( r <- IdealWorld.Return (IdealWorld.Content 1)
-                                            ; IdealWorld.Return match IdealWorld.extractContent r with Some c => c | None => 43 end)
-                  |})
-                               ])%idealworld
-        |}
-
-  | SimplifyBindAfterReceive :
-      R_ping
-        {|
-          RealWorld.users   := ([
-               (0, {| RealWorld.usrid    := 0
-                    ; RealWorld.key_heap := $0
-                    ; RealWorld.protocol := _ <- RealWorld.Return tt ; RealWorld.Return 42 |} )
-
-             ; (1, {| RealWorld.usrid    := 1
-                    ; RealWorld.key_heap := $0
-                    ; RealWorld.protocol := RealWorld.Return 1 |})
-                               ])%realworld
-        ; RealWorld.users_msg_buffer := $0
-        ; RealWorld.all_keys         := $0
-        ; RealWorld.all_ciphers      := $0
-        |}
-        {| IdealWorld.channel_vector := $0 $+ (0, {IdealWorld.Exm (IdealWorld.Content 1)})
-         ; IdealWorld.users := ([
-              (0, {| IdealWorld.perms    := $0 $+ (0, {| IdealWorld.read := true ; IdealWorld.write := true |})
-                   ; IdealWorld.protocol := _ <- IdealWorld.Return tt ; IdealWorld.Return 42
-                  |})
-            ; (1, {| IdealWorld.perms    := $0 $+ (0, {| IdealWorld.read := true ; IdealWorld.write := true |})
-                   ; IdealWorld.protocol := IdealWorld.Return 1
-                  |})
-                               ])%idealworld
-        |}
-
-
-  | Finish :
-      R_ping
-        {|
-          RealWorld.users   := ([
-               (0, {| RealWorld.usrid    := 0
-                    ; RealWorld.key_heap := $0
-                    ; RealWorld.protocol := RealWorld.Return 42 |} )
-
-             ; (1, {| RealWorld.usrid    := 1
-                    ; RealWorld.key_heap := $0
-                    ; RealWorld.protocol := RealWorld.Return 1 |} )
-                               ])%realworld
-        ; RealWorld.users_msg_buffer := $0
-        ; RealWorld.all_keys         := $0
-        ; RealWorld.all_ciphers      := $0
-        |}
-        {| IdealWorld.channel_vector := $0 $+ (0, {IdealWorld.Exm (IdealWorld.Content 1)})
-         ; IdealWorld.users := ([
-              (0, {| IdealWorld.perms    := $0 $+ (0, {| IdealWorld.read := true ; IdealWorld.write := true |})
-                   ; IdealWorld.protocol := IdealWorld.Return 42
-                  |})
-            ; (1, {| IdealWorld.perms    := $0 $+ (0, {| IdealWorld.read := true ; IdealWorld.write := true |})
-                   ; IdealWorld.protocol := IdealWorld.Return 1
-                  |})
-                               ])%idealworld
-        |}
+  | SimpleFinish : forall RU IU,
+        RU = RUFinal
+      -> IU = IUFinal
+      -> RPingL RU IU
   .
 
-  Hint Constructors R_ping.
-  Hint Resolve in_eq in_cons.
+  Hint Constructors RPingL.
 
-  Lemma finalStatesAre : 
-    forall {U1 : RealWorld.universe nat} {U2 : IdealWorld.universe nat},
-      R_ping U1 U2
-      -> realWorldIsReallyFinalState U1
-      -> U1 = {|
-          RealWorld.users :=
-            [(0, {| RealWorld.usrid := 0; RealWorld.key_heap := $0; RealWorld.protocol := RealWorld.Return 42 |});
-             (1, {| RealWorld.usrid := 1; RealWorld.key_heap := $0; RealWorld.protocol := RealWorld.Return  1 |})];
-          RealWorld.users_msg_buffer := $0;
-          RealWorld.all_keys := $0;
-          RealWorld.all_ciphers := $0 |}
-        /\ U2 = {|
-            IdealWorld.channel_vector := $0 $+ (0, {IdealWorld.Exm (IdealWorld.Content 1)});
-            IdealWorld.users :=
-              [(0, {|
-                  IdealWorld.protocol := IdealWorld.Return 42;
-                  IdealWorld.perms := $0 $+ (0, {| IdealWorld.read := true; IdealWorld.write := true |}) |});
-                 (1, {|
-                    IdealWorld.protocol := IdealWorld.Return 1;
-                    IdealWorld.perms := $0 $+ (0, {| IdealWorld.read := true; IdealWorld.write := true |}) |})]
-          |}.
-  Proof.
-    intros.
 
-    destruct H;
-      (repeat match goal with
-              | [ H : realWorldIsReallyFinalState _ |- _ ] => invert H
-              | [ H : exists a , _ = RealWorld.Return a |- _ ] => invert H
-              | [ H : _ = RealWorld.Return _ |- _ ] => invert H
-              | [ H : Forall _ _ |- _ ] => invert H
-              end); propositional.
-  Qed.
+  Ltac risky1 :=
+    match goal with
+    | [ H: realUniverseSilentStep^* _ _ |- _ ] => invert H
+    end.
 
-  Hint Resolve finalStatesAre.
+  Ltac churn1 :=
+    match goal with
+    | [ H: In _ _ |- _ ] => invert H
+    | [ H : $0 $? _ = Some _ |- _ ] => apply lookup_empty_not_Some in H; contradiction
+    | [ H : (_ $+ (_, _)) $? _ = Some _ |- _ ] => apply lookup_split in H; propositional; subst
 
-  Lemma rping_steps_simulate : 
+    | [ H : (_ :: _) = _ |- _ ] => invert H
+    | [ H : (_,_) = (_,_) |- _ ] => invert H
+    (* | [ H: _ = _ |- _ ] => progress (invert H) *)
+
+    | [ H : updF _ _ _ = _ |- _ ] => unfold updF; simpl in H
+
+    (* Only take a user step if we have chosen a user *)
+    | [ H: RealWorld.lstep_user RA _ _ _ |- _ ] => invert H
+    | [ H: RealWorld.lstep_user RB _ _ _ |- _ ] => invert H
+
+    | [ H: rstepSilent _ _ |- _ ] => unfold rstepSilent in H
+    | [ H: RealWorld.lstep_universe _ _ _ |- _ ] => invert H
+
+    | [ H: realUniverseSilentStep _ _ |- _ ] => invert H
+    | [ H: realUniverseSilentStep^* (RealWorld.updateUniverse _ _ _ _ _ _ _) _ |- _ ] =>
+      unfold RealWorld.updateUniverse in H; simpl in H; invert H
+    end.
+
+  Ltac rstep_user0 :=
+    eapply TrcFront; [
+      eapply RealWorld.LStepUser'; simpl; [ left; reflexivity | | reflexivity] |
+    ]; simpl.
+
+  Ltac rstep_user1 :=
+    eapply TrcFront; [
+      eapply RealWorld.LStepUser'; simpl; [ right; left; reflexivity | | reflexivity] |
+    ]; simpl.
+
+  Ltac istep_user0 :=
+    eapply TrcFront; [
+      eapply IdealWorld.LStepUser'; simpl; [ left; reflexivity | | reflexivity] |
+    ]; simpl.
+
+  Ltac istep_user1 :=
+    eapply TrcFront; [
+      eapply IdealWorld.LStepUser'; simpl; [ right; left; reflexivity | | reflexivity] |
+    ]; simpl.
+
+  Hint Constructors RealWorld.lstep_user IdealWorld.lstep_user.
+
+  Hint Extern 1 (RPingL (RealWorld.updateUniverse _ _ _ _ _ _ _) _) => unfold RealWorld.updateUniverse; simpl.
+  Hint Extern 1 (RealWorld.lstep_universe _ _ _) => eapply RealWorld.LStepUser'.
+  Hint Extern 1 (RealWorld.lstep_user _ _ (RealWorld.all_ciphers _, _, _, _, _)) => progress simpl.
+  Hint Extern 1 (In _ _) => progress simpl.
+  Hint Extern 2 (realUniverseSilentStep ^* _ _) => (solve TrcRefl) || rstep_user0. 
+  Hint Extern 2 (realUniverseSilentStep ^* _ _) => (solve TrcRefl) || rstep_user1. 
+  Hint Extern 2 (istepSilent ^* _ _) => (solve TrcRefl) || istep_user0. 
+  Hint Extern 2 (istepSilent ^* _ _) => (solve TrcRefl) || istep_user1. 
+  Hint Extern 1 (_ <> RUFinal) => unfold not, RUFinal; discriminate.
+
+  Lemma rpingl_silent_simulates :
     forall U1 U2,
-      R_ping U1 U2
+      RPingL U1 U2
       -> forall U1',
-        RealWorld.step_universe U1 U1'
-        -> exists U2',
-          IdealWorld.step_universe^* U2 U2'
-          /\ R_ping U1' U2'.
+          rstepSilent U1 U1'
+          -> exists U2',
+              istepSilent ^* U2 U2'
+              /\ RPingL U1' U2'.
   Proof.
+    unfold real_ping_universe, ideal_ping_universe;
+      intros. 
 
-    Hint Extern 1 (In _ (IdealWorld.users _)) => progress simpl.
-    Hint Extern 1 (_ \in _ ) => sets.
-    Hint Extern 1 (IdealWorld.step_user (_, IdealWorld.Bind _ _, _) _) => eapply IdealWorld.StepBindRecur; simplify.
-    Hint Extern 1 (IdealWorld.step_user (_, IdealWorld.Send _ _, _) _) => eapply IdealWorld.StepSend'; simplify.
-    Hint Extern 1 (IdealWorld.step_user (IdealWorld.channel_vector _, _, _) _) => progress simpl.
+    invert H;
+      repeat churn1;
+      risky1; repeat (try discriminate; churn1).
 
-    Hint Extern 1 (R_ping (RealWorld.updateUniverse _ _ _ _ _ _ _) _ ) =>
-      autorewrite with core; unfold RealWorld.updateUniverse, RealWorld.multiMapAdd; simplify.
-    (* Hint Extern 1 (R_ping (RealWorld.updateUniverse _ _ _ _ _ _ _) _ ) => *)
-    (*   unfold RealWorld.updateUniverse, RealWorld.multiMapAdd; autorewrite with core; simplify. *)
+    eexists; constructor; swap 1 2; eauto 8.
+    risky1; repeat churn1.
+  Qed.
 
+  Lemma rpingl_loud_simulates : 
+    forall U1 U2,
+      RPingL U1 U2
+      -> forall a1 U1',
+        RealWorld.lstep_universe U1 (Action a1) U1'
+        -> exists a2 U2' U2'',
+            istepSilent^* U2 U2'
+            /\ IdealWorld.lstep_universe U2' (Action a2) U2''
+            /\ action_matches a1 a2
+            /\ RPingL U1' U2''
+            /\ RealWorld.action_adversary_safe U1.(RealWorld.adversary) a1 = true.
+  Proof.
     intros.
 
-    (* The main idea for solving the generated (existential) goals here is to split apart the
-     * conjunction and then solve the second one first.  This works because the second conjuct is
-     * the simulation relation constructor, which helps lock down the destsination state and helps
-     * determine how many steps are needed to get there in the ideal world. Otherwise, we seem to just
-     * pick "take no steps" and get stuck.  *)
-    Hint Extern 1 (exists _, _ /\ _) => eexists; constructor; simplify; [ | constructor ].
+    invert H; repeat churn1.
 
-    invert H; doit; simpl in *; eauto 8;
-      (* Question for Adam.  This works, but pulling the rewrite out breaks it.
-         despite the fact that the Extern above with the needed rewrite is
-         firing.  *)
-      autorewrite with core;
-      eauto 12.
-  Qed.
+    Ltac istep_univ0 :=
+      eapply IdealWorld.LStepUser'; simpl; [ left; reflexivity | | reflexivity]; simpl.
+    Ltac istep_univ1 :=
+      eapply IdealWorld.LStepUser'; simpl; [ right; left; reflexivity | | reflexivity]; simpl.
 
-  Lemma rping_finishes_correctly :
-    forall U1 U2,
-      R_ping U1 U2
-      -> realWorldIsReallyFinalState U1
-      -> idealWorldIsReallyFinalState U2
-        /\ realWorldReturnsOf U1 = idealWorldReturnsOf U2.
+    Hint Constructors action_matches msg_eq.
+    Hint Resolve IdealWorld.LStepSend' IdealWorld.LStepRecv'.
+
+    (* Hint Extern 1 (IdealWorld.lstep_universe _ _ _) => eapply IdealWorld.LStepUser'. *)
+    Hint Extern 2 (IdealWorld.lstep_universe _ _ _) => istep_univ0 + istep_univ1.
+    (* Hint Extern 2 (IdealWorld.lstep_universe _ _ _) => istep_univ1. *)
+
+    Hint Extern 1 (IdealWorld.msg_permissions_valid _ _) => progress simpl.
+    Hint Extern 1 (add _ _ _ = _) => maps_equal.
+    Hint Extern 1 (_ \in _) => sets.
+
+    - do 3 eexists.
+      propositional;
+        swap 1 4; swap 2 4; swap 3 4;
+          unfold RealWorld.updateUniverse, RealWorld.multiMapAdd; simplify;
+            eauto 8.
+
+    - do 3 eexists.
+       propositional;
+        swap 1 4; swap 2 4; swap 3 4;
+          risky1;
+          repeat (try discriminate; churn1);
+          match goal with
+          | [ H : RB = _ |- _] => rewrite H; clear H
+          end;
+          unfold RealWorld.updateUniverse; simplify;
+            eauto 6.
+
+       admit.
+
+    - risky1; repeat churn1.
+      risky1; repeat churn1.
+  Admitted.
+
+  (* Theorem is correctly unproveable *)
+
+  Hint Resolve rpingl_silent_simulates rpingl_loud_simulates.
+
+  Theorem idealPingLRefinesRealPing : 
+    lrefines real_ping_universe ideal_ping_universe.
   Proof.
-    Hint Extern 1 (exists _, _ = _) => eexists; simplify; reflexivity.
-    Hint Extern 1 (idealWorldIsReallyFinalState _) => unfold idealWorldIsReallyFinalState; simplify.
-    Hint Constructors Forall.
-
-    firstorder;
-      (match goal with
-       | [ H : R_ping _ _ |- _ ] => apply finalStatesAre in H
-       end); repeat fixcontext; simplify; eauto 8.
-
+    exists RPingL.
+    firstorder; eauto.
   Qed.
 
-  Hint Resolve rping_steps_simulate rping_finishes_correctly.
-
-  Theorem idealPingRefinesRealPing : 
-    real_ping_universe <| ideal_ping_universe.
-  Proof.
-    exists R_ping.
-    assert (F := rping_finishes_correctly).
-    unfold simulates; firstorder; eauto.
-
-    (* invert H; doit; simpl in *; try contradiction; eexists; *)
-    (*   (constructor; [ | simplify; constructor ]; eauto 8; eauto 10). *)
-  Qed.
-
-  Theorem ping_protocol_ok :
-    finalAnswerInclusion real_ping_universe ideal_ping_universe.
-  Proof.
-    apply refines_implies_inclusion.
-    apply idealPingRefinesRealPing.
-  Qed.
-
-End SimplePingProtocolCorrect.
+End SimplePingProtocolCorrectLabeled.

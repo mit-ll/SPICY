@@ -1,6 +1,6 @@
 From Coq Require Import String.
 From Coq Require Import Bool.Sumbool.
-Require Import Frap.
+Require Import Frap. 
 
 Require Import Common.
 Set Implicit Arguments.
@@ -15,14 +15,27 @@ Definition permissions := fmap channel_id permission.
 
 Definition creator_permission := construct_permission true true.
 
-Inductive message : Type -> Type :=
-| Permission (id : channel_id) (p : permission) : message (channel_id * permission)
-| Content {A : Type} (m : A) : message A
-| MsgPair {A B : Type} (m1 : message A) (m2 : message B) : message (A * B).
+Inductive type :=
+| Nat
+| ChanId
+| Perm
+(* | Text *)
+| Pair (t1 t2 : type)
+.
 
-(* Exisistential wrapper for message, so we can put it in collections *)
-Inductive exmsg : Type :=
-| Exm {A : Type} (msg : message A) : exmsg.
+Fixpoint typeDenote (t : type) : Set :=
+  match t with
+  | Nat => nat
+  | ChanId => channel_id
+  | Perm => permission
+  | Pair t1 t2 => typeDenote t1 * typeDenote t2
+  end.
+
+Inductive message : type -> Type :=
+| Permission (id : channel_id) (p : permission) : message (Pair ChanId Perm)
+| Content (n : nat) : message Nat
+| MsgPair {t1 t2} (m1 : message t1) (m2 : message t2) : message (Pair t1 t2)
+.
 
 (* shouldn't this be just Permissions ? *)
 Definition channels := fmap channel_id (set exmsg).
@@ -30,8 +43,9 @@ Definition channels := fmap channel_id (set exmsg).
 Inductive cmd : Type -> Type :=
 | Return {result : Type} (r : result) : cmd result
 | Bind {result' result} (c1 : cmd result') (c2 : result' -> cmd result) : cmd result
-| Send {msg_ty : Type} (m : message msg_ty) (ch_id : channel_id) : cmd unit
-| Recv {msg_ty : Type} (ch_id : channel_id) : cmd (message msg_ty)
+| Gen : cmd nat
+| Send {t} (m : message t) (ch_id : channel_id) : cmd unit
+| Recv {t} (ch_id : channel_id) : cmd (message t)
 | CreateChannel : cmd channel_id.
 
 Module IdealNotations.
@@ -51,10 +65,6 @@ Record universe A :=
       channel_vector : channels (* fmap channel_id channels *)
     ; users : user_list (user A)
     }.
-
-(* Record universe := construct_universe *)
-(*                      { channel_vector : channels ; *)
-(*                        users : fmap user_id user}. *)
 
 (* write as inductive relation *)
 Fixpoint chs_search {A} (m : message A) : list (channel_id * permission) :=
@@ -98,20 +108,20 @@ Inductive step_user : forall A, channels * cmd A * permissions -> channels * cmd
     ~(ch_id \in dom cv) ->
     step_user (cv, CreateChannel, ps)
               (cv $+ (ch_id, {}), Return ch_id, ps $+ (ch_id, creator_permission))
-| StepSend : forall A cv (m : message A) ch_id ps ch_d b,
+| StepSend : forall t cv (m : message t) ch_id ps ch_d b,
     ps $? ch_id = Some {| read := b ; write := true |} ->
     cv $? ch_id = Some ch_d ->
     msg_permissions_valid m ps ->
     step_user (cv, Send m ch_id, ps) (cv $+ (ch_id, {Exm m} \cup ch_d), Return tt, ps)
-| StepRecv : forall A (cv : channels) ch_d ps (m : message A) ch_id b,
+| StepRecv : forall t (cv : channels) ch_d ps (m : message t) ch_id b,
     cv $? ch_id = Some ch_d ->
     ps $? ch_id = Some {| read := true ; write := b |} ->
     (Exm m) \in ch_d ->
     step_user (cv, Recv ch_id, ps)
-              (cv, Return m, add_chs_to_set (chs_search m) ps).
+              (cv, Return m, add_chs_to_set (chs_search m) ps)
+.
 
-
-Lemma StepSend' : forall A cv cv' (m : message A) ch_id ps ch_d b,
+Lemma StepSend' : forall t cv cv' (m : message t) ch_id ps ch_d b,
     ps $? ch_id = Some {| read := b ; write := true |}
     -> cv $? ch_id = Some ch_d
     -> msg_permissions_valid m ps
@@ -121,7 +131,7 @@ Proof.
   intros; subst; econstructor; eauto.
 Qed.
 
-Lemma StepRecv' : forall A (cv : channels) ch_d ps ps' (m : message A) ch_id b,
+Lemma StepRecv' : forall t (cv : channels) ch_d ps ps' (m : message t) ch_id b,
     cv $? ch_id = Some ch_d
     -> ps $? ch_id = Some {| read := true ; write := b |}
     -> (Exm m) \in ch_d
@@ -152,9 +162,92 @@ Proof.
   intros. subst. econstructor; eauto.
 Qed.
 
-
-Definition extractContent {A} (msg : message A) : option A :=
+Definition extractContent {t} (msg : message t) : option nat :=
   match msg with
   | Content t => Some t
   | _         => None
   end.
+
+
+(* Labeled transition system *)
+
+Inductive action : Type :=
+| Input  t (msg : message t) (ch_id : channel_id) (cs : channels) (ps : permissions)
+| Output t (msg : message t) (ch_id : channel_id) (cs : channels) (ps : permissions)
+.
+
+Definition ilabel := @label action.
+
+Inductive lstep_user : forall A, ilabel -> channels * cmd A * permissions -> channels * cmd A * permissions -> Prop :=
+| LStepBindRecur : forall result result' lbl (c1 c1' : cmd result') (c2 : result' -> cmd result) cv cv' ps ps',
+    lstep_user lbl (cv, c1, ps) (cv', c1', ps') ->
+    lstep_user lbl (cv, (Bind c1 c2), ps) (cv', (Bind c1' c2), ps')
+| LStepBindProceed : forall (result result' : Type) (v : result') (c2 : result' -> cmd result) cv ps,
+    lstep_user Silent (cv, (Bind (Return v) c2), ps) (cv, c2 v, ps)
+| LStepGen : forall cv ps n,
+    lstep_user Silent (cv, Gen, ps) (cv, Return n, ps)
+| LStepCreateChannel : forall ch_id cv ps,
+    ~(ch_id \in dom cv) ->
+    lstep_user Silent
+               (cv, CreateChannel, ps)
+               (cv $+ (ch_id, {}), Return ch_id, ps $+ (ch_id, creator_permission))
+| LStepSend : forall t cv (m : message t) ch_id ps ch_d b,
+    ps $? ch_id = Some {| read := b ; write := true |} ->
+    cv $? ch_id = Some ch_d ->
+    msg_permissions_valid m ps ->
+    lstep_user
+      (Action (Output m ch_id cv ps))
+      (cv, Send m ch_id, ps)
+      (cv $+ (ch_id, {Exm m} \cup ch_d), Return tt, ps)
+| LStepRecv : forall t (cv : channels) ch_d ps (m : message t) ch_id b,
+    cv $? ch_id = Some ch_d ->
+    ps $? ch_id = Some {| read := true ; write := b |} ->
+    (Exm m) \in ch_d ->
+    lstep_user
+      (Action (Input m ch_id cv ps))
+      (cv, Recv ch_id, ps)
+      (cv, Return m, add_chs_to_set (chs_search m) ps)
+.
+
+Lemma LStepSend' : forall t cv cv' (m : message t) ch_id ps ch_d b,
+    ps $? ch_id = Some {| read := b ; write := true |}
+    -> cv $? ch_id = Some ch_d
+    -> msg_permissions_valid m ps
+    -> cv' = cv $+ (ch_id, {Exm m} \cup ch_d)
+    -> lstep_user (Action (Output m ch_id cv ps)) (cv, Send m ch_id, ps) (cv', Return tt, ps).
+Proof.
+  intros; subst; econstructor; eauto.
+Qed.
+
+Lemma LStepRecv' : forall t (cv : channels) ch_d ps ps' (m : message t) ch_id b,
+    cv $? ch_id = Some ch_d
+    -> ps $? ch_id = Some {| read := true ; write := b |}
+    -> (Exm m) \in ch_d
+    -> ps' = add_chs_to_set (chs_search m) ps
+    -> lstep_user
+        (Action (Input m ch_id cv ps))
+        (cv, Recv ch_id, ps)
+        (cv, Return m, ps').
+Proof.
+  intros; subst; econstructor; eauto.
+Qed.
+
+Inductive lstep_universe : forall {A : Type}, universe A -> ilabel -> universe A -> Prop :=
+| LStepUser : forall A (U : universe A) u_id u proto chans perms' lbl,
+    In (u_id,u) U.(users)
+    -> lstep_user lbl (U.(channel_vector), u.(protocol), u.(perms)) (chans, proto, perms')
+    -> lstep_universe U lbl (construct_universe
+                             chans
+                             (updateUserList U.(users) u_id {| protocol := proto ; perms := perms' |})).
+
+
+Lemma LStepUser' : forall A (U U': universe A) u_id u proto chans perms' lbl,
+    In (u_id,u) U.(users)
+    -> lstep_user lbl (U.(channel_vector), u.(protocol), u.(perms)) (chans, proto, perms')
+    -> U' = (construct_universe
+              chans
+              (updateUserList U.(users) u_id {| protocol := proto ; perms := perms' |}))
+    -> lstep_universe U lbl U'.
+Proof.
+  intros. subst. econstructor; eauto.
+Qed.

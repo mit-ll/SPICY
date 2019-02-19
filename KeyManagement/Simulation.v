@@ -10,74 +10,6 @@ Import RealWorld.RealWorldNotations.
 
 Set Implicit Arguments.
 
-Definition idealWorldIsReallyFinalState {A} (U : IdealWorld.universe A) : Prop :=
-  Forall (fun '(_,u_data) => exists a, u_data.(IdealWorld.protocol) = IdealWorld.Return a) U.(IdealWorld.users).
-
-Definition realWorldIsReallyFinalState {A} (U : RealWorld.universe A) : Prop :=
-  Forall (fun '(_,u_data) => exists a, u_data.(RealWorld.protocol) = RealWorld.Return a) U.(RealWorld.users).
-
-Definition idealWorldReturnOf {A} (c : IdealWorld.user A) : option A :=
-  match c.(IdealWorld.protocol) with
-  | IdealWorld.Return a => Some a
-  | _                   => None
-  end.
-
-Definition realWorldReturnOf {A} (c : RealWorld.user_data A) : option A :=
-  match c.(RealWorld.protocol) with 
-  | RealWorld.Return a => Some a
-  | _                  => None
-  end.
-
-Fixpoint returnsOfHelper {B : Type} {A : Type -> Type} (users : user_list (A B)) (f : A B -> option B) : list B :=
-  match users with
-  | []          => []
-  | (_,a) :: xs =>
-    match f a with
-    | Some b => b :: returnsOfHelper xs f
-    | None   => returnsOfHelper xs f
-    end
-  end.
-
-Definition idealWorldReturnsOf {A : Type} (U : IdealWorld.universe A) : list A :=
-  returnsOfHelper U.(IdealWorld.users) idealWorldReturnOf.
-
-Definition realWorldReturnsOf {A : Type} (U : RealWorld.universe A) : list A :=
-  returnsOfHelper U.(RealWorld.users) realWorldReturnOf.
-
-Definition finalAnswerInclusion {A} (U1 : RealWorld.universe A) (U2 : IdealWorld.universe A) :=
-
-  forall finalStateOfU1, RealWorld.step_universe^* U1 finalStateOfU1
-                    -> realWorldIsReallyFinalState finalStateOfU1
-                    -> exists finalStateOfU2, IdealWorld.step_universe^* U2 finalStateOfU2
-                                        /\ idealWorldIsReallyFinalState finalStateOfU2
-                                        /\ realWorldReturnsOf finalStateOfU1 = idealWorldReturnsOf finalStateOfU2.
-
-Definition simulates {A : Type} (R : RealWorld.universe A -> IdealWorld.universe A -> Prop)
-           (U1 : RealWorld.universe A) (U2 : IdealWorld.universe A) :=
-  (forall U1 U2,
-      R U1 U2
-      -> forall U1',
-        RealWorld.step_universe U1 U1'
-        -> exists U2',
-          IdealWorld.step_universe^* U2 U2'
-          /\ R U1' U2')
-
-  /\ (forall U1 U2,
-        R U1 U2
-        -> realWorldIsReallyFinalState U1
-        -> idealWorldIsReallyFinalState U2
-          /\ realWorldReturnsOf U1 = idealWorldReturnsOf U2)
-
-  /\ R U1 U2.
-
-Definition refines {A : Type} (U1 : RealWorld.universe A)(U2 : IdealWorld.universe A) :=
-  exists R, simulates R U1 U2.
-
-Infix "<|" := refines (no associativity, at level 70).
-
-Hint Constructors IdealWorld.step_user IdealWorld.step_universe trc.
-Hint Resolve in_eq in_cons.
-
 Ltac invert H :=
   (FrapWithoutSets.invert H || (inversion H; clear H));
   repeat match goal with
@@ -146,81 +78,117 @@ Ltac fixcontext :=
   | [ H : (_ :: _) = _ |- _ ] => invert H
   end.
 
-Ltac rw_step :=
-  match goal with
-  | [ H : RealWorld.step_universe _ _ |- _ ] => invert H
-  | [ H : RealWorld.step_user _ _ _ |- _ ] => invert H
-  end.
+Hint Resolve in_eq in_cons.
 
-Ltac doit :=
-  repeat (rw_step; repeat fixcontext).
+(* Labeled transition system simulation statement *)
 
-Hint Constructors Forall.
-Hint Unfold simulates.
+Definition rstepSilent {A : Type} (U1 U2 : RealWorld.universe A) :=
+  RealWorld.lstep_universe U1 Silent U2.
 
-Ltac process1 :=
-  match goal with
-  | [ H : simulates _ _ _ |- _ ] => invert H
-  | [ H : exists _, _ |- _ ] => invert H
-  | [ H : _ /\ _ |- _ ] => invert H
-  end.
+Definition istepSilent {A : Type} (U1 U2 : IdealWorld.universe A) :=
+  IdealWorld.lstep_universe U1 Silent U2.
 
-Ltac process := repeat process1.
+Inductive chan_key : Set :=
+| Public (ch_id : IdealWorld.channel_id)
+| Auth (ch_id : IdealWorld.channel_id): forall k,
+    k.(RealWorld.keyUsage) = RealWorld.Signing -> chan_key
+| Enc  (ch_id : IdealWorld.channel_id) : forall k,
+    k.(RealWorld.keyUsage) = RealWorld.Encryption -> chan_key
+| AuthEnc (ch_id : IdealWorld.channel_id) : forall k1 k2,
+      k1.(RealWorld.keyUsage) = RealWorld.Signing
+    -> k2.(RealWorld.keyUsage) = RealWorld.Encryption
+    -> chan_key
+.
 
-  (* Lemma shouldStepOrDone : *)
-  (*   forall {A} {U1 U1' : IdealWorld.universe A} *)
-  (*     {U2 : RealWorld.universe A} *)
-  (*     {R : IdealWorld.universe A -> RealWorld.universe A -> Prop}, *)
-  (*     simulates R U1 U2 *)
-  (*     -> IdealWorld.step_universe^* U1 U1' *)
-  (*     -> idealWorldIsReallyFinalState U1' *)
-  (*     -> idealWorldIsReallyFinalState U1 (* already there! *) *)
-  (*       \/ (exists U1'' U2', IdealWorld.step_universe U1 U1'' *)
-  (*                      /\ IdealWorld.step_universe^* U1'' U1' *)
-  (*                      /\ RealWorld.step_universe^* U2 U2' *)
-  (*                      /\ simulates R U1'' U2'). *)
-  (* Proof. *)
-  (*   intros. *)
+Inductive msg_eq : forall t__r t__i,
+    RealWorld.message t__r
+    -> IdealWorld.message t__i * IdealWorld.channel_id * IdealWorld.channels * IdealWorld.permissions -> Prop :=
 
-  (*   invert H0; process; eauto. *)
+(* Still need to reason over visibility of channel -- plaintext really means everyone can see it *)
+| PlaintextMessage' : forall content ch_id cs ps,
+    ps $? ch_id = Some (IdealWorld.construct_permission true true) ->
+    msg_eq (RealWorld.Plaintext content) (IdealWorld.Content content, ch_id, cs, ps)
+.
 
-  (*   right. *)
-  (*   eapply H0 in H4; eauto; process. eexists. eexists. propositional; eauto. *)
-  (* Qed. *)
+Definition check_cipher (ch_id : IdealWorld.channel_id)
+  :=
+    forall A B ch_id k (im : IdealWorld.message A) (rm : RealWorld.message B) cphrs (*do we need these??*) chans perms,
+      match rm with
+      | RealWorld.Ciphertext cphr_id =>
+        match cphrs $? cphr_id with
+        | None => False
+        | Some (RealWorld.Cipher cphr_id k_id msg) =>
+          RealWorld.keyId k = k_id /\ msg_eq msg (im,ch_id,chans,perms)
+        end
+      | _ => False
+      end.
+    
+Definition chan_key_ok :=
+  forall A B ch_id (im : IdealWorld.message A) (rm : RealWorld.message B) cphrs chan_keys (*do we need these??*) chans perms,
+    match chan_keys $? ch_id with
+    | None => False
+    | Some (Public _)   => msg_eq rm (im,ch_id,chans,perms)
+    | Some (Auth _ k _) =>
+      (* check_cipher ch_id k im rm cphrs chans perms *)
+      match rm with
+      | RealWorld.Ciphertext cphr_id =>
+        match cphrs $? cphr_id with
+        | None => False
+        | Some (RealWorld.Cipher cphr_id k_id msg) =>
+          RealWorld.keyId k = k_id /\ msg_eq msg (im,ch_id,chans,perms)
+        end
+      | _ => False
+      end
+    | Some (Enc  _ k _) => False
+    | Some (AuthEnc _ k1 k2 _ _) => False
+    end.
 
-Lemma realWorldManyStepsIdealWorldToo :
-  forall {A} {U1 U1': RealWorld.universe A} {R},
-    RealWorld.step_universe^* U1 U1'
-    -> forall U2, simulates R U1 U2
-            -> exists U2', IdealWorld.step_universe^* U2 U2'
-                     /\ simulates R U1' U2'.
-Proof.
-  induct 1; intros; eauto.
 
-  process;
-    (* Step forward *)
-    (match goal with
-     | [ H : (forall _ _, R _ _ -> forall _, _ -> exists _, _) , H1 : R _ _ |- _ ] => eapply H in H1; eauto
-     end); process;
-    (* Apply induction hypothesis *)
-    match goal with
-    | [ H : R ?x ?y , IH : forall _, _ -> _ |- _ ]
-      => assert (S : simulates R x y) by (unfold simulates; propositional); apply IH in S
-    end; process;
-    (* Pick correct final state *)
-    match goal with
-    | [ H : R z ?x |- _ ] => exists x
-    end; propositional; eauto using trc_trans.
-Qed.
+Inductive action_matches :
+    RealWorld.action -> IdealWorld.action -> Prop :=
+| Inp : forall t__r t__i (msg1 : RealWorld.message t__r) (msg2 : IdealWorld.message t__i) rw iw ch_id cs ps p x y z,
+      rw = (RealWorld.Input msg1 p x y z)
+    -> iw = IdealWorld.Input msg2 ch_id cs ps
+    -> msg_eq msg1 (msg2, ch_id, cs, ps)
+    -> action_matches rw iw
+| Out : forall t__r t__i (msg1 : RealWorld.message t__r) (msg2 : IdealWorld.message t__i) rw iw ch_id cs ps x,
+      rw = RealWorld.Output msg1 x
+    -> iw = IdealWorld.Output msg2 ch_id cs ps
+    -> msg_eq msg1 (msg2, ch_id, cs, ps)
+    -> action_matches rw iw
+.
 
-Lemma refines_implies_inclusion :
-  forall A (U1 : RealWorld.universe A) (U2 : IdealWorld.universe A),
-    U1 <| U2
-    -> finalAnswerInclusion U1 U2.
-Proof.
-  unfold finalAnswerInclusion, refines in *. intros.
-  process;
-    match goal with
-    | [ H : RealWorld.step_universe ^* _ _ |- _ ] => eapply realWorldManyStepsIdealWorldToo in H
-    end; process; eauto.
-Qed.
+(* Simulation for labeled transition system *)
+Definition lsimulates {A : Type}
+           (R : RealWorld.universe A -> IdealWorld.universe A -> Prop)
+           (U1 : RealWorld.universe A) (U2 : IdealWorld.universe A) :=
+
+(*  call spoofable *)
+
+  (forall U1 U2,
+      R U1 U2
+      -> forall U1',
+        rstepSilent U1 U1' (* or any adversary step *)
+        -> exists U2',
+          istepSilent ^* U2 U2'
+          /\ R U1' U2')
+
+  /\ (forall U1 U2,
+      R U1 U2
+      -> forall a1 U1',
+        RealWorld.lstep_universe U1 (Action a1) U1' (* exclude adversary steps *)
+        -> exists a2 U2' U2'',
+            istepSilent^* U2 U2'
+            /\ IdealWorld.lstep_universe U2' (Action a2) U2''
+            /\ action_matches a1 a2
+            /\ R U1' U2''
+            /\ RealWorld.action_adversary_safe U1.(RealWorld.adversary) a1 = true
+    (* and adversary couldn't have constructed message seen in a1 *)
+    )
+
+  /\ R U1 U2.
+
+Definition lrefines {A : Type} (U1 : RealWorld.universe A)(U2 : IdealWorld.universe A) :=
+  exists R, lsimulates R U1 U2.
+
+Infix "<|" := lrefines (no associativity, at level 70).
