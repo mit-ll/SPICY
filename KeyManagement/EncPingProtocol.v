@@ -242,7 +242,6 @@ Module SimulationAutomation.
 
   Ltac churn1 :=
     match goal with
-    | [ H: In _ _ |- _ ] => invert H
     | [ H : $0 $? _ = Some _ |- _ ] => apply lookup_empty_not_Some in H; contradiction
     | [ H : _ $? _ = Some _ |- _ ] => apply lookup_split in H; propositional; subst
     | [ H : (_ $- _) $? _ = Some _ |- _ ] => rewrite addRemoveKey in H by auto
@@ -260,19 +259,7 @@ Module SimulationAutomation.
     | [ H: exists _, _ |- _ ] => invert H
     | [ H: _ /\ _ |- _ ] => invert H
 
-    (* Only take a user step if we have chosen a user *)
-    | [ H: RealWorld.lstep_user A _ _ _ |- _ ] => invert H
-    | [ H: RealWorld.lstep_user B _ _ _ |- _ ] => invert H
-
-    | [ H: rstepSilent _ _ |- _ ] => invert H (* unfold rstepSilent in H *)
-    | [ H: RealWorld.lstep_universe _ _ _ |- _ ] => invert H
-
-    (* Effectively clears hypotheses of this kind, assuming they are correct.  Otherwise,
-     * I have problems with the automation trying to identify cipher ids. *)
     | [ H : RealWorld.keyId _ = _ |- _] => invert H
-
-    | [ H: RealWorld.signMessage _ _ _ = _ |- _ ] => unfold RealWorld.encryptMessage; simpl in H
-    | [ H: RealWorld.encryptMessage _ _ _ = _ |- _ ] => unfold RealWorld.encryptMessage; simpl in H
 
     | [ H: RealWorld.msg_accepted_by_pattern _ _ _ = _ |- _ ] =>
       unfold RealWorld.msg_accepted_by_pattern in H;
@@ -285,25 +272,53 @@ Module SimulationAutomation.
       rewrite lookup_add_eq in H by eauto;
       simplify;
       discriminate
+
+    | [ H: RealWorld.signMessage _ _ _ = _ |- _ ] => unfold RealWorld.encryptMessage; simpl in H
+    | [ H: RealWorld.encryptMessage _ _ _ = _ |- _ ] => unfold RealWorld.encryptMessage; simpl in H
+
+    | [ H: In _ _ |- _ ] => invert H
+
+    (* Only take a user step if we have chosen a user *)
+    | [ H: RealWorld.lstep_user A _ _ _ |- _ ] => invert H
+    | [ H: RealWorld.lstep_user B _ _ _ |- _ ] => invert H
+
+    | [ H: rstepSilent _ _ |- _ ] => invert H
+    | [ H: RealWorld.lstep_universe _ _ _ |- _ ] => invert H
+
+    | [ S: rstepSilent ^* ?U _ |- _ ] => 
+      (* Don't actually multiStep unless we know the state of the starting universe
+       * meaning it is not some unknown hypothesis in the context...
+       *)
+      match goal with
+      | [U1 : U |- _] => fail 1
+      | [ |- _ ] => invert S
+      end
+
     end.
 
-  Ltac risky1 :=
-    match goal with
-    | [ H: rstepSilent^* _ _ |- _ ] => invert H
-      (* idtac "risk"; (churn1 || idtac "nochurn"); invert H *)
-    end.
+  (* Ltac notHyp P := *)
+  (*   match goal with *)
+  (*   | [ _ : P |- _ ] => fail 1 *)
+  (*   | _ => idtac "notHyp" *)
+  (*   end. *)
 
-  Ltac churn := 
-    repeat (repeat churn1; try risky1; repeat churn1).
+  Ltac churn := repeat churn1.
 
   Ltac istep_univ pick :=
-    eapply IdealWorld.LStepUser'; simpl; [ pick; reflexivity | | reflexivity]; simpl.
+    eapply IdealWorld.LStepUser'; simpl; swap 2 3; [ pick | ..]; (try eapply @eq_refl); simpl.
+  Ltac rstep_univ pick :=
+    eapply  RealWorld.LStepUser'; simpl; swap 2 3; [ pick | ..]; (try eapply @eq_refl); simpl.
 
-  Ltac user0 := left.
-  Ltac user1 := right;left.
+  Ltac istep_univ0 := istep_univ ltac:(left).
+  Ltac istep_univ1 := istep_univ ltac:(right;left).
+  Ltac rstep_univ0 := rstep_univ ltac:(left).
+  Ltac rstep_univ1 := rstep_univ ltac:(right;left).
 
-  Ltac istep_univ0 := istep_univ user0.
-  Ltac istep_univ1 := istep_univ user1.
+  Ltac i_single_silent_step :=
+      eapply IdealWorld.LStepBindProceed
+    || eapply IdealWorld.LStepGen
+    || eapply IdealWorld.LStepCreateChannel
+  .
 
   Ltac r_single_silent_step :=
       eapply RealWorld.LStepBindProceed
@@ -315,44 +330,44 @@ Module SimulationAutomation.
     || eapply RealWorld.LStepVerify
   .
 
-  Ltac real_silent_step pick :=
-    eapply TrcFront; [
-      eapply RealWorld.LStepUser'; simpl; [pick; reflexivity | | reflexivity];
-        (eapply RealWorld.LStepBindRecur; r_single_silent_step) || r_single_silent_step
-     |]; simpl.
+  Ltac isilent_step_univ pick :=
+    eapply IdealWorld.LStepUser'; simpl; swap 2 3; [ pick | ..]; (try simple eapply @eq_refl);
+      ((eapply IdealWorld.LStepBindRecur; i_single_silent_step) || i_single_silent_step).
+  Ltac rsilent_step_univ pick :=
+    eapply  RealWorld.LStepUser'; simpl; swap 2 3; [ pick | ..]; (try simple eapply @eq_refl);
+      ((eapply RealWorld.LStepBindRecur; r_single_silent_step) || r_single_silent_step).
 
-  Ltac real_silent_step0 := real_silent_step user0.
-  Ltac real_silent_step1 := real_silent_step user1.
+  Ltac silent_step usr_step := eapply TrcFront; [usr_step |]; simpl.
 
-  Ltac i_single_silent_step :=
-      eapply IdealWorld.LStepBindProceed
-    || eapply IdealWorld.LStepGen
-    || eapply IdealWorld.LStepCreateChannel
-  .
+  Ltac real_silent_step0 := silent_step ltac:(rsilent_step_univ ltac:(left)).
+  Ltac real_silent_step1 := silent_step ltac:(rsilent_step_univ ltac:(right;left)).
 
-  Ltac ideal_silent_step pick :=
-    eapply TrcFront; [
-      eapply IdealWorld.LStepUser'; simpl;
-      [ pick; reflexivity | | reflexivity];
-      (eapply IdealWorld.LStepBindRecur; i_single_silent_step) || i_single_silent_step
-     |]; simpl.
+  Ltac ideal_silent_step0 := silent_step ltac:(isilent_step_univ ltac:(left)).
+  Ltac ideal_silent_step1 := silent_step ltac:(isilent_step_univ ltac:(right;left)).
 
-  Ltac ideal_silent_step0 := ideal_silent_step user0.
-  Ltac ideal_silent_step1 := ideal_silent_step user1.
-  Ltac ideal_silent_steps := (ideal_silent_step0 || ideal_silent_step1) ; repeat ideal_silent_step0; repeat ideal_silent_step1; eapply TrcRefl.
+  Ltac ideal_silent_steps :=
+    (ideal_silent_step0 || ideal_silent_step1);
+      repeat ideal_silent_step0;
+      repeat ideal_silent_step1;
+      eapply TrcRefl.
 
   Remove Hints TrcRefl TrcFront.
+  Hint Extern 1 (_ ^* ?U ?U) => apply TrcRefl.
+
+  Remove Hints eq_sym includes_lookup.
+  Remove Hints trans_eq_bool mult_n_O plus_n_O eq_add_S f_equal_nat.
 
   Hint Constructors RPingPongBase action_matches msg_eq.
   Hint Resolve IdealWorld.LStepSend' IdealWorld.LStepRecv'.
 
-  Hint Extern 2 (rstepSilent ^* _ _) => (solve [eapply TrcRefl]) || real_silent_step0.
-  Hint Extern 2 (rstepSilent ^* _ _) => (solve [eapply TrcRefl]) || real_silent_step1.
-  Hint Extern 1 (RPingPongBase _ (RealWorld.updateUniverse _ _ _ _ _ _ _ _) _) => unfold RealWorld.updateUniverse; simpl.
+  Hint Extern 0 (rstepSilent ^* _ _) => solve [eapply TrcRefl].
+  Hint Extern 1 (rstepSilent ^* _ _) => real_silent_step0.
+  Hint Extern 1 (rstepSilent ^* _ _) => real_silent_step1.
+  Hint Extern 1 (RPingPongBase (RealWorld.updateUniverse _ _ _ _ _ _ _ _) _) => unfold RealWorld.updateUniverse; simpl.
 
   Hint Extern 2 (IdealWorld.lstep_universe _ _ _) => istep_univ0.
   Hint Extern 2 (IdealWorld.lstep_universe _ _ _) => istep_univ1.
-  Hint Extern 1 (IdealWorld.lstep_user _ (_,(IdealWorld.Bind _ _)%idealworld,_) _) => eapply IdealWorld.LStepBindRecur.
+  Hint Extern 1 (IdealWorld.lstep_user _ (_, IdealWorld.Bind _ _, _) _) => eapply IdealWorld.LStepBindRecur.
   Hint Extern 1 (istepSilent ^* _ _) => ideal_silent_steps || apply TrcRefl.
 
   Hint Extern 1 (In _ _) => progress simpl.
@@ -385,26 +400,13 @@ Section FeebleSimulates.
           istepSilent ^* U__i U__i'
           /\ RPingPongBase U__r' U__i'.
   Proof.
-    intros.
-    invert H.
 
-    - churn;
-        (eexists; constructor; swap 1 2; [eapply Start |]; eauto 8).
-
-    - churn;
-        (eexists; constructor; swap 1 2; [eapply Sent1 |]; eauto 8).
-
-    - churn;
-        (eexists; constructor; swap 1 2; [eapply Recd1 |]; eauto 8).
-
-    - churn;
-        (eexists; constructor; swap 1 2; [eapply Sent2 |]; eauto 8).
-
-    - churn;
-        (eexists; constructor; swap 1 2; [eapply Recd2 |]; eauto 8).
-
-    - churn.
-
+    time (
+      intros;
+        invert H;
+        churn;
+        [> eexists; constructor; swap 1 2 .. ];
+        eauto 9).
   Qed.
 
   Lemma rpingbase_loud_simulates : 
@@ -419,40 +421,16 @@ Section FeebleSimulates.
             /\ RPingPongBase U__r' U__i''
             /\ RealWorld.action_adversary_safe U__r.(RealWorld.adversary) a1 = true.
   Proof.
-    intros.
-    invert H; churn.
-    
-    unfold ideal_univ_start, RealWorld.updateUniverse, RealWorld.multiMapAdd; simpl.
-
-    - do 3 eexists.
-      propositional; swap 1 4; swap 2 4; swap 3 4;
-        [simplify | | | ]; eauto; eauto 12.
-      admit.
-
-    - do 3 eexists.
-      propositional; swap 1 4; swap 2 4; swap 3 4;
-        [simplify | | | | ]; eauto; eauto 12.
-      admit.
-
-    - do 3 eexists.
-      propositional; swap 1 4; swap 2 4; swap 3 4;
-        [simplify | | | | ]; eauto; eauto 12.
-      admit.
-
-    - do 3 eexists.
-      propositional; swap 1 4; swap 2 4; swap 3 4;
-        [simplify | | | | ]; eauto; eauto 12.
-      admit.
-
-    - do 3 eexists.
-      propositional; swap 1 4; swap 2 4; swap 3 4;
-        [simplify | | | | ]; eauto; eauto 12.
-      admit.
-
-    - do 3 eexists.
-      propositional; swap 1 4; swap 2 4; swap 3 4;
-        [simplify | | | | ]; eauto; eauto 12.
-      admit.
+    time
+      (intros;
+       invert H;
+       churn;
+       unfold ideal_univ_start, RealWorld.updateUniverse, RealWorld.multiMapAdd;
+       simpl;
+       (do 3 eexists;
+        autorewrite with core;
+        propositional; swap 3 4; swap 1 3;
+        [ .. | admit (* action matches predicate *) ]; eauto; eauto 12)).
 
   Admitted.
 
