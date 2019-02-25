@@ -117,15 +117,16 @@ End enemy.
 Section RealProtocol.
   Import RealWorld.
 
-  Definition mkrU (usr_msgs : queued_messages) (cs : ciphers) (p__a p__b : user_cmd bool) (adversaries : user_list (user_data bool)) : universe bool :=
+  Definition mkrU (usr_msgs : queued_messages) (cs : ciphers) (p__a p__b : user_cmd bool) (adversaries : user_list (user_data unit)) : universe bool :=
     {| users            :=
            (A, {| key_heap := A__keys ; protocol := p__a |})
          :: (B, {| key_heap := B__keys ; protocol := p__b |})
-         :: adversaries
-     ; users_msg_buffer := usr_msgs
-     ; all_keys         := KEYS
-     ; all_ciphers      := cs
-     ; adversary        := $0
+         :: []
+     ; adversary        := adversaries
+     ; univ_data        := {| users_msg_buffer := usr_msgs
+                            ; all_keys         := KEYS
+                            ; all_ciphers      := cs
+                            |}
      |}.
 
   Definition real_univ_start cs :=
@@ -242,6 +243,8 @@ Module SimulationAutomation.
 
   Ltac churn1 :=
     match goal with
+    | [ H: In _ _ |- _ ] => invert H
+
     | [ H : $0 $? _ = Some _ |- _ ] => apply lookup_empty_not_Some in H; contradiction
     | [ H : _ $? _ = Some _ |- _ ] => apply lookup_split in H; propositional; subst
     | [ H : (_ $- _) $? _ = Some _ |- _ ] => rewrite addRemoveKey in H by auto
@@ -261,8 +264,11 @@ Module SimulationAutomation.
 
     | [ H : RealWorld.keyId _ = _ |- _] => invert H
 
+    | [H : RealWorld.users_msg_buffer _ $? _ = _ |- _ ] => progress (simpl in H)
+    (* | [H : RealWorld.msg_accepted_by_pattern _ _ _ = _ |- _ ] => progress (simpl in H) *)
+
     | [ H: RealWorld.msg_accepted_by_pattern _ _ _ = _ |- _ ] =>
-      unfold RealWorld.msg_accepted_by_pattern in H;
+      simpl in H;
       rewrite lookup_add_eq in H by eauto;
       try discriminate
     (* | [ H : match (_ $+ (_, RealWorld.Cipher _ _ _)) $? _ with _ => _ end = false |- _ ] => *)
@@ -275,8 +281,6 @@ Module SimulationAutomation.
 
     | [ H: RealWorld.signMessage _ _ _ = _ |- _ ] => unfold RealWorld.encryptMessage; simpl in H
     | [ H: RealWorld.encryptMessage _ _ _ = _ |- _ ] => unfold RealWorld.encryptMessage; simpl in H
-
-    | [ H: In _ _ |- _ ] => invert H
 
     (* Only take a user step if we have chosen a user *)
     | [ H: RealWorld.lstep_user A _ _ _ |- _ ] => invert H
@@ -363,7 +367,7 @@ Module SimulationAutomation.
   Hint Extern 0 (rstepSilent ^* _ _) => solve [eapply TrcRefl].
   Hint Extern 1 (rstepSilent ^* _ _) => real_silent_step0.
   Hint Extern 1 (rstepSilent ^* _ _) => real_silent_step1.
-  Hint Extern 1 (RPingPongBase (RealWorld.updateUniverse _ _ _ _ _ _ _ _) _) => unfold RealWorld.updateUniverse; simpl.
+  Hint Extern 1 (RPingPongBase (RealWorld.updateUniverse _ _ _ _ _ _) _) => unfold RealWorld.updateUniverse; simpl.
 
   Hint Extern 2 (IdealWorld.lstep_universe _ _ _) => istep_univ0.
   Hint Extern 2 (IdealWorld.lstep_universe _ _ _) => istep_univ1.
@@ -400,7 +404,6 @@ Section FeebleSimulates.
           istepSilent ^* U__i U__i'
           /\ RPingPongBase U__r' U__i'.
   Proof.
-
     time (
       intros;
         invert H;
@@ -419,13 +422,14 @@ Section FeebleSimulates.
             /\ IdealWorld.lstep_universe U__i' (Action a2) U__i''
             /\ action_matches a1 a2
             /\ RPingPongBase U__r' U__i''
-            /\ RealWorld.action_adversary_safe U__r.(RealWorld.adversary) a1 = true.
+            /\ RealWorld.action_adversary_safe (RealWorld.findUserKeys U__r.(RealWorld.adversary)) a1 = true.
   Proof.
+
     time
       (intros;
        invert H;
        churn;
-       unfold ideal_univ_start, RealWorld.updateUniverse, RealWorld.multiMapAdd;
+       unfold RealWorld.updateUniverse, RealWorld.setGlobalUserMsgs, RealWorld.addGlobalUserMsg, RealWorld.multiMapAdd;
        simpl;
        (do 3 eexists;
         autorewrite with core;

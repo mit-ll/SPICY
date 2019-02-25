@@ -158,35 +158,34 @@ Inductive action_matches :
     -> action_matches rw iw
 .
 
-(* Simulation for labeled transition system *)
 Definition lsimulates {A : Type}
            (R : RealWorld.universe A -> IdealWorld.universe A -> Prop)
-           (U1 : RealWorld.universe A) (U2 : IdealWorld.universe A) :=
+           (U__r : RealWorld.universe A) (U__i : IdealWorld.universe A) :=
 
 (*  call spoofable *)
 
-  (forall U1 U2,
-      R U1 U2
-      -> forall U1',
-        rstepSilent U1 U1' (* or any adversary step *)
-        -> exists U2',
-          istepSilent ^* U2 U2'
-          /\ R U1' U2')
+  (forall U__r U__i,
+      R U__r U__i
+      -> forall U__r',
+        rstepSilent U__r U__r'
+        -> exists U__i',
+          istepSilent ^* U__i U__i'
+          /\ R U__r' U__i')
 
-  /\ (forall U1 U2,
-      R U1 U2
-      -> forall a1 U1',
-        RealWorld.lstep_universe U1 (Action a1) U1' (* exclude adversary steps *)
-        -> exists a2 U2' U2'',
-            istepSilent^* U2 U2'
-            /\ IdealWorld.lstep_universe U2' (Action a2) U2''
+  /\ (forall U__r U__i,
+        R U__r U__i
+        -> forall a1 U__r',
+          RealWorld.lstep_universe U__r (Action a1) U__r' (* excludes adversary steps *)
+          -> exists a2 U__i' U__i'',
+            istepSilent^* U__i U__i'
+            /\ IdealWorld.lstep_universe U__i' (Action a2) U__i''
             /\ action_matches a1 a2
-            /\ R U1' U2''
-            /\ RealWorld.action_adversary_safe U1.(RealWorld.adversary) a1 = true
+            /\ R U__r' U__i''
+            /\ RealWorld.action_adversary_safe (RealWorld.findUserKeys U__r.(RealWorld.adversary)) a1 = true
     (* and adversary couldn't have constructed message seen in a1 *)
     )
 
-  /\ R U1 U2.
+  /\ R U__r U__i.
 
 Definition lrefines {A : Type} (U1 : RealWorld.universe A)(U2 : IdealWorld.universe A) :=
   exists R, lsimulates R U1 U2.
