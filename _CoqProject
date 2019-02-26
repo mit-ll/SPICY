@@ -1,6 +1,8 @@
 -R ./frap Frap
 -R ./KeyManagement KeyManagement
 
+KeyManagement/MyPrelude.v
+KeyManagement/Users.v
 KeyManagement/Common.v
 KeyManagement/IdealWorld.v
 KeyManagement/RealWorld.v

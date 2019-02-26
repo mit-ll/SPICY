@@ -1,7 +1,7 @@
 From Coq Require Import List.
-Require Import Frap.
+Require Import MyPrelude.
 
-Require Import Common Simulation.
+Require Import Users Common Simulation.
 Require IdealWorld RealWorld.
 
 Import IdealWorld.IdealNotations.
@@ -25,10 +25,9 @@ Section IdealProtocol.
 
   Definition mkiU (cv : channels) (p__a p__b : cmd bool): universe bool :=
     {| channel_vector := cv
-     ; users :=
-         [ (A,   {| perms    := PERMS__a ; protocol := p__a |})
-         ; (B,   {| perms    := PERMS__b ; protocol := p__b |})
-         ]
+     ; users := $0
+         $+ (A,   {| perms    := PERMS__a ; protocol := p__a |})
+         $+ (B,   {| perms    := PERMS__b ; protocol := p__b |})
     |}.
 
   Definition ideal_univ_start :=
@@ -118,10 +117,9 @@ Section RealProtocol.
   Import RealWorld.
 
   Definition mkrU (usr_msgs : queued_messages) (cs : ciphers) (p__a p__b : user_cmd bool) (adversaries : user_list (user_data unit)) : universe bool :=
-    {| users            :=
-           (A, {| key_heap := A__keys ; protocol := p__a |})
-         :: (B, {| key_heap := B__keys ; protocol := p__b |})
-         :: []
+    {| users            := $0
+         $+ (A, {| key_heap := A__keys ; protocol := p__a |})
+         $+ (B, {| key_heap := B__keys ; protocol := p__b |})
      ; adversary        := adversaries
      ; univ_data        := {| users_msg_buffer := usr_msgs
                             ; all_keys         := KEYS
@@ -214,27 +212,27 @@ Section RealProtocol.
 
   Inductive RPingPongBase: RealWorld.universe bool -> IdealWorld.universe bool -> Prop :=
   | Start : forall U__r cs,
-        rstepSilent^* (real_univ_start cs []) U__r
+        rstepSilent^* (real_univ_start cs $0) U__r
       -> RPingPongBase U__r ideal_univ_start
 
   | Sent1 : forall U__r cs cid1 n,
-        rstepSilent^* (real_univ_sent1 n cs cid1 []) U__r
+        rstepSilent^* (real_univ_sent1 n cs cid1 $0) U__r
       -> RPingPongBase U__r (ideal_univ_sent1 n)
 
   | Recd1 : forall U__r cs cid1 n,
-        rstepSilent^* (real_univ_recd1 n cs cid1 []) U__r
+        rstepSilent^* (real_univ_recd1 n cs cid1 $0) U__r
       -> RPingPongBase U__r (ideal_univ_recd1 n)
 
   | Sent2 : forall U__r cid1 cid2 n,
-        rstepSilent^* (real_univ_sent2 n cid1 cid2 []) U__r
+        rstepSilent^* (real_univ_sent2 n cid1 cid2 $0) U__r
       -> RPingPongBase U__r (ideal_univ_sent2 n)
 
   | Recd2 : forall U__r cid1 cid2 n,
-        rstepSilent^* (real_univ_recd2 n cid1 cid2 []) U__r
+        rstepSilent^* (real_univ_recd2 n cid1 cid2 $0) U__r
       -> RPingPongBase U__r (ideal_univ_recd2 n)
 
   | Done : forall cs n,
-      RPingPongBase (real_univ_done cs []) (ideal_univ_done n)
+      RPingPongBase (real_univ_done cs $0) (ideal_univ_done n)
   .
 
 End RealProtocol.
@@ -245,15 +243,15 @@ Module SimulationAutomation.
     match goal with
     | [ H: In _ _ |- _ ] => invert H
 
-    | [ H : $0 $? _ = Some _ |- _ ] => apply lookup_empty_not_Some in H; contradiction
-    | [ H : _ $? _ = Some _ |- _ ] => apply lookup_split in H; propositional; subst
-    | [ H : (_ $- _) $? _ = Some _ |- _ ] => rewrite addRemoveKey in H by auto
+    (* | [ H : $0 $? _ = Some _ |- _ ] => apply lookup_empty_not_Some in H; contradiction *)
+    (* | [ H : _ $? _ = Some _ |- _ ] => apply lookup_split in H; propositional; subst *)
+    (* | [ H : (_ $- _) $? _ = Some _ |- _ ] => rewrite addRemoveKey in H by auto *)
     | [ H : Some _ = Some _ |- _ ] => invert H
 
     | [ H : (_ :: _) = _ |- _ ] => invert H
     | [ H : (_,_) = (_,_) |- _ ] => invert H
 
-    | [ H : updF _ _ _ = _ |- _ ] => unfold updF; simpl in H
+    (* | [ H : updF _ _ _ = _ |- _ ] => unfold updF; simpl in H *)
 
     | [ H: RealWorld.Cipher _ _ _ = RealWorld.Cipher _ _ _ |- _ ] => invert H
     | [ H: RealWorld.SymKey _ = _ |- _ ] => invert H
@@ -265,19 +263,17 @@ Module SimulationAutomation.
     | [ H : RealWorld.keyId _ = _ |- _] => invert H
 
     | [H : RealWorld.users_msg_buffer _ $? _ = _ |- _ ] => progress (simpl in H)
-    (* | [H : RealWorld.msg_accepted_by_pattern _ _ _ = _ |- _ ] => progress (simpl in H) *)
 
-    | [ H: RealWorld.msg_accepted_by_pattern _ _ _ = _ |- _ ] =>
-      simpl in H;
-      rewrite lookup_add_eq in H by eauto;
-      try discriminate
-    (* | [ H : match (_ $+ (_, RealWorld.Cipher _ _ _)) $? _ with _ => _ end = false |- _ ] => *)
-    (*   rewrite lookup_add_eq in H by eauto; try discriminate *)
-    | [ H : RealWorld.msg_spoofable _ _ _ = _ |- _] =>
-      unfold RealWorld.msg_spoofable in H;
-      rewrite lookup_add_eq in H by eauto;
-      simplify;
-      discriminate
+    (* | [ H: RealWorld.msg_accepted_by_pattern _ _ _ = _ |- _ ] => *)
+    (*   simpl in H; *)
+    (*   rewrite lookup_add_eq in H by eauto; *)
+    (*   try discriminate *)
+
+    (* | [ H : RealWorld.msg_spoofable _ _ _ = _ |- _] => *)
+    (*   unfold RealWorld.msg_spoofable in H; *)
+    (*   rewrite lookup_add_eq in H by eauto; *)
+    (*   simplify; *)
+    (*   discriminate *)
 
     | [ H: RealWorld.signMessage _ _ _ = _ |- _ ] => unfold RealWorld.encryptMessage; simpl in H
     | [ H: RealWorld.encryptMessage _ _ _ = _ |- _ ] => unfold RealWorld.encryptMessage; simpl in H
@@ -358,7 +354,7 @@ Module SimulationAutomation.
   Remove Hints TrcRefl TrcFront.
   Hint Extern 1 (_ ^* ?U ?U) => apply TrcRefl.
 
-  Remove Hints eq_sym includes_lookup.
+  Remove Hints eq_sym (* includes_lookup *).
   Remove Hints trans_eq_bool mult_n_O plus_n_O eq_add_S f_equal_nat.
 
   Hint Constructors RPingPongBase action_matches msg_eq.
@@ -385,8 +381,8 @@ Module SimulationAutomation.
   Hint Extern 1 (B__keys $? _ = _) => unfold A__keys, B__keys, KEY1, KEY2, KEY__A, KEY__B, KID1, KID2.
   Hint Extern 1 (PERMS__a $? _ = _) => unfold PERMS__a.
   Hint Extern 1 (PERMS__b $? _ = _) => unfold PERMS__b.
-  Hint Extern 1 (add _ _ _ $? _ = Some _) => rewrite lookup_add_ne by discriminate.
-  Hint Extern 1 (add _ _ _ = _) => maps_equal; try discriminate.
+  (* Hint Extern 1 (add _ _ _ $? _ = Some _) => rewrite lookup_add_ne by discriminate. *)
+  (* Hint Extern 1 (add _ _ _ = _) => maps_equal; try discriminate. *)
   Hint Extern 1 (_ \in _) => sets.
 
 End SimulationAutomation.
