@@ -244,7 +244,9 @@ Module SimulationAutomation.
     | [ H: In _ _ |- _ ] => invert H
 
     (* | [ H : $0 $? _ = Some _ |- _ ] => apply lookup_empty_not_Some in H; contradiction *)
-    (* | [ H : _ $? _ = Some _ |- _ ] => apply lookup_split in H; propositional; subst *)
+    | [ H : $0 $? _ = Some _ |- _ ] => apply find_mapsto_iff in H; apply empty_mapsto_iff in H; contradiction
+
+    | [ H : _ $? _ = Some _ |- _ ] => apply lookup_split in H; intuition (* propositional *); subst
     (* | [ H : (_ $- _) $? _ = Some _ |- _ ] => rewrite addRemoveKey in H by auto *)
     | [ H : Some _ = Some _ |- _ ] => invert H
 
@@ -400,6 +402,37 @@ Section FeebleSimulates.
           istepSilent ^* U__i U__i'
           /\ RPingPongBase U__r' U__i'.
   Proof.
+    intros; invert H.
+    - do 2 churn1. churn.
+      + eexists; constructor; swap 1 2.
+        debug eauto 9.
+        unfold RealWorld.updateUniverse, updateUserList; simpl.
+        eapply Start.
+        eapply TrcFront.
+        eapply  RealWorld.LStepUser'; simpl; swap 2 3.
+
+
+
+        ; [ pick | ..]; (try simple eapply @eq_refl);
+                                                          ((eapply RealWorld.LStepBindRecur; r_single_silent_step) || r_single_silent_step).
+
+
+
+      real_silent_step0.
+
+
+      [> eexists; constructor; swap 1 2 .. ];
+
+
+
+      + simpl in H.
+        apply lookup_split in H; intuition.
+        * admit.
+        * subst.
+        
+
+
+
     time (
       intros;
         invert H;

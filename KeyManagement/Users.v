@@ -36,6 +36,26 @@ Definition merge_maps {V : Type} (m1 m2 : NatMap.t V) : NatMap.t V :=
 
 Notation "m1 $++ m2" := (merge_maps m2 m1) (at level 50, left associativity).
 
+Lemma lookup_split : forall V (m : NatMap.t V) k v k' v',
+    (m $+ (k, v)) $? k' = Some v'
+    -> (k' <> k /\ m $? k' = Some v') \/ (k' = k /\ v' = v).
+Proof.
+  intros.
+  case (eq_dec k k').
+  - intros.
+    subst.
+    right; intuition.
+    rewrite add_eq_o in H by auto.
+    congruence.
+  - intros. left.
+    intuition.
+    rewrite add_neq_o in H by auto.
+    exact H.
+Qed.
+
+
+
+
 (* Lemma update_inserted : *)
 (*   forall {V} u_id v v' (usrs : user_list V), *)
 (*         In (u_id,v)  usrs *)
