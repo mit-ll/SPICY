@@ -191,3 +191,16 @@ Definition lrefines {A : Type} (U1 : RealWorld.universe A)(U2 : IdealWorld.unive
   exists R, lsimulates R U1 U2.
 
 Infix "<|" := lrefines (no associativity, at level 70).
+
+
+Inductive couldGenerate : forall {A}, RealWorld.universe A -> list RealWorld.action -> Prop :=
+| CgNothing : forall {A} (u : RealWorld.universe A),
+    couldGenerate u []
+| CgSilent : forall {A} {u u' : RealWorld.universe A} tr,
+    RealWorld.lstep_universe u Silent u'
+    -> couldGenerate u' tr
+    -> couldGenerate u tr
+| CgAction : forall {A} a (u u' : RealWorld.universe A) tr,
+    RealWorld.lstep_universe u (Action a) u'
+    -> couldGenerate u' tr
+    -> couldGenerate u (a :: tr).

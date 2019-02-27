@@ -458,51 +458,65 @@ Section SingleAdversarySimulates.
    *   or, prove an appended simulation relation, but I am not sure how to generically express this
    *)
 
-  Definition add_adversary {A} (U__r : RealWorld.universe A) (advcode : RealWorld.user_cmd A) :=
-    RealWorld.addUniverseUsers U__r [(ADV, {| RealWorld.key_heap := $0 ; RealWorld.protocol := advcode |})].
+  Definition add_adversary {A} (U__r : RealWorld.universe A) (advcode : RealWorld.user_cmd unit) :=
+    RealWorld.addAdversaries U__r [(ADV, {| RealWorld.key_heap := $0 ; RealWorld.protocol := advcode |})].
 
   Definition strip_adversary {A} (U__r : RealWorld.universe A) : RealWorld.universe A :=
     {|
-      RealWorld.users            := removelast U__r.(RealWorld.users)
-    ; RealWorld.users_msg_buffer := U__r.(RealWorld.users_msg_buffer)
-    ; RealWorld.all_keys         := U__r.(RealWorld.all_keys)
-    ; RealWorld.all_ciphers      := U__r.(RealWorld.all_ciphers)
-    ; RealWorld.adversary        := U__r.(RealWorld.adversary)
+      RealWorld.users      := U__r.(RealWorld.users)
+    ; RealWorld.adversary  := []
+    ; RealWorld.univ_data  := U__r.(RealWorld.univ_data) (* need to clear out message queue, key heap, ciphers *)
     |}.
 
 
-  Lemma step_clean_or_adversary :
-    forall {A} (U__r U__ra U__ra' : RealWorld.universe A) advcode lbl u_id u,
-      In (u_id,u) U__r.(RealWorld.users)
-      -> u_id <> ADV
-      -> U__ra = add_adversary U__r advcode
-      -> RealWorld.lstep_universe U__ra lbl U__ra'
-      -> forall stepUdata uks advk cs ks qmsgs (cmd' : RealWorld.user_cmd A),
-          (* Legit step *)
-          ( forall stepUid,
-              In (stepUid,stepUdata) U__r.(RealWorld.users)
-            /\ RealWorld.lstep_user
-                stepUid lbl
-                (RealWorld.universe_data_step U__r stepUdata)
-                (advk, cs, ks, qmsgs, uks, cmd')
-
-          ) \/
-          (* Adversary step *)
-          ( In (ADV,stepUdata) U__ra.(RealWorld.users)
-          /\ RealWorld.lstep_user
-              ADV lbl
-              (RealWorld.universe_data_step U__ra stepUdata)
-              (advk, cs, ks, qmsgs, uks, cmd')
-
-          )
-  .
+  Lemma simulates_implies_noninterference :
+    forall {A} (U__r : RealWorld.universe A) (U__i : IdealWorld.universe A),
+      U__r <| U__i
+      -> forall U__r' U__ra U__ra' advcode a,
+        U__ra = add_adversary U__r advcode
+        -> RealWorld.lstep_universe U__ra (Action a) U__ra'
+        -> U__r' = strip_adversary U__ra'
+        -> RealWorld.lstep_universe U__r (Action a) U__r'.
   Proof.
-  Admitted.
+    intros.
+    inversion H as [R SIM].
+    inversion SIM as [H__silent H__l].
+    inversion H__l as [H__loud R__start]; clear H__l.
+
+    invert H1. simpl in H3.
+    invert H4.
+
+    - admit.
+    - simpl.
+      eapply RealWorld.LStepUser'. eauto.
+      unfold RealWorld.universe_data_step; simpl. rewrite <- H10.
+      eapply RealWorld.LStepRecv'; eauto.
+
+      simpl in *.
+
+      unfold strip_adversary, RealWorld.updateUniverse; simpl.
+
+      (* stuck because:
+       *  1. no guarantee that U__r has no adversaries
+       *  2. didn't strip keys
+       *  3.  
+       *)
+
+
+    - eapply IHlstep_user.
+      constructor.
+
+      eapply RealWorld.LStepUser'.
+      + eassumption.
+      + simpl.
+
+
+
 
   Lemma simulates_implies_noninterference:
-    forall {A} (U__r U__ra : RealWorld.universe A) (U__i : IdealWorld.universe A),
+    forall {A} (U__r : RealWorld.universe A) (U__i : IdealWorld.universe A),
       U__r <| U__i
-      -> forall U__ra' u_id advcode a udata,
+      -> forall U__ra U__ra' advcode a udata,
         U__ra = add_adversary U__r advcode
         -> RealWorld.lstep_universe U__ra (Action a) U__ra'
         -> RealWorld.lstep_user u_id (Action a) (RealWorld.universe_data_step U__ra udata) (RealWorld.universe_data_step U__ra' udata) 
