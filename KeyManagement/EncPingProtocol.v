@@ -472,7 +472,6 @@ Section FeebleSimulates.
               RealWorld.multiMapAdd, updateUserList;
        simpl;
        (do 3 eexists;
-        autorewrite with core;
         propositional; swap 3 4; swap 1 3;
         [ .. | admit (* action matches predicate *) ]; eauto; eauto 12)).
 
