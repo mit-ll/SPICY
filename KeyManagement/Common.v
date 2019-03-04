@@ -31,14 +31,3 @@ Inductive label  {A} : Type :=
   Silent : label
 | Action :  A -> label
 .
-
-(* Lemma pair_uneq_if_fst_uneq: *)
-(*   forall {A: Type} (p1 p2 : (user_id * A)) ineq, *)
-(*     ((fst p1) ==n (fst p2)) = right ineq *)
-(*     -> p1 <> p2. *)
-(* Proof. *)
-(*   intros. simpl. destruct p1 as [u1 a1]. destruct p2 as [u2 a2]. *)
-(*   simpl in *. unfold not; intros. inversion H0. auto. *)
-(* Qed. *)
-
-(* Hint Resolve pair_uneq_if_fst_uneq. *)
