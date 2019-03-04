@@ -1,6 +1,5 @@
 From Coq Require Import String.
-Require Import Frap.
-Require Import Common.
+Require Import MyPrelude Common Users.
 
 Set Implicit Arguments.
 
@@ -75,9 +74,9 @@ Inductive cipher : Type :=
 | Cipher {t} (c_id : cipher_id) (k_id : key_identifier) (msg : message t) : cipher
 .
 
-Definition queued_messages := fmap user_id (list exmsg).
-Definition keys            := fmap key_identifier key.
-Definition ciphers         := fmap cipher_id cipher.
+Definition queued_messages := NatMap.t (list exmsg).
+Definition keys            := NatMap.t key.
+Definition ciphers         := NatMap.t cipher.
 
 Definition adversary_knowledge := keys.
 
@@ -187,7 +186,7 @@ Record universe (A : Type) :=
     }.
 
 (* First in - first out (queue) semantics to keep message order preserved *)
-Definition multiMapAdd {K V} (k : K)(v : V)(m : fmap K (list V)) : fmap K (list V) :=
+Definition multiMapAdd {V} (k : nat)(v : V)(m : NatMap.t (list V)) : NatMap.t (list V) :=
   match m $? k with
   | None => m $+ (k, [v])
   | Some vs => m $+ (k, vs ++ [v]) (* add new element to end, to preserve order *)
@@ -196,34 +195,31 @@ Definition multiMapAdd {K V} (k : K)(v : V)(m : fmap K (list V)) : fmap K (list 
 (* When we are finding keys, we need to check whether they are asymmetric.  If
    so, we mark them as not having access to the private key, since the intent is to
    send only the public part of the key *)
-Fixpoint findKeys {t} (msg : message t) : list key :=
+Fixpoint findKeys {t} (msg : message t) : keys :=
   match msg with
-  | Plaintext _        => []
+  | Plaintext _        => $0
 
-  | KeyMessage (AsymKey k' _) => [AsymKey k' false] (* Only sending public keys *)
-  | KeyMessage k       => [k]
-  | MsgPair msg1 msg2  => findKeys msg1 ++ findKeys msg2
-  | Ciphertext _       => []
+  | KeyMessage (AsymKey k' _) => $0 $+ (k'.(key_id), AsymKey k' false) (* Only sending public keys *)
+  | KeyMessage k       => $0 $+ (keyId k, k)
+  | MsgPair msg1 msg2  => (findKeys msg1) $++ (findKeys msg2)
+  | Ciphertext _       => $0
   | Signature m _      => findKeys m
   end.
 
-Definition updateKeyHeap (ks : list key) (key_heap : keys) : keys :=
-  let addKey (m : keys) (k : key) :=
-      match k with
-      | SymKey k'     => m $+ (k'.(key_id), k)
-      | AsymKey k' b  => m $+ (k'.(key_id), k)
-      end
-  in  fold_left addKey ks key_heap.
+(* Definition updateKeyHeap (ks : list key) (key_heap : keys) : keys := *)
+(*   let addKey (m : keys) (k : key) := m $+ (keyId k, k) *)
+(*   in  fold_left addKey ks key_heap. *)
 
 Definition findUserKeys {A} (us : user_list (user_data A)) : keys :=
-  fold_left (fun ks '(_,usr) => ks $++ usr.(key_heap)) us $0.
+  fold (fun u_id u ks => ks $++ u.(key_heap)) us $0.
 
-Definition addUserKeys {A} (us : user_list (user_data A)) (ks : list key) :=
-  map (fun '(u_id,u) => (u_id, {| key_heap := updateKeyHeap ks u.(key_heap) ; protocol := u.(protocol) |})) us.
+Definition addUserKeys {A} (us : user_list (user_data A)) (ks : keys) :=
+  map (fun u => {| key_heap := u.(key_heap) $++ ks ; protocol := u.(protocol) |}) us.
+  (* map (fun '(u_id,u) => (u_id, {| key_heap := updateKeyHeap ks u.(key_heap) ; protocol := u.(protocol) |})) us. *)
 
-Definition updateGlobalKeys (ks : list key) (globals : universe_globals) : universe_globals :=
+Definition updateGlobalKeys (ks : keys) (globals : universe_globals) : universe_globals :=
   {| users_msg_buffer := globals.(users_msg_buffer)
-   ; all_keys         := updateKeyHeap ks globals.(all_keys)
+   ; all_keys         := globals.(all_keys) $++ ks
    ; all_ciphers      := globals.(all_ciphers)
    |}.
 
@@ -274,9 +270,9 @@ Definition signMessage {t} (k : key) (m : message t) (c_id : cipher_id) : option
   | _ => None
   end.
 
-Definition canVerifySignature {A} (ciphers : fmap cipher_id cipher)(usrDat : user_data A)(c_id : cipher_id) : Prop :=
+Definition canVerifySignature {A} (cs : ciphers)(usrDat : user_data A)(c_id : cipher_id) : Prop :=
   forall t (m : message t) k_id k ,
-    ciphers $? c_id = Some (Cipher c_id k_id m)
+    cs $? c_id = Some (Cipher c_id k_id m)
     (*  Make sure that the user has access to the key.  If we are doing asymmetric signatures,
         we only need the public part of the key, so no additional checks necessary! *)
     /\ usrDat.(key_heap) $? k_id = Some k.
@@ -306,7 +302,7 @@ Definition updateUniverseAdv {A}
 Definition addAdversaries {A} (U : universe A) (advs : adversaries) :=
   {|
     users         := U.(users)
-  ; adversary     := U.(adversary) ++ advs
+  ; adversary     := U.(adversary) $++ advs
   ; univ_data     :=   {| users_msg_buffer := U.(univ_data).(users_msg_buffer)
                           ; all_keys         := U.(univ_data).(all_keys) $++ (findUserKeys advs)
                           ; all_ciphers      := U.(univ_data).(all_ciphers)
@@ -370,7 +366,7 @@ Inductive lstep_user : forall A, user_id -> rlabel -> data_step0 A -> data_step0
     -> msg_accepted_by_pattern globals.(all_ciphers) pat msg = true
     -> lstep_user u_id (Action (Input msg pat u_id uks globals.(all_ciphers)))
                  (globals , adv, uks, Recv pat)
-                 (globals', adv, updateKeyHeap newkeys uks, Return msg)
+                 (globals', adv, uks $++ newkeys, Return msg)
 
 | LStepRecvDrop : forall {t} u_id adv globals globals' uks (msg : message t) pat msgs,
       globals.(users_msg_buffer) $? u_id = Some (Exm msg :: msgs) (* we have a message waiting for us! *)
@@ -393,7 +389,7 @@ Inductive lstep_user : forall A, user_id -> rlabel -> data_step0 A -> data_step0
 | LStepEncrypt : forall {t} u_id adv globals globals' uks (msg : message t) k k_id c_id cipherMsg,
     keyId k = k_id
     -> uks $? k_id = Some k
-    -> ~(c_id \in (dom globals.(all_ciphers)))
+    -> ~(In c_id globals.(all_ciphers))
     -> encryptMessage k msg c_id = Some cipherMsg
     -> globals' = addCipher c_id cipherMsg globals
     -> lstep_user u_id Silent
@@ -408,13 +404,13 @@ Inductive lstep_user : forall A, user_id -> rlabel -> data_step0 A -> data_step0
     -> findKeys msg = newkeys
     -> lstep_user u_id Silent
                  (globals, adv, uks, Decrypt (Ciphertext c_id))
-                 (globals, adv, updateKeyHeap newkeys uks, Return msg)
+                 (globals, adv, uks $++ newkeys, Return msg)
 
 (* Signing / Verification *)
 | LStepSign : forall {t} u_id adv globals globals' uks (msg : message t) k k_id c_id cipherMsg,
       keyId k = k_id
     -> uks $? k_id = Some k
-    -> ~(c_id \in (dom globals.(all_ciphers)))
+    -> ~(In c_id globals.(all_ciphers))
     -> signMessage k msg c_id = Some cipherMsg
     -> globals' = addCipher c_id cipherMsg globals
     -> lstep_user u_id Silent
@@ -451,7 +447,7 @@ Lemma LStepRecv' : forall {t} u_id adv globals globals' uks uks' (msg : message 
     -> globals' = setGlobalUserMsgs u_id msgs globals
     -> findKeys msg = newkeys
     -> msg_accepted_by_pattern globals.(all_ciphers) pat msg = true
-    -> uks' = updateKeyHeap newkeys uks
+    -> uks' = uks $++ newkeys
     -> lstep_user u_id (Action (Input msg pat u_id uks globals.(all_ciphers)))
                  (globals , adv, uks,  Recv pat)
                  (globals', adv, uks', Return msg).
@@ -461,13 +457,13 @@ Qed.
 
 Inductive lstep_universe {A} : universe A -> rlabel -> universe A -> Prop :=
 | LStepUser : forall U u_id userData uks adv globals lbl (cmd : user_cmd A),
-    In (u_id,userData) U.(users)
+    U.(users) $? u_id = Some userData
     -> lstep_user u_id lbl
                  (universe_data_step U userData)
                  (globals, adv, uks, cmd)
     -> lstep_universe U lbl (updateUniverse U globals adv u_id uks cmd)
 | LStepAdversary : forall (U : universe A) u_id (userData : user_data unit) uks adv globals lbl (cmd : user_cmd unit),
-    In (u_id,userData) U.(adversary)
+    U.(adversary) $? u_id = Some userData
     -> lstep_user u_id lbl
                  (universe_data_step U userData)
                  (globals, adv, uks, cmd)
@@ -475,7 +471,7 @@ Inductive lstep_universe {A} : universe A -> rlabel -> universe A -> Prop :=
 .
 
 Lemma LStepUser' : forall A U U' u_id userData uks adv globals lbl (cmd : user_cmd A),
-    In (u_id,userData) U.(users)
+    U.(users) $? u_id = Some userData
     -> lstep_user u_id lbl
                  (universe_data_step U userData)
                  (globals, adv, uks, cmd)
@@ -486,7 +482,7 @@ Proof.
 Qed.
 
 Lemma LStepAdversary' : forall A (U U' : universe A) u_id (userData : user_data unit) uks adv globals lbl cmd,
-    In (u_id,userData) U.(adversary)
+    U.(adversary) $? u_id = Some userData
     -> lstep_user u_id lbl
                  (universe_data_step U userData)
                  (globals, adv, uks, cmd)
