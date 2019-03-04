@@ -39,7 +39,7 @@ Section IdealProtocol.
   Definition ideal_univ_start :=
     mkiU ($0 $+ (CH__A2B, { }) $+ (CH__B2A, { }))
          ( n <- Gen
-           ; _ <- Send (Content n) CH__A2B
+         ; _ <- Send (Content n) CH__A2B
          ; m <- @Recv Nat CH__B2A
          ; Return match extractContent m with
                   | None =>    false

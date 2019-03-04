@@ -1,12 +1,14 @@
-From Coq Require Import List Classical ClassicalEpsilon.
-Require Import Eqdep.
+From Coq Require Import
+     List
+     Eqdep.
 
 Require Import MyPrelude Users Common. 
-Require IdealWorld.
-Require RealWorld.
 
-Import IdealWorld.IdealNotations.
-Import RealWorld.RealWorldNotations.
+Require IdealWorld
+        RealWorld.
+
+Import IdealWorld.IdealNotations
+       RealWorld.RealWorldNotations.
 
 Set Implicit Arguments.
 
@@ -16,70 +18,8 @@ Ltac invert H :=
          (* | [ x : _ |- _ ] => subst x *)
          | [ H : existT _ _ _ = existT _ _ _ |- _ ] => apply inj_pair2 in H; try subst
          end.
-  
-(* Lemma addKeyTwice : *)
-(*   forall K V (k : K) (v v' : V) m, *)
-(*     m $+ (k, v) $+ (k, v') = m $+ (k, v'). *)
-(* Proof. *)
-(*   intros. maps_equal. *)
-(* Qed. *)
-
-(* Question for Adam.  Is there a better way to do this??? *)
-(* Section decide. *)
-(*   Variable P : Prop. *)
-
-(*   Lemma decided : inhabited (sum P (~P)). *)
-(*   Proof. *)
-(*     destruct (classic P). *)
-(*     constructor; exact (inl _ H). *)
-(*     constructor; exact (inr _ H). *)
-(*   Qed. *)
-
-(*   Definition decide : sum P (~P) := *)
-(*     epsilon decided (fun _ => True). *)
-(* End decide. *)
-
-(* Lemma addRemoveKey :  *)
-(*   forall K V (k : K) (v : V) m, *)
-(*     m $? k = None *)
-(*     -> m $+ (k,v) $- k = m. *)
-(* Proof. *)
-(*   intros. *)
-(*   eapply fmap_ext. *)
-(*   intros. *)
-
-(*   destruct (decide (k0 = k)). *)
-(*   * subst. simplify. eauto. *)
-(*   * symmetry. *)
-(*     rewrite <- lookup_add_ne with (k := k) (v := v); auto. *)
-(*     rewrite lookup_remove_ne; auto. *)
-(* Qed. *)
-
-(* Theorem lookup_empty_not_Some : *)
-(*   forall K V (k : K) (v : V), *)
-(*     empty K V $? k = Some v -> False. *)
-(* Proof. *)
-(*   intros. *)
-(*   apply lookup_Some_dom in H. *)
-(*   rewrite dom_empty in H. invert H. *)
-(* Qed. *)
-
-(* Hint Rewrite addKeyTwice addRemoveKey. *)
-(* Hint Resolve lookup_add_eq lookup_empty lookup_empty_not_Some. *)
-
-(* Ltac fixcontext := *)
-(*   match goal with *)
-(*   | [ H : $0 $? _ = Some _ |- _ ] => apply lookup_empty_not_Some in H; contradiction *)
-(*   | [ H : (_ $+ (_, _)) $? _ = Some _ |- _ ] => apply lookup_split in H; propositional; subst *)
-(*   | [ H : (_, _) = (_,_) |- _ ] => invert H *)
-(*   | [ H : In _ _ |- _ ] => inversion H; clear H *)
-(*   | [ H : _ /\ _ |- _ ] => invert H *)
-(*   | [ H : (_ :: _) = _ |- _ ] => invert H *)
-(*   end. *)
 
 Hint Resolve in_eq in_cons.
-
-(* Labeled transition system simulation statement *)
 
 Definition rstepSilent {A : Type} (U1 U2 : RealWorld.universe A) :=
   RealWorld.lstep_universe U1 Silent U2.
