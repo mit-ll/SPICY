@@ -1,7 +1,7 @@
 # Coq build stuff
 Makefile.coq
 Makefile.coq.conf
-
+.coqdeps.d
 
 .*.aux
 *.a

@@ -1,7 +1,11 @@
-From Coq Require Import List.
-Require Import Frap.
+From Coq Require Import
+     List
+     Logic.ProofIrrelevance.
 
-Require Import Common Simulation.
+Require Import MyPrelude.
+
+Require Import Users Common Simulation MapLtac.
+
 Require IdealWorld RealWorld.
 
 Import IdealWorld.IdealNotations.
@@ -14,6 +18,8 @@ Definition A : user_id   := 0.
 Definition B : user_id   := 1.
 Definition ADV : user_id := 2.
 
+Transparent A B ADV.
+
 Section IdealProtocol.
   Import IdealWorld.
 
@@ -25,10 +31,9 @@ Section IdealProtocol.
 
   Definition mkiU (cv : channels) (p__a p__b : cmd bool): universe bool :=
     {| channel_vector := cv
-     ; users :=
-         [ (A,   {| perms    := PERMS__a ; protocol := p__a |})
-         ; (B,   {| perms    := PERMS__b ; protocol := p__b |})
-         ]
+     ; users := $0
+         $+ (A,   {| perms    := PERMS__a ; protocol := p__a |})
+         $+ (B,   {| perms    := PERMS__b ; protocol := p__b |})
     |}.
 
   Definition ideal_univ_start :=
@@ -118,10 +123,9 @@ Section RealProtocol.
   Import RealWorld.
 
   Definition mkrU (usr_msgs : queued_messages) (cs : ciphers) (p__a p__b : user_cmd bool) (adversaries : user_list (user_data unit)) : universe bool :=
-    {| users            :=
-           (A, {| key_heap := A__keys ; protocol := p__a |})
-         :: (B, {| key_heap := B__keys ; protocol := p__b |})
-         :: []
+    {| users            := $0
+         $+ (A, {| key_heap := A__keys ; protocol := p__a |})
+         $+ (B, {| key_heap := B__keys ; protocol := p__b |})
      ; adversary        := adversaries
      ; univ_data        := {| users_msg_buffer := usr_msgs
                             ; all_keys         := KEYS
@@ -214,27 +218,27 @@ Section RealProtocol.
 
   Inductive RPingPongBase: RealWorld.universe bool -> IdealWorld.universe bool -> Prop :=
   | Start : forall U__r cs,
-        rstepSilent^* (real_univ_start cs []) U__r
+        rstepSilent^* (real_univ_start cs $0) U__r
       -> RPingPongBase U__r ideal_univ_start
 
   | Sent1 : forall U__r cs cid1 n,
-        rstepSilent^* (real_univ_sent1 n cs cid1 []) U__r
+        rstepSilent^* (real_univ_sent1 n cs cid1 $0) U__r
       -> RPingPongBase U__r (ideal_univ_sent1 n)
 
   | Recd1 : forall U__r cs cid1 n,
-        rstepSilent^* (real_univ_recd1 n cs cid1 []) U__r
+        rstepSilent^* (real_univ_recd1 n cs cid1 $0) U__r
       -> RPingPongBase U__r (ideal_univ_recd1 n)
 
   | Sent2 : forall U__r cid1 cid2 n,
-        rstepSilent^* (real_univ_sent2 n cid1 cid2 []) U__r
+        rstepSilent^* (real_univ_sent2 n cid1 cid2 $0) U__r
       -> RPingPongBase U__r (ideal_univ_sent2 n)
 
   | Recd2 : forall U__r cid1 cid2 n,
-        rstepSilent^* (real_univ_recd2 n cid1 cid2 []) U__r
+        rstepSilent^* (real_univ_recd2 n cid1 cid2 $0) U__r
       -> RPingPongBase U__r (ideal_univ_recd2 n)
 
   | Done : forall cs n,
-      RPingPongBase (real_univ_done cs []) (ideal_univ_done n)
+      RPingPongBase (real_univ_done cs $0) (ideal_univ_done n)
   .
 
 End RealProtocol.
@@ -243,17 +247,22 @@ Module SimulationAutomation.
 
   Ltac churn1 :=
     match goal with
-    | [ H: In _ _ |- _ ] => invert H
+    | [ H : List.In _ _ |- _ ] => progress (simpl in H); intuition
 
-    | [ H : $0 $? _ = Some _ |- _ ] => apply lookup_empty_not_Some in H; contradiction
-    | [ H : _ $? _ = Some _ |- _ ] => apply lookup_split in H; propositional; subst
-    | [ H : (_ $- _) $? _ = Some _ |- _ ] => rewrite addRemoveKey in H by auto
+    | [ H : _ $? _ = Some _ |- _ ] => progress (simpl in H)
+
+    (* | [ H : $0 $? _ = Some _ |- _ ] => apply lookup_empty_not_Some in H; contradiction *)
+    | [ H : $0 $? _ = Some _ |- _ ] => apply find_mapsto_iff in H; apply empty_mapsto_iff in H; contradiction
+
+    (* | [ H : _ $? _ = Some _ |- _ ] => apply lookup_split in H; intuition (* propositional *); subst *)
+    | [ H : _ $? _ = Some _ |- _ ] => apply lookup_some_implies_in in H
+    (* | [ H : (_ $- _) $? _ = Some _ |- _ ] => rewrite addRemoveKey in H by auto *)
     | [ H : Some _ = Some _ |- _ ] => invert H
 
     | [ H : (_ :: _) = _ |- _ ] => invert H
     | [ H : (_,_) = (_,_) |- _ ] => invert H
 
-    | [ H : updF _ _ _ = _ |- _ ] => unfold updF; simpl in H
+    (* | [ H : updF _ _ _ = _ |- _ ] => unfold updF; simpl in H *)
 
     | [ H: RealWorld.Cipher _ _ _ = RealWorld.Cipher _ _ _ |- _ ] => invert H
     | [ H: RealWorld.SymKey _ = _ |- _ ] => invert H
@@ -265,19 +274,22 @@ Module SimulationAutomation.
     | [ H : RealWorld.keyId _ = _ |- _] => invert H
 
     | [H : RealWorld.users_msg_buffer _ $? _ = _ |- _ ] => progress (simpl in H)
-    (* | [H : RealWorld.msg_accepted_by_pattern _ _ _ = _ |- _ ] => progress (simpl in H) *)
+
+    (* | [ H: RealWorld.msg_accepted_by_pattern _ _ _ = _ |- _ ] => *)
+    (*   simpl in H; *)
+    (*   rewrite lookup_add_eq in H by eauto; *)
+    (*   try discriminate *)
 
     | [ H: RealWorld.msg_accepted_by_pattern _ _ _ = _ |- _ ] =>
       simpl in H;
-      rewrite lookup_add_eq in H by eauto;
+      rewrite add_eq_o in H by auto;
       try discriminate
-    (* | [ H : match (_ $+ (_, RealWorld.Cipher _ _ _)) $? _ with _ => _ end = false |- _ ] => *)
-    (*   rewrite lookup_add_eq in H by eauto; try discriminate *)
-    | [ H : RealWorld.msg_spoofable _ _ _ = _ |- _] =>
-      unfold RealWorld.msg_spoofable in H;
-      rewrite lookup_add_eq in H by eauto;
-      simplify;
-      discriminate
+
+    (* | [ H : RealWorld.msg_spoofable _ _ _ = _ |- _] => *)
+    (*   unfold RealWorld.msg_spoofable in H; *)
+    (*   rewrite lookup_add_eq in H by eauto; *)
+    (*   simplify; *)
+    (*   discriminate *)
 
     | [ H: RealWorld.signMessage _ _ _ = _ |- _ ] => unfold RealWorld.encryptMessage; simpl in H
     | [ H: RealWorld.encryptMessage _ _ _ = _ |- _ ] => unfold RealWorld.encryptMessage; simpl in H
@@ -308,15 +320,26 @@ Module SimulationAutomation.
 
   Ltac churn := repeat churn1.
 
+  Ltac usr_first :=
+    eapply find_mapsto_iff;
+      eapply elements_mapsto_iff;
+      eapply SetoidList.InA_alt;
+      eexists;
+      unfold eq_key_elt, Raw.PX.eqke; constructor; [intuition | ..].
+
+  Ltac user0 := usr_first; left.
+  Ltac user1 := usr_first; right; left.
+
   Ltac istep_univ pick :=
-    eapply IdealWorld.LStepUser'; simpl; swap 2 3; [ pick | ..]; (try eapply @eq_refl); simpl.
+    eapply IdealWorld.LStepUser'; simpl; swap 2 3; [ pick | ..];
+    unfold updateUserList; (try eapply @eq_refl); (try f_equal); simpl.
   Ltac rstep_univ pick :=
     eapply  RealWorld.LStepUser'; simpl; swap 2 3; [ pick | ..]; (try eapply @eq_refl); simpl.
 
-  Ltac istep_univ0 := istep_univ ltac:(left).
-  Ltac istep_univ1 := istep_univ ltac:(right;left).
-  Ltac rstep_univ0 := rstep_univ ltac:(left).
-  Ltac rstep_univ1 := rstep_univ ltac:(right;left).
+  Ltac istep_univ0 := istep_univ user0.
+  Ltac istep_univ1 := istep_univ user1.
+  Ltac rstep_univ0 := rstep_univ user0.
+  Ltac rstep_univ1 := rstep_univ user1.
 
   Ltac i_single_silent_step :=
       eapply IdealWorld.LStepBindProceed
@@ -343,11 +366,11 @@ Module SimulationAutomation.
 
   Ltac silent_step usr_step := eapply TrcFront; [usr_step |]; simpl.
 
-  Ltac real_silent_step0 := silent_step ltac:(rsilent_step_univ ltac:(left)).
-  Ltac real_silent_step1 := silent_step ltac:(rsilent_step_univ ltac:(right;left)).
+  Ltac real_silent_step0 := silent_step ltac:(rsilent_step_univ user0).
+  Ltac real_silent_step1 := silent_step ltac:(rsilent_step_univ user1).
 
-  Ltac ideal_silent_step0 := silent_step ltac:(isilent_step_univ ltac:(left)).
-  Ltac ideal_silent_step1 := silent_step ltac:(isilent_step_univ ltac:(right;left)).
+  Ltac ideal_silent_step0 := silent_step ltac:(isilent_step_univ user0).
+  Ltac ideal_silent_step1 := silent_step ltac:(isilent_step_univ user1).
 
   Ltac ideal_silent_steps :=
     (ideal_silent_step0 || ideal_silent_step1);
@@ -358,23 +381,37 @@ Module SimulationAutomation.
   Remove Hints TrcRefl TrcFront.
   Hint Extern 1 (_ ^* ?U ?U) => apply TrcRefl.
 
-  Remove Hints eq_sym includes_lookup.
+  Remove Hints eq_sym (* includes_lookup *).
   Remove Hints trans_eq_bool mult_n_O plus_n_O eq_add_S f_equal_nat.
 
   Hint Constructors RPingPongBase action_matches msg_eq.
   Hint Resolve IdealWorld.LStepSend' IdealWorld.LStepRecv'.
 
-  Hint Extern 0 (rstepSilent ^* _ _) => solve [eapply TrcRefl].
+  Lemma TrcRefl' :
+    forall {A} (R : A -> A -> Prop) x1 x2,
+      x1 = x2 ->
+      trc R x1 x2.
+  Proof.
+    intros. subst. apply TrcRefl.
+  Qed.
+
+  Hint Extern 0 (rstepSilent ^* _ _) => solve [eapply TrcRefl || eapply TrcRefl'; smash_universe].
   Hint Extern 1 (rstepSilent ^* _ _) => real_silent_step0.
   Hint Extern 1 (rstepSilent ^* _ _) => real_silent_step1.
+  Hint Extern 1 (rstepSilent ^* _ _) =>
+        progress(unfold real_univ_start, real_univ_sent1, real_univ_recd1,
+                        real_univ_sent2, real_univ_recd2, real_univ_done, mkrU; simpl).
   Hint Extern 1 (RPingPongBase (RealWorld.updateUniverse _ _ _ _ _ _) _) => unfold RealWorld.updateUniverse; simpl.
 
   Hint Extern 2 (IdealWorld.lstep_universe _ _ _) => istep_univ0.
   Hint Extern 2 (IdealWorld.lstep_universe _ _ _) => istep_univ1.
+  Hint Extern 1 (IdealWorld.lstep_universe _ _ _) =>
+      progress(unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1,
+                      ideal_univ_sent2, ideal_univ_recd2, ideal_univ_done, mkiU; simpl).
   Hint Extern 1 (IdealWorld.lstep_user _ (_, IdealWorld.Bind _ _, _) _) => eapply IdealWorld.LStepBindRecur.
   Hint Extern 1 (istepSilent ^* _ _) => ideal_silent_steps || apply TrcRefl.
 
-  Hint Extern 1 (In _ _) => progress simpl.
+  Hint Extern 1 (List.In _ _) => progress simpl.
 
   Hint Extern 1 (RealWorld.encryptMessage _ _ _ = _) => unfold RealWorld.encryptMessage; simpl.
   Hint Extern 1 (RealWorld.signMessage _ _ _ = _) => unfold RealWorld.signMessage; simpl.
@@ -385,8 +422,9 @@ Module SimulationAutomation.
   Hint Extern 1 (B__keys $? _ = _) => unfold A__keys, B__keys, KEY1, KEY2, KEY__A, KEY__B, KID1, KID2.
   Hint Extern 1 (PERMS__a $? _ = _) => unfold PERMS__a.
   Hint Extern 1 (PERMS__b $? _ = _) => unfold PERMS__b.
-  Hint Extern 1 (add _ _ _ $? _ = Some _) => rewrite lookup_add_ne by discriminate.
-  Hint Extern 1 (add _ _ _ = _) => maps_equal; try discriminate.
+  Hint Extern 1 (_ = RealWorld.addUserKeys _ _) => unfold RealWorld.addUserKeys, map; simpl.
+  Hint Extern 1 (add _ _ _ = _) => m_equal.
+  Hint Extern 1 (find _ _ = _) => m_equal.
   Hint Extern 1 (_ \in _) => sets.
 
 End SimulationAutomation.
@@ -412,6 +450,7 @@ Section FeebleSimulates.
         eauto 9).
   Qed.
 
+
   Lemma rpingbase_loud_simulates : 
     forall U__r U__i,
       RPingPongBase U__r U__i
@@ -429,10 +468,10 @@ Section FeebleSimulates.
       (intros;
        invert H;
        churn;
-       unfold RealWorld.updateUniverse, RealWorld.setGlobalUserMsgs, RealWorld.addGlobalUserMsg, RealWorld.multiMapAdd;
+       unfold RealWorld.updateUniverse, RealWorld.setGlobalUserMsgs, RealWorld.addGlobalUserMsg,
+              RealWorld.multiMapAdd, updateUserList;
        simpl;
        (do 3 eexists;
-        autorewrite with core;
         propositional; swap 3 4; swap 1 3;
         [ .. | admit (* action matches predicate *) ]; eauto; eauto 12)).
 
