@@ -74,7 +74,7 @@ Inductive cipher : Type :=
 | Cipher {t} (c_id : cipher_id) (k_id : key_identifier) (msg : message t) : cipher
 .
 
-Definition queued_messages := NatMap.t (list exmsg).
+Definition queued_messages := list exmsg.
 Definition keys            := NatMap.t key.
 Definition ciphers         := NatMap.t cipher.
 
@@ -163,34 +163,36 @@ Open Scope realworld_scope.
 
 Record user_data (A : Type) :=
   mkUserData {
-      key_heap : keys ;
-      protocol : user_cmd A ;
+      key_heap : keys
+    ; protocol : user_cmd A
+    ; msg_heap : queued_messages
       (* msg_heap : user_msg_heap ; *)
       (* is_admin : bool *)
     }.
 
-Definition adversaries := user_list (user_data unit).
+Definition adversaries A  := user_list (user_data A).
+Definition honest_users A := user_list (user_data A).
 
-Record universe_globals :=
-  mkUGlobals {
-      users_msg_buffer : queued_messages
-    ; all_keys         : keys
-    ; all_ciphers      : ciphers
-    }.
+(* Record universe_globals := *)
+(*   mkUGlobals { *)
+(*       users_msg_buffer : queued_messages *)
+(*     ; all_keys         : keys *)
+(*     ; all_ciphers      : ciphers *)
+(*     }. *)
 
-Record universe (A : Type) :=
+Record universe (A B : Type) :=
   mkUniverse {
-      users      : user_list (user_data A)
-    ; adversary  : adversaries
-    ; univ_data  : universe_globals
+      users       : honest_users A
+    ; adversary   : adversaries B
+    ; all_ciphers : ciphers
     }.
 
 (* First in - first out (queue) semantics to keep message order preserved *)
-Definition multiMapAdd {V} (k : nat)(v : V)(m : NatMap.t (list V)) : NatMap.t (list V) :=
-  match m $? k with
-  | None => m $+ (k, [v])
-  | Some vs => m $+ (k, vs ++ [v]) (* add new element to end, to preserve order *)
-  end.
+(* Definition multiMapAdd {V} (k : nat)(v : V)(m : NatMap.t (list V)) : NatMap.t (list V) := *)
+(*   match m $? k with *)
+(*   | None => m $+ (k, [v]) *)
+(*   | Some vs => m $+ (k, vs ++ [v]) (* add new element to end, to preserve order *) *)
+(*   end. *)
 
 (* When we are finding keys, we need to check whether they are asymmetric.  If
    so, we mark them as not having access to the private key, since the intent is to
@@ -206,40 +208,17 @@ Fixpoint findKeys {t} (msg : message t) : keys :=
   | Signature m _      => findKeys m
   end.
 
-(* Definition updateKeyHeap (ks : list key) (key_heap : keys) : keys := *)
-(*   let addKey (m : keys) (k : key) := m $+ (keyId k, k) *)
-(*   in  fold_left addKey ks key_heap. *)
-
 Definition findUserKeys {A} (us : user_list (user_data A)) : keys :=
   fold (fun u_id u ks => ks $++ u.(key_heap)) us $0.
 
-Definition addUserKeys {A} (us : user_list (user_data A)) (ks : keys) :=
-  map (fun u => {| key_heap := u.(key_heap) $++ ks ; protocol := u.(protocol) |}) us.
-  (* map (fun '(u_id,u) => (u_id, {| key_heap := updateKeyHeap ks u.(key_heap) ; protocol := u.(protocol) |})) us. *)
+Definition addUserKeys {A} (us : user_list (user_data A)) (ks : keys) : user_list (user_data A) :=
+  map (fun u => {| key_heap := u.(key_heap) $++ ks ; protocol := u.(protocol) ;  msg_heap := u.(msg_heap) |}) us.
 
-Definition updateGlobalKeys (ks : keys) (globals : universe_globals) : universe_globals :=
-  {| users_msg_buffer := globals.(users_msg_buffer)
-   ; all_keys         := globals.(all_keys) $++ ks
-   ; all_ciphers      := globals.(all_ciphers)
-   |}.
-
-Definition setGlobalUserMsgs (u_id : user_id) (msgs : list exmsg) (globals : universe_globals) :=
-  {| users_msg_buffer := match msgs with [] => globals.(users_msg_buffer) $- u_id | _ => globals.(users_msg_buffer) $+ (u_id,msgs) end
-   ; all_keys         := globals.(all_keys)
-   ; all_ciphers      := globals.(all_ciphers)
-   |}.
-
-Definition addGlobalUserMsg {t} (u_id : user_id) (msg : message t) (globals : universe_globals) :=
-  {| users_msg_buffer := multiMapAdd u_id (Exm msg) globals.(users_msg_buffer)
-   ; all_keys         := globals.(all_keys)
-   ; all_ciphers      := globals.(all_ciphers)
-   |}.
-
-Definition addCipher (cid : cipher_id) (msg : cipher) (globals : universe_globals) :=
-  {| users_msg_buffer := globals.(users_msg_buffer)
-   ; all_keys         := globals.(all_keys)
-   ; all_ciphers      := globals.(all_ciphers) $+ (cid, msg)
-   |}.
+(* Definition addCipher {A B} (cid : cipher_id) (msg : cipher) (U : universe A B) := *)
+(*   {| users       := U.(users) *)
+(*    ; adversary   := U.(adversary) *)
+(*    ; all_ciphers := U.(all_ciphers) $+ (cid, msg) *)
+(*    |}. *)
 
 Definition encryptMessage {t} (k : key) (m : message t) (c_id : cipher_id) : option cipher :=
   match k with
@@ -277,36 +256,26 @@ Definition canVerifySignature {A} (cs : ciphers)(usrDat : user_data A)(c_id : ci
         we only need the public part of the key, so no additional checks necessary! *)
     /\ usrDat.(key_heap) $? k_id = Some k.
 
-Definition data_step0 (A : Type) : Type :=
-  universe_globals * adversaries * keys * user_cmd A.
-  (* adversary_knowledge * ciphers * keys * queued_messages * fmap nat key * user_cmd A. *)
+Definition buildUniverse {A B}
+           (usrs : honest_users A) (advs : adversaries B) (cs : ciphers)
+           (u_id : user_id) (userData : user_data A) : universe A B :=
+  {| users        := updateUserList usrs u_id userData
+   ; adversary    := advs
+   ; all_ciphers  := cs
+   |}.
 
-Definition updateUniverse {A}
-           (U : universe A) (univ_globals : universe_globals) (advs : adversaries)
-           (u_id : user_id) (userKeys : keys) (cmd : user_cmd A): universe A :=
-  {|
-    users        := updateUserList U.(users) u_id ( mkUserData userKeys cmd )
-  ; adversary    := advs
-  ; univ_data    := univ_globals
-  |}.
+Definition buildUniverseAdv {A B}
+           (usrs : honest_users A) (advs : adversaries B) (cs : ciphers)
+           (u_id : user_id) (userData : user_data B) : universe A B :=
+  {| users        := usrs
+   ; adversary    := updateUserList advs u_id userData
+   ; all_ciphers  := cs
+   |}.
 
-Definition updateUniverseAdv {A}
-           (U : universe A) (univ_globals : universe_globals) (advs : adversaries)
-           (u_id : user_id) (userKeys : keys) (cmd : user_cmd unit): universe A :=
-  {|
-    users        := U.(users)
-  ; adversary    := updateUserList advs u_id ( mkUserData userKeys cmd )
-  ; univ_data    := univ_globals
-  |}.
-
-Definition addAdversaries {A} (U : universe A) (advs : adversaries) :=
-  {|
-    users         := U.(users)
-  ; adversary     := U.(adversary) $++ advs
-  ; univ_data     :=   {| users_msg_buffer := U.(univ_data).(users_msg_buffer)
-                          ; all_keys         := U.(univ_data).(all_keys) $++ (findUserKeys advs)
-                          ; all_ciphers      := U.(univ_data).(all_ciphers)
-                        |}
+Definition addAdversaries {A B} (U : universe A B) (advs : adversaries B) :=
+  {| users       := U.(users)
+   ; adversary   := U.(adversary) $++ advs
+   ; all_ciphers := U.(all_ciphers)
   |}.
 
 Definition extractPlainText {t} (msg : message t) : option nat :=
@@ -341,91 +310,102 @@ Definition action_adversary_safe (advk : adversary_knowledge) (a : action) : boo
   | Output _ _        => true
   end.
 
-Definition universe_data_step {A B} (U : universe A) (u_data : user_data B) : data_step0 B :=
-  (U.(univ_data), U.(adversary), u_data.(key_heap), u_data.(protocol)).
+Definition data_step0 (A B C : Type) : Type :=
+  honest_users A * adversaries B * ciphers * keys * queued_messages * user_cmd C.
+
+Definition build_data_step {A B C} (U : universe A B) (u_data : user_data C) : data_step0 A B C :=
+  (U.(users), U.(adversary), U.(all_ciphers), u_data.(key_heap), u_data.(msg_heap), u_data.(protocol)).
 
 (* Labeled transition system *)
-Inductive lstep_user : forall A, user_id -> rlabel -> data_step0 A -> data_step0 A -> Prop := 
+Inductive step_user : forall A B C, user_id -> rlabel -> data_step0 A B C -> data_step0 A B C -> Prop :=
 
 (* Plumbing *)
-| LStepBindRecur : forall {r r'} u_id adv adv' globals globals'
-                     uks uks' lbl (cmd1 cmd1' : user_cmd r) (cmd2 : r -> user_cmd r'),
-      lstep_user u_id lbl (globals, adv, uks, cmd1) (globals', adv', uks', cmd1')
-    -> lstep_user u_id lbl (globals, adv, uks, Bind cmd1 cmd2) (globals', adv', uks', Bind cmd1' cmd2)
-| LStepBindProceed : forall {r r'} u_id adv globals uks (v : r') (cmd : r' -> user_cmd r),
-    lstep_user u_id Silent (globals, adv, uks, Bind (Return v) cmd) (globals, adv, uks, cmd v)
+| StepBindRecur : forall {B r r'} u_id (usrs usrs' : honest_users r') (adv adv' : adversaries B)
+                     lbl cs cs' qmsgs qmsgs' ks ks' (cmd1 cmd1' : user_cmd r) (cmd2 : r -> user_cmd r'),
+      step_user u_id lbl (usrs, adv, cs, ks, qmsgs, cmd1) (usrs', adv', cs', ks', qmsgs', cmd1')
+    -> step_user u_id lbl (usrs, adv, cs, ks, qmsgs, Bind cmd1 cmd2) (usrs', adv', cs', ks', qmsgs', Bind cmd1' cmd2)
+| StepBindProceed : forall {B r r'} u_id (usrs : honest_users r) (adv : adversaries B) cs ks qmsgs (v : r') (cmd : r' -> user_cmd r),
+    step_user u_id Silent (usrs, adv, cs, ks, qmsgs, Bind (Return v) cmd) (usrs, adv, cs, ks, qmsgs, cmd v)
 
-| LGen : forall u_id adv globals uks n,
-    lstep_user u_id Silent (globals, adv, uks, Gen) (globals, adv, uks, Return n)
+| StepGen : forall {A B} u_id (usrs : honest_users A) (adv : adversaries B) cs ks qmsgs n,
+    step_user u_id Silent (usrs, adv, cs, ks, qmsgs, Gen) (usrs, adv, cs, ks, qmsgs, Return n)
 
 (* Comms  *)
-| LStepRecv : forall {t} u_id adv globals globals' uks (msg : message t) pat msgs newkeys,
-      globals.(users_msg_buffer) $? u_id = Some (Exm msg :: msgs) (* we have a message waiting for us! *)
-    -> globals' = setGlobalUserMsgs u_id msgs globals
+| StepRecv : forall {A B} {t} u_id (usrs : honest_users A) (adv : adversaries B) cs ks ks' qmsgs qmsgs' (msg : message t) msgs pat newkeys,
+      qmsgs = Exm msg :: msgs (* we have a message waiting for us! *)
+    -> qmsgs' = msgs
     -> findKeys msg = newkeys
-    -> msg_accepted_by_pattern globals.(all_ciphers) pat msg = true
-    -> lstep_user u_id (Action (Input msg pat u_id uks globals.(all_ciphers)))
-                 (globals , adv, uks, Recv pat)
-                 (globals', adv, uks $++ newkeys, Return msg)
+    -> ks' = ks $++ newkeys
+    -> msg_accepted_by_pattern cs pat msg = true
+    -> step_user u_id (Action (Input msg pat u_id ks cs))
+                (usrs, adv, cs, ks , qmsgs , Recv pat)
+                (usrs, adv, cs, ks', qmsgs', Return msg)
 
-| LStepRecvDrop : forall {t} u_id adv globals globals' uks (msg : message t) pat msgs,
-      globals.(users_msg_buffer) $? u_id = Some (Exm msg :: msgs) (* we have a message waiting for us! *)
-    -> globals' = setGlobalUserMsgs u_id msgs globals
-    -> msg_accepted_by_pattern globals.(all_ciphers) pat msg = false
-    -> lstep_user u_id Silent (* Error label ... *)
-                 (globals , adv, uks, @Recv t pat)
-                 (globals', adv, uks, Recv pat)
+| StepRecvDrop : forall {A B} {t} u_id (usrs : honest_users A) (adv : adversaries B) cs ks qmsgs qmsgs' (msg : message t) pat msgs,
+      qmsgs = Exm msg :: msgs (* we have a message waiting for us! *)
+    -> qmsgs' = msgs
+    -> msg_accepted_by_pattern cs pat msg = false
+    -> step_user u_id Silent (* Error label ... *)
+                (usrs, adv, cs, ks, qmsgs , Recv pat)
+                (usrs, adv, cs, ks, qmsgs', Return msg)
 
-(* Augment attacker's keys with those available through messages sent, including traversing through ciphers already known by attacker, etc. *)
-| LStepSend : forall {t} u_id adv adv' globals globals' rec_u_id uks newkeys (msg : message t),
+(* Augment attacker's keys with those available through messages sent,
+ * including traversing through ciphers already known by attacker, etc.
+ *)
+| StepSend : forall {A B} {t} u_id (usrs usrs' : honest_users A) (adv adv' : adversaries B)
+               cs ks qmsgs rec_u_id rec_u newkeys (msg : message t),
     findKeys msg = newkeys
     -> adv' = addUserKeys adv newkeys
-    -> globals' = addGlobalUserMsg rec_u_id msg globals
-    -> lstep_user u_id (Action (Output msg u_id))
-               (globals,  adv,  uks, Send rec_u_id msg)
-               (globals', adv', uks, Return tt)
+    -> usrs $? rec_u_id = Some rec_u
+    -> usrs' = usrs $+ (rec_u_id, {| key_heap := rec_u.(key_heap)
+                                  ; protocol := rec_u.(protocol) 
+                                  ; msg_heap := rec_u.(msg_heap) ++ [Exm msg]  |})
+    -> step_user u_id (Action (Output msg u_id))
+                (usrs , adv , cs, ks, qmsgs, Send rec_u_id msg)
+                (usrs', adv', cs, ks, qmsgs, Return tt)
 
 (* Encryption / Decryption *)
-| LStepEncrypt : forall {t} u_id adv globals globals' uks (msg : message t) k k_id c_id cipherMsg,
+| StepEncrypt : forall {A B} {t} u_id (usrs : honest_users A) (adv : adversaries B) cs cs' ks qmsgs (msg : message t) k k_id c_id cipherMsg,
     keyId k = k_id
-    -> uks $? k_id = Some k
-    -> ~(In c_id globals.(all_ciphers))
+    -> ks $? k_id = Some k
+    -> ~(In c_id cs)
     -> encryptMessage k msg c_id = Some cipherMsg
-    -> globals' = addCipher c_id cipherMsg globals
-    -> lstep_user u_id Silent
-                 (globals,  adv, uks, Encrypt k msg)
-                 (globals', adv, uks, Return (Ciphertext c_id))
+    -> cs' = cs $+ (c_id, cipherMsg)
+    -> step_user u_id Silent
+                (usrs, adv, cs , ks, qmsgs, Encrypt k msg)
+                (usrs, adv, cs', ks, qmsgs, Return (Ciphertext c_id))
 
-| LStepDecrypt : forall {t} u_id adv globals uks (msg : message t) k_id k c_id newkeys,
-    globals.(all_ciphers) $? c_id = Some (Cipher c_id k_id msg)
-    -> ( uks $? k_id = Some (AsymKey k true) (* check we have access to private key *)
-      \/ uks $? k_id = Some (SymKey k) )
+| StepDecrypt : forall {A B} {t} u_id (usrs : honest_users A) (adv : adversaries B) cs ks ks' qmsgs (msg : message t) k_id k c_id newkeys,
+      cs $? c_id = Some (Cipher c_id k_id msg)
+    -> ( ks $? k_id = Some (AsymKey k true) (* check we have access to private key *)
+      \/ ks $? k_id = Some (SymKey k) )
     -> k.(key_id) = k_id
     -> findKeys msg = newkeys
-    -> lstep_user u_id Silent
-                 (globals, adv, uks, Decrypt (Ciphertext c_id))
-                 (globals, adv, uks $++ newkeys, Return msg)
+    -> ks' = ks $++ newkeys
+    -> step_user u_id Silent
+                (usrs, adv, cs, ks , qmsgs, Decrypt (Ciphertext c_id))
+                (usrs, adv, cs, ks', qmsgs, Return msg)
 
 (* Signing / Verification *)
-| LStepSign : forall {t} u_id adv globals globals' uks (msg : message t) k k_id c_id cipherMsg,
+| StepSign : forall {A B} {t} u_id (usrs : honest_users A) (adv : adversaries B) cs cs' ks qmsgs (msg : message t) k k_id c_id cipherMsg,
       keyId k = k_id
-    -> uks $? k_id = Some k
-    -> ~(In c_id globals.(all_ciphers))
+    -> ks $? k_id = Some k
+    -> ~(In c_id cs)
     -> signMessage k msg c_id = Some cipherMsg
-    -> globals' = addCipher c_id cipherMsg globals
-    -> lstep_user u_id Silent
-                 (globals,  adv, uks, Sign k msg)
-                 (globals', adv, uks, Return (Signature msg c_id))
+    -> cs' = cs $+ (c_id, cipherMsg)
+    -> step_user u_id Silent
+                (usrs, adv, cs , ks, qmsgs, Sign k msg)
+                (usrs, adv, cs', ks, qmsgs, Return (Signature msg c_id))
 
-| LStepVerify : forall {t} u_id adv globals uks (msg : message t) k_id k c_id,
+| StepVerify : forall {A B} {t} u_id (usrs : honest_users A) (adv : adversaries B) cs ks qmsgs (msg : message t) k_id k c_id,
     (* k is in your key heap *)
-    uks $? (keyId k) = Some k
+    ks $? (keyId k) = Some k
     (* return true or false whether k was used to sign the message *)
-    -> globals.(all_ciphers) $? c_id = Some (Cipher c_id k_id msg)
+    -> cs $? c_id = Some (Cipher c_id k_id msg)
     (* -> findKeys msg = newkeys *)
-    -> lstep_user u_id Silent
-                 (globals, adv, uks, (Verify k (MsgPair msg (Ciphertext c_id))))
-                 (globals, adv, uks, Return (if (k_id ==n (keyId k)) then true else false))
+    -> step_user u_id Silent
+                (usrs, adv, cs, ks, qmsgs, (Verify k (MsgPair msg (Ciphertext c_id))))
+                (usrs, adv, cs, ks, qmsgs, Return (if (k_id ==n (keyId k)) then true else false))
 .
 
 (* Key creation *)
@@ -442,52 +422,32 @@ Inductive lstep_user : forall A, user_id -> rlabel -> data_step0 A -> data_step0
                 
 (* | Barrier {result : Set} : user_cmd result. *)
 
-Lemma LStepRecv' : forall {t} u_id adv globals globals' uks uks' (msg : message t) pat msgs newkeys,
-      globals.(users_msg_buffer) $? u_id = Some (Exm msg :: msgs) (* we have a message waiting for us! *)
-    -> globals' = setGlobalUserMsgs u_id msgs globals
-    -> findKeys msg = newkeys
-    -> msg_accepted_by_pattern globals.(all_ciphers) pat msg = true
-    -> uks' = uks $++ newkeys
-    -> lstep_user u_id (Action (Input msg pat u_id uks globals.(all_ciphers)))
-                 (globals , adv, uks,  Recv pat)
-                 (globals', adv, uks', Return msg).
-Proof.
-  intros; subst; econstructor; eauto.
-Qed.
+(* Lemma LStepRecv' : forall {B t} u_id (adv : adversaries B) globals globals' uks uks' (msg : message t) pat msgs newkeys, *)
+(*       globals.(users_msg_buffer) $? u_id = Some (Exm msg :: msgs) (* we have a message waiting for us! *) *)
+(*     -> globals' = setGlobalUserMsgs u_id msgs globals *)
+(*     -> findKeys msg = newkeys *)
+(*     -> msg_accepted_by_pattern globals.(all_ciphers) pat msg = true *)
+(*     -> uks' = uks $++ newkeys *)
+(*     -> lstep_user u_id (Action (Input msg pat u_id uks globals.(all_ciphers))) *)
+(*                  (globals , adv, uks,  Recv pat) *)
+(*                  (globals', adv, uks', Return msg). *)
+(* Proof. *)
+(*   intros; subst; econstructor; eauto. *)
+(* Qed. *)
 
-Inductive lstep_universe {A} : universe A -> rlabel -> universe A -> Prop :=
-| LStepUser : forall U u_id userData uks adv globals lbl (cmd : user_cmd A),
+Inductive step_universe {A B} : universe A B -> rlabel -> universe A B -> Prop :=
+| StepUser : forall U U' u_id userData usrs adv cs ks qmsgs lbl (cmd : user_cmd A),
     U.(users) $? u_id = Some userData
-    -> lstep_user u_id lbl
-                 (universe_data_step U userData)
-                 (globals, adv, uks, cmd)
-    -> lstep_universe U lbl (updateUniverse U globals adv u_id uks cmd)
-| LStepAdversary : forall (U : universe A) u_id (userData : user_data unit) uks adv globals lbl (cmd : user_cmd unit),
+    -> step_user u_id lbl
+                (build_data_step U userData)
+                (usrs, adv, cs, ks, qmsgs, cmd)
+    -> U' = buildUniverse usrs adv cs u_id {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmd |}
+    -> step_universe U lbl U'
+| StepAdversary : forall U U' u_id userData usrs adv cs ks qmsgs lbl (cmd : user_cmd B),
     U.(adversary) $? u_id = Some userData
-    -> lstep_user u_id lbl
-                 (universe_data_step U userData)
-                 (globals, adv, uks, cmd)
-    -> lstep_universe U Silent (updateUniverseAdv U globals adv u_id uks cmd)
+    -> step_user u_id lbl
+                (build_data_step U userData)
+                (usrs, adv, cs, ks, qmsgs, cmd)
+    -> U' = buildUniverseAdv usrs adv cs u_id {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmd |}
+    -> step_universe U Silent U'
 .
-
-Lemma LStepUser' : forall A U U' u_id userData uks adv globals lbl (cmd : user_cmd A),
-    U.(users) $? u_id = Some userData
-    -> lstep_user u_id lbl
-                 (universe_data_step U userData)
-                 (globals, adv, uks, cmd)
-    -> U' = updateUniverse U globals adv u_id uks cmd
-    -> lstep_universe U lbl U'.
-Proof.
-  intros; subst; econstructor; eassumption.
-Qed.
-
-Lemma LStepAdversary' : forall A (U U' : universe A) u_id (userData : user_data unit) uks adv globals lbl cmd,
-    U.(adversary) $? u_id = Some userData
-    -> lstep_user u_id lbl
-                 (universe_data_step U userData)
-                 (globals, adv, uks, cmd)
-    -> U' = updateUniverseAdv U globals adv u_id uks cmd
-    -> lstep_universe U Silent U'.
-Proof.
-  intros; subst; econstructor; eassumption.
-Qed.
