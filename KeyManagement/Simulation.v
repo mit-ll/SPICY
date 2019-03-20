@@ -321,6 +321,105 @@ Section SingleAdversarySimulates.
   (*      + admit. (* need to swipe ciphers *) *)
   
   (*  Admitted. *)
+
+
+  Inductive StrippedR {A B} (R : RealWorld.universe A B -> IdealWorld.universe A -> Prop) :
+    RealWorld.universe A B -> IdealWorld.universe A -> Prop :=
+  (* | Stripped : forall {U__ra U__i}, R (strip_adversary U__ra) U__i -> StrippedR R U__ra U__i *)
+  | Strip : forall {U__r U__r' U__ra U__ra' U__i},
+        rstepSilent ^* U__ra U__ra'
+      /\ U__r' = strip_adversary U__ra'
+      /\ (exists cs, U__r' = {| RealWorld.users       := RealWorld.users U__r
+                      ; RealWorld.adversary   := RealWorld.adversary U__r
+                      ; RealWorld.all_ciphers := RealWorld.all_ciphers U__r $++ cs
+                     |} /\ Disjoint (RealWorld.all_ciphers U__r) cs)
+      /\ R U__r U__i
+      -> StrippedR R U__ra U__i
+  .
+
+  Hint Constructors StrippedR.
+
+  Lemma simulates_with_adversary_silent' :
+    forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A) R,
+      simulates (StrippedR R) U__ra U__i
+      -> forall U__ra',
+        rstepSilent U__ra U__ra'
+        -> exists U__i',
+          istepSilent ^* U__i U__i'
+          /\ (StrippedR R) U__ra' U__i'.
+  Proof.
+    intros.
+    inversion H  as [H__silent H__l]; clear H.
+    inversion H__l as [H__loud R__start]; clear H__l; clear H__loud.
+
+    invert H0; destruct R__start.
+
+    (* Honest step *)
+    - invert H1; unfold RealWorld.build_data_step; simpl; [
+        | eauto 9 ..
+      ].
+      + admit.
+        
+    - invert H1; unfold RealWorld.build_data_step; simpl;
+        [| exists U__i; constructor; [apply TrcRefl |]; unfold RealWorld.buildUniverseAdv, updateUserList; simpl .. ].
+      + admit.
+    (*   +       invert H0. invert H2. invert H3. *)
+    (*     exists U__i; constructor. eapply TrcRefl. *)
+    (*     econstructor. constructor. 2:constructor. 3:constructor. *)
+    (*     4:eassumption. simpl in *. 3:eapply H0. eauto. unfold strip_adversary; simpl. *)
+        
+
+
+
+    (*     exists U__i. constructor. eapply TrcRefl. simpl. econstructor. constructor. eapply TrcRefl. *)
+    (*     unfold strip_adversary; simpl. constructor. auto. *)
+
+
+
+    (*     intuition.  econstructor. constructor. eapply TrcRefl. unfold strip_adversary; simpl. *)
+    (*     constructor. eauto. simpl. constructor. 2:eassumption.  *)
+    (*     subst; simpl in *. eauto. *)
+
+        
+    (*     simpl. simpl in H3. simpl. *)
+    (*     invert H3. invert H1. eexists; simpl. subst. *)
+    (*     eexists; intuition. *)
+    (*     simpl. *)
+
+    (* (* Adversary step *)  *)
+    (* - invert H1; unfold RealWorld.build_data_step; simpl; [ *)
+    (*     | unfold strip_adversary, RealWorld.buildUniverseAdv, updateUserList; *)
+    (*         simpl; *)
+    (*         exists U__i; *)
+    (*         match goal with | [ H : R (strip_adversary _) _ |- _ ] => progress unfold strip_adversary in H; simpl in H end; *)
+    (*         intuition .. *)
+    (*     ]. *)
+
+    (*     + admit. *)
+    (*     + admit. (* adversary sent a message to a honest user *) *)
+    (*     + admit. (* need to swipe ciphers *) *)
+    (*     + admit. (* need to swipe ciphers *) *)
+
+    Admitted.
+
+    Lemma simulates_with_adversary_loud' :
+      forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A) R,
+        simulates (StrippedR R) U__ra U__i
+        -> forall U__ra' a__ra,
+          RealWorld.step_universe U__ra (Action a__ra) U__ra' (* excludes adversary steps *)
+          -> exists a__i U__i' U__i'',
+              istepSilent^* U__i U__i'
+            /\ IdealWorld.lstep_universe U__i' (Action a__i) U__i''
+            /\ action_matches a__ra a__i
+            /\ (StrippedR R) U__ra' U__i''
+            /\ RealWorld.action_adversary_safe (RealWorld.findUserKeys U__ra.(RealWorld.adversary)) a__ra = true.
+    Proof.
+      intros.
+      inversion H  as [H__silent H__l]; clear H.
+      inversion H__l as [H__loud R__start]; clear H__l; clear H__silent.
+
+      Admitted.
+
   
   Lemma simulates_with_adversary_silent :
     forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A) R,
@@ -353,7 +452,7 @@ Section SingleAdversarySimulates.
         ].
 
         + admit.
-        + admit. (* something with send.. *)
+        + admit. (* adversary sent a message to a honest user *)
         + admit. (* need to swipe ciphers *)
         + admit. (* need to swipe ciphers *)
 
