@@ -173,61 +173,6 @@ Section SingleAdversarySimulates.
      |}.
 
 
-  (* Lemma adversary_univ_loud_step_implies_stripped_nonadv_step : *)
-  (*   forall {A B} (U__r U__ra : RealWorld.universe A B) advcode, *)
-  (*       U__ra = add_adversary U__r advcode *)
-  (*     -> U__r.(RealWorld.adversary) = $0 *)
-  (*     -> forall U__r' U__ra' a, *)
-  (*         RealWorld.lstep_universe U__ra (Action a) U__ra' *)
-  (*       -> U__r' = strip_adversary U__ra' *)
-  (*       -> RealWorld.lstep_universe U__r (Action a) U__r'. *)
-  (* Proof. *)
-  (*   intros. *)
-  (*   invert H1. *)
-  (*   invert H4. *)
-
-  (*   (* Bind *) *)
-  (*   - admit. *)
-
-  (*   (* Recv *) *)
-  (*   - eapply RealWorld.LStepUser'; eauto. *)
-  (*     unfold RealWorld.universe_data_step; simpl. *)
-  (*     match goal with *)
-  (*     | [ H : _ = RealWorld.protocol _ |- _ ] => rewrite <- H *)
-  (*     end. *)
-  (*     eapply RealWorld.LStepRecv'; eauto. *)
-  (*     unfold strip_adversary, RealWorld.updateUniverse; simpl. *)
-  (*     eapply real_univ_eq_fields_eq; auto. *)
-
-  (*   (* Send *) *)
-  (*   - eapply RealWorld.LStepUser'; eauto. *)
-  (*     unfold RealWorld.universe_data_step; simpl. *)
-  (*     match goal with *)
-  (*     | [ H : _ = RealWorld.protocol _ |- _ ] => rewrite <- H *)
-  (*     end. *)
-  (*     eapply RealWorld.LStepSend; eauto. *)
-  (*     unfold RealWorld.updateUniverse, strip_adversary; simpl. *)
-  (*     rewrite H0.  *)
-  (*     smash_universe. *)
-  (* Admitted. *)
-
-
-  Lemma honest_step_advuniv_implies_honest_step_origuniv :
-    forall {A B} (U__r : RealWorld.universe A B) u_id userData advcode gs adv adv' uks cmd,
-      RealWorld.step_user u_id Silent (RealWorld.build_data_step (add_adversary U__r advcode) userData) (gs, adv, uks, cmd)
-      -> U__r.(RealWorld.adversary) = $0
-      -> RealWorld.users (add_adversary U__r advcode) $? u_id = Some userData
-      -> adv' = $0
-      -> RealWorld.step_user u_id Silent (RealWorld.build_data_step U__r userData) (gs, adv', uks, cmd).
-  Proof.
-    intros.
-    invert H.
-    - admit.
-    - admit.
-    - unfold RealWorld.build_data_step. 
-
-  Admitted.
-
   Section RealWorldLemmas.
     Import RealWorld.
 
@@ -254,6 +199,20 @@ Section SingleAdversarySimulates.
       rewrite map_mapsto_iff.
       eexists; intuition. eassumption.
     Qed.
+
+    Lemma honest_step_advuniv_implies_honest_step_origuniv :
+      forall {A B C} cs cs' lbl u_id (usrs usrs' : honest_users A) (adv adv' : adversaries B) ks ks' qmsgs qmsgs' bd bd',
+        step_user u_id lbl bd bd'
+        -> forall (cmd : user_cmd C),
+          bd = (usrs, adv, cs, ks, qmsgs, cmd)
+          -> forall cmd',
+            bd' = (usrs', adv', cs', ks', qmsgs', cmd')
+            -> step_user (B:=B) u_id lbl (usrs, $0, cs, ks, qmsgs, cmd) (usrs', $0, cs', ks', qmsgs', cmd').
+    Proof.
+      induction 1; inversion 1; inversion 1; subst; econstructor; eauto.
+      unfold addUserKeys; m_equal; trivial.
+    Qed.
+
   End RealWorldLemmas.
 
   Hint Constructors RealWorld.step_user.
@@ -282,232 +241,108 @@ Section SingleAdversarySimulates.
     end.
   Hint Extern 1 (_ = RealWorld.adversary _) => solve [ symmetry ; assumption ].
 
-
-  (* Lemma simulates_with_adversary_silent : *)
-  (*  forall {A B} (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A) R, *)
-  (*      simulates R U__r U__i *)
-  (*    -> U__r.(RealWorld.adversary) = $0 *)
-  (*    -> forall U__ra U__ra' advcode, *)
-  (*        U__ra = add_adversary U__r advcode *)
-  (*        -> rstepSilent U__ra U__ra' *)
-  (*        -> exists U__i', *)
-  (*            istepSilent ^* U__i U__i' *)
-  (*            /\ R (strip_adversary U__ra') U__i'. *)
-  (*  Proof. *)
-  (*    intros. *)
-  (*    inversion H  as [H__silent H__l]; clear H. *)
-  (*    inversion H__l as [H__loud R__start]; clear H__l; clear H__loud. *)
-
-  (*    invert H2. *)
-  
-  (*    (* Honest step *)  *)
-  (*    - invert H3; unfold RealWorld.build_data_step; simpl; *)
-  (*        [ | specialize (H__silent U__r U__i R__start); eapply H__silent .. ]; *)
-  (*        eauto 9. *)
-  (*      + admit. *)
-  
-  (*    (* Adversary step *)  *)
-  (*    - invert H3; unfold RealWorld.build_data_step; simpl; *)
-  (*        [ | unfold strip_adversary, RealWorld.buildUniverseAdv, updateUserList; *)
-  (*              simpl; *)
-  (*              exists U__i; *)
-  (*              rewrite <- H0; *)
-  (*              try rewrite univ_components; *)
-  (*              intuition .. *)
-  (*        ]. *)
-
-  (*      + admit. *)
-  (*      + admit. (* need to swipe ciphers *) *)
-  (*      + admit. (* need to swipe ciphers *) *)
-  
-  (*  Admitted. *)
-
-
-  Inductive StrippedR {A B} (R : RealWorld.universe A B -> IdealWorld.universe A -> Prop) :
-    RealWorld.universe A B -> IdealWorld.universe A -> Prop :=
-  (* | Stripped : forall {U__ra U__i}, R (strip_adversary U__ra) U__i -> StrippedR R U__ra U__i *)
-  | Strip : forall {U__r U__r' U__ra U__ra' U__i},
-        rstepSilent ^* U__ra U__ra'
-      /\ U__r' = strip_adversary U__ra'
-      /\ (exists cs, U__r' = {| RealWorld.users       := RealWorld.users U__r
-                      ; RealWorld.adversary   := RealWorld.adversary U__r
-                      ; RealWorld.all_ciphers := RealWorld.all_ciphers U__r $++ cs
-                     |} /\ Disjoint (RealWorld.all_ciphers U__r) cs)
-      /\ R U__r U__i
-      -> StrippedR R U__ra U__i
-  .
-
-  Hint Constructors StrippedR.
-
-  Lemma simulates_with_adversary_silent' :
-    forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A) R,
-      simulates (StrippedR R) U__ra U__i
+  Lemma simulates_with_adversary_silent :
+    forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A) (R : RealWorld.universe A B -> IdealWorld.universe A -> Prop),
+      (forall (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A),
+          R U__r U__i
+          -> forall U__r' : RealWorld.universe A B,
+            rstepSilent U__r U__r'
+            -> exists U__i' : IdealWorld.universe A, (istepSilent) ^* U__i U__i' /\ R U__r' U__i')
+      -> R (strip_adversary U__ra) U__i
       -> forall U__ra',
-        rstepSilent U__ra U__ra'
-        -> exists U__i',
-          istepSilent ^* U__i U__i'
-          /\ (StrippedR R) U__ra' U__i'.
+          rstepSilent U__ra U__ra'
+          -> exists U__i', istepSilent ^* U__i U__i'
+                   /\ R (strip_adversary U__ra') U__i'.
   Proof.
+    simpl.
     intros.
-    inversion H  as [H__silent H__l]; clear H.
-    inversion H__l as [H__loud R__start]; clear H__l; clear H__loud.
-
-    invert H0; destruct R__start.
+    invert H1.
 
     (* Honest step *)
-    - invert H1; unfold RealWorld.build_data_step; simpl; [
-        | eauto 9 ..
-      ].
-      + admit.
-        
-    - invert H1; unfold RealWorld.build_data_step; simpl;
-        [| exists U__i; constructor; [apply TrcRefl |]; unfold RealWorld.buildUniverseAdv, updateUserList; simpl .. ].
-      + admit.
-    (*   +       invert H0. invert H2. invert H3. *)
-    (*     exists U__i; constructor. eapply TrcRefl. *)
-    (*     econstructor. constructor. 2:constructor. 3:constructor. *)
-    (*     4:eassumption. simpl in *. 3:eapply H0. eauto. unfold strip_adversary; simpl. *)
-        
+    - simpl.
+      (* specialize (H _ _ H0). *)
+      assert (UNIV_STEP :
+                rstepSilent
+                  (strip_adversary U__ra)
+                  (strip_adversary (RealWorld.buildUniverse usrs adv cs u_id
+                                                            {| RealWorld.key_heap := ks
+                                                             ; RealWorld.protocol := cmd
+                                                             ; RealWorld.msg_heap := qmsgs |})) ).
+      eapply RealWorld.StepUser; eauto. eapply honest_step_advuniv_implies_honest_step_origuniv; eauto.
+      smash_universe.
 
+      specialize (H _ _ H0 _ UNIV_STEP); eauto.
 
-
-    (*     exists U__i. constructor. eapply TrcRefl. simpl. econstructor. constructor. eapply TrcRefl. *)
-    (*     unfold strip_adversary; simpl. constructor. auto. *)
-
-
-
-    (*     intuition.  econstructor. constructor. eapply TrcRefl. unfold strip_adversary; simpl. *)
-    (*     constructor. eauto. simpl. constructor. 2:eassumption.  *)
-    (*     subst; simpl in *. eauto. *)
-
-        
-    (*     simpl. simpl in H3. simpl. *)
-    (*     invert H3. invert H1. eexists; simpl. subst. *)
-    (*     eexists; intuition. *)
-    (*     simpl. *)
-
-    (* (* Adversary step *)  *)
-    (* - invert H1; unfold RealWorld.build_data_step; simpl; [ *)
-    (*     | unfold strip_adversary, RealWorld.buildUniverseAdv, updateUserList; *)
-    (*         simpl; *)
-    (*         exists U__i; *)
-    (*         match goal with | [ H : R (strip_adversary _) _ |- _ ] => progress unfold strip_adversary in H; simpl in H end; *)
-    (*         intuition .. *)
-    (*     ]. *)
-
-    (*     + admit. *)
-    (*     + admit. (* adversary sent a message to a honest user *) *)
-    (*     + admit. (* need to swipe ciphers *) *)
-    (*     + admit. (* need to swipe ciphers *) *)
-
-    Admitted.
-
-    Lemma simulates_with_adversary_loud' :
-      forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A) R,
-        simulates (StrippedR R) U__ra U__i
-        -> forall U__ra' a__ra,
-          RealWorld.step_universe U__ra (Action a__ra) U__ra' (* excludes adversary steps *)
-          -> exists a__i U__i' U__i'',
-              istepSilent^* U__i U__i'
-            /\ IdealWorld.lstep_universe U__i' (Action a__i) U__i''
-            /\ action_matches a__ra a__i
-            /\ (StrippedR R) U__ra' U__i''
-            /\ RealWorld.action_adversary_safe (RealWorld.findUserKeys U__ra.(RealWorld.adversary)) a__ra = true.
-    Proof.
-      intros.
-      inversion H  as [H__silent H__l]; clear H.
-      inversion H__l as [H__loud R__start]; clear H__l; clear H__silent.
-
-      Admitted.
-
-  
-  Lemma simulates_with_adversary_silent :
-    forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A) R,
-      simulates R (strip_adversary U__ra) U__i
-      -> forall U__ra',
-        rstepSilent U__ra U__ra'
-        -> exists U__i',
-          istepSilent ^* U__i U__i'
-          /\ R (strip_adversary U__ra') U__i'.
-  Proof.
-    intros.
-    inversion H  as [H__silent H__l]; clear H.
-    inversion H__l as [H__loud R__start]; clear H__l; clear H__loud.
-
-    invert H0.
-
-    (* Honest step *) 
-    - invert H1; unfold RealWorld.build_data_step; simpl;
-        [ | specialize (H__silent (strip_adversary U__ra) U__i R__start); eapply H__silent .. ];
-        eauto 9.
-      + admit.
-
-    (* Adversary step *) 
-    - invert H1; unfold RealWorld.build_data_step; simpl; [
+      (* Adversary step *)
+    - invert H3; unfold RealWorld.build_data_step; simpl; [
         | unfold strip_adversary, RealWorld.buildUniverseAdv, updateUserList;
             simpl;
             exists U__i;
             match goal with | [ H : R (strip_adversary _) _ |- _ ] => progress unfold strip_adversary in H; simpl in H end;
             intuition ..
-        ].
+      ].
 
-        + admit.
-        + admit. (* adversary sent a message to a honest user *)
-        + admit. (* need to swipe ciphers *)
-        + admit. (* need to swipe ciphers *)
+      + admit.
+      + (* send *)
+        admit.
+      + (* enc *)
+        admit.
+      + (* sign *)
+        admit.
 
-    Admitted.
+  Admitted.
 
-    Lemma simulates_with_adversary_loud :
-      forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A) R,
-        simulates R (strip_adversary U__ra) U__i
-        -> forall U__ra' a__ra,
-          RealWorld.step_universe U__ra (Action a__ra) U__ra' (* excludes adversary steps *)
-          -> exists a__i U__i' U__i'',
-              istepSilent^* U__i U__i'
-            /\ IdealWorld.lstep_universe U__i' (Action a__i) U__i''
-            /\ action_matches a__ra a__i
+  Lemma simulates_with_adversary_loud :
+    forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A) (R : RealWorld.universe A B -> IdealWorld.universe A -> Prop),
+      (forall (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A),
+          R U__r U__i ->
+          forall (a1 : RealWorld.action) (U__r' : RealWorld.universe A B),
+            RealWorld.step_universe U__r (Action a1) U__r' ->
+            exists (a2 : IdealWorld.action) (U__i' U__i'' : IdealWorld.universe A),
+              (istepSilent) ^* U__i U__i' /\
+              IdealWorld.lstep_universe U__i' (Action a2) U__i'' /\
+              action_matches a1 a2 /\ R U__r' U__i'' /\
+              RealWorld.action_adversary_safe (RealWorld.findUserKeys (RealWorld.adversary U__r)) a1 = true)
+      -> R (strip_adversary U__ra) U__i
+      -> forall a1 U__ra',
+          RealWorld.step_universe U__ra (Action a1) U__ra'
+          -> exists a2 U__i' U__i'',
+            (istepSilent) ^* U__i U__i'
+            /\ IdealWorld.lstep_universe U__i' (Action a2) U__i''
+            /\ action_matches a1 a2
             /\ R (strip_adversary U__ra') U__i''
-            /\ RealWorld.action_adversary_safe (RealWorld.findUserKeys U__ra.(RealWorld.adversary)) a__ra = true.
-    Proof.
+            /\ RealWorld.action_adversary_safe (RealWorld.findUserKeys (RealWorld.adversary U__ra)) a1 = true.
+  Proof.
+    simpl.
+    intros.
+    invert H1.
 
-      intros.
-      inversion H  as [H__silent H__l]; clear H.
-      inversion H__l as [H__loud R__start]; clear H__l; clear H__silent.
+    assert (UNIV_STEP :
+              RealWorld.step_universe
+                (strip_adversary U__ra)
+                (Action a1)
+                (strip_adversary (RealWorld.buildUniverse usrs adv cs u_id
+                                                            {| RealWorld.key_heap := ks
+                                                             ; RealWorld.protocol := cmd
+                                                             ; RealWorld.msg_heap := qmsgs |})) ).
 
-      match goal with
-      | [ H : RealWorld.step_universe _ _ _ |- _] => invert H
-      end.
+    eapply RealWorld.StepUser. exact H2.
+    eapply honest_step_advuniv_implies_honest_step_origuniv; eauto.
+    smash_universe.
 
-      match goal with
-      | [ H : RealWorld.step_user _ _ _ _ |- _] => invert H
-      end; 
-        unfold RealWorld.build_data_step; simpl;
-          [ | specialize (H__loud (strip_adversary U__ra) U__i R__start) ..
-          ].
+    specialize (H _ _ H0 _ _ UNIV_STEP).
 
-      - admit.
-      - admit.
-      - admit.
+    destruct H as [a2].
+    destruct H as [U__i'].
+    destruct H as [U__i''].
+    destruct H. destruct H1. destruct H4. destruct H5.
+    exists a2; exists U__i'; exists U__i''; intuition; eauto.
 
-      (* - unfold RealWorld.buildUniverse, updateUserList; simpl. *)
-      (*   unfold RealWorld.findUserKeys,fold in H__loud; simpl in H__loud. *)
-      (*   eapply H__loud. *)
+    unfold RealWorld.findUserKeys, strip_adversary, fold in H6; simpl in H6.
 
-      (* (* Hint Extern 1 (step_universe _ _ _) => eapply RealWorld.StepUser. *) *)
+    admit.
 
-      (* - simpl in *. *)
-      (*   unfold strip_adversary, RealWorld.buildUniverse, updateUserList; simpl. *)
-      (*   eapply RealWorld.StepUser; eauto. *)
-
-      (* - simpl in *. *)
-      (*   unfold strip_adversary, RealWorld.buildUniverse, updateUserList; simpl. *)
-      (*   eapply RealWorld.StepUser. exact H. eauto. *)
-      (*   unfold RealWorld.buildUniverse, updateUserList; simpl. *)
-      (*   rewrite H0; smash_universe. *)
-
-    Admitted.
-
+  Admitted.
 
   Theorem simulates_ok_with_adversary :
     forall {A B} (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A),
@@ -524,9 +359,8 @@ Section SingleAdversarySimulates.
 
     unfold refines.
     exists (fun ur ui => R (strip_adversary ur) ui); unfold simulates.
-    propositional.
-    - eapply simulates_with_adversary_silent; eauto. unfold simulates; eauto.
-    - eapply simulates_with_adversary_loud; eauto. unfold simulates; eauto.
+    propositional;
+      eauto using simulates_with_adversary_silent, simulates_with_adversary_loud.
     - rewrite H1;
         unfold strip_adversary, add_adversary; simpl;
           rewrite <- H0; rewrite univ_components; eauto.
