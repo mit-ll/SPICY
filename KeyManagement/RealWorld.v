@@ -227,11 +227,12 @@ Definition encryptMessage {t} (k : key) (m : message t) (c_id : cipher_id) : opt
     | Encryption => Some (Cipher c_id k'.(key_id) m)
     | _          => None
     end
-  | AsymKey k' _ => (* Encryption always uses the public part of an asymmetric key *)
+  | AsymKey k' false => (* Encryption always uses the public part of an asymmetric key *)
     match (usage k') with
     | Encryption => Some (Cipher c_id k'.(key_id) m)
     | _          => None
     end
+  | _ => None
   end.
 
 Definition signMessage {t} (k : key) (m : message t) (c_id : cipher_id) : option cipher :=

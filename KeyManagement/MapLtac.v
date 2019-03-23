@@ -198,6 +198,23 @@ Section MapLemmas.
       unfold P.Add in H1. specialize (H1 y). symmetry; auto.
   Qed.
 
+  Lemma fold_over_empty :
+    forall {V} (m : NatMap.t V),
+      fold (fun k v a =>
+              if match v with
+                 | _ => true
+                 end then a $+ (k,v) else a) m $0 = m.
+  Proof.
+
+    intros.
+    apply P.fold_rec.
+    - intros; simpl. eapply map_eq_Equal; unfold Equal; intros.
+      rewrite empty_o. admit.
+    - intros; subst.
+      apply map_eq_Equal; unfold Equal; intros.
+      unfold P.Add in H1. specialize (H1 y). symmetry; auto.
+
+  Admitted.
 
 End MapLemmas.
 
