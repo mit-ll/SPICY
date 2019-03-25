@@ -201,8 +201,37 @@ Section SingleAdversarySimulates.
         end
       end.
 
+    Definition clean_cipher_fold_fn (adv_keys : keys) (k : key_identifier) (v : cipher) (cs : ciphers) :=
+      if honest_cipher adv_keys v then cs $+ (k,v) else cs.
+
+    Lemma honest_cipher_proper_morphism :
+      forall ks,
+        Morphisms.Proper
+          (Morphisms.respectful eq (Morphisms.respectful eq (Morphisms.respectful eq eq)))
+          (clean_cipher_fold_fn ks).
+    Proof.
+      unfold Morphisms.Proper, Morphisms.respectful; intros; subst; reflexivity.
+    Qed.
+
+    Lemma honest_cipher_transpose_key :
+      forall ks,
+        transpose_neqkey eq (clean_cipher_fold_fn ks).
+    Proof.
+      unfold transpose_neqkey; intros.
+      unfold clean_cipher_fold_fn.
+      case (honest_cipher ks e); eauto.
+      case (honest_cipher ks e'); eauto.
+      apply map_eq_Equal; unfold Equal; intros.
+      case (y ==n k); intro; subst.
+      - rewrite add_eq_o by trivial. rewrite add_neq_o by auto. rewrite add_eq_o by trivial. auto.
+      - rewrite add_neq_o by auto.
+        case (y ==n k'); intros; subst.
+        do 2 rewrite add_eq_o by trivial. trivial.
+        do 3 rewrite add_neq_o by auto. trivial.
+    Qed.
+
     Definition clean_ciphers (adv_keys : keys) (cs : ciphers) :=
-      fold (fun k v m => if honest_cipher adv_keys v then m $+ (k,v) else m) cs $0.
+      fold (clean_cipher_fold_fn adv_keys) cs $0.
 
     Definition strip_adversary {A B} (U__r : universe A B) : universe A B :=
       {| users       := U__r.(users)
@@ -224,18 +253,25 @@ Section SingleAdversarySimulates.
         clean_ciphers $0 cs = cs.
     Proof.
       intros.
-      unfold clean_ciphers, honest_cipher.
+      unfold clean_ciphers, clean_cipher_fold_fn, honest_cipher.
       simpl.
+      apply P.fold_rec; intros.
 
-      (* rewrite cipher_is_Cipher. *)
-      admit.
+      apply elements_Empty in H.
+      apply map_eq_elements_eq. auto.
 
-    Admitted.
+      intros. subst.
+      apply map_eq_Equal. unfold Equal; intros.
+      destruct e. eauto.
+
+    Qed.
 
   End AdversaryHelpers.
 
   Section RealWorldLemmas.
     Import RealWorld.
+
+    Hint Resolve honest_cipher_proper_morphism honest_cipher_transpose_key.
 
     Lemma univ_components :
       forall {A B} (U__r : universe A B),
@@ -261,20 +297,34 @@ Section SingleAdversarySimulates.
       eexists; intuition. eassumption.
     Qed.
 
-    (* Lemma honest_step_advuniv_implies_honest_step_origuniv : *)
-    (*   forall {A B C} cs cs' lbl u_id (usrs usrs' : honest_users A) (adv adv' : adversaries B) ks ks' qmsgs qmsgs' bd bd', *)
-    (*     step_user u_id lbl bd bd' *)
-    (*     -> forall (cmd : user_cmd C), *)
-    (*       bd = (usrs, adv, cs, ks, qmsgs, cmd) *)
-    (*       -> forall cmd', *)
-    (*         bd' = (usrs', adv', cs', ks', qmsgs', cmd') *)
-    (*         -> step_user (B:=B) u_id lbl (usrs, $0, cs, ks, qmsgs, cmd) (usrs', $0, cs', ks', qmsgs', cmd'). *)
-    (* Proof. *)
-    (*   induction 1; inversion 1; inversion 1; subst; econstructor; eauto. *)
-    (*   unfold addUserKeys; m_equal; trivial. *)
-    (* Qed. *)
 
-    (* Print data_step0. *)
+
+
+    (* Lemma clean_ciphers_doesn't_make_unaccepted_msg_accepted : *)
+    (*   forall {t} cs pat ks (msg : message t), *)
+    (*     msg_accepted_by_pattern cs pat msg = false *)
+    (*     -> msg_accepted_by_pattern (clean_ciphers ks cs) pat msg = false. *)
+    (* Proof. *)
+    (*   intro. intro. *)
+    (*   intro. *)
+    (*   induction pat; destruct msg; eauto. *)
+    (*   destruct msg; induction pat; eauto. *)
+    (*   - unfold msg_accepted_by_pattern in H. *)
+    (*     fold (@msg_accepted_by_pattern t1) in H. fold (@msg_accepted_by_pattern t2) in H. *)
+    (*     SearchAbout (_ && _ = false). *)
+    (*     apply andb_false_elim in H; invert H. *)
+    (*     apply IHpat1; eauto. *)
+
+
+
+    (*   - admit. *)
+    (*   -  *)
+
+
+
+    (*   unfold msg_accepted_by_pattern in * *)
+
+
 
     Lemma honest_step_advuniv_implies_honest_step_origuniv :
       forall {A B C} cs cs' lbl u_id (usrs usrs' : honest_users A) (adv adv' : adversaries B) ks ks' qmsgs qmsgs' bd bd',
@@ -295,10 +345,10 @@ Section SingleAdversarySimulates.
       -
         (* eapply StepRecv. *)
 
-  (* H3 : msg_accepted_by_pattern cs' pat msg = true *)
-  (* ============================ *)
-  (* step_user u_id (Action (Input msg pat u_id ks cs')) (usrs', $0, clean_ciphers (findUserKeys adv') cs', ks, Exm msg :: qmsgs', Recv pat) *)
-  (*   (usrs', $0, clean_ciphers (findUserKeys adv') cs', ks $++ findKeys msg, qmsgs', Return msg) *)
+        (* H3 : msg_accepted_by_pattern cs' pat msg = true *)
+        (* ============================ *)
+        (* step_user u_id (Action (Input msg pat u_id ks cs')) (usrs', $0, clean_ciphers (findUserKeys adv') cs', ks, Exm msg :: qmsgs', Recv pat) *)
+        (*   (usrs', $0, clean_ciphers (findUserKeys adv') cs', ks $++ findKeys msg, qmsgs', Return msg) *)
         admit.
 
       - econstructor; eauto.
@@ -393,34 +443,6 @@ Section SingleAdversarySimulates.
           case_eq (usage k0); intro; rewrite H2 in H || invert H; invert H; eauto.
     Qed.
 
-    Lemma honest_cipher_proper_morphism :
-      forall ks,
-        Morphisms.Proper (Morphisms.respectful eq (Morphisms.respectful eq (Morphisms.respectful eq eq)))
-                         (fun (k : NatMap.key) (c : cipher) (cs : t cipher) => if honest_cipher ks c then cs $+ (k, c) else cs).
-    Proof.
-      unfold Morphisms.Proper, Morphisms.respectful; simpl. intros. subst. simpl.
-      case (honest_cipher ks y0); eauto.
-    Qed.
-
-    Lemma honest_cipher_transpose_key :
-      forall ks,
-        transpose_neqkey eq (fun (k : NatMap.key) (c : cipher) (cs : t cipher) => if honest_cipher ks c then cs $+ (k, c) else cs).
-    Proof.
-      unfold transpose_neqkey; simpl.
-      intros.
-      case (honest_cipher ks e); eauto.
-      case (honest_cipher ks e'); eauto.
-      apply map_eq_Equal; unfold Equal; intros.
-      case (y ==n k); intro; subst.
-      - rewrite add_eq_o by trivial. rewrite add_neq_o by auto. rewrite add_eq_o by trivial. auto.
-      - rewrite add_neq_o by auto.
-        case (y ==n k'); intros; subst.
-        do 2 rewrite add_eq_o by trivial. trivial.
-        do 3 rewrite add_neq_o by auto. trivial.
-    Qed.
-
-    Hint Resolve honest_cipher_proper_morphism honest_cipher_transpose_key.
-
     (* Specialize to single adversary.  This means that in the following proof, we assume
      * that, since we are stepping the adversary, then
      *   ks =  adv keys at beginning
@@ -450,7 +472,7 @@ Section SingleAdversarySimulates.
         unfold clean_ciphers; simpl.
         rewrite fold_add; simpl; eauto.
 
-        assert (honest_cipher ks' cipherMsg = false).
+        unfold clean_cipher_fold_fn; assert (honest_cipher ks' cipherMsg = false).
         apply sign_cipher_has_key in H2; invert H2; subst; simpl.
         invert H3. rewrite H0. invert H; eauto.
         rewrite H; trivial.
@@ -500,16 +522,6 @@ Section SingleAdversarySimulates.
         rewrite <- in_find_iff in H.
         rewrite map_in_iff; eauto.
     Qed.
-
-
-    (* Lemma universe_step_adds_no_users : *)
-    (*   forall {A B} (U U' : universe A B) lbl, *)
-    (*     step_universe U lbl U' *)
-    (*     -> forall u_id u_d, *)
-    (*       U'.(users) $? u_id = Some u_d -> U.(users) $? u_id <> None. *)
-    (* Proof. *)
-    (*   intros. *)
-    (*   invert  *)
 
     Lemma adv_step_stays_in_R :
       forall {A B} (U__i : IdealWorld.universe A) (U__r : universe A B) (R : universe A B -> IdealWorld.universe A -> Prop)
@@ -568,7 +580,6 @@ Section SingleAdversarySimulates.
       rewrite H5. admit.
 
     Admitted.
-
 
   End RealWorldLemmas.
 
@@ -729,7 +740,7 @@ Section SingleAdversarySimulates.
       rewrite H0. rewrite empty_add_idempotent.
       unfold RealWorld.findUserKeys, fold; simpl. rewrite empty_add_idempotent.
 
-      unfold clean_ciphers, honest_cipher; simpl. rewrite fun_cipher_match; simpl. rewrite fold_over_empty. simpl.
+      rewrite clean_ciphers_nokeys_idempotent.
       rewrite <- H0; rewrite univ_components. auto.
   Qed.
 
