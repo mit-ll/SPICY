@@ -110,7 +110,6 @@ Section MapLemmas.
         specialize (H1 k); assumption.
   Qed.
 
-
   Lemma remove_hd :
     forall {V} n (v : V) xs sx hdrel,
       {| this := (n,v) :: xs ; sorted := Sorted.Sorted_cons sx hdrel |} $- n = {| this := xs ; sorted := sx |}.
@@ -198,6 +197,16 @@ Section MapLemmas.
       unfold P.Add in H1. specialize (H1 y). symmetry; auto.
   Qed.
 
+  Lemma Empty_eq_empty :
+    forall v m,
+      Empty (elt:=v) m
+      -> $0 = m.
+  Proof.
+    intros.
+    apply elements_Empty in H.
+    apply map_eq_elements_eq. auto.
+  Qed.
+
   Lemma fold_over_empty :
     forall {V} (m : NatMap.t V),
       fold (fun k v a =>
@@ -227,8 +236,10 @@ Ltac m_equal :=
          | [ |- context[_ $++ $0 ] ] => rewrite add_empty_idempotent
          | [ |- (add _ _ _) = _ ] => normalize_set
          | [ |- (add _ _ _) = _ ] => unfold add, Raw.add; simpl
-         | [ |- empty _ = _ ] => unfold empty, Raw.empty, remove, Raw.remove; simpl
          | [ |- {| this := _ ; sorted := _ |} = _ ] => eapply map_eq_fields_eq
+         | [ H : Empty ?m |- $0 = ?m ] => eapply Empty_eq_empty; exact H
+         | [ H : Empty ?m |- ?m = $0 ] => symmetry
+         | [ |- empty _ = _ ] => unfold empty, Raw.empty, remove, Raw.remove; simpl
          end.
 
 Hint Rewrite add_empty_idempotent empty_add_idempotent : maps.

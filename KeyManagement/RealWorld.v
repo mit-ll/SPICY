@@ -80,6 +80,27 @@ Definition ciphers         := NatMap.t cipher.
 
 Definition adversary_knowledge := keys.
 
+(* Inductive msg_accepted_by_pattern (cs : ciphers) : forall {t} pat msg, msg_pat -> message t -> Prop := *)
+(* | BothPairsAccepted : forall {t} pat msg p1 p2 m1 m2, *)
+(*     fun pat msg => *)
+(*         pat = Paired p1 p2 *)
+(*       -> msg = MsgPair m1 m2 *)
+(*       -> msg_accepted_by_pattern cs p1 m1 *)
+(*       -> msg_accepted_by_pattern cs p2 m2 *)
+(*       -> msg_accepted_by_pattern cs pat msg *)
+(* . *)
+
+
+
+(* Inductive msg_accepted_by_pattern {t} (cs : ciphers) (pat : msg_pat) (msg : message t) : Prop := *)
+(* | BothPairsAccepted : forall p1 p2 m1 m2, *)
+(*       pat = Paired p1 p2 *)
+(*     -> msg = MsgPair m1 m2 *)
+(*     -> msg_accepted_by_pattern cs p1 m1 *)
+(*     -> msg_accepted_by_pattern cs p2 m2 *)
+(*     -> msg_accepted_by_pattern cs pat msg *)
+(* . *)
+
 Fixpoint msg_accepted_by_pattern {t} (cs : ciphers) (pat : msg_pat) (msg : message t) : bool :=
   match pat, msg with
   | Accept, _ => true
