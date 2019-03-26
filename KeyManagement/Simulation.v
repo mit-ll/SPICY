@@ -339,7 +339,7 @@ Section SingleAdversarySimulates.
 
     Hint Constructors msg_accepted_by_pattern.
 
-    Lemma clean_ciphers_doesn't_make_unaccepted_msg_accepted :
+    Lemma clean_ciphers_doesn't_make_unaccepted_msg_accepted' :
       forall {t} cs pat ks (msg : message t),
           ~ msg_accepted_by_pattern cs pat msg
         -> ~ msg_accepted_by_pattern (clean_ciphers ks cs) pat msg.
