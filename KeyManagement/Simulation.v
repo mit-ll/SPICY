@@ -191,6 +191,10 @@ Section SingleAdversarySimulates.
                     ; protocol := u_d.(protocol)
                     ; msg_heap := clean_messages u_d.(msg_heap) |}) usrs.
 
+    (* So called honest ciphers are those that :
+     *  1. Are signed by an honest user
+     *  2. HOW DO WE KNOW WHICH ENCRYPTED CIPHERS TO KEEP?
+     *)
     Definition honest_cipher (adv_keys : keys) (c : cipher) :=
       match c with
       | Cipher _ k_id _ =>
@@ -213,24 +217,47 @@ Section SingleAdversarySimulates.
       unfold Morphisms.Proper, Morphisms.respectful; intros; subst; reflexivity.
     Qed.
 
-    (* Lemma honest_cipher_transpose_key : *)
-    (*   forall ks, *)
-    (*     transpose_neqkey eq (clean_cipher_fold_fn ks). *)
-    (* Proof. *)
-    (*   unfold transpose_neqkey; intros. *)
-    (*   unfold clean_cipher_fold_fn. *)
-    (*   case (honest_cipher ks e); eauto. *)
-    (*   case (honest_cipher ks e'); eauto. *)
-    (*   apply map_eq_Equal; unfold Equal; intros. *)
-    (*   case (y ==n k); intro; subst. *)
-    (*   - rewrite add_eq_o by trivial. rewrite add_neq_o by auto. rewrite add_eq_o by trivial. auto. *)
-    (*   - rewrite add_neq_o by auto. *)
-    (*     case (y ==n k'); intros; subst. *)
-    (*     do 2 rewrite add_eq_o by trivial. trivial. *)
-    (*     do 3 rewrite add_neq_o by auto. trivial. *)
-    (* Qed. *)
+    Lemma honest_cipher_filter_proper_morphism :
+      forall adv_keys,
+        Morphisms.Proper
+          (Morphisms.respectful eq (Morphisms.respectful eq (Morphisms.respectful Equal Equal)))
+          (fun (k : NatMap.key) (e : cipher) (m : t cipher) => if honest_cipher_filter_fn adv_keys k e then m $+ (k, e) else m).
+    Proof.
+      unfold Morphisms.Proper, Morphisms.respectful; intros.
+      apply map_eq_Equal in H1; subst; reflexivity.
+    Qed.
 
-    Hint Resolve honest_cipher_proper_morphism.
+    Lemma honest_cipher_filter_transpose_key :
+      forall ks,
+        transpose_neqkey Equal (fun k e m => if honest_cipher_filter_fn ks k e then m $+ (k, e) else m).
+    Proof.
+      unfold transpose_neqkey, Equal, honest_cipher_filter_fn; intros.
+      case (honest_cipher ks e); eauto.
+      case (honest_cipher ks e'); eauto.
+      case (y ==n k); intro; subst.
+      rewrite add_eq_o by auto. rewrite add_neq_o, add_eq_o by auto. trivial.
+      rewrite add_neq_o by auto.
+      case (y ==n k'); intros; subst.
+      m_equal; trivial.
+      do 3 rewrite add_neq_o by auto; trivial.
+    Qed.
+
+    Lemma merge_maps_proper_morphism :
+      forall {B},
+        Morphisms.Proper
+          (Morphisms.respectful eq (Morphisms.respectful eq (Morphisms.respectful eq eq)))
+          (fun (k: NatMap.key) (u : user_data B) (ks : t key) => ks $++ key_heap u).
+    Proof.
+      unfold Morphisms.Proper, Morphisms.respectful; intros; subst; trivial.
+    Qed.
+
+    (* Lemma merge_maps_transpose_key : *)
+    (*   forall {B}, *)
+    (*     transpose_neqkey eq (fun (_ : NatMap.key) (u : user_data B) (ks : t key) => ks $++ key_heap u). *)
+    (* Proof. *)
+    (*   unfold transpose_neqkey, Equal, honest_cipher_filter_fn; intros. *)
+
+
 
     Definition clean_ciphers (adv_keys : keys) (cs : ciphers) :=
       filter (honest_cipher_filter_fn adv_keys) cs.
@@ -260,8 +287,7 @@ Section SingleAdversarySimulates.
   Section RealWorldLemmas.
     Import RealWorld.
 
-    (* Hint Resolve honest_cipher_proper_morphism honest_cipher_transpose_key. *)
-    Hint Resolve honest_cipher_proper_morphism.
+    Hint Resolve honest_cipher_proper_morphism honest_cipher_filter_proper_morphism honest_cipher_filter_transpose_key.
 
     Lemma univ_components :
       forall {A B} (U__r : universe A B),
@@ -342,7 +368,8 @@ Section SingleAdversarySimulates.
     Lemma clean_ciphers_reduces_or_keeps_same_ciphers :
       forall c_id c adv_keys cs,
         cs $? c_id = Some c
-        -> clean_ciphers adv_keys cs $? c_id = Some c
+        -> ( clean_ciphers adv_keys cs $? c_id = Some c
+          /\ honest_cipher adv_keys c = true)
         \/ ( clean_ciphers adv_keys cs $? c_id = None
           /\ honest_cipher adv_keys c = false).
     Proof.
@@ -410,13 +437,6 @@ Section SingleAdversarySimulates.
           case_eq (usage k0); intro; rewrite H2 in H || invert H; invert H; eauto.
     Qed.
 
-
-    (* Lemma clean_ciphers_eliminates_dishonest_cipher : *)
-    (*   forall c_id c adv_keys cs, *)
-    (*     cs $? c_id = Some c *)
-    (*     -> honest_cipher adv_keys c = false *)
-    (*     -> clean_ciphers adv_keys cs $? c_id = None. *)
-
     Lemma dishonest_cipher_cleaned :
       forall cs adv_keys c_id cipherMsg,
           honest_cipher adv_keys cipherMsg = false
@@ -425,32 +445,24 @@ Section SingleAdversarySimulates.
     Proof.
       intros.
       apply map_eq_Equal; unfold Equal; intros.
-      case (y ==n c_id); intros; subst.
-      - symmetry.
-        rewrite clean_ciphers_eliminates_dishonest_cipher with (c_id:=c_id) (c:=cipherMsg); eauto.
-        apply not_in_ciphers_not_in_cleaned_ciphers with (ks:=adv_keys) in H0.
-        rewrite not_find_in_iff in H0.
+
+      case_eq (cs $? y); intros.
+
+      - apply clean_ciphers_reduces_or_keeps_same_ciphers with (adv_keys:=adv_keys) in H1.
+        destruct H1; destruct H1;
+          rewrite H1;
+            unfold clean_ciphers, filter in H1;
+            symmetry; unfold clean_ciphers, filter;
+              rewrite fold_add by eauto;
+              unfold honest_cipher_filter_fn; rewrite H; auto.
+
+      - rewrite clean_ciphers_no_new_ciphers; auto.
+        apply clean_ciphers_no_new_ciphers with (adv_keys:=adv_keys) in H1.
+        unfold clean_ciphers, filter. rewrite fold_add; eauto.
+        unfold honest_cipher_filter_fn; rewrite H.
+        unfold clean_ciphers, filter in H1.
         symmetry; auto.
-      - admit.
-
-    Admitted.
-
-
-    (* clean_ciphers ks' cs = clean_ciphers ks' (cs $+ (c_id, cipherMsg)) *)
-
-
-   (*  Lemma dishonest_cipher_cleaned : *)
-   (*    forall {t} cs k ks c_id (msg : message t) cipherMsg, *)
-   (*        encryptMessage k msg c_id = Some cipherMsg *)
-   (*      -> ks $? (keyId k) = None *)
-   (*      -> clean_ciphers ks cs = clean_ciphers ks cs $+ (c_id, cipherMsg). *)
-
-
-   (* Lemma clean_ciphers_eliminates_dishonest_cipher : *)
-   (*    forall c_id c adv_keys cs, *)
-   (*      cs $? c_id = Some c *)
-   (*      -> honest_cipher adv_keys c = false *)
-   (*      -> clean_ciphers adv_keys cs $? c_id = None. *)
+    Qed.
 
     Lemma honest_enc_cipher_not_cleaned :
       forall {t} cs k ks c_id (msg : message t) cipherMsg,
@@ -572,6 +584,19 @@ Section SingleAdversarySimulates.
 
     Admitted.
 
+    Lemma honest_silent_step_nochange_adversaries :
+      forall {A B C} cs cs' lbl u_id (usrs usrs' : honest_users A) (adv adv' : adversaries B) ks ks' qmsgs qmsgs' bd bd',
+        step_user u_id lbl bd bd'
+        -> forall (cmd : user_cmd C),
+          bd = (usrs, adv, cs, ks, qmsgs, cmd)
+          -> lbl = Silent
+          -> forall cmd',
+              bd' = (usrs', adv', cs', ks', qmsgs', cmd')
+            -> adv = adv'.
+    Proof.
+      induction 1; inversion 1; inversion 2; subst; eauto.
+      invert H4.
+    Qed.
 
     (* Specialize to single adversary.  This means that in the following proof, we assume
      * that, since we are stepping the adversary, then
@@ -592,9 +617,23 @@ Section SingleAdversarySimulates.
     Proof.
       induction 1; inversion 1; inversion 2; intros; subst; eauto.
 
-      - admit.
+      - (* Hrm.  Did the adversary receive any new keys in the received message.
+         * We know not, since the message didn't come from an honest user, but
+         * how can we show that?
+         *)
+        admit. 
 
-      - apply dishonest_cipher_cleaned; eauto.
+      -
+
+        (* apply enc_cipher_has_key in H2; invert H2. *)
+
+        (* Lemma dishonest_cipher_cleaned : *)
+        (*   forall cs adv_keys c_id cipherMsg, *)
+        (*     honest_cipher adv_keys cipherMsg = false *)
+        (*     -> ~ In c_id cs *)
+        (*     -> clean_ciphers adv_keys cs = clean_ciphers adv_keys (cs $+ (c_id, cipherMsg)). *)
+
+        apply dishonest_cipher_cleaned; eauto.
         apply enc_cipher_has_key in H2. 
         invert H2; invert H3.
         unfold honest_cipher; invert H.
@@ -602,7 +641,10 @@ Section SingleAdversarySimulates.
         rewrite H0; simpl. (* stuck *)
         admit.
 
-      - admit.
+      - (* Adversary just decryped a message.  Did it have any keys?
+         * Need to reason about what kinds of keys could be in there.
+         *)
+        admit.
 
       - apply dishonest_cipher_cleaned; eauto.
         apply sign_cipher_has_key in H2. 
@@ -702,15 +744,15 @@ Section SingleAdversarySimulates.
       case_eq (adv $? y); intros.
       assert (adv $? y <> None). unfold not; intro. rewrite H7 in H8. invert H8.
       assert (adversary U__r $? u_id <> None); unfold not. intro. rewrite H9 in H; invert H.
-      admit.
+
+      specialize (H5 H8); rewrite H3 in H5. rewrite add_neq_o in H5 by auto.
+      assert ((empty cipher) $? y = None) by eauto. contradiction.
+
       rewrite empty_o; trivial.
       rewrite H5. unfold findUserKeys.
-      rewrite fold_add; eauto.
-      simpl. unfold fold, Raw.fold; simpl. rewrite empty_add_idempotent. eauto.
+      unfold fold, Raw.fold; simpl. rewrite empty_add_idempotent; trivial.
 
-      admit. admit. admit.
-
-      rewrite H5. admit.
+      rewrite H5. admit. (* admitted because need to handle user filtering *)
 
     Admitted.
 
@@ -771,10 +813,13 @@ Section SingleAdversarySimulates.
                                                              ; RealWorld.protocol := cmd
                                                              ; RealWorld.msg_heap := qmsgs |})) ).
       eapply RealWorld.StepUser; eauto.
-      eapply honest_step_advuniv_implies_honest_step_origuniv; eauto.
-      smash_universe.
-      unfold strip_adversary; smash_universe.
-      simpl. admit. admit. admit.
+      eapply honest_step_advuniv_implies_honest_step_origuniv; intros; eauto. 
+      admit. (* Disjoint keys assumption of last lemma *)
+      eauto.
+      unfold strip_adversary; simpl; smash_universe.
+
+      unfold RealWorld.build_data_step in H3.
+      eapply honest_silent_step_nochange_adversaries in H3; trivial. rewrite H3; trivial.
 
       eapply H; eauto.
 
@@ -822,9 +867,9 @@ Section SingleAdversarySimulates.
 
     eapply RealWorld.StepUser; eauto.
     eapply honest_step_advuniv_implies_honest_step_origuniv; simpl; eauto.
-    unfold strip_adversary; simpl; smash_universe. simpl.
-    admit.
-    admit.
+    admit. (* Disjoint keys assumption of last lemma *)
+    unfold strip_adversary; simpl; smash_universe.
+    admit. (* Need evidence that the user didn't send keys *)
 
     specialize (H _ _ H0 _ _ UNIV_STEP).
 
@@ -835,7 +880,8 @@ Section SingleAdversarySimulates.
     exists a2; exists U__i'; exists U__i''; intuition; eauto.
 
     unfold RealWorld.findUserKeys, strip_adversary, fold in H6; simpl in H6.
-
+    unfold RealWorld.action_adversary_safe; destruct a1; auto.
+    unfold RealWorld.msg_pattern_spoofable.
     admit.
 
   Admitted.
