@@ -658,8 +658,8 @@ Section SingleAdversarySimulates.
       - apply dishonest_cipher_cleaned; eauto.
         apply sign_cipher_has_key in H2.
         invert H2; invert H3; 
-          unfold honest_cipher; rewrite H0.
-        admit.  admit.
+          unfold honest_cipher; rewrite H0;
+            destruct k; simpl in H; subst; eauto.
 
     Admitted.
 
