@@ -393,7 +393,7 @@ Inductive step_user : forall A B C, user_id -> rlabel -> data_step0 A B C -> dat
 | StepRecvDrop : forall {A B} {t} u_id (usrs : honest_users A) (adv : adversaries B) cs ks qmsgs qmsgs' (msg : message t) pat msgs,
       qmsgs = Exm msg :: msgs (* we have a message waiting for us! *)
     -> qmsgs' = msgs
-    -> msg_accepted_by_pattern_compute cs pat msg = false
+    -> ~ msg_accepted_by_pattern cs pat msg
     -> step_user u_id Silent (* Error label ... *)
                 (usrs, adv, cs, ks, qmsgs , Recv pat)
                 (usrs, adv, cs, ks, qmsgs', Return msg)

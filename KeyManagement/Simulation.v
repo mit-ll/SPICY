@@ -314,17 +314,45 @@ Section SingleAdversarySimulates.
       eexists; intuition. eassumption.
     Qed.
 
+    Lemma clean_ciphers_mapsto_iff : forall ks cs c_id c,
+        MapsTo c_id c (clean_ciphers ks cs) <-> MapsTo c_id c cs /\ honest_cipher_filter_fn ks c_id c = true.
+    Proof.
+      intros.
+      apply filter_iff; eauto.
+    Qed.
+
+    Lemma clean_ciphers_accepts :
+      forall {t} ks cs p (m : message t),
+          msg_accepted_by_pattern (clean_ciphers ks cs) p m
+        -> msg_accepted_by_pattern cs p m.
+    Proof.
+      induction 1; intros; subst; eauto.
+      - econstructor; auto.
+      - eapply BothPairsAccepted; eauto.
+      - eapply ProperlySigned; eauto.
+        rewrite <- find_mapsto_iff in H1; rewrite clean_ciphers_mapsto_iff in H1.
+        apply find_mapsto_iff; intuition.
+      - eapply ProperlyEncrypted; eauto.
+        rewrite <- find_mapsto_iff in H1; rewrite clean_ciphers_mapsto_iff in H1.
+        apply find_mapsto_iff; intuition.
+    Qed.
+
+    Hint Constructors msg_accepted_by_pattern.
 
     Lemma clean_ciphers_doesn't_make_unaccepted_msg_accepted :
       forall {t} cs pat ks (msg : message t),
-          msg_accepted_by_pattern_compute cs pat msg = false
-        -> msg_accepted_by_pattern_compute (clean_ciphers ks cs) pat msg = false.
+          ~ msg_accepted_by_pattern cs pat msg
+        -> ~ msg_accepted_by_pattern (clean_ciphers ks cs) pat msg.
     Proof.
-    (* need to induct on the combination of pat, msg
-     * Looks like we need to convert msg_accepted_by_pattern to
-     * inductive type to make this go through
-     *)
-    Admitted.
+      unfold "~"; induction 2; subst.
+      - apply H; eauto.
+      - apply clean_ciphers_accepts in H0_; apply clean_ciphers_accepts in H0_0.
+        apply H; eauto.
+      - rewrite <- find_mapsto_iff in H2; rewrite clean_ciphers_mapsto_iff in H2; intuition. rewrite find_mapsto_iff in H0.
+        apply clean_ciphers_accepts in H3; apply H; eauto.
+      - rewrite <- find_mapsto_iff in H2; rewrite clean_ciphers_mapsto_iff in H2; intuition. rewrite find_mapsto_iff in H0.
+        apply clean_ciphers_accepts in H3; apply H; eauto.
+    Qed.
 
     Hint Resolve clean_ciphers_doesn't_make_unaccepted_msg_accepted.
     Hint Extern 1 (_ $+ (?k, _) $? ?k = Some _) => rewrite add_eq_o.
@@ -343,13 +371,6 @@ Section SingleAdversarySimulates.
       - rewrite find_mapsto_iff in H1; rewrite H1 in H; invert H.
         rewrite H0; auto.
       - case (honest_cipher adv_keys e); eauto.
-    Qed.
-
-    Lemma clean_ciphers_mapsto_iff : forall ks cs c_id c,
-        MapsTo c_id c (clean_ciphers ks cs) <-> MapsTo c_id c cs /\ honest_cipher_filter_fn ks c_id c = true.
-    Proof.
-      intros.
-      apply filter_iff; eauto.
     Qed.
 
     Lemma clean_ciphers_keeps_honest_cipher :

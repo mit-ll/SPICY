@@ -242,6 +242,8 @@ End RealProtocol.
 
 Module SimulationAutomation.
 
+  Hint Constructors RealWorld.msg_accepted_by_pattern.
+
   Ltac churn1 :=
     match goal with
     | [ H : List.In _ _ |- _ ] => progress (simpl in H); intuition
@@ -275,6 +277,9 @@ Module SimulationAutomation.
       simpl in H;
       rewrite add_eq_o in H by auto;
       try discriminate
+
+    | [ H : ~ RealWorld.msg_accepted_by_pattern ?cs ?pat ?msg |- _ ] =>
+      assert ( RealWorld.msg_accepted_by_pattern cs pat msg ) by eauto; contradiction
 
     | [ H: RealWorld.signMessage _ _ _ = _ |- _ ] => unfold RealWorld.encryptMessage; simpl in H
     | [ H: RealWorld.encryptMessage _ _ _ = _ |- _ ] => unfold RealWorld.encryptMessage; simpl in H
@@ -433,30 +438,39 @@ Section FeebleSimulates.
         churn;
         [> eexists; constructor; swap 1 2 .. ];
         eauto 9).
+
+    (* intros. invert H. *)
+
+    (* - churn. *)
+    (*   eexists; constructor; swap 1 2. eauto. eauto. *)
+    (*   eexists; constructor; swap 1 2. eauto. eauto. *)
+    (*   eexists; constructor; swap 1 2. eauto. eauto. *)
+    (*   eexists; constructor; swap 1 2; eauto 9. *)
+
+    (* - churn. *)
+    (*   eexists; constructor; swap 1 2; eauto 9. *)
+
+    (* - churn. *)
+    (*   eexists; constructor; swap 1 2; eauto 9. *)
+    (*   eexists; constructor; swap 1 2; eauto 9. *)
+    (*   eexists; constructor; swap 1 2; eauto 9. *)
+    (*   eexists; constructor; swap 1 2; eauto 9. *)
+
+    (* - churn. *)
+    (*   eexists; constructor; swap 1 2; eauto 9. *)
+    (*   eexists; constructor; swap 1 2; eauto 9. *)
+    (*   eexists; constructor; swap 1 2; eauto 9. *)
+    (*   eexists; constructor; swap 1 2; eauto 9. *)
+
+    (* - churn. *)
+    (*   eexists; constructor; swap 1 2; eauto 9. *)
+    (*   eexists; constructor; swap 1 2; eauto 9. *)
+    (*   eexists; constructor; swap 1 2; eauto 9. *)
+    (*   eexists; constructor; swap 1 2; eauto 9. *)
+
+    (* - churn. *)
+
   Qed.
-  (*   intros; invert H. *)
-
-  (*   - churn; *)
-  (*       [> eexists; constructor; swap 1 2 .. ]; *)
-  (*       eauto 9. *)
-
-  (*   - churn; *)
-  (*       [> eexists; constructor; swap 1 2 .. ]; *)
-  (*       eauto 9. *)
-
-  (*   - churn; *)
-  (*       [> eexists; constructor; swap 1 2 .. ]; *)
-  (*       eauto 9. *)
-  (*   - churn; *)
-  (*       [> eexists; constructor; swap 1 2 .. ]; *)
-  (*       eauto 9. *)
-  (*   - churn; *)
-  (*       [> eexists; constructor; swap 1 2 .. ]; *)
-  (*       eauto 9. *)
-  (*   - churn; *)
-  (*       [> eexists; constructor; swap 1 2 .. ]; *)
-  (*       eauto 9. *)
-  (* Qed. *)
 
   Lemma rpingbase_loud_simulates : 
     forall U__r U__i,
