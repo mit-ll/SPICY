@@ -4,36 +4,24 @@ Require Import MyPrelude Common Users.
 Set Implicit Arguments.
 
 Definition key_identifier := nat.
-Definition cipher_id      := nat.
 
 Inductive key_usage :=
 | Encryption
-| Signing
-.
-
-Record cryptographic_key := MkCryptoKey {
-                                key_id : key_identifier ;
-                                usage  : key_usage
-                              }.
+| Signing.
 
 (* A master key type *)
-Inductive key :=
-| SymKey   (k : cryptographic_key)
-| AsymKey  (k : cryptographic_key) (has_private_access : bool)
-.
+Inductive key_type :=
+| SymKey
+| AsymKey (has_private_access : bool).
 
-Definition keyId (k : key) :=
-  match k with
-  | SymKey  ck   => ck.(key_id)
-  | AsymKey ck _ => ck.(key_id)
-  end.
+Record key := MkCryptoKey { keyId : key_identifier ;
+                            keyUsage  : key_usage ;
+                            keyType : key_type }.
 
-Definition keyUsage (k : key) :=
-  match k with
-  | SymKey  ck   => ck.(usage)
-  | AsymKey ck _ => ck.(usage)
-  end.
+Definition keyEq k1 k2 := k1.(keyId) = k2.(keyId).
+Notation "x ==k y" := (keyEq x y) (right associativity, at level 75).
 
+Definition cipher_id := nat.
 
 Inductive type : Set :=
 | Nat
@@ -248,8 +236,6 @@ Record universe (A B : Type) :=
 Fixpoint findKeys {t} (msg : message t) : keys :=
   match msg with
   | Plaintext _        => $0
-
-  | KeyMessage (AsymKey k' _) => $0 $+ (k'.(key_id), AsymKey k' false) (* Only sending public keys *)
   | KeyMessage k       => $0 $+ (keyId k, k)
   | MsgPair msg1 msg2  => (findKeys msg1) $++ (findKeys msg2)
   | Ciphertext _       => $0
@@ -269,33 +255,30 @@ Definition addUserKeys {A} (us : user_list (user_data A)) (ks : keys) : user_lis
 (*    |}. *)
 
 Definition encryptMessage {t} (k : key) (m : message t) (c_id : cipher_id) : option cipher :=
-  match k with
-  | SymKey k'  =>
-    match (usage k') with
-    | Encryption => Some (Cipher c_id k'.(key_id) m)
-    | _          => None
-    end
-  | AsymKey k' false => (* Encryption always uses the public part of an asymmetric key *)
-    match (usage k') with
-    | Encryption => Some (Cipher c_id k'.(key_id) m)
-    | _          => None
-    end
-  | _ => None
+(* <<<<<<< HEAD *)
+(*   match k with *)
+(*   | SymKey k'  => *)
+(*     match (usage k') with *)
+(*     | Encryption => Some (Cipher c_id k'.(key_id) m) *)
+(*     | _          => None *)
+(*     end *)
+(*   | AsymKey k' false => (* Encryption always uses the public part of an asymmetric key *) *)
+(*     match (usage k') with *)
+(*     | Encryption => Some (Cipher c_id k'.(key_id) m) *)
+(*     | _          => None *)
+(*     end *)
+(*   | _ => None *)
+(* ======= *)
+  match k.(keyUsage) with
+  | Encryption => Some (Cipher c_id k.(keyId) m)
+  | _          => None
   end.
 
 Definition signMessage {t} (k : key) (m : message t) (c_id : cipher_id) : option cipher :=
   match k with
-  | SymKey k'  =>
-    match (usage k') with
-    | Signing => Some (Cipher c_id k'.(key_id) m)
-    | _       => None
-    end
-  | AsymKey k' true => (* Signing requires private key, so check we have access *)
-    match (usage k') with
-    | Signing => Some (Cipher c_id k'.(key_id) m)
-    | _       => None
-    end
-  | _ => None
+  | MkCryptoKey _ _ SymKey         => Some (Cipher c_id k.(keyId) m)
+  | MkCryptoKey _ _ (AsymKey true) => Some (Cipher c_id k.(keyId) m)
+  | _       => None
   end.
 
 Definition canVerifySignature {A} (cs : ciphers)(usrDat : user_data A)(c_id : cipher_id) : Prop :=
@@ -426,9 +409,23 @@ Inductive step_user : forall A B C, user_id -> rlabel -> data_step0 A B C -> dat
 
 | StepDecrypt : forall {A B} {t} u_id (usrs : honest_users A) (adv : adversaries B) cs ks ks' qmsgs (msg : message t) k_id k c_id newkeys,
       cs $? c_id = Some (Cipher c_id k_id msg)
-    -> ( ks $? k_id = Some (AsymKey k true) (* check we have access to private key *)
-      \/ ks $? k_id = Some (SymKey k) )
-    -> k.(key_id) = k_id
+    -> ( ks $? k_id = Some (MkCryptoKey k_id Encryption (AsymKey true)) (* check we have access to private key *)
+      \/ ks $? k_id = Some (MkCryptoKey k_id Encryption SymKey) )
+    (* -> ( ks $? k_id = Some (AsymKey k true) (* check we have access to private key *) *)
+    (*   \/ ks $? k_id = Some (SymKey k) ) *)
+    -> k.(keyId) = k_id
+(* ======= *)
+(*     -> globals' = addCipher c_id cipherMsg globals *)
+(*     -> lstep_user u_id Silent *)
+(*                  (globals,  adv, uks, Encrypt k msg) *)
+(*                  (globals', adv, uks, Return (Ciphertext c_id)) *)
+
+(* | LStepDecrypt : forall {t} u_id adv globals uks (msg : message t) k_id k c_id newkeys, *)
+(*     globals.(all_ciphers) $? c_id = Some (Cipher c_id k_id msg) *)
+(*     -> ( uks $? k_id = Some (MkCryptoKey k_id Encryption (AsymKey true)) (* check we have access to private key *) *)
+(*       \/ uks $? k_id = Some (MkCryptoKey k_id Encryption SymKey) ) *)
+(*     -> k.(keyId) = k_id *)
+(* >>>>>>> master *)
     -> findKeys msg = newkeys
     -> ks' = ks $++ newkeys
     -> step_user u_id Silent

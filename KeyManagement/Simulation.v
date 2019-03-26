@@ -200,8 +200,8 @@ Section SingleAdversarySimulates.
       match c with
       | Cipher _ k_id _ =>
         match adv_keys $? k_id with
-        | Some (SymKey _) => false
-        | Some (AsymKey _ true) => false
+        | Some (MkCryptoKey _ _ SymKey)         => false
+        | Some (MkCryptoKey _ _ (AsymKey true)) => false
         | _ => true
         end
       end.
@@ -339,7 +339,7 @@ Section SingleAdversarySimulates.
 
     Hint Constructors msg_accepted_by_pattern.
 
-    Lemma clean_ciphers_doesn't_make_unaccepted_msg_accepted' :
+    Lemma clean_ciphers_doesn't_make_unaccepted_msg_accepted :
       forall {t} cs pat ks (msg : message t),
           ~ msg_accepted_by_pattern cs pat msg
         -> ~ msg_accepted_by_pattern (clean_ciphers ks cs) pat msg.
@@ -433,30 +433,31 @@ Section SingleAdversarySimulates.
     Lemma enc_cipher_has_key :
       forall {t} k (msg : message t) c_id cipherMsg,
         encryptMessage k msg c_id = Some cipherMsg
-        -> cipherMsg = Cipher c_id (keyId k) msg
-        /\ (exists cryp_key, k = SymKey cryp_key \/ k = AsymKey cryp_key false).
+        -> cipherMsg = Cipher c_id (keyId k) msg.
+        (* /\ (k.(keyType) = SymKey \/ k.(keyType) = AsymKey false). *)
     Proof.
       intros.
       unfold encryptMessage in H.
       case_eq k; intros; rewrite H0 in H.
-      - case_eq (usage k0); intro; rewrite H1 in H; invert H; eauto.
-      - case_eq has_private_access; intro; rewrite H1 in H;
-          case_eq (usage k0); intro; rewrite H2 in H || invert H; invert H; eauto.
+      case_eq keyUsage; intro; subst; simpl in *; invert H; eauto.
     Qed.
 
     Lemma sign_cipher_has_key :
       forall {t} k (msg : message t) c_id cipherMsg,
         signMessage k msg c_id = Some cipherMsg
         -> cipherMsg = Cipher c_id (keyId k) msg
-          /\ (exists cryp_key, k = SymKey cryp_key \/ k = AsymKey cryp_key true).
+          /\ (k.(keyType) = SymKey \/ k.(keyType) = AsymKey  true).
     Proof.
       intros.
       unfold signMessage in H.
 
       case_eq k; intros; rewrite H0 in H.
-      - case_eq (usage k0); intro; rewrite H1 in H; invert H; eauto.
-      - case_eq has_private_access; intro; rewrite H1 in H;
-          case_eq (usage k0); intro; rewrite H2 in H || invert H; invert H; eauto.
+      case_eq keyUsage; intro; subst; simpl in *; invert H;
+        case_eq keyType; intros; subst; invert H1.
+      - intuition.
+      - case_eq has_private_access; intros; subst; invert H0; intuition.
+      - intuition.
+      - case_eq has_private_access; intros; subst; invert H0; intuition.
     Qed.
 
     Lemma dishonest_cipher_cleaned :
@@ -645,22 +646,8 @@ Section SingleAdversarySimulates.
          *)
         admit. 
 
-      -
-
-        (* apply enc_cipher_has_key in H2; invert H2. *)
-
-        (* Lemma dishonest_cipher_cleaned : *)
-        (*   forall cs adv_keys c_id cipherMsg, *)
-        (*     honest_cipher adv_keys cipherMsg = false *)
-        (*     -> ~ In c_id cs *)
-        (*     -> clean_ciphers adv_keys cs = clean_ciphers adv_keys (cs $+ (c_id, cipherMsg)). *)
-
-        apply dishonest_cipher_cleaned; eauto.
+      - apply dishonest_cipher_cleaned; eauto.
         apply enc_cipher_has_key in H2. 
-        invert H2; invert H3.
-        unfold honest_cipher; invert H.
-        rewrite H0; simpl; trivial.
-        rewrite H0; simpl. (* stuck *)
         admit.
 
       - (* Adversary just decryped a message.  Did it have any keys?
@@ -669,10 +656,10 @@ Section SingleAdversarySimulates.
         admit.
 
       - apply dishonest_cipher_cleaned; eauto.
-        apply sign_cipher_has_key in H2. 
-        invert H2; invert H3.
-        unfold honest_cipher; invert H;
-          rewrite H0; simpl; trivial.
+        apply sign_cipher_has_key in H2.
+        invert H2; invert H3; 
+          unfold honest_cipher; rewrite H0.
+        admit.  admit.
 
     Admitted.
 

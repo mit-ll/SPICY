@@ -260,21 +260,21 @@ Section ExamplarProofs.
   Definition A : user_id   := 0.
   Definition B : user_id   := 1.
 
-  Section RealProtocolParams.
-    Import RealWorld.
+  (* Section RealProtocolParams. *)
+  (*   Import RealWorld. *)
 
-    Definition KID1 : key_identifier := 0.
-    Definition KID2 : key_identifier := 1.
+  (*   Definition KID1 : key_identifier := 0. *)
+  (*   Definition KID2 : key_identifier := 1. *)
 
-    Definition KEY1  := MkCryptoKey KID1 Signing.
-    Definition KEY2  := MkCryptoKey KID2 Signing.
-    Definition KEY__A  := AsymKey KEY1 true.
-    Definition KEY__B  := AsymKey KEY2 true.
-    Definition KEYS  := $0 $+ (KID1, AsymKey KEY1 true) $+ (KID2, AsymKey KEY2 true).
+  (*   Definition KEY1  := MkCryptoKey KID1 Signing. *)
+  (*   Definition KEY2  := MkCryptoKey KID2 Signing. *)
+  (*   Definition KEY__A  := AsymKey KEY1 true. *)
+  (*   Definition KEY__B  := AsymKey KEY2 true. *)
+  (*   Definition KEYS  := $0 $+ (KID1, AsymKey KEY1 true) $+ (KID2, AsymKey KEY2 true). *)
 
-    Definition A__keys := $0 $+ (KID1, AsymKey KEY1 true)  $+ (KID2, AsymKey KEY2 false).
-    Definition B__keys := $0 $+ (KID1, AsymKey KEY1 false) $+ (KID2, AsymKey KEY2 true).
-  End RealProtocolParams.
+  (*   Definition A__keys := $0 $+ (KID1, AsymKey KEY1 true)  $+ (KID2, AsymKey KEY2 false). *)
+  (*   Definition B__keys := $0 $+ (KID1, AsymKey KEY1 false) $+ (KID2, AsymKey KEY2 true). *)
+  (* End RealProtocolParams. *)
 
   (* Lemma ex1: forall {AT : Type} cid1 (n : nat) cs, exists qn qcid1 qcs, *)
   (*   (RealWorld.updateUniverse *)
