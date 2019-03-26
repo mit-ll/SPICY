@@ -187,9 +187,10 @@ Section SingleAdversarySimulates.
       List.filter exm_safe msgs.
 
     Definition clean_users {A} ( usrs : honest_users A ) :=
-      map (fun u_d => {| key_heap := u_d.(key_heap)
-                    ; protocol := u_d.(protocol)
-                    ; msg_heap := clean_messages u_d.(msg_heap) |}) usrs.
+      usrs.
+      (* map (fun u_d => {| key_heap := u_d.(key_heap) *)
+      (*               ; protocol := u_d.(protocol) *)
+      (*               ; msg_heap := clean_messages u_d.(msg_heap) |}) usrs. *)
 
     (* So called honest ciphers are those that :
      *  1. Are signed by an honest user
@@ -263,7 +264,7 @@ Section SingleAdversarySimulates.
       filter (honest_cipher_filter_fn adv_keys) cs.
 
     Definition strip_adversary {A B} (U__r : universe A B) : universe A B :=
-      {| users       := U__r.(users)
+      {| users       := clean_users U__r.(users)
        ; adversary   := $0
        ; all_ciphers := clean_ciphers (findUserKeys U__r.(adversary)) U__r.(all_ciphers)
       |}.
@@ -654,6 +655,39 @@ Section SingleAdversarySimulates.
 
     Admitted.
 
+    (* Specialize to single adversary.  This means that in the following proof, we assume
+     * that, since we are stepping the adversary, then
+     *   ks =  adv keys at beginning
+     *   ks' = adv keys at the end
+     *)
+    Lemma adv_step_implies_no_user_impact_after_cleaning :
+      forall {A B C} cs cs' lbl u_id (usrs usrs' : honest_users A) (adv adv' : adversaries B) ks ks' qmsgs qmsgs' bd bd',
+        step_user u_id lbl bd bd'
+        -> forall (cmd : user_cmd C) usrs__s,
+            bd = (usrs, adv, cs, ks, qmsgs, cmd)
+          -> usrs__s = clean_users usrs
+          (* -> (forall k_id v, MapsTo k_id v ks -> MapsTo k_id v adv_keys) *)
+          -> forall cmd' usrs__s',
+                bd' = (usrs', adv', cs', ks', qmsgs', cmd')
+              -> usrs__s' = clean_users usrs'
+              -> usrs__s = usrs__s'.
+    Proof.
+      induction 1; inversion 1; inversion 2; intros; subst; eauto.
+
+      (* only goal left is the adversary send case *)
+
+      (* H1 : usrs $? rec_u_id = Some rec_u *)
+      (* H3 : (usrs, adv, cs', ks', qmsgs', Send rec_u_id msg) = (usrs, adv, cs', ks', qmsgs', Send rec_u_id msg) *)
+      (* H11 : (usrs $+ (rec_u_id, {| key_heap := key_heap rec_u; protocol := protocol rec_u; msg_heap := msg_heap rec_u ++ [Exm msg] |}), addUserKeys adv (findKeys msg), cs', ks', qmsgs', Return tt) = *)
+      (*   (usrs $+ (rec_u_id, {| key_heap := key_heap rec_u; protocol := protocol rec_u; msg_heap := msg_heap rec_u ++ [Exm msg] |}), addUserKeys adv (findKeys msg), cs', ks', qmsgs', Return tt) *)
+      (* ============================ *)
+      (* clean_users usrs = clean_users (usrs $+ (rec_u_id, {| key_heap := key_heap rec_u; protocol := protocol rec_u; msg_heap := msg_heap rec_u ++ [Exm msg] |})) *)
+
+      admit.
+
+    Admitted.
+
+
     Lemma user_step_adds_no_users :
       forall {A B C} cs cs' lbl u_id (usrs usrs' : honest_users A) (adv adv' : adversaries B) ks ks' qmsgs qmsgs' bd bd',
         step_user u_id lbl bd bd'
@@ -711,9 +745,13 @@ Section SingleAdversarySimulates.
     Proof.
       intros.
 
-      pose proof H1 as STEP.
-      unfold build_data_step in STEP.
-      eapply adv_step_implies_no_new_ciphers_after_cleaning in STEP; eauto.
+      pose proof H1 as CLEAN_CIPHERS.
+      unfold build_data_step in CLEAN_CIPHERS.
+      eapply adv_step_implies_no_new_ciphers_after_cleaning in CLEAN_CIPHERS; eauto.
+
+      pose proof H1 as CLEAN_USERS.
+      unfold build_data_step in CLEAN_USERS.
+      eapply adv_step_implies_no_user_impact_after_cleaning in CLEAN_USERS; eauto.
 
       unfold buildUniverseAdv, strip_adversary, updateUserList in *; simpl in *.
 
@@ -726,13 +764,10 @@ Section SingleAdversarySimulates.
       assert (findUserKeys U__r.(adversary) = userData.(key_heap)).
       rewrite H3; unfold findUserKeys, fold, Raw.fold; simpl; rewrite empty_add_idempotent; trivial.
 
-      rewrite H4 in H2; rewrite STEP in H2.
+      rewrite H4 in H2; rewrite CLEAN_CIPHERS in H2.
 
       assert (findUserKeys (adv $+ (u_id, {| key_heap := ks; protocol := cmd; msg_heap := qmsgs |})) = ks).
       pose proof H1 as NOADD; unfold build_data_step in NOADD.
-
-      (* eapply user_step_adds_removes_no_adversaries in NOADD. *)
-      (* unfold iff in NOADD; invert NOADD. *)
 
       assert (adv $+ (u_id, {| key_heap := ks; protocol := cmd; msg_heap := qmsgs |}) = $0 $+ (u_id, {| key_heap := ks; protocol := cmd; msg_heap := qmsgs |})).
       apply map_eq_Equal; unfold Equal; intros.
@@ -752,9 +787,9 @@ Section SingleAdversarySimulates.
       rewrite H5. unfold findUserKeys.
       unfold fold, Raw.fold; simpl. rewrite empty_add_idempotent; trivial.
 
-      rewrite H5. admit. (* admitted because need to handle user filtering *)
+      rewrite H5. rewrite <- CLEAN_USERS. eauto.
 
-    Admitted.
+    Qed.
 
   End RealWorldLemmas.
 
@@ -908,6 +943,7 @@ Section SingleAdversarySimulates.
       unfold RealWorld.findUserKeys, fold; simpl. rewrite empty_add_idempotent.
 
       rewrite clean_ciphers_nokeys_idempotent.
+      unfold clean_users; simpl.
       rewrite <- H0; rewrite univ_components. auto.
   Qed.
 
