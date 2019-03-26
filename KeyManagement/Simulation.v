@@ -317,13 +317,13 @@ Section SingleAdversarySimulates.
 
     Lemma clean_ciphers_doesn't_make_unaccepted_msg_accepted :
       forall {t} cs pat ks (msg : message t),
-        msg_accepted_by_pattern cs pat msg = false
-        -> msg_accepted_by_pattern (clean_ciphers ks cs) pat msg = false.
+          msg_accepted_by_pattern_compute cs pat msg = false
+        -> msg_accepted_by_pattern_compute (clean_ciphers ks cs) pat msg = false.
     Proof.
-      (* need to induct on the combination of pat, msg
-       * Looks like we need to convert msg_accepted_by_pattern to
-       * inductive type to make this go through
-       *)
+    (* need to induct on the combination of pat, msg
+     * Looks like we need to convert msg_accepted_by_pattern to
+     * inductive type to make this go through
+     *)
     Admitted.
 
     Hint Resolve clean_ciphers_doesn't_make_unaccepted_msg_accepted.

@@ -271,7 +271,7 @@ Module SimulationAutomation.
 
     (* NEW | [H : RealWorld.users_msg_buffer _ $? _ = _ |- _ ] => progress (simpl in H) *)
 
-    | [ H: RealWorld.msg_accepted_by_pattern _ _ _ = _ |- _ ] =>
+    | [ H: RealWorld.msg_accepted_by_pattern_compute _ _ _ = false |- _ ] =>
       simpl in H;
       rewrite add_eq_o in H by auto;
       try discriminate

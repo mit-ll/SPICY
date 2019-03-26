@@ -35,7 +35,7 @@ Definition keyUsage (k : key) :=
   end.
 
 
-Inductive type :=
+Inductive type : Set :=
 | Nat
 (* | Text *)
 | Key
@@ -80,45 +80,72 @@ Definition ciphers         := NatMap.t cipher.
 
 Definition adversary_knowledge := keys.
 
-(* Inductive msg_accepted_by_pattern (cs : ciphers) : forall {t} pat msg, msg_pat -> message t -> Prop := *)
-(* | BothPairsAccepted : forall {t} pat msg p1 p2 m1 m2, *)
-(*     fun pat msg => *)
-(*         pat = Paired p1 p2 *)
-(*       -> msg = MsgPair m1 m2 *)
-(*       -> msg_accepted_by_pattern cs p1 m1 *)
-(*       -> msg_accepted_by_pattern cs p2 m2 *)
-(*       -> msg_accepted_by_pattern cs pat msg *)
-(* . *)
+Inductive msg_accepted_by_pattern (cs : ciphers) (pat : msg_pat) : forall {t : type}, message t -> Prop :=
+| MsgAccept : forall {t} (m : message t),
+      pat = Accept
+    -> msg_accepted_by_pattern cs pat m
+| BothPairsAccepted : forall {t1 t2} m p1 p2 (m1 : message t1) (m2 : message t2),
+      pat = Paired p1 p2
+    -> m   = MsgPair m1 m2
+    -> msg_accepted_by_pattern cs p1 m1
+    -> msg_accepted_by_pattern cs p2 m2
+    -> msg_accepted_by_pattern cs pat m
+| ProperlySigned : forall {t} c_id k p m (m' : message t),
+      pat = Signed k p
+    -> m   = Signature m' c_id
+    -> cs $? c_id = Some (Cipher c_id k m')
+    -> msg_accepted_by_pattern cs p m'
+    -> msg_accepted_by_pattern cs pat m
+| ProperlyEncrypted : forall {t} c_id k p m (m' : message t),
+      pat = Encrypted k p
+    -> m   = Ciphertext c_id
+    -> cs $? c_id = Some (Cipher c_id k m')
+    -> msg_accepted_by_pattern cs p m'
+    -> msg_accepted_by_pattern cs pat m
+.
 
-
-
-(* Inductive msg_accepted_by_pattern {t} (cs : ciphers) (pat : msg_pat) (msg : message t) : Prop := *)
-(* | BothPairsAccepted : forall p1 p2 m1 m2, *)
-(*       pat = Paired p1 p2 *)
-(*     -> msg = MsgPair m1 m2 *)
-(*     -> msg_accepted_by_pattern cs p1 m1 *)
-(*     -> msg_accepted_by_pattern cs p2 m2 *)
-(*     -> msg_accepted_by_pattern cs pat msg *)
-(* . *)
-
-Fixpoint msg_accepted_by_pattern {t} (cs : ciphers) (pat : msg_pat) (msg : message t) : bool :=
+Fixpoint msg_accepted_by_pattern_compute {t} (cs : ciphers) (pat : msg_pat) (msg : message t) : bool :=
   match pat, msg with
   | Accept, _ => true
-  | Paired p1 p2, MsgPair m1 m2 => msg_accepted_by_pattern cs p1 m1 && msg_accepted_by_pattern cs p2 m2
+  | Paired p1 p2, MsgPair m1 m2 => msg_accepted_by_pattern_compute cs p1 m1 && msg_accepted_by_pattern_compute cs p2 m2
   | Paired _ _, _ => false
   | Signed k p, Signature _ c_id =>
     match cs $? c_id with
-    | Some (Cipher _ k_id m) => if (k ==n k_id) then (msg_accepted_by_pattern cs p m) else false
+    | Some (Cipher _ k_id m) => if (k ==n k_id) then (msg_accepted_by_pattern_compute cs p m) else false
     | None => false
     end
   | Signed _ _, _ => false
   | Encrypted k p, Ciphertext c_id =>
     match cs $? c_id with
-    | Some (Cipher _ k_id m) => if (k ==n k_id) then (msg_accepted_by_pattern cs p m) else false
+    | Some (Cipher _ k_id m) => if (k ==n k_id) then (msg_accepted_by_pattern_compute cs p m) else false
     | None => false
     end
   | Encrypted _ _, _ => false
   end.
+
+Lemma msg_accepted_by_pattern_pred_compute :
+  forall {t} cs pat (msg : message t),
+    msg_accepted_by_pattern cs pat msg -> msg_accepted_by_pattern_compute cs pat msg = true.
+Proof.
+  induction 1; unfold msg_accepted_by_pattern_compute; subst; simpl.
+  - trivial.
+  - fold (@msg_accepted_by_pattern_compute t1) (@msg_accepted_by_pattern_compute t2); apply andb_true_iff; eauto.
+  - rewrite H1; simpl; case (k ==n k); intros; eauto.
+  - rewrite H1; simpl; case (k ==n k); intros; eauto.
+Qed.
+
+Lemma msg_accepted_by_pattern_compute_false_no_pred :
+  forall {t} cs pat (msg : message t),
+      msg_accepted_by_pattern_compute cs pat msg = false
+    -> ~ msg_accepted_by_pattern cs pat msg.
+Proof.
+  unfold "~"; induction 2; unfold msg_accepted_by_pattern_compute in H; subst; simpl in *.
+  - invert H.
+  - fold (@msg_accepted_by_pattern_compute t1) (@msg_accepted_by_pattern_compute t2) in H.
+    rewrite andb_false_iff in H; destruct H; contradiction.
+  - rewrite H2 in H; case (k ==n k) in H; simpl in H; eauto.
+  - rewrite H2 in H; case (k ==n k) in H; simpl in H; eauto.
+Qed.
 
 Fixpoint msg_pattern_spoofable (advk : adversary_knowledge) (pat : msg_pat) : bool :=
   match pat with
@@ -358,7 +385,7 @@ Inductive step_user : forall A B C, user_id -> rlabel -> data_step0 A B C -> dat
     -> qmsgs' = msgs
     -> findKeys msg = newkeys
     -> ks' = ks $++ newkeys
-    -> msg_accepted_by_pattern cs pat msg = true
+    -> msg_accepted_by_pattern cs pat msg
     -> step_user u_id (Action (Input msg pat u_id ks cs))
                 (usrs, adv, cs, ks , qmsgs , Recv pat)
                 (usrs, adv, cs, ks', qmsgs', Return msg)
@@ -366,7 +393,7 @@ Inductive step_user : forall A B C, user_id -> rlabel -> data_step0 A B C -> dat
 | StepRecvDrop : forall {A B} {t} u_id (usrs : honest_users A) (adv : adversaries B) cs ks qmsgs qmsgs' (msg : message t) pat msgs,
       qmsgs = Exm msg :: msgs (* we have a message waiting for us! *)
     -> qmsgs' = msgs
-    -> msg_accepted_by_pattern cs pat msg = false
+    -> msg_accepted_by_pattern_compute cs pat msg = false
     -> step_user u_id Silent (* Error label ... *)
                 (usrs, adv, cs, ks, qmsgs , Recv pat)
                 (usrs, adv, cs, ks, qmsgs', Return msg)
