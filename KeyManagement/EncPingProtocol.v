@@ -104,14 +104,14 @@ Section RealProtocolParams.
   Definition KID1 : key_identifier := 0.
   Definition KID2 : key_identifier := 1.
 
-  Definition KEY1  := MkCryptoKey KID1 Signing.
-  Definition KEY2  := MkCryptoKey KID2 Signing.
-  Definition KEY__A  := AsymKey KEY1 true.
-  Definition KEY__B  := AsymKey KEY2 true.
-  Definition KEYS  := $0 $+ (KID1, AsymKey KEY1 true) $+ (KID2, AsymKey KEY2 true).
+  Definition KEY1  := MkCryptoKey KID1 Signing (AsymKey true).
+  Definition KEY2  := MkCryptoKey KID2 Signing (AsymKey true).
+  Definition KEY__pub1 := MkCryptoKey KID1 Signing (AsymKey false).
+  Definition KEY__pub2 := MkCryptoKey KID2 Signing (AsymKey false).
+  Definition KEYS  := $0 $+ (KID1, KEY1) $+ (KID2, KEY2).
 
-  Definition A__keys := $0 $+ (KID1, AsymKey KEY1 true)  $+ (KID2, AsymKey KEY2 false).
-  Definition B__keys := $0 $+ (KID1, AsymKey KEY1 false) $+ (KID2, AsymKey KEY2 true).
+  Definition A__keys := $0 $+ (KID1, KEY1) $+ (KID2, KEY__pub2).
+  Definition B__keys := $0 $+ (KID1, KEY__pub1) $+ (KID2, KEY2).
 End RealProtocolParams.
 
 Module Type enemy.
@@ -133,7 +133,7 @@ Section RealProtocol.
   Definition real_univ_start cs :=
     mkrU [] [] cs
          ( n  <- Gen
-         ; m  <- Sign KEY__A (Plaintext n)
+         ; m  <- Sign KEY1 (Plaintext n)
          ; _  <- Send B m
          ; m' <- @Recv (Pair Nat CipherId) (Signed KID2 Accept)
          ; Return match unPair m' with
@@ -142,10 +142,10 @@ Section RealProtocol.
                   end)
 
          ( m  <- @Recv (Pair Nat CipherId) (Signed KID1 Accept)
-         ; v  <- Verify (AsymKey KEY1 false) m
+         ; v  <- Verify KEY__pub1 m
          ; m' <- match unPair m with
-                | Some (p,_) => Sign KEY__B p
-                | Nothing    => Sign KEY__B (Plaintext 1)
+                | Some (p,_) => Sign KEY2 p
+                | Nothing    => Sign KEY2 (Plaintext 1)
                 end
          ; _  <- Send A m'
          ; Return v).
@@ -161,10 +161,10 @@ Section RealProtocol.
                   end)
 
          ( m  <- @Recv (Pair Nat CipherId) (Signed KID1 Accept)
-         ; v  <- Verify (AsymKey KEY1 false) m
+         ; v  <- Verify KEY__pub1 m
          ; m' <- match unPair m with
-                | Some (p,_) => Sign KEY__B p
-                | Nothing    => Sign KEY__B (Plaintext 1)
+                | Some (p,_) => Sign KEY2 p
+                | Nothing    => Sign KEY2 (Plaintext 1)
                 end
          ; _  <- Send A m'
          ; Return v).
@@ -180,10 +180,10 @@ Section RealProtocol.
                   end)
 
          ( m  <- Return (Signature (Plaintext n) cid1)
-         ; v  <- Verify (AsymKey KEY1 false) m
+         ; v  <- Verify KEY__pub1 m
          ; m' <- match unPair m with
-                | Some (p,_) => Sign KEY__B p
-                | Nothing    => Sign KEY__B (Plaintext 1)
+                | Some (p,_) => Sign KEY2 p
+                | Nothing    => Sign KEY2 (Plaintext 1)
                 end
          ; _  <- Send A m'
          ; Return v).
@@ -263,8 +263,9 @@ Module SimulationAutomation.
     | [ H : (_,_) = (_,_) |- _ ] => invert H
 
     | [ H: RealWorld.Cipher _ _ _ = RealWorld.Cipher _ _ _ |- _ ] => invert H
-    | [ H: RealWorld.SymKey _ = _ |- _ ] => invert H
-    | [ H: RealWorld.AsymKey _ _ = _ |- _ ] => invert H
+    | [ H: RealWorld.MkCryptoKey _ _ _ = _ |- _ ] => invert H
+    | [ H: RealWorld.AsymKey _ = _ |- _ ] => invert H
+    (* | [ H: RealWorld.AsymKey _ _ = _ |- _ ] => invert H *)
 
     | [ H: exists _, _ |- _ ] => invert H
     | [ H: _ /\ _ |- _ ] => invert H
@@ -408,8 +409,8 @@ Module SimulationAutomation.
   Hint Extern 1 (RealWorld.action_adversary_safe _ _ = _) => unfold RealWorld.action_adversary_safe; simplify.
   Hint Extern 1 (IdealWorld.msg_permissions_valid _ _) => progress simpl.
 
-  Hint Extern 1 (A__keys $? _ = _) => unfold A__keys, B__keys, KEY1, KEY2, KEY__A, KEY__B, KID1, KID2.
-  Hint Extern 1 (B__keys $? _ = _) => unfold A__keys, B__keys, KEY1, KEY2, KEY__A, KEY__B, KID1, KID2.
+  Hint Extern 1 (A__keys $? _ = _) => unfold A__keys, B__keys, KEY1, KEY2, KEY__pub1, KEY__pub2, KID1, KID2.
+  Hint Extern 1 (B__keys $? _ = _) => unfold A__keys, B__keys, KEY1, KEY2, KEY__pub1, KEY__pub2, KID1, KID2.
   Hint Extern 1 (PERMS__a $? _ = _) => unfold PERMS__a.
   Hint Extern 1 (PERMS__b $? _ = _) => unfold PERMS__b.
   Hint Extern 1 (_ = RealWorld.addUserKeys _ _) => unfold RealWorld.addUserKeys, map; simpl.

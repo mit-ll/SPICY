@@ -231,7 +231,7 @@ Ltac m_equal :=
   repeat match goal with
          (* | [ |- context[find ?k (add ?k' _ _) ] ] => idtac k; idtac k'; case (eq_dec k k'); intro *)
          | [ |- context[find ?k (add ?k _ _) ] ] => rewrite add_eq_o by (simple apply @eq_refl)
-         | [ |- context[find ?k (add ?k' _ _) ] ] => rewrite add_neq_o by discriminate
+         | [ |- context[find ?k (add ?k' _ _) ] ] => rewrite add_neq_o by intuition
          | [ |- context[$0 $++ _ ] ] => rewrite empty_add_idempotent
          | [ |- context[_ $++ $0 ] ] => rewrite add_empty_idempotent
          | [ |- (add _ _ _) = _ ] => normalize_set

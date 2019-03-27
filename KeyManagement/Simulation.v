@@ -593,7 +593,7 @@ Section SingleAdversarySimulates.
         invert H0; specialize (H5 _ _ H1); rewrite H5; eauto.
 
       - econstructor; eauto.
-      - econstructor; eauto.
+      - econstructor; eauto. 
 
         (* Hrm. We have a problem here.  I should never get to this point if the ciphertext is sent from
          * an adversary, since the message would have been dropped at receive.  Not sure how to do this reasoning.
@@ -646,7 +646,16 @@ Section SingleAdversarySimulates.
          *)
         admit. 
 
-      - apply dishonest_cipher_cleaned; eauto.
+      - 
+        (* apply enc_cipher_has_key in H2; invert H2. *)
+
+        (* Lemma dishonest_cipher_cleaned : *)
+        (*   forall cs adv_keys c_id cipherMsg, *)
+        (*     honest_cipher adv_keys cipherMsg = false *)
+        (*     -> ~ In c_id cs *)
+        (*     -> clean_ciphers adv_keys cs = clean_ciphers adv_keys (cs $+ (c_id, cipherMsg)). *)
+
+        apply dishonest_cipher_cleaned; eauto.
         apply enc_cipher_has_key in H2. 
         admit.
 
@@ -740,6 +749,23 @@ Section SingleAdversarySimulates.
         rewrite map_in_iff; eauto.
     Qed.
 
+    Ltac map_equal :=
+      repeat match goal with
+             | [ |- context[find ?k (add ?k _ _) ] ] => rewrite add_eq_o by (simple apply @eq_refl)
+             | [ |- context[find ?k (add ?k' _ _) ] ] => rewrite add_neq_o by intuition
+             | [ |- context[find ?k (empty _) ] ] => rewrite empty_o; trivial
+             | [ |- context[$0 $++ _ ] ] => rewrite empty_add_idempotent
+             | [ |- context[_ $++ $0 ] ] => rewrite add_empty_idempotent
+             | [ |- (add ?k _ _) = _ ] => apply map_eq_Equal; unfold Equal; intros ?KEY; case (KEY ==n k); intro; subst
+             | [ |- _ = (add ?k _ _) ] => apply map_eq_Equal; unfold Equal; intros ?KEY; case (KEY ==n k); intro; subst
+             (* | [ |- (add _ _ _) = _ ] => normalize_set *)
+             (* | [ |- (add _ _ _) = _ ] => unfold add, Raw.add; simpl *)
+             | [ |- {| this := _ ; sorted := _ |} = _ ] => eapply map_eq_fields_eq
+             | [ H : Empty ?m |- $0 = ?m ] => eapply Empty_eq_empty; exact H
+             | [ H : Empty ?m |- ?m = $0 ] => symmetry
+             | [ |- empty _ = _ ] => unfold empty, Raw.empty, remove, Raw.remove; simpl
+             end.
+
     Lemma adv_step_stays_in_R :
       forall {A B} (U__i : IdealWorld.universe A) (U__r : universe A B) (R : universe A B -> IdealWorld.universe A -> Prop)
               (cmd : user_cmd B) lbl u_id userData (usrs : honest_users A) (adv : adversaries B) cs ks qmsgs,
@@ -752,50 +778,37 @@ Section SingleAdversarySimulates.
         -> R (strip_adversary (buildUniverseAdv usrs adv cs u_id {| key_heap := ks; protocol := cmd; msg_heap := qmsgs |})) U__i.
     Proof.
       intros.
-
-      pose proof H1 as CLEAN_CIPHERS.
-      unfold build_data_step in CLEAN_CIPHERS.
-      eapply adv_step_implies_no_new_ciphers_after_cleaning in CLEAN_CIPHERS; eauto.
-
-      pose proof H1 as CLEAN_USERS.
-      unfold build_data_step in CLEAN_USERS.
-      eapply adv_step_implies_no_user_impact_after_cleaning in CLEAN_USERS; eauto.
-
       unfold buildUniverseAdv, strip_adversary, updateUserList in *; simpl in *.
 
-      assert (U__r.(adversary) = $0 $+ (u_id,userData)).
-      apply map_eq_Equal; unfold Equal; intros.
-      case (y ==n u_id); intro.
-      subst. rewrite H. rewrite add_eq_o by trivial; trivial.
-      specialize (H0 _ n). rewrite H0. rewrite add_neq_o by auto. eauto.
+      assert (U__r.(adversary) = $0 $+ (u_id,userData)) by (map_equal; eauto).
 
-      assert (findUserKeys U__r.(adversary) = userData.(key_heap)).
-      rewrite H3; unfold findUserKeys, fold, Raw.fold; simpl; rewrite empty_add_idempotent; trivial.
+      assert (findUserKeys U__r.(adversary) = userData.(key_heap)) as ADV_KEYS
+        by (rewrite H3; unfold findUserKeys, fold, Raw.fold; simpl; rewrite empty_add_idempotent; trivial).
+      rewrite ADV_KEYS in H2; clear ADV_KEYS.
 
-      rewrite H4 in H2; rewrite CLEAN_CIPHERS in H2.
+      assert (adv $+ (u_id, {| key_heap := ks; protocol := cmd; msg_heap := qmsgs |})
+              = $0 $+ (u_id, {| key_heap := ks; protocol := cmd; msg_heap := qmsgs |})) as ADV_RED;
+        map_equal; trivial.
+      pose proof H1 as NOADD; unfold build_data_step in NOADD;
+        eapply user_step_adds_removes_no_adversaries with (u_id' := KEY) in NOADD; eauto;
+          unfold iff in NOADD; invert NOADD.
+      case_eq (adv $? KEY); intros; eauto. exfalso.
 
-      assert (findUserKeys (adv $+ (u_id, {| key_heap := ks; protocol := cmd; msg_heap := qmsgs |})) = ks).
-      pose proof H1 as NOADD; unfold build_data_step in NOADD.
+      assert (adv $? KEY <> None) as LK_KEY_NOT_NONE
+        by (unfold not; intros;
+            match goal with [ H1 : ?m $? ?k = Some _, H2 : ?m $? ?k = None |- _ ] => rewrite H1 in H2; invert H2 end).
+      specialize (H0 _ n); specialize (H4 LK_KEY_NOT_NONE); contradiction.
 
-      assert (adv $+ (u_id, {| key_heap := ks; protocol := cmd; msg_heap := qmsgs |}) = $0 $+ (u_id, {| key_heap := ks; protocol := cmd; msg_heap := qmsgs |})).
-      apply map_eq_Equal; unfold Equal; intros.
-      case (y ==n u_id); intros.
-      subst; do 2 rewrite add_eq_o by trivial; trivial.
-      do 2 rewrite add_neq_o by auto; simpl. specialize (H0 _ n).
-      eapply user_step_adds_removes_no_adversaries with (u_id' := y) in NOADD; eauto.
-      unfold iff in NOADD; invert NOADD.
-      case_eq (adv $? y); intros.
-      assert (adv $? y <> None). unfold not; intro. rewrite H7 in H8. invert H8.
-      assert (adversary U__r $? u_id <> None); unfold not. intro. rewrite H9 in H; invert H.
+      assert (findUserKeys (adv $+ (u_id, {| key_heap := ks; protocol := cmd; msg_heap := qmsgs |})) = ks);
+        rewrite ADV_RED; clear ADV_RED;
+        unfold findUserKeys, fold, Raw.fold; simpl; rewrite empty_add_idempotent; trivial.
 
-      specialize (H5 H8); rewrite H3 in H5. rewrite add_neq_o in H5 by auto.
-      assert ((empty cipher) $? y = None) by eauto. contradiction.
-
-      rewrite empty_o; trivial.
-      rewrite H5. unfold findUserKeys.
-      unfold fold, Raw.fold; simpl. rewrite empty_add_idempotent; trivial.
-
-      rewrite H5. rewrite <- CLEAN_USERS. eauto.
+      match goal with
+      | [ H : R {| users := ?us ; adversary := _ ; all_ciphers := ?cs |} _ |- R {| users := ?us' ; adversary := _ ; all_ciphers := ?cs' |} _ ] =>
+        assert ( cs = cs' ) as CS by (unfold build_data_step in *; eapply adv_step_implies_no_new_ciphers_after_cleaning; eauto);
+          assert ( us = us' ) as US by (unfold build_data_step in *; eapply adv_step_implies_no_user_impact_after_cleaning; eauto)
+      end; rewrite <- CS; rewrite <- US; clear US CS;
+        assumption.
 
     Qed.
 
