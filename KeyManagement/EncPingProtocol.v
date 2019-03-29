@@ -187,9 +187,9 @@ Section RealProtocol.
          ; _  <- Send A m'
          ; Return v).
 
-  Definition real_univ_sent2 n cid1 cid2 :=
+  Definition real_univ_sent2 n cs cid1 cid2 :=
     mkrU [Exm (Signature (Plaintext n) cid2)] []
-         ($0 $+ (cid1, SigCipher cid1 KID1 (Plaintext n)) $+ (cid2, SigCipher cid2 KID2 (Plaintext n)))
+         (cs $+ (cid1, SigCipher cid1 KID1 (Plaintext n)) $+ (cid2, SigCipher cid2 KID2 (Plaintext n)))
          ( _  <- Return tt
          ; m' <- @Recv Nat (Signed KID2)
          ; Return match unSig m' with
@@ -199,8 +199,8 @@ Section RealProtocol.
 
          ( _  <- Return tt ; Return true).
 
-  Definition real_univ_recd2 n cid1 cid2 :=
-    mkrU [] [] ($0 $+ (cid1, SigCipher cid1 KID1 (Plaintext n)) $+ (cid2, SigCipher cid2 KID2 (Plaintext n)))
+  Definition real_univ_recd2 n cs cid1 cid2 :=
+    mkrU [] [] (cs $+ (cid1, SigCipher cid1 KID1 (Plaintext n)) $+ (cid2, SigCipher cid2 KID2 (Plaintext n)))
          ( m' <- Return (Signature (Plaintext n) cid2)
          ; Return match unSig m' with
                   | Some (Plaintext n') => if n ==n n' then true else false (* also do verify? *)
@@ -225,12 +225,12 @@ Section RealProtocol.
         rstepSilent^* (real_univ_recd1 n cs cid1 $0) U__r
       -> RPingPongBase U__r (ideal_univ_recd1 n)
 
-  | Sent2 : forall U__r cid1 cid2 n,
-        rstepSilent^* (real_univ_sent2 n cid1 cid2 $0) U__r
+  | Sent2 : forall U__r cs cid1 cid2 n,
+        rstepSilent^* (real_univ_sent2 n cs cid1 cid2 $0) U__r
       -> RPingPongBase U__r (ideal_univ_sent2 n)
 
-  | Recd2 : forall U__r cid1 cid2 n,
-        rstepSilent^* (real_univ_recd2 n cid1 cid2 $0) U__r
+  | Recd2 : forall U__r cs cid1 cid2 n,
+        rstepSilent^* (real_univ_recd2 n cs cid1 cid2 $0) U__r
       -> RPingPongBase U__r (ideal_univ_recd2 n)
 
   | Done : forall cs n,
@@ -305,48 +305,36 @@ Section RealWorldLemmas.
   Qed.
 
   Lemma simplify_build_univ1 :
-    forall {A B} (U__r : RealWorld.universe A B) (usrs : RealWorld.honest_users A) uid__a uid__b ud__a ud__b uid ud (adv : RealWorld.adversaries B) cs,
+    forall {A B} (U__r : universe A B) (usrs : honest_users A) uid__a uid__b ud__a ud__b uid ud (adv : adversaries B) cs,
         uid__a <> uid__b
       -> uid = uid__a
-      -> RealWorld.buildUniverse (usrs $+ (uid__a,ud__a) $+ (uid__b,ud__b)) adv cs uid ud
-        = {| RealWorld.users       := usrs $+ (uid,ud) $+ (uid__b,ud__b)
-           ; RealWorld.adversary   := adv
-           ; RealWorld.all_ciphers := cs
+      -> buildUniverse (usrs $+ (uid__a,ud__a) $+ (uid__b,ud__b)) adv cs uid ud
+        = {| users       := usrs $+ (uid,ud) $+ (uid__b,ud__b)
+           ; adversary   := adv
+           ; all_ciphers := cs
           |}.
   Proof.
-    intros. unfold RealWorld.buildUniverse; simpl.
+    intros. unfold buildUniverse; simpl.
     f_equal.
     unfold updateUserList; subst.
-    apply map_eq_Equal; unfold Equal; intros.
-    case (y ==n uid__a); intros; subst.
-    m_equal. rewrite add_neq_o by auto. m_equal; trivial.
-    rewrite !add_neq_o by auto.
-    case (y ==n uid__b); intros; subst.
-    m_equal; trivial.
-    rewrite !add_neq_o by auto; trivial.
+    rewrite add_univ_simpl2 by auto; trivial.
   Qed.
 
   Lemma simplify_build_univ2 :
-    forall {A B} (U__r : RealWorld.universe A B) (usrs : RealWorld.honest_users A) uid__a uid__b ud__a ud__b uid ud (adv : RealWorld.adversaries B) cs,
+    forall {A B} (U__r : universe A B) (usrs : honest_users A) uid__a uid__b ud__a ud__b uid ud (adv : adversaries B) cs,
         uid__a <> uid__b
       -> uid = uid__b
-      -> RealWorld.buildUniverse (usrs $+ (uid__a,ud__a) $+ (uid__b,ud__b)) adv cs uid ud
-        = {| RealWorld.users       := usrs $+ (uid__a,ud__a) $+ (uid,ud)
-           ; RealWorld.adversary   := adv
-           ; RealWorld.all_ciphers := cs
+      -> buildUniverse (usrs $+ (uid__a,ud__a) $+ (uid__b,ud__b)) adv cs uid ud
+        = {| users       := usrs $+ (uid__a,ud__a) $+ (uid,ud)
+           ; adversary   := adv
+           ; all_ciphers := cs
           |}.
   Proof.
-    intros. unfold RealWorld.buildUniverse; simpl.
+    intros. unfold buildUniverse; simpl.
     f_equal.
     unfold updateUserList; subst.
-    apply map_eq_Equal; unfold Equal; intros.
-    case (y ==n uid__a); intros; subst.
-    rewrite !add_neq_o by auto. m_equal. rewrite !add_neq_o by auto. m_equal; trivial.
-    case (y ==n uid__b); intros; subst.
-    m_equal; trivial.
-    rewrite !add_neq_o by auto; trivial.
+    rewrite add_univ_simpl1 by auto; trivial.
   Qed.
-
 
 
 End RealWorldLemmas.
@@ -638,8 +626,6 @@ Section FeebleSimulates.
             /\ RealWorld.action_adversary_safe (RealWorld.findUserKeys U__r.(RealWorld.adversary)) a1 = true.
   Proof.
 
-    time (intros; invert H; churn).
-
     Ltac simplUniv :=
       repeat match goal with
              | [ |- context[ _ $+ (?A,_) $+ (?A,_) ] ] => rewrite add_univ_simpl1 by trivial
@@ -647,93 +633,12 @@ Section FeebleSimulates.
              | [ |- context[ _ $+ (?A,_) $+ (?A,_) $+ (?B,_) ] ] => rewrite add_univ_simpl3 by auto
              end.
 
-    unfold RealWorld.buildUniverse, updateUserList;
-      simpl; simplUniv;
-        (do 3 eexists;
-         propositional; swap 3 4; swap 1 3;
-         [ .. | admit (* action matches predicate *) ]; eauto; eauto 12).
-
-    unfold RealWorld.buildUniverse, updateUserList;
-      simpl; simplUniv;
-        (do 3 eexists;
-         propositional; swap 3 4; swap 1 3;
-         [ .. | admit (* action matches predicate *) ]; eauto; eauto 12).
-
-    unfold RealWorld.buildUniverse, updateUserList;
-      simpl; simplUniv;
-        (do 3 eexists;
-         propositional; swap 3 4; swap 1 3;
-         [ .. | admit (* action matches predicate *) ]; eauto; eauto 12).
-
-    
-    - unfold RealWorld.buildUniverse, updateUserList;
-        simpl; simplUniv.
-      do 3 eexists.
-      intuition idtac.
-      3:admit.
-      3:eapply Sent2; eauto 12.
-
-
-
-
-    unfold RealWorld.buildUniverse, updateUserList;
-      simpl; simplUniv;
-        (do 3 eexists;
-         propositional; swap 3 4; swap 1 3;
-         [ .. | admit (* action matches predicate *) ]; eauto; eauto 12).
-
-
-
-
-
-      + unfold RealWorld.buildUniverse, updateUserList; simpl; simplUniv.
-        do 3 eexists; (intuition idtac).
-        4: eapply Sent2.
-        ideal_silent_steps.
-        eauto 12.
-        admit.
-        unfold real_univ_sent2, mkrU; simpl.
-        real_silent_step0. eapply TrcRefl'. unfold RealWorld.buildUniverse, updateUserList; simpl.
-        f_equal. m_equal; eauto. unfold RealWorld.addUserKeys, map; simpl. m_equal.   m_equal; eauto. 
-        
-
-
-
-        ideal_silent_steps.
-        eauto 9.
-        admit.
-        eapply Sent2.
-
-        4: eapply Sent2; eauto 9.
-
-        unfold ideal_univ_recd1, mkiU; simpl.
-        ideal_silent_step1.
-        eauto 9.
-        admit.
-        eapply Sent1.
-
-    (ideal_silent_step0 || ideal_silent_step1);
-      repeat ideal_silent_step0;
-      repeat ideal_silent_step1;
-      eapply TrcRefl.
-
-
-        ideal_silent_steps.
-        eauto 9.
-        admit.
-        eapply Sent1.
-        econstructor; eauto.
-
-
-      
-
-
     time
       (intros;
        invert H;
        churn;
        unfold RealWorld.buildUniverse, updateUserList;
-       simpl;
+       simpl; simplUniv;
        (do 3 eexists;
         propositional; swap 3 4; swap 1 3;
         [ .. | admit (* action matches predicate *) ]; eauto; eauto 12)).
