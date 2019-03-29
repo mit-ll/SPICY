@@ -46,20 +46,21 @@ Inductive message : type -> Type :=
 
 | MsgPair {t1 t2 : type} (msg1 : message t1) (msg2 : message t2) : message (Pair t1 t2)
 
-| Ciphertext (msg_id : cipher_id) : message CipherId
-| Signature {t} (msg : message t) (sig : cipher_id) : message (Pair t CipherId)
+| SignedCiphertext (msg_id : cipher_id) : message CipherId
+| Signature {t} (msg : message t) (sig : cipher_id) : message t
 .
 
 (* We need to handle non-deterministic message  -- external choice on ordering *)
 Inductive msg_pat :=
 | Accept
 | Paired (pat1 pat2 : msg_pat)
-| Signed (k : key_identifier) (pat : msg_pat)
-| Encrypted (k : key_identifier) (pat : msg_pat)
+| Signed (k : key_identifier)
+| SignedEncrypted (k__sign k__enc : key_identifier)
 .
 
 Inductive cipher : Type :=
-| Cipher {t} (c_id : cipher_id) (k_id : key_identifier) (msg : message t) : cipher
+| SigCipher {t} (c_id : cipher_id) (k_id : key_identifier) (msg : message t) : cipher
+| SigEncCipher {t} (c_id : cipher_id) (k__sign k__enc : key_identifier) (msg : message t) : cipher
 .
 
 Definition queued_messages := list exmsg.
@@ -78,90 +79,76 @@ Inductive msg_accepted_by_pattern (cs : ciphers) (pat : msg_pat) : forall {t : t
     -> msg_accepted_by_pattern cs p1 m1
     -> msg_accepted_by_pattern cs p2 m2
     -> msg_accepted_by_pattern cs pat m
-| ProperlySigned : forall {t} c_id k p m (m' : message t),
-      pat = Signed k p
+| ProperlySigned : forall {t} c_id k m (m' : message t),
+      pat = Signed k
     -> m   = Signature m' c_id
-    -> cs $? c_id = Some (Cipher c_id k m')
-    -> msg_accepted_by_pattern cs p m'
+    -> cs $? c_id = Some (SigCipher c_id k m')
     -> msg_accepted_by_pattern cs pat m
-| ProperlyEncrypted : forall {t} c_id k p m (m' : message t),
-      pat = Encrypted k p
-    -> m   = Ciphertext c_id
-    -> cs $? c_id = Some (Cipher c_id k m')
-    -> msg_accepted_by_pattern cs p m'
+| ProperlyEncrypted : forall {t} c_id k__sign k__enc m (m' : message t),
+      pat = SignedEncrypted k__sign k__enc
+    -> m   = SignedCiphertext c_id
+    -> cs $? c_id = Some (SigEncCipher c_id  k__sign k__enc m')
     -> msg_accepted_by_pattern cs pat m
 .
 
-Fixpoint msg_accepted_by_pattern_compute {t} (cs : ciphers) (pat : msg_pat) (msg : message t) : bool :=
-  match pat, msg with
-  | Accept, _ => true
-  | Paired p1 p2, MsgPair m1 m2 => msg_accepted_by_pattern_compute cs p1 m1 && msg_accepted_by_pattern_compute cs p2 m2
-  | Paired _ _, _ => false
-  | Signed k p, Signature _ c_id =>
-    match cs $? c_id with
-    | Some (Cipher _ k_id m) => if (k ==n k_id) then (msg_accepted_by_pattern_compute cs p m) else false
-    | None => false
-    end
-  | Signed _ _, _ => false
-  | Encrypted k p, Ciphertext c_id =>
-    match cs $? c_id with
-    | Some (Cipher _ k_id m) => if (k ==n k_id) then (msg_accepted_by_pattern_compute cs p m) else false
-    | None => false
-    end
-  | Encrypted _ _, _ => false
-  end.
+(* Fixpoint msg_accepted_by_pattern_compute {t} (cs : ciphers) (pat : msg_pat) (msg : message t) : bool := *)
+(*   match pat, msg with *)
+(*   | Accept, _ => true *)
+(*   | Paired p1 p2, MsgPair m1 m2 => msg_accepted_by_pattern_compute cs p1 m1 && msg_accepted_by_pattern_compute cs p2 m2 *)
+(*   | Paired _ _, _ => false *)
+(*   | Signed k, Signature _ c_id => *)
+(*     match cs $? c_id with *)
+(*     | Some (SigCipher _ k_id m) => if (k ==n k_id) then true else false *)
+(*     | _ => false *)
+(*     end *)
+(*   | Signed _, _ => false *)
+(*   | SignedEncrypted k__sign _, SignedCiphertext c_id => *)
+(*     match cs $? c_id with *)
+(*     | Some (SigEncCipher _ k__sign' _ m) => if (k__sign ==n k__sign') then true else false *)
+(*     | _ => false *)
+(*     end *)
+(*   | SignedEncrypted _ _, _ => false *)
+(*   end. *)
 
-Lemma msg_accepted_by_pattern_pred_compute :
-  forall {t} cs pat (msg : message t),
-    msg_accepted_by_pattern cs pat msg -> msg_accepted_by_pattern_compute cs pat msg = true.
-Proof.
-  induction 1; unfold msg_accepted_by_pattern_compute; subst; simpl.
-  - trivial.
-  - fold (@msg_accepted_by_pattern_compute t1) (@msg_accepted_by_pattern_compute t2); apply andb_true_iff; eauto.
-  - rewrite H1; simpl; case (k ==n k); intros; eauto.
-  - rewrite H1; simpl; case (k ==n k); intros; eauto.
-Qed.
+(* Lemma msg_accepted_by_pattern_pred_compute : *)
+(*   forall {t} cs pat (msg : message t), *)
+(*     msg_accepted_by_pattern cs pat msg -> msg_accepted_by_pattern_compute cs pat msg = true. *)
+(* Proof. *)
+(*   induction 1; unfold msg_accepted_by_pattern_compute; subst; simpl. *)
+(*   - trivial. *)
+(*   - fold (@msg_accepted_by_pattern_compute t1) (@msg_accepted_by_pattern_compute t2); apply andb_true_iff; eauto. *)
+(*   - rewrite H1; simpl; case (k ==n k); intros; eauto. *)
+(*   - rewrite H1; simpl; case (k ==n k); intros; eauto. *)
+(* Qed. *)
 
-Lemma msg_accepted_by_pattern_compute_false_no_pred :
-  forall {t} cs pat (msg : message t),
-      msg_accepted_by_pattern_compute cs pat msg = false
-    -> ~ msg_accepted_by_pattern cs pat msg.
-Proof.
-  unfold "~"; induction 2; unfold msg_accepted_by_pattern_compute in H; subst; simpl in *.
-  - invert H.
-  - fold (@msg_accepted_by_pattern_compute t1) (@msg_accepted_by_pattern_compute t2) in H.
-    rewrite andb_false_iff in H; destruct H; contradiction.
-  - rewrite H2 in H; case (k ==n k) in H; simpl in H; eauto.
-  - rewrite H2 in H; case (k ==n k) in H; simpl in H; eauto.
-Qed.
+(* Lemma msg_accepted_by_pattern_compute_false_no_pred : *)
+(*   forall {t} cs pat (msg : message t), *)
+(*       msg_accepted_by_pattern_compute cs pat msg = false *)
+(*     -> ~ msg_accepted_by_pattern cs pat msg. *)
+(* Proof. *)
+(*   unfold "~"; induction 2; unfold msg_accepted_by_pattern_compute in H; subst; simpl in *. *)
+(*   - invert H. *)
+(*   - fold (@msg_accepted_by_pattern_compute t1) (@msg_accepted_by_pattern_compute t2) in H. *)
+(*     rewrite andb_false_iff in H; destruct H; contradiction. *)
+(*   - rewrite H2 in H; case (k ==n k) in H; simpl in H; eauto. *)
+(*   - rewrite H2 in H; case (k ==n k) in H; simpl in H; eauto. *)
+(* Qed. *)
 
 Fixpoint msg_pattern_spoofable (advk : adversary_knowledge) (pat : msg_pat) : bool :=
   match pat with
   | Accept => true
-  | Paired p1 p2 => msg_pattern_spoofable advk p1 && msg_pattern_spoofable advk p2
-  | Signed k p =>
+  | Paired p1 p2 => msg_pattern_spoofable advk p1 || msg_pattern_spoofable advk p2
+  | Signed k =>
     match advk $? k with
-    | Some _ => msg_pattern_spoofable advk p
+    | Some _ => true
     | None   => false
     end
-  | Encrypted k p =>
-    match advk $? k with
-    | Some _ => msg_pattern_spoofable advk p
+  | SignedEncrypted k__sign K__enc =>
+    match advk $? k__sign with
+    | Some _ => true
     | None   => false
     end
-  end.
 
-Fixpoint msg_spoofable {t} (cs : ciphers) (advk : adversary_knowledge) (msg : message t) : bool :=
-  match msg with
-  | Plaintext _ => true
-  | KeyMessage _ => true
-  | MsgPair m1 m2 => msg_spoofable cs advk m1 && msg_spoofable cs advk m2
-  | Ciphertext c_id => true (* TODO -- how should we actually handle this?? *)
-  | Signature m c_id =>
-    match cs $? c_id with
-    | Some (Cipher _ k_id _) => match advk $? k_id with | Some _ => true | None => false end
-    | None => false
-    end
   end.
 
 Inductive user_cmd : Type -> Type :=
@@ -176,11 +163,11 @@ Inductive user_cmd : Type -> Type :=
 | Recv {t} (pat : msg_pat) : user_cmd (message t)
 
 (* Crypto!! *)
-| Encrypt {t} (k : key) (msg : message t) : user_cmd (message CipherId)
+| SignEncrypt {t} (k__sign k__enc : key) (msg : message t) : user_cmd (message CipherId)
 | Decrypt {t} (msg : message CipherId) : user_cmd (message t)
 
-| Sign    {t} (k : key) (msg : message t) : user_cmd (message (Pair t CipherId))
-| Verify  {t} (k : key) (msg : message (Pair t CipherId)) : user_cmd bool
+| Sign    {t} (k : key) (msg : message t) : user_cmd (message t)
+| Verify  {t} (k : key) (msg : message t) : user_cmd bool
 
 | GenerateSymKey  (usage : key_usage) : user_cmd key
 | GenerateAsymKey (usage : key_usage) : user_cmd key
@@ -209,26 +196,12 @@ Record user_data (A : Type) :=
 Definition adversaries A  := user_list (user_data A).
 Definition honest_users A := user_list (user_data A).
 
-(* Record universe_globals := *)
-(*   mkUGlobals { *)
-(*       users_msg_buffer : queued_messages *)
-(*     ; all_keys         : keys *)
-(*     ; all_ciphers      : ciphers *)
-(*     }. *)
-
 Record universe (A B : Type) :=
   mkUniverse {
       users       : honest_users A
     ; adversary   : adversaries B
     ; all_ciphers : ciphers
     }.
-
-(* First in - first out (queue) semantics to keep message order preserved *)
-(* Definition multiMapAdd {V} (k : nat)(v : V)(m : NatMap.t (list V)) : NatMap.t (list V) := *)
-(*   match m $? k with *)
-(*   | None => m $+ (k, [v]) *)
-(*   | Some vs => m $+ (k, vs ++ [v]) (* add new element to end, to preserve order *) *)
-(*   end. *)
 
 (* When we are finding keys, we need to check whether they are asymmetric.  If
    so, we mark them as not having access to the private key, since the intent is to
@@ -238,7 +211,7 @@ Fixpoint findKeys {t} (msg : message t) : keys :=
   | Plaintext _        => $0
   | KeyMessage k       => $0 $+ (keyId k, k)
   | MsgPair msg1 msg2  => (findKeys msg1) $++ (findKeys msg2)
-  | Ciphertext _       => $0
+  | SignedCiphertext _ => $0
   | Signature m _      => findKeys m
   end.
 
@@ -248,42 +221,28 @@ Definition findUserKeys {A} (us : user_list (user_data A)) : keys :=
 Definition addUserKeys {A} (us : user_list (user_data A)) (ks : keys) : user_list (user_data A) :=
   map (fun u => {| key_heap := u.(key_heap) $++ ks ; protocol := u.(protocol) ;  msg_heap := u.(msg_heap) |}) us.
 
-(* Definition addCipher {A B} (cid : cipher_id) (msg : cipher) (U : universe A B) := *)
-(*   {| users       := U.(users) *)
-(*    ; adversary   := U.(adversary) *)
-(*    ; all_ciphers := U.(all_ciphers) $+ (cid, msg) *)
-(*    |}. *)
-
-Definition encryptMessage {t} (k : key) (m : message t) (c_id : cipher_id) : option cipher :=
-(* <<<<<<< HEAD *)
-(*   match k with *)
-(*   | SymKey k'  => *)
-(*     match (usage k') with *)
-(*     | Encryption => Some (Cipher c_id k'.(key_id) m) *)
-(*     | _          => None *)
-(*     end *)
-(*   | AsymKey k' false => (* Encryption always uses the public part of an asymmetric key *) *)
-(*     match (usage k') with *)
-(*     | Encryption => Some (Cipher c_id k'.(key_id) m) *)
-(*     | _          => None *)
-(*     end *)
-(*   | _ => None *)
-(* ======= *)
-  match k.(keyUsage) with
-  | Encryption => Some (Cipher c_id k.(keyId) m)
+Definition encryptMessage {t} (k__sign k__enc : key) (m : message t) (c_id : cipher_id) : option cipher :=
+  match (k__sign.(keyUsage), k__enc.(keyUsage)) with
+  | (Signing, Encryption) =>
+    let c := SigEncCipher c_id k__sign.(keyId) k__enc.(keyId) m
+    in  match k__sign with
+        | MkCryptoKey _ _ SymKey         => Some c
+        | MkCryptoKey _ _ (AsymKey true) => Some c
+        | _       => None
+        end
   | _          => None
   end.
 
 Definition signMessage {t} (k : key) (m : message t) (c_id : cipher_id) : option cipher :=
   match k with
-  | MkCryptoKey _ _ SymKey         => Some (Cipher c_id k.(keyId) m)
-  | MkCryptoKey _ _ (AsymKey true) => Some (Cipher c_id k.(keyId) m)
+  | MkCryptoKey _ _ SymKey         => Some (SigCipher c_id k.(keyId) m)
+  | MkCryptoKey _ _ (AsymKey true) => Some (SigCipher c_id k.(keyId) m)
   | _       => None
   end.
 
 Definition canVerifySignature {A} (cs : ciphers)(usrDat : user_data A)(c_id : cipher_id) : Prop :=
   forall t (m : message t) k_id k ,
-    cs $? c_id = Some (Cipher c_id k_id m)
+    cs $? c_id = Some (SigCipher c_id k_id m)
     (*  Make sure that the user has access to the key.  If we are doing asymmetric signatures,
         we only need the public part of the key, so no additional checks necessary! *)
     /\ usrDat.(key_heap) $? k_id = Some k.
@@ -316,21 +275,27 @@ Definition extractPlainText {t} (msg : message t) : option nat :=
   | _           => None
   end.
 
-Definition unPair {t1 t2} (msg : message (Pair t1 t2)) : option (message t1 * message t2)  :=
-  match msg
-        in (message t)
-        (* return (match t with _ => option (message t1 * message t2) end) *)
-        return (match t with
-                | Pair t1 t2 => option (message t1 * message t2)
-                | _ => option (message t1 * message t2) end)
-  with
-  | MsgPair m1 m2 => Some (m1,m2)
+Definition unSig {t} (msg : message t) : option (message t) :=
+  match msg with
+  | Signature m _ => Some m
   | _             => None
   end.
 
+(* Definition unPair {t1 t2} (msg : message (Pair t1 t2)) : option (message t1 * message t2)  := *)
+(*   match msg *)
+(*         in (message t) *)
+(*         (* return (match t with _ => option (message t1 * message t2) end) *) *)
+(*         return (match t with *)
+(*                 | Pair t1 t2 => option (message t1 * message t2) *)
+(*                 | _ => option (message t1 * message t2) end) *)
+(*   with *)
+(*   | MsgPair m1 m2 => Some (m1,m2) *)
+(*   | _             => None *)
+(*   end. *)
+
 
 Inductive action : Type :=
-| Input  t (msg : message t) (pat : msg_pat) (u_id : user_id) (uks : keys) (cs : ciphers)
+| Input  t (msg : message t) (pat : msg_pat) (u_id : user_id) (uks : keys)
 | Output t (msg : message t) (u_id : user_id)
 .
 
@@ -338,8 +303,8 @@ Definition rlabel := @label action.
 
 Definition action_adversary_safe (advk : adversary_knowledge) (a : action) : bool :=
   match a with
-  | Input _ pat _ _ _ => negb (msg_pattern_spoofable advk pat)
-  | Output _ _        => true
+  | Input _ pat _ _ => negb (msg_pattern_spoofable advk pat)
+  | Output _ _      => true
   end.
 
 Definition data_step0 (A B C : Type) : Type :=
@@ -369,7 +334,7 @@ Inductive step_user : forall A B C, user_id -> rlabel -> data_step0 A B C -> dat
     -> findKeys msg = newkeys
     -> ks' = ks $++ newkeys
     -> msg_accepted_by_pattern cs pat msg
-    -> step_user u_id (Action (Input msg pat u_id ks cs))
+    -> step_user u_id (Action (Input msg pat u_id ks))
                 (usrs, adv, cs, ks , qmsgs , Recv pat)
                 (usrs, adv, cs, ks', qmsgs', Return msg)
 
@@ -397,39 +362,28 @@ Inductive step_user : forall A B C, user_id -> rlabel -> data_step0 A B C -> dat
                 (usrs', adv', cs, ks, qmsgs, Return tt)
 
 (* Encryption / Decryption *)
-| StepEncrypt : forall {A B} {t} u_id (usrs : honest_users A) (adv : adversaries B) cs cs' ks qmsgs (msg : message t) k k_id c_id cipherMsg,
-    keyId k = k_id
-    -> ks $? k_id = Some k
-    -> ~(In c_id cs)
-    -> encryptMessage k msg c_id = Some cipherMsg
+| StepEncrypt : forall {A B} {t} u_id (usrs : honest_users A) (adv : adversaries B) cs cs' ks qmsgs (msg : message t) k__sign k__enc k__signid k__encid c_id cipherMsg,
+      keyId k__sign = k__signid
+    -> keyId k__enc = k__encid
+    -> ks $? k__signid = Some k__sign
+    -> ks $? k__encid = Some k__enc
+    -> ~ In c_id cs
+    -> encryptMessage k__sign k__enc msg c_id = Some cipherMsg
     -> cs' = cs $+ (c_id, cipherMsg)
     -> step_user u_id Silent
-                (usrs, adv, cs , ks, qmsgs, Encrypt k msg)
-                (usrs, adv, cs', ks, qmsgs, Return (Ciphertext c_id))
+                (usrs, adv, cs , ks, qmsgs, SignEncrypt k__sign k__enc msg)
+                (usrs, adv, cs', ks, qmsgs, Return (SignedCiphertext c_id))
 
-| StepDecrypt : forall {A B} {t} u_id (usrs : honest_users A) (adv : adversaries B) cs ks ks' qmsgs (msg : message t) k_id k c_id newkeys,
-      cs $? c_id = Some (Cipher c_id k_id msg)
-    -> ( ks $? k_id = Some (MkCryptoKey k_id Encryption (AsymKey true)) (* check we have access to private key *)
-      \/ ks $? k_id = Some (MkCryptoKey k_id Encryption SymKey) )
-    (* -> ( ks $? k_id = Some (AsymKey k true) (* check we have access to private key *) *)
-    (*   \/ ks $? k_id = Some (SymKey k) ) *)
-    -> k.(keyId) = k_id
-(* ======= *)
-(*     -> globals' = addCipher c_id cipherMsg globals *)
-(*     -> lstep_user u_id Silent *)
-(*                  (globals,  adv, uks, Encrypt k msg) *)
-(*                  (globals', adv, uks, Return (Ciphertext c_id)) *)
-
-(* | LStepDecrypt : forall {t} u_id adv globals uks (msg : message t) k_id k c_id newkeys, *)
-(*     globals.(all_ciphers) $? c_id = Some (Cipher c_id k_id msg) *)
-(*     -> ( uks $? k_id = Some (MkCryptoKey k_id Encryption (AsymKey true)) (* check we have access to private key *) *)
-(*       \/ uks $? k_id = Some (MkCryptoKey k_id Encryption SymKey) ) *)
-(*     -> k.(keyId) = k_id *)
-(* >>>>>>> master *)
+| StepDecrypt : forall {A B} {t} u_id (usrs : honest_users A) (adv : adversaries B) cs ks ks' qmsgs (msg : message t) k__signid k__sign k__encid c_id newkeys,
+      cs $? c_id = Some (SigEncCipher c_id k__signid k__encid msg)
+    -> ( ks $? k__encid = Some (MkCryptoKey k__encid Encryption (AsymKey true)) (* check we have access to private key *)
+      \/ ks $? k__encid = Some (MkCryptoKey k__encid Encryption SymKey) )
+    -> ks $? k__signid = Some k__sign
+    (* -> k.(keyId) = k_id *)
     -> findKeys msg = newkeys
     -> ks' = ks $++ newkeys
     -> step_user u_id Silent
-                (usrs, adv, cs, ks , qmsgs, Decrypt (Ciphertext c_id))
+                (usrs, adv, cs, ks , qmsgs, Decrypt (SignedCiphertext c_id))
                 (usrs, adv, cs, ks', qmsgs, Return msg)
 
 (* Signing / Verification *)
@@ -447,10 +401,10 @@ Inductive step_user : forall A B C, user_id -> rlabel -> data_step0 A B C -> dat
     (* k is in your key heap *)
     ks $? (keyId k) = Some k
     (* return true or false whether k was used to sign the message *)
-    -> cs $? c_id = Some (Cipher c_id k_id msg)
+    -> cs $? c_id = Some (SigCipher c_id k_id msg)
     (* -> findKeys msg = newkeys *)
     -> step_user u_id Silent
-                (usrs, adv, cs, ks, qmsgs, (Verify k (MsgPair msg (Ciphertext c_id))))
+                (usrs, adv, cs, ks, qmsgs, (Verify k (Signature msg c_id)))
                 (usrs, adv, cs, ks, qmsgs, Return (if (k_id ==n (keyId k)) then true else false))
 .
 

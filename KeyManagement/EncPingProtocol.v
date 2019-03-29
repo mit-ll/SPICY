@@ -135,77 +135,76 @@ Section RealProtocol.
          ( n  <- Gen
          ; m  <- Sign KEY1 (Plaintext n)
          ; _  <- Send B m
-         ; m' <- @Recv (Pair Nat CipherId) (Signed KID2 Accept)
-         ; Return match unPair m' with
-                  | Some (Plaintext n', _) => if n ==n n' then true else false (* also do verify? *)
-                  | _ => false
+         ; m' <- @Recv Nat (Signed KID2)
+         ; Return match unSig m' with
+                  | Some (Plaintext n') => if n ==n n' then true else false (* also do verify? *)
+                  | _       => false
                   end)
 
-         ( m  <- @Recv (Pair Nat CipherId) (Signed KID1 Accept)
+         ( m  <- @Recv Nat (Signed KID1)
          ; v  <- Verify KEY__pub1 m
-         ; m' <- match unPair m with
-                | Some (p,_) => Sign KEY2 p
-                | Nothing    => Sign KEY2 (Plaintext 1)
+         ; m' <- match unSig m with
+                | Some p => Sign KEY2 p
+                | _      => Sign KEY2 (Plaintext 1)
                 end
          ; _  <- Send A m'
          ; Return v).
 
   Definition real_univ_sent1 n cs cid1 :=
     mkrU [] [Exm (Signature (Plaintext n) cid1)]
-         (cs $+ (cid1, Cipher cid1 KID1 (Plaintext n)))
+         (cs $+ (cid1, SigCipher cid1 KID1 (Plaintext n)))
          ( _  <- Return tt
-         ; m' <- @Recv (Pair Nat CipherId) (Signed KID2 Accept)
-         ; Return match unPair m' with
-                  | Some (Plaintext n', _) => if n ==n n' then true else false (* also do verify? *)
-                  | _ => false
+         ; m' <- @Recv Nat (Signed KID2)
+         ; Return match unSig m' with
+                  | Some (Plaintext n') => if n ==n n' then true else false (* also do verify? *)
+                  | _       => false
                   end)
-
-         ( m  <- @Recv (Pair Nat CipherId) (Signed KID1 Accept)
+         ( m  <- @Recv Nat (Signed KID1)
          ; v  <- Verify KEY__pub1 m
-         ; m' <- match unPair m with
-                | Some (p,_) => Sign KEY2 p
-                | Nothing    => Sign KEY2 (Plaintext 1)
+         ; m' <- match unSig m with
+                | Some p => Sign KEY2 p
+                | _      => Sign KEY2 (Plaintext 1)
                 end
          ; _  <- Send A m'
          ; Return v).
 
   Definition real_univ_recd1 n cs cid1 :=
     mkrU [] []
-         (cs $+ (cid1, Cipher cid1 KID1 (Plaintext n)))
+         (cs $+ (cid1, SigCipher cid1 KID1 (Plaintext n)))
          ( _  <- Return tt
-         ; m' <- @Recv (Pair Nat CipherId) (Signed KID2 Accept)
-         ; Return match unPair m' with
-                  | Some (Plaintext n', _) => if n ==n n' then true else false (* also do verify? *)
-                  | _ => false
+         ; m' <- @Recv Nat (Signed KID2)
+         ; Return match unSig m' with
+                  | Some (Plaintext n') => if n ==n n' then true else false (* also do verify? *)
+                  | _       => false
                   end)
 
          ( m  <- Return (Signature (Plaintext n) cid1)
          ; v  <- Verify KEY__pub1 m
-         ; m' <- match unPair m with
-                | Some (p,_) => Sign KEY2 p
-                | Nothing    => Sign KEY2 (Plaintext 1)
+         ; m' <- match unSig m with
+                | Some p => Sign KEY2 p
+                | _      => Sign KEY2 (Plaintext 1)
                 end
          ; _  <- Send A m'
          ; Return v).
 
   Definition real_univ_sent2 n cid1 cid2 :=
     mkrU [Exm (Signature (Plaintext n) cid2)] []
-         ($0 $+ (cid1, Cipher cid1 KID1 (Plaintext n)) $+ (cid2, Cipher cid2 KID2 (Plaintext n)))
+         ($0 $+ (cid1, SigCipher cid1 KID1 (Plaintext n)) $+ (cid2, SigCipher cid2 KID2 (Plaintext n)))
          ( _  <- Return tt
-         ; m' <- @Recv (Pair Nat CipherId) (Signed KID2 Accept)
-         ; Return match unPair m' with
-                  | Some (Plaintext n', _) => if n ==n n' then true else false (* also do verify? *)
-                  | _ => false
+         ; m' <- @Recv Nat (Signed KID2)
+         ; Return match unSig m' with
+                  | Some (Plaintext n') => if n ==n n' then true else false (* also do verify? *)
+                  | _       => false
                   end)
 
          ( _  <- Return tt ; Return true).
 
   Definition real_univ_recd2 n cid1 cid2 :=
-    mkrU [] [] ($0 $+ (cid1, Cipher cid1 KID1 (Plaintext n)) $+ (cid2, Cipher cid2 KID2 (Plaintext n)))
+    mkrU [] [] ($0 $+ (cid1, SigCipher cid1 KID1 (Plaintext n)) $+ (cid2, SigCipher cid2 KID2 (Plaintext n)))
          ( m' <- Return (Signature (Plaintext n) cid2)
-         ; Return match unPair m' with
-                  | Some (Plaintext n', _) => if n ==n n' then true else false (* also do verify? *)
-                  | _ => false
+         ; Return match unSig m' with
+                  | Some (Plaintext n') => if n ==n n' then true else false (* also do verify? *)
+                  | _       => false
                   end)
 
          ( _  <- Return tt ; Return true).
@@ -248,21 +247,26 @@ Module SimulationAutomation.
     match goal with
     | [ H : List.In _ _ |- _ ] => progress (simpl in H); intuition
 
-    | [ H : _ $? _ = Some _ |- _ ] => progress (simpl in H)
-
-    (* | [ H : $0 $? _ = Some _ |- _ ] => apply lookup_empty_not_Some in H; contradiction *)
     | [ H : $0 $? _ = Some _ |- _ ] => apply find_mapsto_iff in H; apply empty_mapsto_iff in H; contradiction
+    | [ H : _  $? _ = Some _ |- _ ] => progress (simpl in H)
 
-    (* | [ H : _ $? _ = Some _ |- _ ] => apply lookup_split in H; intuition (* propositional *); subst *)
-    | [ H : _ $? _ = Some _ |- _ ] => apply lookup_some_implies_in in H
-    (* | [ H : (_ $- _) $? _ = Some _ |- _ ] => rewrite addRemoveKey in H by auto *)
+    | [ H : add _ _ _ $? _ = Some ?UD |- _ ] =>
+      match type of UD with
+      | RealWorld.user_data bool => apply lookup_some_implies_in in H
+      | _ => apply lookup_split in H; intuition
+      end
+
+    | [ H : updateUserList _ _ _ $? _ = Some _ |- _ ] => unfold updateUserList in H
+    | [ H : RealWorld.users _ $? _ = Some _ |- _ ] => progress (simpl in H)
+
+    | [ H : _ = RealWorld.mkUserData _ _ _ |- _ ] => invert H
     | [ H : Some _ = Some _ |- _ ] => invert H
-
     | [ H : (_ :: _) = _ |- _ ] => invert H
     | [ H : _ = (_ :: _) |- _ ] => invert H
     | [ H : (_,_) = (_,_) |- _ ] => invert H
 
-    | [ H: RealWorld.Cipher _ _ _ = RealWorld.Cipher _ _ _ |- _ ] => invert H
+    | [ H: RealWorld.SigCipher _ _ _ = RealWorld.SigCipher _ _ _ |- _ ] => invert H
+    | [ H: RealWorld.SigEncCipher _ _ _ _ = RealWorld.SigEncCipher _ _ _ _ |- _ ] => invert H
     | [ H: RealWorld.MkCryptoKey _ _ _ = _ |- _ ] => invert H
     | [ H: RealWorld.AsymKey _ = _ |- _ ] => invert H
     (* | [ H: RealWorld.AsymKey _ _ = _ |- _ ] => invert H *)
@@ -274,16 +278,16 @@ Module SimulationAutomation.
 
     (* NEW | [H : RealWorld.users_msg_buffer _ $? _ = _ |- _ ] => progress (simpl in H) *)
 
-    | [ H: RealWorld.msg_accepted_by_pattern_compute _ _ _ = false |- _ ] =>
-      simpl in H;
-      rewrite add_eq_o in H by auto;
-      try discriminate
+    (* | [ H: RealWorld.msg_accepted_by_pattern_compute _ _ _ = false |- _ ] => *)
+    (*   simpl in H; *)
+    (*   rewrite add_eq_o in H by auto; *)
+    (*   try discriminate *)
 
     | [ H : ~ RealWorld.msg_accepted_by_pattern ?cs ?pat ?msg |- _ ] =>
       assert ( RealWorld.msg_accepted_by_pattern cs pat msg ) by eauto; contradiction
 
-    | [ H: RealWorld.signMessage _ _ _ = _ |- _ ] => unfold RealWorld.encryptMessage; simpl in H
-    | [ H: RealWorld.encryptMessage _ _ _ = _ |- _ ] => unfold RealWorld.encryptMessage; simpl in H
+    | [ H: RealWorld.signMessage _ _ _ = _ |- _ ] => unfold RealWorld.signMessage; simpl in H
+    | [ H: RealWorld.encryptMessage _ _ _ _ = _ |- _ ] => unfold RealWorld.encryptMessage; simpl in H
 
     (* Only take a user step if we have chosen a user *)
     | [ H: RealWorld.step_user A _ _ _ |- _ ] => invert H
@@ -292,6 +296,8 @@ Module SimulationAutomation.
     | [ H: rstepSilent _ _ |- _ ] => invert H
     | [ H: RealWorld.step_universe _ _ _ |- _ ] => invert H
 
+    | [ H :rstepSilent ^* (RealWorld.buildUniverse _ _ _ _ _) _ |- _] =>
+      progress (unfold RealWorld.buildUniverse, updateUserList in H; simpl in H)
     | [ S: rstepSilent ^* ?U _ |- _ ] => 
       (* Don't actually multiStep unless we know the state of the starting universe
        * meaning it is not some unknown hypothesis in the context...
@@ -386,7 +392,7 @@ Module SimulationAutomation.
     intros. subst. apply TrcRefl.
   Qed.
 
-  Hint Extern 0 (rstepSilent ^* _ _) => solve [eapply TrcRefl || eapply TrcRefl'; smash_universe].
+  Hint Extern 0 (rstepSilent ^* _ _) => solve [eapply TrcRefl || eapply TrcRefl'; simpl; smash_universe].
   Hint Extern 1 (rstepSilent ^* _ _) => real_silent_step0.
   Hint Extern 1 (rstepSilent ^* _ _) => real_silent_step1.
   Hint Extern 1 (rstepSilent ^* _ _) =>
@@ -433,23 +439,83 @@ Section FeebleSimulates.
           istepSilent ^* U__i U__i'
           /\ RPingPongBase U__r' U__i'.
   Proof.
-    time (
-        intros;
-        invert H;
-        churn;
-        [> eexists; constructor; swap 1 2 .. ];
-        eauto 9).
+    (* time ( *)
+    (*     intros; *)
+    (*     invert H; *)
+    (*     churn; *)
+    (*     [> eexists; constructor; swap 1 2 .. ]; *)
+    (*     eauto 9). *)
 
-    (* intros. invert H. *)
+    intros. invert H.
 
-    (* - churn. *)
-    (*   eexists; constructor; swap 1 2. eauto. eauto. *)
-    (*   eexists; constructor; swap 1 2. eauto. eauto. *)
-    (*   eexists; constructor; swap 1 2. eauto. eauto. *)
-    (*   eexists; constructor; swap 1 2; eauto 9. *)
+    - churn.
 
-    (* - churn. *)
-    (*   eexists; constructor; swap 1 2; eauto 9. *)
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+
+    - churn.
+      eexists; constructor; swap 1 2; eauto 9.
+
+
+    - do 6 churn1.
+      churn. admit.
+      churn. admit.
+
+      churn1. churn1. churn1. churn1. churn1.    admit. 
+      churn1. churn1. churn1.
+
+      do 3 churn1. churn1. churn1. churn1. churn. (* 2a 2b  *)
+
+      admit. admit.
+
+
+    - churn.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+
+    - churn.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+
+    - churn.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+      eexists; constructor; swap 1 2; eauto 9.
+
+    - churn.
+
+
+
+
 
     (* - churn. *)
     (*   eexists; constructor; swap 1 2; eauto 9. *)

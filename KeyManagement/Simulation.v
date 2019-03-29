@@ -52,44 +52,44 @@ Inductive msg_eq : forall t__r t__i,
     msg_eq (RealWorld.Plaintext content) (IdealWorld.Content content, ch_id, cs, ps)
 .
 
-Definition check_cipher (ch_id : IdealWorld.channel_id)
-  :=
-    forall A B ch_id k (im : IdealWorld.message A) (rm : RealWorld.message B) cphrs (*do we need these??*) chans perms,
-      match rm with
-      | RealWorld.Ciphertext cphr_id =>
-        match cphrs $? cphr_id with
-        | None => False
-        | Some (RealWorld.Cipher cphr_id k_id msg) =>
-          RealWorld.keyId k = k_id /\ msg_eq msg (im,ch_id,chans,perms)
-        end
-      | _ => False
-      end.
+(* Definition check_cipher (ch_id : IdealWorld.channel_id) *)
+(*   := *)
+(*     forall A B ch_id k (im : IdealWorld.message A) (rm : RealWorld.message B) cphrs (*do we need these??*) chans perms, *)
+(*       match rm with *)
+(*       | RealWorld.Ciphertext cphr_id => *)
+(*         match cphrs $? cphr_id with *)
+(*         | None => False *)
+(*         | Some (RealWorld.Cipher cphr_id k_id msg) => *)
+(*           RealWorld.keyId k = k_id /\ msg_eq msg (im,ch_id,chans,perms) *)
+(*         end *)
+(*       | _ => False *)
+(*       end. *)
     
-Definition chan_key_ok :=
-  forall A B ch_id (im : IdealWorld.message A) (rm : RealWorld.message B) cphrs chan_keys (*do we need these??*) chans perms,
-    match chan_keys $? ch_id with
-    | None => False
-    | Some (Public _)   => msg_eq rm (im,ch_id,chans,perms)
-    | Some (Auth _ k _) =>
-      (* check_cipher ch_id k im rm cphrs chans perms *)
-      match rm with
-      | RealWorld.Ciphertext cphr_id =>
-        match cphrs $? cphr_id with
-        | None => False
-        | Some (RealWorld.Cipher cphr_id k_id msg) =>
-          RealWorld.keyId k = k_id /\ msg_eq msg (im,ch_id,chans,perms)
-        end
-      | _ => False
-      end
-    | Some (Enc  _ k _) => False
-    | Some (AuthEnc _ k1 k2 _ _) => False
-    end.
+(* Definition chan_key_ok := *)
+(*   forall A B ch_id (im : IdealWorld.message A) (rm : RealWorld.message B) cphrs chan_keys (*do we need these??*) chans perms, *)
+(*     match chan_keys $? ch_id with *)
+(*     | None => False *)
+(*     | Some (Public _)   => msg_eq rm (im,ch_id,chans,perms) *)
+(*     | Some (Auth _ k _) => *)
+(*       (* check_cipher ch_id k im rm cphrs chans perms *) *)
+(*       match rm with *)
+(*       | RealWorld.Ciphertext cphr_id => *)
+(*         match cphrs $? cphr_id with *)
+(*         | None => False *)
+(*         | Some (RealWorld.Cipher cphr_id k_id msg) => *)
+(*           RealWorld.keyId k = k_id /\ msg_eq msg (im,ch_id,chans,perms) *)
+(*         end *)
+(*       | _ => False *)
+(*       end *)
+(*     | Some (Enc  _ k _) => False *)
+(*     | Some (AuthEnc _ k1 k2 _ _) => False *)
+(*     end. *)
 
 
 Inductive action_matches :
     RealWorld.action -> IdealWorld.action -> Prop :=
-| Inp : forall t__r t__i (msg1 : RealWorld.message t__r) (msg2 : IdealWorld.message t__i) rw iw ch_id cs ps p x y z,
-      rw = (RealWorld.Input msg1 p x y z)
+| Inp : forall t__r t__i (msg1 : RealWorld.message t__r) (msg2 : IdealWorld.message t__i) rw iw ch_id cs ps p x y,
+      rw = (RealWorld.Input msg1 p x y)
     -> iw = IdealWorld.Input msg2 ch_id cs ps
     -> msg_eq msg1 (msg2, ch_id, cs, ps)
     -> action_matches rw iw
@@ -174,7 +174,7 @@ Section SingleAdversarySimulates.
       | Plaintext _ => false
       | KeyMessage _ => false
       | MsgPair m1 m2 => msg_safe m1 && msg_safe m2
-      | Ciphertext _ => true
+      | SignedCiphertext _ => true
       | Signature _ _ => true
       end.
 
@@ -198,8 +198,14 @@ Section SingleAdversarySimulates.
      *)
     Definition honest_cipher (adv_keys : keys) (c : cipher) :=
       match c with
-      | Cipher _ k_id _ =>
+      | SigCipher _ k_id _ =>
         match adv_keys $? k_id with
+        | Some (MkCryptoKey _ _ SymKey)         => false
+        | Some (MkCryptoKey _ _ (AsymKey true)) => false
+        | _ => true
+        end
+      | SigEncCipher _ k__sign k__enc _ =>
+        match adv_keys $? k__sign with
         | Some (MkCryptoKey _ _ SymKey)         => false
         | Some (MkCryptoKey _ _ (AsymKey true)) => false
         | _ => true
@@ -320,6 +326,18 @@ Section SingleAdversarySimulates.
       intros.
       apply filter_iff; eauto.
     Qed.
+    
+    Lemma clean_ciphers_keeps_honest_cipher :
+      forall c_id c adv_keys cs,
+        cs $? c_id = Some c
+        -> honest_cipher adv_keys c = true
+        -> clean_ciphers adv_keys cs $? c_id = Some c.
+    Proof.
+      intros.
+      rewrite <- find_mapsto_iff.
+      rewrite <- find_mapsto_iff in H.
+      apply clean_ciphers_mapsto_iff; intuition.
+    Qed.
 
     Lemma clean_ciphers_accepts :
       forall {t} ks cs p (m : message t),
@@ -334,7 +352,33 @@ Section SingleAdversarySimulates.
         apply find_mapsto_iff; intuition.
       - eapply ProperlyEncrypted; eauto.
         rewrite <- find_mapsto_iff in H1; rewrite clean_ciphers_mapsto_iff in H1.
-        apply find_mapsto_iff; intuition.
+        apply find_mapsto_iff; intuition eassumption.
+    Qed.
+
+    Lemma clean_ciphers_accepts_non_spoofable :
+      forall {t} ks cs p (m : message t),
+        msg_accepted_by_pattern cs p m
+        -> forall p',
+          p' = p
+        -> msg_pattern_spoofable ks p' = false
+        -> msg_accepted_by_pattern (clean_ciphers ks cs) p' m.
+    Proof.
+      induction 1; intros; subst; eauto.
+      - econstructor; auto.
+      - invert H4; apply orb_false_elim in H0; invert H0.
+        eapply BothPairsAccepted; eauto.
+      - eapply ProperlySigned; eauto.
+        invert H3.
+        case_eq (ks $? k); intros; rewrite H in H0; simpl.
+        + invert H0.
+        + eapply clean_ciphers_keeps_honest_cipher; eauto.
+          unfold honest_cipher; rewrite H; trivial.
+      - eapply ProperlyEncrypted; eauto.
+        invert H3.
+        case_eq (ks $? k__sign); intros; rewrite H in H0; simpl.
+        + invert H0.
+        + eapply clean_ciphers_keeps_honest_cipher; eauto.
+          unfold honest_cipher; rewrite H; trivial.
     Qed.
 
     Hint Constructors msg_accepted_by_pattern.
@@ -344,14 +388,13 @@ Section SingleAdversarySimulates.
           ~ msg_accepted_by_pattern cs pat msg
         -> ~ msg_accepted_by_pattern (clean_ciphers ks cs) pat msg.
     Proof.
-      unfold "~"; induction 2; subst.
-      - apply H; eauto.
-      - apply clean_ciphers_accepts in H0_; apply clean_ciphers_accepts in H0_0.
-        apply H; eauto.
-      - rewrite <- find_mapsto_iff in H2; rewrite clean_ciphers_mapsto_iff in H2; intuition. rewrite find_mapsto_iff in H0.
-        apply clean_ciphers_accepts in H3; apply H; eauto.
-      - rewrite <- find_mapsto_iff in H2; rewrite clean_ciphers_mapsto_iff in H2; intuition. rewrite find_mapsto_iff in H0.
-        apply clean_ciphers_accepts in H3; apply H; eauto.
+      unfold "~"; induction 2; subst;
+        eauto;
+        repeat match goal with
+               | [ H : clean_ciphers _ _ $? _ = Some _ |- _] => rewrite <- find_mapsto_iff in H; rewrite clean_ciphers_mapsto_iff in H
+               | [ H : _ /\ _ |- _ ] => invert H
+               | [ H : MapsTo _ _ _ |- _ ] => rewrite find_mapsto_iff in H
+               end; eauto.
     Qed.
 
     Hint Resolve clean_ciphers_doesn't_make_unaccepted_msg_accepted.
@@ -371,18 +414,6 @@ Section SingleAdversarySimulates.
       - rewrite find_mapsto_iff in H1; rewrite H1 in H; invert H.
         rewrite H0; auto.
       - case (honest_cipher adv_keys e); eauto.
-    Qed.
-
-    Lemma clean_ciphers_keeps_honest_cipher :
-      forall c_id c adv_keys cs,
-        cs $? c_id = Some c
-        -> honest_cipher adv_keys c = true
-        -> clean_ciphers adv_keys cs $? c_id = Some c.
-    Proof.
-      intros.
-      rewrite <- find_mapsto_iff.
-      rewrite <- find_mapsto_iff in H.
-      apply clean_ciphers_mapsto_iff; intuition.
     Qed.
 
     Hint Resolve clean_ciphers_eliminates_dishonest_cipher clean_ciphers_keeps_honest_cipher.
@@ -431,21 +462,25 @@ Section SingleAdversarySimulates.
     Hint Resolve not_in_ciphers_not_in_cleaned_ciphers.
 
     Lemma enc_cipher_has_key :
-      forall {t} k (msg : message t) c_id cipherMsg,
-        encryptMessage k msg c_id = Some cipherMsg
-        -> cipherMsg = Cipher c_id (keyId k) msg.
-        (* /\ (k.(keyType) = SymKey \/ k.(keyType) = AsymKey false). *)
+      forall {t} k__sign k__enc (msg : message t) c_id cipherMsg,
+        encryptMessage k__sign k__enc msg c_id = Some cipherMsg
+        -> cipherMsg = SigEncCipher c_id (keyId k__sign) (keyId k__enc) msg
+        /\ (k__sign.(keyType) = SymKey \/ k__sign.(keyType) = AsymKey true).
     Proof.
       intros.
       unfold encryptMessage in H.
-      case_eq k; intros; rewrite H0 in H.
+      destruct k__sign; simpl in *.
       case_eq keyUsage; intro; subst; simpl in *; invert H; eauto.
+      destruct k__enc; simpl in *.
+      case_eq keyUsage; intro; subst; simpl in *; invert H1; eauto.
+      case_eq keyType; intros; subst; simpl in *; invert H0; eauto.
+      case_eq has_private_access; intros; subst; invert H1; eauto.
     Qed.
 
     Lemma sign_cipher_has_key :
       forall {t} k (msg : message t) c_id cipherMsg,
         signMessage k msg c_id = Some cipherMsg
-        -> cipherMsg = Cipher c_id (keyId k) msg
+        -> cipherMsg = SigCipher c_id (keyId k) msg
           /\ (k.(keyType) = SymKey \/ k.(keyType) = AsymKey  true).
     Proof.
       intros.
@@ -488,9 +523,9 @@ Section SingleAdversarySimulates.
     Qed.
 
     Lemma honest_enc_cipher_not_cleaned :
-      forall {t} cs k ks c_id (msg : message t) cipherMsg,
-          encryptMessage k msg c_id = Some cipherMsg
-        -> ks $? (keyId k) = None
+      forall {t} cs k__sign k__enc ks c_id (msg : message t) cipherMsg,
+          encryptMessage k__sign k__enc msg c_id = Some cipherMsg
+        -> ks $? (keyId k__sign) = None
         -> clean_ciphers ks (cs $+ (c_id, cipherMsg)) = clean_ciphers ks cs $+ (c_id, cipherMsg).
     Proof.
       intros.
@@ -559,7 +594,33 @@ Section SingleAdversarySimulates.
 
     Hint Resolve honest_enc_cipher_not_cleaned honest_sign_cipher_not_cleaned.
 
-    Lemma honest_step_advuniv_implies_honest_step_origuniv :
+  (*   Lemma input_action_same_after_cleaning : *)
+  (*     forall a a' u_id cs pat msg ks adv_keys, *)
+  (*       a  = Input msg pat u_id ks cs *)
+  (*       -> a' = Input msg pat u_id ks (clean_ciphers adv_keys cs) *)
+  (*       -> a *)
+  (*       -> a'. *)
+
+
+  (* msg : message t0 *)
+  (* pat : msg_pat *)
+  (* H7 : (usrs', adv', cs', ks, Exm msg :: qmsgs', Recv pat) = (usrs', adv', cs', ks, Exm msg :: qmsgs', Recv pat) *)
+  (* H3 : msg_accepted_by_pattern cs' pat msg *)
+  (* H5 : forall (uk_id : NatMap.key) (uk : key), ks $? uk_id = Some uk -> findUserKeys adv' $? uk_id = None *)
+  (* H15 : (usrs', adv', cs', ks $++ findKeys msg, qmsgs', Return msg) = (usrs', adv', cs', ks $++ findKeys msg, qmsgs', Return msg) *)
+  (* ============================ *)
+  (* step_user u_id (Action (Input msg pat u_id ks cs')) (usrs', $0, clean_ciphers (findUserKeys adv') cs', ks, Exm msg :: qmsgs', Recv pat) *)
+  (*   (usrs', $0, clean_ciphers (findUserKeys adv') cs', ks $++ findKeys msg, qmsgs', Return msg) *)
+
+
+  (* H3 : msg_accepted_by_pattern cs' pat msg *)
+  (* H5 : forall (uk_id : NatMap.key) (uk : key), ks $? uk_id = Some uk -> findUserKeys adv' $? uk_id = None *)
+  (* H15 : (usrs', adv', cs', ks $++ findKeys msg, qmsgs', Return msg) = (usrs', adv', cs', ks $++ findKeys msg, qmsgs', Return msg) *)
+  (* ============================ *)
+  (* msg_accepted_by_pattern (clean_ciphers (findUserKeys adv') cs') pat msg *)
+
+
+    Lemma honest_silent_step_advuniv_implies_honest_step_origuniv :
       forall {A B C} cs cs' lbl u_id (usrs usrs' : honest_users A) (adv adv' : adversaries B) ks ks' qmsgs qmsgs' bd bd',
         step_user u_id lbl bd bd'
         -> forall (cmd : user_cmd C) cs__s adv_keys,
@@ -570,40 +631,47 @@ Section SingleAdversarySimulates.
           -> forall cmd' cs__s',
               cs__s' = clean_ciphers adv_keys cs'
               -> bd' = (usrs', adv', cs', ks', qmsgs', cmd')
+              -> lbl = Silent
               -> step_user (B:=B) u_id lbl (usrs, $0, cs__s, ks, qmsgs, cmd) (usrs', $0, cs__s', ks', qmsgs', cmd').
     Proof.
-      induction 1; inversion 4; inversion 2; subst.
-      - econstructor; eauto.
-      - econstructor; eauto.
-      - econstructor; eauto.
-      -
-        (* eapply StepRecv. *)
+      induction 1; inversion 4; inversion 2; intro; subst;
+        econstructor;
+        repeat match goal with
+               | [ H : Action _ = Silent |- _ ] => invert H
+               end;
+        eauto.
 
-        (* H3 : msg_accepted_by_pattern cs' pat msg = true *)
-        (* ============================ *)
-        (* step_user u_id (Action (Input msg pat u_id ks cs')) (usrs', $0, clean_ciphers (findUserKeys adv') cs', ks, Exm msg :: qmsgs', Recv pat) *)
-        (*   (usrs', $0, clean_ciphers (findUserKeys adv') cs', ks $++ findKeys msg, qmsgs', Return msg) *)
-        admit.
-
-      - econstructor; eauto.
-      - econstructor; eauto; unfold addUserKeys; m_equal; trivial.
-      - econstructor; eauto.
-      - econstructor; eauto.
-        apply clean_ciphers_keeps_honest_cipher; unfold honest_cipher; eauto.
+      - apply clean_ciphers_keeps_honest_cipher; unfold honest_cipher; eauto.
         invert H0; specialize (H5 _ _ H1); rewrite H5; eauto.
-
-      - econstructor; eauto.
-      - econstructor; eauto. 
-
-        (* Hrm. We have a problem here.  I should never get to this point if the ciphertext is sent from
-         * an adversary, since the message would have been dropped at receive.  Not sure how to do this reasoning.
+      - apply clean_ciphers_keeps_honest_cipher; unfold honest_cipher; eauto.
+        specialize (H2 _ _ H).
+        (* The small problem here is that we don't know that the verification will work.
+         * Thus, we don't get the connection between the keyId we are checking
          *)
-
-        (* H : ks' $? keyId k = Some k *)
-        (* H0 : cs' $? c_id = Some (Cipher c_id k_id msg) *)
-        (* ============================ *)
-        (* clean_ciphers (findUserKeys adv') cs' $? c_id = Some (Cipher c_id k_id msg) *)
         admit.
+
+    Admitted.
+
+    Lemma honest_loud_step_advuniv_implies_honest_step_origuniv :
+      forall {A B C} cs cs' lbl u_id (usrs usrs' : honest_users A) (adv adv' : adversaries B) ks ks' qmsgs qmsgs' bd bd',
+        step_user u_id lbl bd bd'
+        -> forall (cmd : user_cmd C) cs__s adv_keys,
+          adv_keys = findUserKeys adv
+          -> (forall uk_id uk, ks $? uk_id = Some uk -> adv_keys $? uk_id = None) (* better notion of disjoint to take care of public/private *)
+          -> cs__s = clean_ciphers adv_keys cs
+          -> bd = (usrs, adv, cs, ks, qmsgs, cmd)
+          -> forall cmd' cs__s',
+              cs__s' = clean_ciphers adv_keys cs'
+              -> bd' = (usrs', adv', cs', ks', qmsgs', cmd')
+              -> ~ lbl = Silent
+              -> step_user (B:=B) u_id lbl (usrs, $0, cs__s, ks, qmsgs, cmd) (usrs', $0, cs__s', ks', qmsgs', cmd').
+    Proof.
+      induction 1; inversion 4; inversion 2; intro; subst; econstructor; eauto.
+
+      - eapply clean_ciphers_accepts_non_spoofable; eauto.
+        (* need evidence that the message pattern isn't spoofable *) admit.
+
+      - unfold addUserKeys; m_equal; trivial.
 
     Admitted.
 
@@ -646,18 +714,13 @@ Section SingleAdversarySimulates.
          *)
         admit. 
 
-      - 
-        (* apply enc_cipher_has_key in H2; invert H2. *)
-
-        (* Lemma dishonest_cipher_cleaned : *)
-        (*   forall cs adv_keys c_id cipherMsg, *)
-        (*     honest_cipher adv_keys cipherMsg = false *)
-        (*     -> ~ In c_id cs *)
-        (*     -> clean_ciphers adv_keys cs = clean_ciphers adv_keys (cs $+ (c_id, cipherMsg)). *)
-
-        apply dishonest_cipher_cleaned; eauto.
-        apply enc_cipher_has_key in H2. 
-        admit.
+      - apply dishonest_cipher_cleaned; eauto.
+        apply enc_cipher_has_key in H4.
+        invert H4.
+        destruct k__sign; simpl in *.
+        unfold honest_cipher; invert H0; simpl.
+        rewrite H1; eauto.
+        rewrite H1; eauto.
 
       - (* Adversary just decryped a message.  Did it have any keys?
          * Need to reason about what kinds of keys could be in there.
@@ -869,7 +932,7 @@ Section SingleAdversarySimulates.
                                                              ; RealWorld.protocol := cmd
                                                              ; RealWorld.msg_heap := qmsgs |})) ).
       eapply RealWorld.StepUser; eauto.
-      eapply honest_step_advuniv_implies_honest_step_origuniv; intros; eauto. 
+      eapply honest_silent_step_advuniv_implies_honest_step_origuniv; intros; eauto. 
       admit. (* Disjoint keys assumption of last lemma *)
       eauto.
       unfold strip_adversary; simpl; smash_universe.
@@ -922,8 +985,15 @@ Section SingleAdversarySimulates.
                                                              ; RealWorld.msg_heap := qmsgs |})) ).
 
     eapply RealWorld.StepUser; eauto.
-    eapply honest_step_advuniv_implies_honest_step_origuniv; simpl; eauto.
+
+
+  (* H16 : Action (Input msg pat u_id ks) <> Silent *)
+  (* ============================ *)
+  (* msg_pattern_spoofable (findUserKeys adv') pat = false *)
+
+    eapply honest_loud_step_advuniv_implies_honest_step_origuniv; simpl; intros; eauto.
     admit. (* Disjoint keys assumption of last lemma *)
+    intro NE; invert NE.
     unfold strip_adversary; simpl; smash_universe.
     admit. (* Need evidence that the user didn't send keys *)
 
@@ -937,7 +1007,6 @@ Section SingleAdversarySimulates.
 
     unfold RealWorld.findUserKeys, strip_adversary, fold in H6; simpl in H6.
     unfold RealWorld.action_adversary_safe; destruct a1; auto.
-    unfold RealWorld.msg_pattern_spoofable.
     admit.
 
   Admitted.
