@@ -239,13 +239,125 @@ Section RealProtocol.
 
 End RealProtocol.
 
+Section RealWorldLemmas.
+  Import RealWorld.
+
+
+  Lemma multiStepSilentInv :
+    forall {A B} (U__r U__r': universe A B),
+        rstepSilent ^* U__r U__r'
+      -> U__r.(adversary) = $0
+      -> U__r = U__r'
+      \/ exists usrs adv cs u_id userData ks cmd qmsgs,
+            rstepSilent ^* (buildUniverse usrs adv cs u_id {| key_heap := ks; protocol := cmd; msg_heap := qmsgs |}) U__r'
+          /\ users U__r $? u_id = Some userData
+          /\ step_user u_id Silent (RealWorld.build_data_step U__r userData) (usrs, adv, cs, ks, qmsgs, cmd).
+  Proof.
+    intros.
+    invert H.
+    - left; trivial.
+    - right. invert H1.
+      + do 9 eexists; intuition; eauto.
+      + rewrite H0 in H; invert H.
+  Qed.
+
+
+  Lemma add_univ_simpl1 :
+    forall {v} (m : NatMap.t v) k1 v1 k2 v2,
+      k1 = k2
+      -> m $+ (k1,v1) $+ (k2,v2) = m $+ (k2,v2).
+  Proof.
+    intros. simpl.
+    apply map_eq_Equal; unfold Equal; intros; subst.
+    case (k2 ==n y); intros; subst.
+    rewrite !add_eq_o; trivial.
+    rewrite !add_neq_o; trivial.
+  Qed.
+
+  Lemma add_univ_simpl2 :
+    forall {v} (m : NatMap.t v) k1 v1 k2 v2 k3 v3,
+      k1 = k3
+      -> k2 <> k3
+      -> m $+ (k1,v1) $+ (k2,v2) $+ (k3,v3) = m $+ (k3,v3) $+ (k2,v2).
+  Proof.
+    intros. simpl.
+    apply map_eq_Equal; unfold Equal; intros; subst.
+    case (y ==n k2); intros; subst.
+    rewrite add_neq_o by auto; rewrite !add_eq_o; trivial.
+    case (y ==n k3); intros; subst.
+    rewrite add_eq_o by trivial. rewrite add_neq_o by auto. rewrite add_eq_o; trivial.
+    rewrite !add_neq_o by auto; trivial.
+  Qed.
+
+  Lemma add_univ_simpl3 :
+    forall {v} (m : NatMap.t v) k1 v1 k2 v2 k3 v3,
+      k1 = k2
+      -> k2 <> k3
+      -> m $+ (k1,v1) $+ (k2,v2) $+ (k3,v3) = m $+ (k2,v2) $+ (k3,v3).
+  Proof.
+    intros. simpl.
+    apply map_eq_Equal; unfold Equal; intros; subst.
+    case (y ==n k3); intros; subst.
+    rewrite !add_eq_o; trivial.
+    case (y ==n k2); intros; subst.
+    do 2 (rewrite add_neq_o by auto; rewrite add_eq_o by auto); trivial.
+    rewrite !add_neq_o by auto; trivial.
+  Qed.
+
+  Lemma simplify_build_univ1 :
+    forall {A B} (U__r : RealWorld.universe A B) (usrs : RealWorld.honest_users A) uid__a uid__b ud__a ud__b uid ud (adv : RealWorld.adversaries B) cs,
+        uid__a <> uid__b
+      -> uid = uid__a
+      -> RealWorld.buildUniverse (usrs $+ (uid__a,ud__a) $+ (uid__b,ud__b)) adv cs uid ud
+        = {| RealWorld.users       := usrs $+ (uid,ud) $+ (uid__b,ud__b)
+           ; RealWorld.adversary   := adv
+           ; RealWorld.all_ciphers := cs
+          |}.
+  Proof.
+    intros. unfold RealWorld.buildUniverse; simpl.
+    f_equal.
+    unfold updateUserList; subst.
+    apply map_eq_Equal; unfold Equal; intros.
+    case (y ==n uid__a); intros; subst.
+    m_equal. rewrite add_neq_o by auto. m_equal; trivial.
+    rewrite !add_neq_o by auto.
+    case (y ==n uid__b); intros; subst.
+    m_equal; trivial.
+    rewrite !add_neq_o by auto; trivial.
+  Qed.
+
+  Lemma simplify_build_univ2 :
+    forall {A B} (U__r : RealWorld.universe A B) (usrs : RealWorld.honest_users A) uid__a uid__b ud__a ud__b uid ud (adv : RealWorld.adversaries B) cs,
+        uid__a <> uid__b
+      -> uid = uid__b
+      -> RealWorld.buildUniverse (usrs $+ (uid__a,ud__a) $+ (uid__b,ud__b)) adv cs uid ud
+        = {| RealWorld.users       := usrs $+ (uid__a,ud__a) $+ (uid,ud)
+           ; RealWorld.adversary   := adv
+           ; RealWorld.all_ciphers := cs
+          |}.
+  Proof.
+    intros. unfold RealWorld.buildUniverse; simpl.
+    f_equal.
+    unfold updateUserList; subst.
+    apply map_eq_Equal; unfold Equal; intros.
+    case (y ==n uid__a); intros; subst.
+    rewrite !add_neq_o by auto. m_equal. rewrite !add_neq_o by auto. m_equal; trivial.
+    case (y ==n uid__b); intros; subst.
+    m_equal; trivial.
+    rewrite !add_neq_o by auto; trivial.
+  Qed.
+
+
+
+End RealWorldLemmas.
+
 Module SimulationAutomation.
 
   Hint Constructors RealWorld.msg_accepted_by_pattern.
 
   Ltac churn1 :=
     match goal with
-    | [ H : List.In _ _ |- _ ] => progress (simpl in H); intuition
+    | [ H : List.In _ _ |- _ ] => progress (simpl in H); intuition idtac
 
     | [ H : $0 $? _ = Some _ |- _ ] => apply find_mapsto_iff in H; apply empty_mapsto_iff in H; contradiction
     | [ H : _  $? _ = Some _ |- _ ] => progress (simpl in H)
@@ -253,7 +365,7 @@ Module SimulationAutomation.
     | [ H : add _ _ _ $? _ = Some ?UD |- _ ] =>
       match type of UD with
       | RealWorld.user_data bool => apply lookup_some_implies_in in H
-      | _ => apply lookup_split in H; intuition
+      | _ => apply lookup_split in H; intuition idtac
       end
 
     | [ H : updateUserList _ _ _ $? _ = Some _ |- _ ] => unfold updateUserList in H
@@ -296,15 +408,20 @@ Module SimulationAutomation.
     | [ H: rstepSilent _ _ |- _ ] => invert H
     | [ H: RealWorld.step_universe _ _ _ |- _ ] => invert H
 
+    (* | [ H :rstepSilent ^* (RealWorld.buildUniverse _ _ _ _ _) _ |- _] => *)
+    (*   progress (unfold RealWorld.buildUniverse, updateUserList in H; simpl in H) *)
     | [ H :rstepSilent ^* (RealWorld.buildUniverse _ _ _ _ _) _ |- _] =>
-      progress (unfold RealWorld.buildUniverse, updateUserList in H; simpl in H)
+      (rewrite simplify_build_univ1 in H by auto) || (rewrite simplify_build_univ2 in H by auto)
     | [ S: rstepSilent ^* ?U _ |- _ ] => 
       (* Don't actually multiStep unless we know the state of the starting universe
        * meaning it is not some unknown hypothesis in the context...
        *)
       match goal with
       | [U1 : U |- _] => fail 1
-      | [ |- _ ] => invert S
+      | [ |- _ ] =>
+        (* invert S *)
+        (* eapply multiStepSilentInv in S; intuition; repeat match goal with [ H : exists _, _ |- _] => destruct H end; intuition; subst *)
+        eapply multiStepSilentInv in S; intuition idtac; repeat match goal with [ H : exists _, _ |- _] => destruct H end; intuition idtac; subst
       end
 
     end.
@@ -322,7 +439,7 @@ Module SimulationAutomation.
       eapply elements_mapsto_iff;
       eapply SetoidList.InA_alt;
       eexists;
-      unfold eq_key_elt, Raw.PX.eqke; constructor; [intuition | ..].
+      unfold eq_key_elt, Raw.PX.eqke; constructor; [intuition idtac | ..].
 
   Ltac user0 := usr_first; left.
   Ltac user1 := usr_first; right; left.
@@ -446,98 +563,67 @@ Section FeebleSimulates.
     (*     [> eexists; constructor; swap 1 2 .. ]; *)
     (*     eauto 9). *)
 
-    intros. invert H.
+    intros; invert H; admit.
 
-    - churn.
+    (* - churn; *)
+    (*     [> eexists; constructor; swap 1 2 .. ]. *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
 
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
+    (* - churn; *)
+    (*     eexists; constructor; swap 1 2; eauto 9. *)
 
-    - churn.
-      eexists; constructor; swap 1 2; eauto 9.
+    (* - churn; *)
+    (*     [> eexists; apply Recd1; swap 1 2 .. ]. *)
+    (*     (* admit. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
 
+    (* - churn; *)
+    (*     [> eexists; constructor; swap 1 2 .. ]. *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
 
-    - do 6 churn1.
-      churn. admit.
-      churn. admit.
-
-      churn1. churn1. churn1. churn1. churn1.    admit. 
-      churn1. churn1. churn1.
-
-      do 3 churn1. churn1. churn1. churn1. churn. (* 2a 2b  *)
-
-      admit. admit.
-
-
-    - churn.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-
-    - churn.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-
-    - churn.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-      eexists; constructor; swap 1 2; eauto 9.
-
-    - churn.
-
-
-
-
-
-    (* - churn. *)
-    (*   eexists; constructor; swap 1 2; eauto 9. *)
-    (*   eexists; constructor; swap 1 2; eauto 9. *)
-    (*   eexists; constructor; swap 1 2; eauto 9. *)
-    (*   eexists; constructor; swap 1 2; eauto 9. *)
-
-    (* - churn. *)
-    (*   eexists; constructor; swap 1 2; eauto 9. *)
-    (*   eexists; constructor; swap 1 2; eauto 9. *)
-    (*   eexists; constructor; swap 1 2; eauto 9. *)
-    (*   eexists; constructor; swap 1 2; eauto 9. *)
-
-    (* - churn. *)
-    (*   eexists; constructor; swap 1 2; eauto 9. *)
-    (*   eexists; constructor; swap 1 2; eauto 9. *)
-    (*   eexists; constructor; swap 1 2; eauto 9. *)
-    (*   eexists; constructor; swap 1 2; eauto 9. *)
+    (* - churn; *)
+    (*     [> eexists; constructor; swap 1 2 .. ]. *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
+    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
 
     (* - churn. *)
 
-  Qed.
+  Admitted.
+
+
 
   Lemma rpingbase_loud_simulates : 
     forall U__r U__i,
@@ -551,6 +637,96 @@ Section FeebleSimulates.
             /\ RPingPongBase U__r' U__i''
             /\ RealWorld.action_adversary_safe (RealWorld.findUserKeys U__r.(RealWorld.adversary)) a1 = true.
   Proof.
+
+    time (intros; invert H; churn).
+
+    Ltac simplUniv :=
+      repeat match goal with
+             | [ |- context[ _ $+ (?A,_) $+ (?A,_) ] ] => rewrite add_univ_simpl1 by trivial
+             | [ |- context[ _ $+ (?A,_) $+ (?B,_) $+ (?A,_) ] ] => rewrite add_univ_simpl2 by auto
+             | [ |- context[ _ $+ (?A,_) $+ (?A,_) $+ (?B,_) ] ] => rewrite add_univ_simpl3 by auto
+             end.
+
+    unfold RealWorld.buildUniverse, updateUserList;
+      simpl; simplUniv;
+        (do 3 eexists;
+         propositional; swap 3 4; swap 1 3;
+         [ .. | admit (* action matches predicate *) ]; eauto; eauto 12).
+
+    unfold RealWorld.buildUniverse, updateUserList;
+      simpl; simplUniv;
+        (do 3 eexists;
+         propositional; swap 3 4; swap 1 3;
+         [ .. | admit (* action matches predicate *) ]; eauto; eauto 12).
+
+    unfold RealWorld.buildUniverse, updateUserList;
+      simpl; simplUniv;
+        (do 3 eexists;
+         propositional; swap 3 4; swap 1 3;
+         [ .. | admit (* action matches predicate *) ]; eauto; eauto 12).
+
+    
+    - unfold RealWorld.buildUniverse, updateUserList;
+        simpl; simplUniv.
+      do 3 eexists.
+      intuition idtac.
+      3:admit.
+      3:eapply Sent2; eauto 12.
+
+
+
+
+    unfold RealWorld.buildUniverse, updateUserList;
+      simpl; simplUniv;
+        (do 3 eexists;
+         propositional; swap 3 4; swap 1 3;
+         [ .. | admit (* action matches predicate *) ]; eauto; eauto 12).
+
+
+
+
+
+      + unfold RealWorld.buildUniverse, updateUserList; simpl; simplUniv.
+        do 3 eexists; (intuition idtac).
+        4: eapply Sent2.
+        ideal_silent_steps.
+        eauto 12.
+        admit.
+        unfold real_univ_sent2, mkrU; simpl.
+        real_silent_step0. eapply TrcRefl'. unfold RealWorld.buildUniverse, updateUserList; simpl.
+        f_equal. m_equal; eauto. unfold RealWorld.addUserKeys, map; simpl. m_equal.   m_equal; eauto. 
+        
+
+
+
+        ideal_silent_steps.
+        eauto 9.
+        admit.
+        eapply Sent2.
+
+        4: eapply Sent2; eauto 9.
+
+        unfold ideal_univ_recd1, mkiU; simpl.
+        ideal_silent_step1.
+        eauto 9.
+        admit.
+        eapply Sent1.
+
+    (ideal_silent_step0 || ideal_silent_step1);
+      repeat ideal_silent_step0;
+      repeat ideal_silent_step1;
+      eapply TrcRefl.
+
+
+        ideal_silent_steps.
+        eauto 9.
+        admit.
+        eapply Sent1.
+        econstructor; eauto.
+
+
+      
+
 
     time
       (intros;
