@@ -535,6 +535,13 @@ Import SimulationAutomation.
 
 Section FeebleSimulates.
 
+  Ltac simplUniv :=
+    repeat match goal with
+           | [ |- context[ _ $+ (?A,_) $+ (?A,_) ] ] => rewrite add_univ_simpl1 by trivial
+           | [ |- context[ _ $+ (?A,_) $+ (?B,_) $+ (?A,_) ] ] => rewrite add_univ_simpl2 by auto
+           | [ |- context[ _ $+ (?A,_) $+ (?A,_) $+ (?B,_) ] ] => rewrite add_univ_simpl3 by auto
+           end.
+
   Lemma rpingbase_silent_simulates :
     forall U__r U__i,
       RPingPongBase U__r U__i
@@ -544,72 +551,30 @@ Section FeebleSimulates.
           istepSilent ^* U__i U__i'
           /\ RPingPongBase U__r' U__i'.
   Proof.
+
+    time (
+        intros;
+        invert H;
+        churn; simplUniv;
+        [> eexists; constructor; swap 1 2 ; eauto 9 .. ]
+      ).
+
+    (* Tactic call ran for 2481.944 secs (2480.162u,1.672s) (success) *)
+    (* No more subgoals. *)
+ 
+    (* Tactic call ran for 494.024 secs (493.416u,0.596s) (success) *)
+
     (* time ( *)
     (*     intros; *)
     (*     invert H; *)
-    (*     churn; *)
+    (*     churn; simplUniv; *)
     (*     [> eexists; constructor; swap 1 2 .. ]; *)
     (*     eauto 9). *)
 
-    intros; invert H; admit.
+    (* Tactic call ran for 2579.235 secs (2577.438u,1.502s) (success) *)
+    (* No more subgoals. *)
 
-    (* - churn; *)
-    (*     [> eexists; constructor; swap 1 2 .. ]. *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-
-    (* - churn; *)
-    (*     eexists; constructor; swap 1 2; eauto 9. *)
-
-    (* - churn; *)
-    (*     [> eexists; apply Recd1; swap 1 2 .. ]. *)
-    (*     (* admit. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-
-    (* - churn; *)
-    (*     [> eexists; constructor; swap 1 2 .. ]. *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-
-    (* - churn; *)
-    (*     [> eexists; constructor; swap 1 2 .. ]. *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-    (*   (* eexists; constructor; swap 1 2; eauto 9. *) *)
-
-    (* - churn. *)
-
-  Admitted.
+  Qed.
 
 
 
@@ -626,12 +591,6 @@ Section FeebleSimulates.
             /\ RealWorld.action_adversary_safe (RealWorld.findUserKeys U__r.(RealWorld.adversary)) a1 = true.
   Proof.
 
-    Ltac simplUniv :=
-      repeat match goal with
-             | [ |- context[ _ $+ (?A,_) $+ (?A,_) ] ] => rewrite add_univ_simpl1 by trivial
-             | [ |- context[ _ $+ (?A,_) $+ (?B,_) $+ (?A,_) ] ] => rewrite add_univ_simpl2 by auto
-             | [ |- context[ _ $+ (?A,_) $+ (?A,_) $+ (?B,_) ] ] => rewrite add_univ_simpl3 by auto
-             end.
 
     time
       (intros;
