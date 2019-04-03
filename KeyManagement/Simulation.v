@@ -56,7 +56,7 @@ Definition check_cipher (ch_id : IdealWorld.channel_id)
       | RealWorld.Ciphertext cphr_id =>
         match cphrs $? cphr_id with
         | None => False
-        | Some (RealWorld.Cipher cphr_id k_id msg) =>
+        | Some (RealWorld.Cipher cphr_id k_id msg _) =>
           RealWorld.keyId k = k_id /\ msg_eq msg (im,ch_id,chans,perms)
         end
       | _ => False
@@ -73,7 +73,7 @@ Definition chan_key_ok :=
       | RealWorld.Ciphertext cphr_id =>
         match cphrs $? cphr_id with
         | None => False
-        | Some (RealWorld.Cipher cphr_id k_id msg) =>
+        | Some (RealWorld.Cipher cphr_id k_id msg _) =>
           RealWorld.keyId k = k_id /\ msg_eq msg (im,ch_id,chans,perms)
         end
       | _ => False

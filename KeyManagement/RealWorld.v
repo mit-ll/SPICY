@@ -52,14 +52,21 @@ Inductive message : type -> Type :=
 
 (* We need to handle non-deterministic message  -- external choice on ordering *)
 Inductive msg_pat :=
-| Accept
+| Accept (* add optional value to accept? *)
 | Paired (pat1 pat2 : msg_pat)
 | Signed (k : key_identifier) (pat : msg_pat)
 | Encrypted (k : key_identifier) (pat : msg_pat)
 .
+(* We also need to store the form of the message with each cipher in the cipher
+   heap to prove functions halt *)
+Inductive message_form :=
+| PtKeyForm : message_form
+| EncForm : message_form -> message_form
+| SigForm : message_form -> message_form                        
+| PairForm : message_form -> message_form -> message_form.
 
 Inductive cipher : Type :=
-| Cipher {t} (c_id : cipher_id) (k_id : key_identifier) (msg : message t) : cipher
+| Cipher {t} (c_id : cipher_id) (k_id : key_identifier) (msg : message t) (form : message_form) : cipher
 .
 
 Definition queued_messages := NatMap.t (list exmsg).
@@ -75,13 +82,13 @@ Fixpoint msg_accepted_by_pattern {t} (cs : ciphers) (pat : msg_pat) (msg : messa
   | Paired _ _, _ => false
   | Signed k p, Signature _ c_id =>
     match cs $? c_id with
-    | Some (Cipher _ k_id m) => if (k ==n k_id) then (msg_accepted_by_pattern cs p m) else false
+    | Some (Cipher _ k_id m _) => if (k ==n k_id) then (msg_accepted_by_pattern cs p m) else false
     | None => false
     end
   | Signed _ _, _ => false
   | Encrypted k p, Ciphertext c_id =>
     match cs $? c_id with
-    | Some (Cipher _ k_id m) => if (k ==n k_id) then (msg_accepted_by_pattern cs p m) else false
+    | Some (Cipher _ k_id m _) => if (k ==n k_id) then (msg_accepted_by_pattern cs p m) else false
     | None => false
     end
   | Encrypted _ _, _ => false
@@ -111,7 +118,7 @@ Fixpoint msg_spoofable {t} (cs : ciphers) (advk : adversary_knowledge) (msg : me
   | Ciphertext c_id => true (* TODO -- how should we actually handle this?? *)
   | Signature m c_id =>
     match cs $? c_id with
-    | Some (Cipher _ k_id _) => match advk $? k_id with | Some _ => true | None => false end
+    | Some (Cipher _ k_id _ _) => match advk $? k_id with | Some _ => true | None => false end
     | None => false
     end
   end.
@@ -225,23 +232,38 @@ Definition addCipher (cid : cipher_id) (msg : cipher) (globals : universe_global
   {| users_msg_buffer := globals.(users_msg_buffer)
    ; all_keys         := globals.(all_keys)
    ; all_ciphers      := globals.(all_ciphers) $+ (cid, msg)
-   |}.
+  |}.
 
-Definition encryptMessage {t} (k : key) (m : message t) (c_id : cipher_id) : option cipher :=
+Fixpoint lookup_form {t} (m : message t) (cs : ciphers) : message_form :=
+  match m with
+  | KeyMessage _
+  | Plaintext _ => PtKeyForm
+  | Signature _ s__id => (match cs $? s__id with
+                       | Some (Cipher _ _ _ f) => SigForm f
+                       | None => PtKeyForm (* error case *)
+                       end)
+  | Ciphertext m__id => (match cs $? m__id with
+                      | Some (Cipher _ _ _ f) => EncForm f
+                      | None => PtKeyForm (* error case, consider option type? *)
+                      end)
+  | MsgPair m1 m2 => PairForm (lookup_form m1 cs) (lookup_form m2 cs)
+  end.
+
+Definition encryptMessage {t} (k : key) (m : message t) (c_id : cipher_id) (cs : ciphers)  : option cipher :=
   match k.(keyUsage) with
-  | Encryption => Some (Cipher c_id k.(keyId) m)
+  | Encryption => Some (Cipher c_id k.(keyId) m (EncForm (lookup_form m cs)))
   | _          => None
   end.
 
-Definition signMessage {t} (k : key) (m : message t) (c_id : cipher_id) : option cipher :=
+Definition signMessage {t} (k : key) (m : message t) (c_id : cipher_id) (cs : ciphers) : option cipher :=
   match k.(keyUsage) with
-  | Signing => Some (Cipher c_id k.(keyId) m)
+  | Signing => Some (Cipher c_id k.(keyId) m (SigForm (lookup_form m cs)))
   | _       => None
   end.
 
 Definition canVerifySignature {A} (cs : ciphers)(usrDat : user_data A)(c_id : cipher_id) : Prop :=
-  forall t (m : message t) k_id k ,
-    cs $? c_id = Some (Cipher c_id k_id m)
+  forall t (m : message t) k_id k f,
+    cs $? c_id = Some (Cipher c_id k_id m f)
     (*  Make sure that the user has access to the key.  If we are doing asymmetric signatures,
         we only need the public part of the key, so no additional checks necessary! *)
     /\ usrDat.(key_heap) $? k_id = Some k.
@@ -359,14 +381,14 @@ Inductive lstep_user : forall A, user_id -> rlabel -> data_step0 A -> data_step0
     keyId k = k_id
     -> uks $? k_id = Some k
     -> ~(In c_id globals.(all_ciphers))
-    -> encryptMessage k msg c_id = Some cipherMsg
+    -> encryptMessage k msg c_id globals.(all_ciphers) = Some cipherMsg
     -> globals' = addCipher c_id cipherMsg globals
     -> lstep_user u_id Silent
                  (globals,  adv, uks, Encrypt k msg)
                  (globals', adv, uks, Return (Ciphertext c_id))
 
-| LStepDecrypt : forall {t} u_id adv globals uks (msg : message t) k_id k c_id newkeys,
-    globals.(all_ciphers) $? c_id = Some (Cipher c_id k_id msg)
+| LStepDecrypt : forall {t} u_id adv globals uks (msg : message t) k_id k c_id newkeys f,
+    globals.(all_ciphers) $? c_id = Some (Cipher c_id k_id msg f)
     -> ( uks $? k_id = Some (MkCryptoKey k_id Encryption (AsymKey true)) (* check we have access to private key *)
       \/ uks $? k_id = Some (MkCryptoKey k_id Encryption SymKey) )
     -> k.(keyId) = k_id
@@ -380,17 +402,17 @@ Inductive lstep_user : forall A, user_id -> rlabel -> data_step0 A -> data_step0
       keyId k = k_id
     -> uks $? k_id = Some k
     -> ~(In c_id globals.(all_ciphers))
-    -> signMessage k msg c_id = Some cipherMsg
+    -> signMessage k msg c_id globals.(all_ciphers) = Some cipherMsg
     -> globals' = addCipher c_id cipherMsg globals
     -> lstep_user u_id Silent
                  (globals,  adv, uks, Sign k msg)
                  (globals', adv, uks, Return (Signature msg c_id))
 
-| LStepVerify : forall {t} u_id adv globals uks (msg : message t) k_id k c_id,
+| LStepVerify : forall {t} u_id adv globals uks (msg : message t) k_id k c_id f,
     (* k is in your key heap *)
     uks $? (keyId k) = Some k
     (* return true or false whether k was used to sign the message *)
-    -> globals.(all_ciphers) $? c_id = Some (Cipher c_id k_id msg)
+    -> globals.(all_ciphers) $? c_id = Some (Cipher c_id k_id msg f)
     (* -> findKeys msg = newkeys *)
     -> lstep_user u_id Silent
                  (globals, adv, uks, (Verify k (MsgPair msg (Ciphertext c_id))))
