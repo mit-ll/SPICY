@@ -14,12 +14,15 @@ Inductive message_form :=
 | Crypto : message_form -> message_form
 | Pair : message_form -> message_form -> message_form.
 
+Definition garbage : option (list RealWorld.key_identifier) * exmsg :=
+  (None, Exm (RealWorld.Plaintext 0)).
+
 Fixpoint key_sets {t : RealWorld.type} (msg : RealWorld.message t) (cipher_heap : RealWorld.ciphers) (form : message_form) :=
   match form with
   | PtKeyForm => match msg with
                 | RealWorld.Plaintext c => (Some nil, Exm c) :: nil
                 | RealWorld.KeyMessage k => (Some nil, Exm k) :: nil
-                | _ => (None, Exm (RealWorld.Plaintext 0)) :: nil
+                | _ => garbage :: nil
                 end
                   
   | Crypto f => match msg with
@@ -30,7 +33,7 @@ Fixpoint key_sets {t : RealWorld.type} (msg : RealWorld.message t) (cipher_heap 
                                   | Some ls => Some (k_id :: ls)
                                   | None => None        
                                   end, snd x)) (key_sets m cipher_heap f)
-                 | None => (None, Exm (RealWorld.Plaintext 0)) :: nil
+                 | None => garbage :: nil
                  end
                | RealWorld.Signature _ id =>
                  match cipher_heap $? id with
@@ -39,13 +42,13 @@ Fixpoint key_sets {t : RealWorld.type} (msg : RealWorld.message t) (cipher_heap 
                                   | Some ls => Some (k_id :: ls)
                                   | None => None
                                   end, snd x)) (key_sets m cipher_heap f)
-                 | None => (None, Exm (RealWorld.Plaintext 0)) :: nil
+                 | None => garbage :: nil
                  end                        
-               | _ => (None, Exm (RealWorld.Plaintext 0)) :: nil
+               | _ => garbage :: nil
                end
   | Pair f1 f2 => match msg with
                  | RealWorld.MsgPair m1 m2 => app (key_sets m1 cipher_heap f1) (key_sets m2 cipher_heap f2)
-                 | _ => (None, Exm (RealWorld.Plaintext 0)) :: nil
+                 | _ => garbage :: nil
                  end
   end.
 
