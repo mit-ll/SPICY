@@ -17,35 +17,35 @@ Inductive message_form :=
 Fixpoint key_sets {t : RealWorld.type} (msg : RealWorld.message t) (cipher_heap : RealWorld.ciphers) (form : message_form) :=
   match form with
   | PtKeyForm => match msg with
-                | RealWorld.Plaintext c => (Some nil) :: nil
-                | RealWorld.KeyMessage k => (Some nil) :: nil
-                | _ => None :: nil
+                | RealWorld.Plaintext c => (Some nil, Exm c) :: nil
+                | RealWorld.KeyMessage k => (Some nil, Exm k) :: nil
+                | _ => (None, Exm (RealWorld.Plaintext 0)) :: nil
                 end
                   
   | Crypto f => match msg with
                | RealWorld.Ciphertext id =>
                  match cipher_heap $? id with
-                 | Some (RealWorld.Cipher _ k_id m) =>
-                   map (fun x => match x with
-                              | Some ls => Some (k_id :: ls)
-                              | None => None        
-                              end) (key_sets m cipher_heap f)
-                 | None => None :: nil
+                 | Some (RealWorld.Cipher _ k_id m _) =>
+                   map (fun x => (match fst x with
+                                  | Some ls => Some (k_id :: ls)
+                                  | None => None        
+                                  end, snd x)) (key_sets m cipher_heap f)
+                 | None => (None, Exm (RealWorld.Plaintext 0)) :: nil
                  end
                | RealWorld.Signature _ id =>
                  match cipher_heap $? id with
-                 | Some (RealWorld.Cipher _ k_id m) =>
-                   map (fun x => match x with
-                              | Some ls => Some (k_id :: ls)
-                              | None => None
-                              end) (key_sets m cipher_heap f)
-                 | None => None :: nil
+                 | Some (RealWorld.Cipher _ k_id m _) =>
+                   map (fun x => (match fst x with
+                                  | Some ls => Some (k_id :: ls)
+                                  | None => None
+                                  end, snd x)) (key_sets m cipher_heap f)
+                 | None => (None, Exm (RealWorld.Plaintext 0)) :: nil
                  end                        
-               | _ => None :: nil
+               | _ => (None, Exm (RealWorld.Plaintext 0)) :: nil
                end
   | Pair f1 f2 => match msg with
                  | RealWorld.MsgPair m1 m2 => app (key_sets m1 cipher_heap f1) (key_sets m2 cipher_heap f2)
-                 | _ => None :: nil
+                 | _ => (None, Exm (RealWorld.Plaintext 0)) :: nil
                  end
   end.
 
