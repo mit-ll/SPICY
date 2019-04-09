@@ -1,6 +1,10 @@
 From Coq Require Import String Bool.Sumbool.
 
-Require Import MyPrelude. 
+Require Import MyPrelude.
+
+Module Foo <: EMPTY. End Foo.
+Module Import SN := SetNotations(Foo).
+
 
 Require Import Users Common.
 Import Users.NatMap.

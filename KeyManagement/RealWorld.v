@@ -1,4 +1,5 @@
-From Coq Require Import String.
+From Coq Require Import String Sumbool.
+
 Require Import MyPrelude Common Users.
 
 Set Implicit Arguments.
@@ -9,14 +10,47 @@ Inductive key_usage :=
 | Encryption
 | Signing.
 
+Lemma key_usage_eq_dec :
+  forall u1 u2 : key_usage, { u1 = u2 } + { u1 <> u2 }.
+  decide equality.
+Defined.
+
 (* A master key type *)
 Inductive key_type :=
 | SymKey
 | AsymKey (has_private_access : bool).
 
+Definition key_type_same (kt1 kt2 : key_type) :=
+  match (kt1,kt2) with
+  | (AsymKey _, AsymKey _) => true
+  | (SymKey   , SymKey   ) => true
+  | _                      => false
+  end.
+
+Lemma key_type_eq_dec :
+  forall kt1 kt2 : key_type, { kt1 = kt2 } + { kt1 <> kt2 }.
+  decide equality; auto using Bool.bool_dec.
+Defined.
+
 Record key := MkCryptoKey { keyId : key_identifier ;
                             keyUsage  : key_usage ;
                             keyType : key_type }.
+
+Lemma key_eq_dec :
+  forall k1 k2 : key, { k1 = k2 } + { k1 <> k2 }.
+  decide equality; auto using Nat.eq_dec, key_usage_eq_dec, key_type_eq_dec.
+Defined.
+
+Notation "x ==kk y" := (key_eq_dec x y) (right associativity, at level 75).
+Notation "x ==ku y" := (key_usage_eq_dec x y) (right associativity, at level 75).
+Notation "x ==kt y" := (key_type_eq_dec x y) (right associativity, at level 75).
+
+Definition keys_compatible (k1 k2 : key) :=
+  if   k1.(keyId) ==n k2.(keyId)
+  then if   k1.(keyUsage) ==ku k2.(keyUsage)
+       then key_type_same k1.(keyType) k2.(keyType)
+       else false
+  else false.
 
 Definition keyEq k1 k2 := k1.(keyId) = k2.(keyId).
 Notation "x ==k y" := (keyEq x y) (right associativity, at level 75).
@@ -202,6 +236,187 @@ Record universe (A B : Type) :=
     ; adversary   : adversaries B
     ; all_ciphers : ciphers
     }.
+
+
+(* Inductive key_type := *)
+(* | SymKey *)
+(* | AsymKey (has_private_access : bool). *)
+
+(* Record key := MkCryptoKey { keyId : key_identifier ; *)
+(*                             keyUsage  : key_usage ; *)
+(*                             keyType : key_type }. *)
+
+Section KeyMerge.
+
+  Definition add_key (k_id : key_identifier) (k : key) (ks : keys) : keys :=
+    match ks $? k_id with
+    | None     => ks $+ (k_id, k)
+    | Some k'  => if   k ==kk k'
+                 then ks
+                 else if   keys_compatible k k'
+                      then if   k'.(keyType) ==kt AsymKey true (* private key do nothing *)
+                           then ks
+                           else ks $+ (k_id, k)
+                      (* Don't ever want to go down this branch
+                       * Implemented this way to make the fold work nice.
+                       *)
+                      else ks $- k_id
+    end.
+
+  Definition merge_keys (ks ks' : keys) : keys :=
+    fold add_key ks ks'.
+
+  Notation "m1 $k++ m2" := (merge_keys m2 m1) (at level 50, left associativity).
+
+  Lemma map_eq_Equal :
+    forall {V} (m m' : t V),
+      Equal m m'
+      -> m = m'.
+  Proof.
+  Admitted.
+
+  Lemma map_Equal_eq :
+    forall {V} (m m' : t V),
+      m = m'
+    -> Equal m m'.
+  Proof.
+    intros; subst.
+    unfold Equal; intros; trivial.
+  Qed.
+
+  Definition keys_good (ks : keys) :=
+    forall k_id k,
+      ks $? k_id = Some k
+      -> keyId k = k_id.
+
+  Lemma merge_keys_fold_fn_proper :
+      Morphisms.Proper
+        (Morphisms.respectful eq (Morphisms.respectful eq (Morphisms.respectful (Basics.flip eq) (Basics.flip eq))))
+        add_key.
+  Proof.
+    unfold Morphisms.Proper, Morphisms.respectful; intros; simpl; unfold Basics.flip in *; subst; trivial.
+  Qed.
+
+  Lemma merge_keys_transpose :
+    transpose_neqkey (Basics.flip eq) add_key.
+  Proof.
+    unfold transpose_neqkey, Basics.flip; intros.
+    unfold add_key; simpl.
+    case_eq (a $? k); case_eq (a $? k'); intros; subst; simpl.
+
+    - 
+
+    repeat
+      match goal with
+      | [ H : ?x <> ?x |- _ ] => contradiction
+      | [ H : a $? k  = _ |- context [a $? k]  ] => rewrite H
+      | [ H : a $? k' = _ |- context [a $? k'] ] => rewrite H
+      | [ |- context[ ?k1 ==kk ?k2 ] ] => case (k1 ==kk k2); intros; subst
+      | [ |- context [ keys_compatible ?k1 ?k2 ]] => case_eq (keys_compatible k1 k2); intros
+      | [ |- context [ keyType ?k ==kt ?kt ]] => case (keyType k ==kt kt); intros
+      | [ |- context [ _ $+ (?k1, _) $? ?k1 ]] => rewrite add_eq_o by (trivial || auto)
+      | [ |- context [ _ $+ (?k1, _) $? ?k2 ]] => rewrite add_neq_o by auto
+      | [ |- context [ _ $- ?k1 $? ?k2 ]] => rewrite remove_neq_o by auto
+      end; eauto.
+    
+
+    - case (e ==kk k1); case (e' ==kk k0); intros; subst.
+      rewrite H0; rewrite H1. case (k0 ==kk k0); case (k1 ==kk k1); intros; subst; try contradiction; auto.
+      rewrite H0. case (e' ==kk k0); intros; subst; try contradiction. case_eq (keys_compatible e' k0); intros; eauto.
+        case (keyType k0 ==kt AsymKey true); intros. rewrite H1. case (k1 ==kk k1); intros; subst; try contradiction; eauto.
+        rewrite add_neq_o by auto; rewrite H1; cases (k1 ==kk k1); intros; try contradiction; eauto.
+        rewrite remove_neq_o by auto; rewrite H1. cases (k1 ==kk k1); intros; try contradiction; eauto.
+      rewrite H1.
+
+
+    admit.
+  Admitted.
+
+  Hint Resolve merge_keys_fold_fn_proper.
+
+
+  Lemma merge_keys_merges :
+    forall ks2 k_id k ks ks1,
+      ks = ks1 $k++ ks2
+      -> ks $? k_id = Some k
+      -> keys_good ks1
+      -> keys_good ks2
+      -> ks1 $? k_id = Some k
+      \/ ks2 $? k_id = Some k.
+  Proof.
+    unfold merge_keys, keys_good.
+    induction ks2 using P.map_induction_bis; intros.
+    - apply map_eq_Equal in H; subst.
+      eapply IHks2_1; eauto.
+
+    - rewrite fold_Empty in H; eauto.
+      subst; intuition idtac.
+      unfold Empty, Raw.Empty, empty, not; simpl. intros. unfold Raw.PX.MapsTo, Raw.empty in H3; invert H3.
+
+    - rewrite fold_add in H0; auto.
+
+      admit.
+
+
+      case (x ==n k_id); intros.
+      + subst. rewrite add_eq_o by reflexivity.
+        remember (fold (fun (_ : NatMap.key) (k : key) (m : keys) => add_key m k) ks2 ks1) as mks12.
+        unfold add_key in H1.
+        case_eq (mks12 $? keyId e); intros.
+          rewrite H0 in H1. admit.
+          rewrite H0 in H1. case (keyId e ==n k_id); intros. rewrite add_eq_o in H1 by assumption. invert H1. intuition idtac.
+            rewrite add_neq_o in H1 by assumption.
+            specialize (IHks2 k_id k _ _ Heqmks12 H1). invert IHks2.
+            intuition idtac. admit. (* annoying but easy *)
+      + rewrite add_neq_o by assumption. eapply IHks2; eauto. subst.
+        remember (fold (fun (_ : NatMap.key) (k : key) (m : keys) => add_key m k) ks2 ks1) as mks12.
+        unfold add_key in H1.
+        case_eq (mks12 $? keyId e); intros; rewrite H0 in H1.
+          admit.
+          case (k_id ==n keyId e); intro.
+            rewrite add_eq_o in H1 by auto; inversion H1; clear H1.
+
+
+      eapply IHks2.
+
+
+
+    induction ks using P.map_induction_bis; intros.
+    - eapply IHks1; admit.
+    - invert H0.
+    - 
+
+    unfold merge_keys; intros.
+    subst.
+
+
+
+    intro. intro. intro.
+    unfold merge_keys.
+    apply P.fold_rec; intros.
+    - subst.
+
+
+
+
+    symmetry in H.
+    apply P.fold_rec in H.
+
+
+  Lemma merge_keys_ok :
+    forall k_id k1 k2 ks ks1 ks2,
+        ks = ks1 $k++ ks2
+      -> ks1 $? k_id = Some k1
+      -> ks2 $? k_id = Some k2
+      -> k1.(keyId) = k_id
+      -> k2.(keyId) = k_id
+      -> keys_compatible k1 k2 = true
+      -> ( ks $? k_id = Some k1 /\ k1 = k2 )
+      \/ ( ks $? k_id = Some k1 /\ k1.(keyType) = AsymKey true )
+      \/ ( ks $? k_id = Some k2 /\ k2.(keyType) = AsymKey true ).
+  Proof.
+    intros.
+    unfold merge_keys in *.
 
 (* When we are finding keys, we need to check whether they are asymmetric.  If
    so, we mark them as not having access to the private key, since the intent is to
@@ -398,14 +613,16 @@ Inductive step_user : forall A B C, user_id -> rlabel -> data_step0 A B C -> dat
                 (usrs, adv, cs', ks, qmsgs, Return (Signature msg c_id))
 
 | StepVerify : forall {A B} {t} u_id (usrs : honest_users A) (adv : adversaries B) cs ks qmsgs (msg : message t) k_id k c_id,
+    keyId k = k_id
     (* k is in your key heap *)
-    ks $? (keyId k) = Some k
+    -> ks $? (keyId k) = Some k
     (* return true or false whether k was used to sign the message *)
     -> cs $? c_id = Some (SigCipher c_id k_id msg)
     (* -> findKeys msg = newkeys *)
     -> step_user u_id Silent
                 (usrs, adv, cs, ks, qmsgs, (Verify k (Signature msg c_id)))
-                (usrs, adv, cs, ks, qmsgs, Return (if (k_id ==n (keyId k)) then true else false))
+                (usrs, adv, cs, ks, qmsgs, Return true)
+                (* (usrs, adv, cs, ks, qmsgs, Return (if (k_id ==n (keyId k)) then true else false)) *)
 .
 
 (* Key creation *)

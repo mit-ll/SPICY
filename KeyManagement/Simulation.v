@@ -594,32 +594,6 @@ Section SingleAdversarySimulates.
 
     Hint Resolve honest_enc_cipher_not_cleaned honest_sign_cipher_not_cleaned.
 
-  (*   Lemma input_action_same_after_cleaning : *)
-  (*     forall a a' u_id cs pat msg ks adv_keys, *)
-  (*       a  = Input msg pat u_id ks cs *)
-  (*       -> a' = Input msg pat u_id ks (clean_ciphers adv_keys cs) *)
-  (*       -> a *)
-  (*       -> a'. *)
-
-
-  (* msg : message t0 *)
-  (* pat : msg_pat *)
-  (* H7 : (usrs', adv', cs', ks, Exm msg :: qmsgs', Recv pat) = (usrs', adv', cs', ks, Exm msg :: qmsgs', Recv pat) *)
-  (* H3 : msg_accepted_by_pattern cs' pat msg *)
-  (* H5 : forall (uk_id : NatMap.key) (uk : key), ks $? uk_id = Some uk -> findUserKeys adv' $? uk_id = None *)
-  (* H15 : (usrs', adv', cs', ks $++ findKeys msg, qmsgs', Return msg) = (usrs', adv', cs', ks $++ findKeys msg, qmsgs', Return msg) *)
-  (* ============================ *)
-  (* step_user u_id (Action (Input msg pat u_id ks cs')) (usrs', $0, clean_ciphers (findUserKeys adv') cs', ks, Exm msg :: qmsgs', Recv pat) *)
-  (*   (usrs', $0, clean_ciphers (findUserKeys adv') cs', ks $++ findKeys msg, qmsgs', Return msg) *)
-
-
-  (* H3 : msg_accepted_by_pattern cs' pat msg *)
-  (* H5 : forall (uk_id : NatMap.key) (uk : key), ks $? uk_id = Some uk -> findUserKeys adv' $? uk_id = None *)
-  (* H15 : (usrs', adv', cs', ks $++ findKeys msg, qmsgs', Return msg) = (usrs', adv', cs', ks $++ findKeys msg, qmsgs', Return msg) *)
-  (* ============================ *)
-  (* msg_accepted_by_pattern (clean_ciphers (findUserKeys adv') cs') pat msg *)
-
-
     Lemma honest_silent_step_advuniv_implies_honest_step_origuniv :
       forall {A B C} cs cs' lbl u_id (usrs usrs' : honest_users A) (adv adv' : adversaries B) ks ks' qmsgs qmsgs' bd bd',
         step_user u_id lbl bd bd'
@@ -635,21 +609,17 @@ Section SingleAdversarySimulates.
               -> step_user (B:=B) u_id lbl (usrs, $0, cs__s, ks, qmsgs, cmd) (usrs', $0, cs__s', ks', qmsgs', cmd').
     Proof.
       induction 1; inversion 4; inversion 2; intro; subst;
-        econstructor;
         repeat match goal with
                | [ H : Action _ = Silent |- _ ] => invert H
                end;
+        econstructor;
         eauto.
 
       - apply clean_ciphers_keeps_honest_cipher; unfold honest_cipher; eauto.
         invert H0; specialize (H5 _ _ H1); rewrite H5; eauto.
       - apply clean_ciphers_keeps_honest_cipher; unfold honest_cipher; eauto.
-        specialize (H2 _ _ H).
-        (* The small problem here is that we don't know that the verification will work.
-         * Thus, we don't get the connection between the keyId we are checking
-         *)
-        admit.
-
+        specialize (H3 _ _ H0); rewrite H3; eauto.
+        (* this should not be provable.  the disjoint keys notion is too strong. *)
     Admitted.
 
     Lemma honest_loud_step_advuniv_implies_honest_step_origuniv :
