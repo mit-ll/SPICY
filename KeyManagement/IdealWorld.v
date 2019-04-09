@@ -5,9 +5,7 @@ Require Import MyPrelude.
 Module Foo <: EMPTY. End Foo.
 Module Import SN := SetNotations(Foo).
 
-
-Require Import Users Common.
-Import Users.NatMap.
+Require Import Common Maps.
 
 Set Implicit Arguments.
 
@@ -178,7 +176,7 @@ Inductive lstep_universe : forall {A : Type}, universe A -> ilabel -> universe A
     -> lstep_user lbl (U.(channel_vector), u.(protocol), u.(perms)) (chans, proto, perms')
     -> lstep_universe U lbl (construct_universe
                              chans
-                             (updateUserList U.(users) u_id {| protocol := proto ; perms := perms' |})).
+                             (U.(users) $+ (u_id, {| protocol := proto ; perms := perms' |}))).
 
 
 Lemma LStepUser' : forall A (U U': universe A) u_id u proto chans perms' lbl,
@@ -186,7 +184,7 @@ Lemma LStepUser' : forall A (U U': universe A) u_id u proto chans perms' lbl,
     -> lstep_user lbl (U.(channel_vector), u.(protocol), u.(perms)) (chans, proto, perms')
     -> U' = (construct_universe
               chans
-              (updateUserList U.(users) u_id {| protocol := proto ; perms := perms' |}))
+              (U.(users) $+ (u_id, {| protocol := proto ; perms := perms' |})))
     -> lstep_universe U lbl U'.
 Proof.
   intros. subst. econstructor; eauto.

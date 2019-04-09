@@ -5,7 +5,7 @@ From Coq Require Import
 .
 
 
-Require Import MyPrelude Users Common MapLtac. 
+Require Import MyPrelude Maps Common MapLtac. 
 
 Require IdealWorld
         RealWorld.
@@ -811,12 +811,12 @@ Section SingleAdversarySimulates.
         -> R (strip_adversary (buildUniverseAdv usrs adv cs u_id {| key_heap := ks; protocol := cmd; msg_heap := qmsgs |})) U__i.
     Proof.
       intros.
-      unfold buildUniverseAdv, strip_adversary, updateUserList in *; simpl in *.
+      unfold buildUniverseAdv, strip_adversary in *; simpl in *.
 
       assert (U__r.(adversary) = $0 $+ (u_id,userData)) by (map_equal; eauto).
 
       assert (findUserKeys U__r.(adversary) = userData.(key_heap)) as ADV_KEYS
-        by (rewrite H3; unfold findUserKeys, fold, Raw.fold; simpl; rewrite empty_add_idempotent; trivial).
+        by (rewrite H3; unfold findUserKeys, fold, Raw.fold; simpl; rewrite merge_keys_left_identity; trivial).
       rewrite ADV_KEYS in H2; clear ADV_KEYS.
 
       assert (adv $+ (u_id, {| key_heap := ks; protocol := cmd; msg_heap := qmsgs |})
@@ -834,7 +834,7 @@ Section SingleAdversarySimulates.
 
       assert (findUserKeys (adv $+ (u_id, {| key_heap := ks; protocol := cmd; msg_heap := qmsgs |})) = ks);
         rewrite ADV_RED; clear ADV_RED;
-        unfold findUserKeys, fold, Raw.fold; simpl; rewrite empty_add_idempotent; trivial.
+        unfold findUserKeys, fold, Raw.fold; simpl; rewrite merge_keys_left_identity; trivial.
 
       match goal with
       | [ H : R {| users := ?us ; adversary := _ ; all_ciphers := ?cs |} _ |- R {| users := ?us' ; adversary := _ ; all_ciphers := ?cs' |} _ ] =>
@@ -850,8 +850,7 @@ Section SingleAdversarySimulates.
   Hint Constructors RealWorld.step_user.
 
   Hint Extern 1 (rstepSilent _ (strip_adversary _)) => 
-    unfold RealWorld.buildUniverse, RealWorld.buildUniverseAdv, strip_adversary,
-           updateUserList, RealWorld.findUserKeys;
+    unfold RealWorld.buildUniverse, RealWorld.buildUniverseAdv, strip_adversary, RealWorld.findUserKeys;
       simpl.
 
   Hint Extern 1 (rstepSilent _ _) => eapply RealWorld.StepUser.
@@ -866,7 +865,7 @@ Section SingleAdversarySimulates.
   Hint Extern 1 (_ = _) => progress m_equal.
   Hint Extern 1 (_ = _) => progress f_equal.
   Hint Extern 1 (_ = _) =>
-    progress unfold RealWorld.build_data_step, RealWorld.buildUniverse, updateUserList; simpl.
+    progress unfold RealWorld.build_data_step, RealWorld.buildUniverse; simpl.
   Hint Extern 1 (_ = _) =>
     match goal with
     | [ H : RealWorld.adversary _ = _ |- _ ] => rewrite <- H
@@ -1000,7 +999,7 @@ Section SingleAdversarySimulates.
       eauto using simulates_with_adversary_silent, simulates_with_adversary_loud.
     - rewrite H1; unfold strip_adversary, add_adversary; simpl.
       rewrite H0. rewrite empty_add_idempotent.
-      unfold RealWorld.findUserKeys, fold; simpl. rewrite empty_add_idempotent.
+      unfold RealWorld.findUserKeys, fold; simpl. rewrite RealWorld.merge_keys_left_identity.
 
       rewrite clean_ciphers_nokeys_idempotent.
       unfold clean_users; simpl.
