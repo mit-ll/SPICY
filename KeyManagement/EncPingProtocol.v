@@ -4,7 +4,10 @@ From Coq Require Import
 
 Require Import MyPrelude.
 
-Require Import Users Common Simulation MapLtac.
+Module Foo <: EMPTY. End Foo.
+Module Import SN := SetNotations(Foo).
+
+Require Import Common Maps Simulation MapLtac.
 
 Require IdealWorld RealWorld.
 
@@ -315,8 +318,7 @@ Section RealWorldLemmas.
           |}.
   Proof.
     intros. unfold buildUniverse; simpl.
-    f_equal.
-    unfold updateUserList; subst.
+    f_equal; subst.
     rewrite add_univ_simpl2 by auto; trivial.
   Qed.
 
@@ -332,10 +334,8 @@ Section RealWorldLemmas.
   Proof.
     intros. unfold buildUniverse; simpl.
     f_equal.
-    unfold updateUserList; subst.
     rewrite add_univ_simpl1 by auto; trivial.
   Qed.
-
 
 End RealWorldLemmas.
 
@@ -356,7 +356,6 @@ Module SimulationAutomation.
       | _ => apply lookup_split in H; intuition idtac
       end
 
-    | [ H : updateUserList _ _ _ $? _ = Some _ |- _ ] => unfold updateUserList in H
     | [ H : RealWorld.users _ $? _ = Some _ |- _ ] => progress (simpl in H)
 
     | [ H : _ = RealWorld.mkUserData _ _ _ |- _ ] => invert H
@@ -396,8 +395,6 @@ Module SimulationAutomation.
     | [ H: rstepSilent _ _ |- _ ] => invert H
     | [ H: RealWorld.step_universe _ _ _ |- _ ] => invert H
 
-    (* | [ H :rstepSilent ^* (RealWorld.buildUniverse _ _ _ _ _) _ |- _] => *)
-    (*   progress (unfold RealWorld.buildUniverse, updateUserList in H; simpl in H) *)
     | [ H :rstepSilent ^* (RealWorld.buildUniverse _ _ _ _ _) _ |- _] =>
       (rewrite simplify_build_univ1 in H by auto) || (rewrite simplify_build_univ2 in H by auto)
     | [ S: rstepSilent ^* ?U _ |- _ ] => 
@@ -434,7 +431,7 @@ Module SimulationAutomation.
 
   Ltac istep_univ pick :=
     eapply IdealWorld.LStepUser'; simpl; swap 2 3; [ pick | ..];
-    unfold updateUserList; (try eapply @eq_refl); (try f_equal); simpl.
+      (try eapply @eq_refl); (try f_equal); simpl.
   Ltac rstep_univ pick :=
     eapply  RealWorld.StepUser; simpl; swap 2 3; [ pick | ..]; (try eapply @eq_refl); simpl.
 
@@ -503,7 +500,7 @@ Module SimulationAutomation.
   Hint Extern 1 (rstepSilent ^* _ _) =>
         progress(unfold real_univ_start, real_univ_sent1, real_univ_recd1,
                         real_univ_sent2, real_univ_recd2, real_univ_done, mkrU; simpl).
-  Hint Extern 1 (RPingPongBase (RealWorld.buildUniverse _ _ _ _ _) _) => unfold RealWorld.buildUniverse, updateUserList; simpl.
+  Hint Extern 1 (RPingPongBase (RealWorld.buildUniverse _ _ _ _ _) _) => unfold RealWorld.buildUniverse; simpl.
 
   Hint Extern 2 (IdealWorld.lstep_universe _ _ _) => istep_univ0.
   Hint Extern 2 (IdealWorld.lstep_universe _ _ _) => istep_univ1.
@@ -596,7 +593,7 @@ Section FeebleSimulates.
       (intros;
        invert H;
        churn;
-       unfold RealWorld.buildUniverse, updateUserList;
+       unfold RealWorld.buildUniverse;
        simpl; simplUniv;
        (do 3 eexists;
         propositional; swap 3 4; swap 1 3;

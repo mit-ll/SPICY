@@ -566,7 +566,25 @@ Section KeyMerge.
   
   Definition addUserKeys {A} (us : user_list (user_data A)) (ks : keys) : user_list (user_data A) :=
     map (fun u => {| key_heap := u.(key_heap) $k++ ks ; protocol := u.(protocol) ;  msg_heap := u.(msg_heap) |}) us.
-  
+
+  Definition adv_no_honest_keys (adv honest : keys) : Prop :=
+    forall k_id,
+      match adv $? k_id with
+      | None => True
+      | Some (MkCryptoKey _ _ SymKey)          => honest $? k_id = None
+      | Some (MkCryptoKey _ _ (AsymKey true) ) => honest $? k_id = None
+      | Some k' =>  honest $? k_id = None
+                \/ (exists k, honest $? k_id = Some k /\ keys_compatible k k' = true)
+      end.
+
+  Lemma find_user_keys_universe_user :
+    forall {A B} (U : universe A B) u_id u_d,
+      adv_no_honest_keys (findUserKeys U.(adversary)) (findUserKeys U.(users))
+      -> U.(users) $? u_id = Some u_d
+      -> adv_no_honest_keys (findUserKeys U.(adversary)) u_d.(key_heap).
+  Proof.
+  Admitted.
+
 End KeyMerge.
 
 Definition encryptMessage {t} (k__sign k__enc : key) (m : message t) (c_id : cipher_id) : option cipher :=
