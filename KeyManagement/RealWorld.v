@@ -304,32 +304,41 @@ Section KeyMerge.
     unfold add_key; simpl.
     case_eq (a $? k); case_eq (a $? k'); intros; subst; simpl.
 
-    - 
+    -
 
-    repeat
-      match goal with
-      | [ H : ?x <> ?x |- _ ] => contradiction
-      | [ H : a $? k  = _ |- context [a $? k]  ] => rewrite H
-      | [ H : a $? k' = _ |- context [a $? k'] ] => rewrite H
-      | [ |- context[ ?k1 ==kk ?k2 ] ] => case (k1 ==kk k2); intros; subst
-      | [ |- context [ keys_compatible ?k1 ?k2 ]] => case_eq (keys_compatible k1 k2); intros
-      | [ |- context [ keyType ?k ==kt ?kt ]] => case (keyType k ==kt kt); intros
-      | [ |- context [ _ $+ (?k1, _) $? ?k1 ]] => rewrite add_eq_o by (trivial || auto)
-      | [ |- context [ _ $+ (?k1, _) $? ?k2 ]] => rewrite add_neq_o by auto
-      | [ |- context [ _ $- ?k1 $? ?k2 ]] => rewrite remove_neq_o by auto
-      end; eauto.
-    
+      Ltac work1 :=
+        match goal with
+        | [ H : ?x <> ?x |- _ ] => contradiction
+        | [ H1 : ?x <> ?y, H2 : ?x = ?y |- _ ] => contradiction
+        | [ H : ?a $? ?k  = _ |- context [?a $? ?k]  ] => rewrite H
+        | [ H : ?a $? ?k' = _ |- context [?a $? ?k'] ] => rewrite H
+        | [ |- context[ ?k1 ==kk ?k2 ] ] => case (k1 ==kk k2); intros; subst
+        | [ H : keys_compatible ?k1 ?k2 = _ |- context [ keys_compatible ?k1 ?k2 ]] => rewrite H
+        | [ |- context [ keys_compatible ?k1 ?k2 ]] => case_eq (keys_compatible k1 k2); intros
+        | [ H : keyType ?k = _ |- context [ keyType ?k ==kt ?kt ]] => rewrite H
+        | [ |- context [ keyType ?k ==kt ?kt ]] => case (keyType k ==kt kt); intros
+        | [ |- context [ _ $+ (?k1, _) $? ?k1 ]] => rewrite add_eq_o by (trivial || auto)
+        | [ |- context [ _ $+ (?k1, _) $? ?k2 ]] => rewrite add_neq_o by auto
+        | [ |- context [ _ $- ?k1 $? ?k2 ]] => rewrite remove_neq_o by auto
+        end.
 
-    - case (e ==kk k1); case (e' ==kk k0); intros; subst.
-      rewrite H0; rewrite H1. case (k0 ==kk k0); case (k1 ==kk k1); intros; subst; try contradiction; auto.
-      rewrite H0. case (e' ==kk k0); intros; subst; try contradiction. case_eq (keys_compatible e' k0); intros; eauto.
-        case (keyType k0 ==kt AsymKey true); intros. rewrite H1. case (k1 ==kk k1); intros; subst; try contradiction; eauto.
-        rewrite add_neq_o by auto; rewrite H1; cases (k1 ==kk k1); intros; try contradiction; eauto.
-        rewrite remove_neq_o by auto; rewrite H1. cases (k1 ==kk k1); intros; try contradiction; eauto.
-      rewrite H1.
+      repeat work1; eauto.
+      (* simple map fact *) admit.
+      (* simple map fact *) admit.
+      (* simple map fact *) admit.
+      (* simple map fact *) admit.
 
+    - repeat work1; eauto.
+      (* simple map fact *) admit.
+      (* simple map fact *) admit.
 
-    admit.
+    - repeat work1; eauto.
+      (* simple map fact *) admit.
+      (* simple map fact *) admit.
+
+    - repeat work1; eauto.
+      (* simple map fact *) admit.
+
   Admitted.
 
   Hint Resolve merge_keys_fold_fn_proper.
