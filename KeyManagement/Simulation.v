@@ -52,40 +52,6 @@ Inductive msg_eq : forall t__r t__i,
     msg_eq (RealWorld.Plaintext content) (IdealWorld.Content content, ch_id, cs, ps)
 .
 
-(* Definition check_cipher (ch_id : IdealWorld.channel_id) *)
-(*   := *)
-(*     forall A B ch_id k (im : IdealWorld.message A) (rm : RealWorld.message B) cphrs (*do we need these??*) chans perms, *)
-(*       match rm with *)
-(*       | RealWorld.Ciphertext cphr_id => *)
-(*         match cphrs $? cphr_id with *)
-(*         | None => False *)
-(*         | Some (RealWorld.Cipher cphr_id k_id msg) => *)
-(*           RealWorld.keyId k = k_id /\ msg_eq msg (im,ch_id,chans,perms) *)
-(*         end *)
-(*       | _ => False *)
-(*       end. *)
-    
-(* Definition chan_key_ok := *)
-(*   forall A B ch_id (im : IdealWorld.message A) (rm : RealWorld.message B) cphrs chan_keys (*do we need these??*) chans perms, *)
-(*     match chan_keys $? ch_id with *)
-(*     | None => False *)
-(*     | Some (Public _)   => msg_eq rm (im,ch_id,chans,perms) *)
-(*     | Some (Auth _ k _) => *)
-(*       (* check_cipher ch_id k im rm cphrs chans perms *) *)
-(*       match rm with *)
-(*       | RealWorld.Ciphertext cphr_id => *)
-(*         match cphrs $? cphr_id with *)
-(*         | None => False *)
-(*         | Some (RealWorld.Cipher cphr_id k_id msg) => *)
-(*           RealWorld.keyId k = k_id /\ msg_eq msg (im,ch_id,chans,perms) *)
-(*         end *)
-(*       | _ => False *)
-(*       end *)
-(*     | Some (Enc  _ k _) => False *)
-(*     | Some (AuthEnc _ k1 k2 _ _) => False *)
-(*     end. *)
-
-
 Inductive action_matches :
     RealWorld.action -> IdealWorld.action -> Prop :=
 | Inp : forall t__r t__i (msg1 : RealWorld.message t__r) (msg2 : IdealWorld.message t__i) rw iw ch_id cs ps p x y,
@@ -257,14 +223,6 @@ Section SingleAdversarySimulates.
     Proof.
       unfold Morphisms.Proper, Morphisms.respectful; intros; subst; trivial.
     Qed.
-
-    (* Lemma merge_maps_transpose_key : *)
-    (*   forall {B}, *)
-    (*     transpose_neqkey eq (fun (_ : NatMap.key) (u : user_data B) (ks : t key) => ks $++ key_heap u). *)
-    (* Proof. *)
-    (*   unfold transpose_neqkey, Equal, honest_cipher_filter_fn; intros. *)
-
-
 
     Definition clean_ciphers (adv_keys : keys) (cs : ciphers) :=
       filter (honest_cipher_filter_fn adv_keys) cs.
@@ -606,7 +564,6 @@ Section SingleAdversarySimulates.
         -> forall (cmd : user_cmd C) cs__s adv_keys,
           adv_keys = findUserKeys adv
           -> adv_no_honest_keys adv_keys ks
-          (* -> (forall uk_id uk, ks $? uk_id = Some uk -> adv_keys $? uk_id = None) (* better notion of disjoint to take care of public/private *) *)
           -> cs__s = clean_ciphers adv_keys cs
           -> bd = (usrs, adv, cs, ks, qmsgs, cmd)
           -> forall cmd' cs__s',
@@ -656,32 +613,56 @@ Section SingleAdversarySimulates.
 
     Qed.
 
+
+    (* Lemma honest_loud_step_advuniv_implies_honest_step_origuniv : *)
+    (*   forall {A B C} cs cs' lbl u_id (usrs usrs' : honest_users A) (adv adv' : adversaries B) ks ks' qmsgs qmsgs' bd bd' a, *)
+    (*     step_user u_id lbl bd bd' *)
+    (*     -> forall (cmd : user_cmd C) cs__s adv_keys, *)
+    (*       adv_keys = findUserKeys adv *)
+    (*       -> adv_no_honest_keys adv_keys ks *)
+    (*       -> cs__s = clean_ciphers adv_keys cs *)
+    (*       -> bd = (usrs, adv, cs, ks, qmsgs, cmd) *)
+    (*       -> forall cmd' cs__s', *)
+    (*           cs__s' = clean_ciphers adv_keys cs' *)
+    (*           -> bd' = (usrs', adv', cs', ks', qmsgs', cmd') *)
+    (*           -> lbl = Action a *)
+    (*           -> step_user (B:=B) u_id lbl (usrs, $0, cs__s, ks, qmsgs, cmd) (usrs', $0, cs__s', ks', qmsgs', cmd'). *)
+    (* Proof. *)
+    (*   induction 1; inversion 4; inversion 2; intro; subst; econstructor; eauto; try discriminate. *)
+
+    (*   - invert H16. unfold action_adversary_safe in H. *)
+    (*     eapply clean_ciphers_accepts_non_spoofable; eauto. *)
+    (*     unfold negb in H; cases (msg_pattern_spoofable (findUserKeys adv') pat); eauto. *)
+
+    (*   - unfold addUserKeys; m_equal; trivial. *)
+        
+    (* Qed. *)
+
+
     Lemma honest_loud_step_advuniv_implies_honest_step_origuniv :
-      forall {A B C} cs cs' lbl u_id (usrs usrs' : honest_users A) (adv adv' : adversaries B) ks ks' qmsgs qmsgs' bd bd',
+      forall {A B C} cs cs' lbl u_id (usrs usrs' : honest_users A) (adv adv' : adversaries B) ks ks' qmsgs qmsgs' bd bd' a,
         step_user u_id lbl bd bd'
         -> forall (cmd : user_cmd C) cs__s adv_keys,
           adv_keys = findUserKeys adv
           -> adv_no_honest_keys adv_keys ks
-          (* -> (forall uk_id uk, ks $? uk_id = Some uk -> adv_keys $? uk_id = None) (* better notion of disjoint to take care of public/private *) *)
           -> cs__s = clean_ciphers adv_keys cs
           -> bd = (usrs, adv, cs, ks, qmsgs, cmd)
           -> forall cmd' cs__s',
               cs__s' = clean_ciphers adv_keys cs'
               -> bd' = (usrs', adv', cs', ks', qmsgs', cmd')
-              -> ~ lbl = Silent
+              -> lbl = Action a
+              -> action_adversary_safe adv_keys a = true
               -> step_user (B:=B) u_id lbl (usrs, $0, cs__s, ks, qmsgs, cmd) (usrs', $0, cs__s', ks', qmsgs', cmd').
     Proof.
-      induction 1; inversion 4; inversion 2; intro; subst; econstructor; eauto.
+      induction 1; inversion 4; inversion 2; intro; subst; econstructor; eauto; try discriminate.
 
-      - eapply clean_ciphers_accepts_non_spoofable; eauto.
-        (* need evidence that the message pattern isn't spoofable *) admit.
+      - invert H16. unfold action_adversary_safe in H.
+        eapply clean_ciphers_accepts_non_spoofable; eauto.
+        unfold negb in H; cases (msg_pattern_spoofable (findUserKeys adv') pat); eauto.
 
       - unfold addUserKeys; m_equal; trivial.
-
-      - contradiction.
-      - contradiction.
-
-    Admitted.
+        
+    Qed.
 
     Lemma honest_silent_step_nochange_adversaries :
       forall {A B C} cs cs' lbl u_id (usrs usrs' : honest_users A) (adv adv' : adversaries B) ks ks' qmsgs qmsgs' bd bd',
@@ -932,7 +913,6 @@ Section SingleAdversarySimulates.
 
     (* Honest step *)
     - simpl.
-      (* specialize (H _ _ H0). *)
       assert (UNIV_STEP :
                 rstepSilent
                   (strip_adversary U__ra)
@@ -940,6 +920,7 @@ Section SingleAdversarySimulates.
                                                             {| RealWorld.key_heap := ks
                                                              ; RealWorld.protocol := cmd
                                                              ; RealWorld.msg_heap := qmsgs |})) ).
+
       eapply RealWorld.StepUser; eauto.
       eapply honest_silent_step_advuniv_implies_honest_step_origuniv; intros; eauto.
       eapply RealWorld.find_user_keys_universe_user; eauto.
@@ -947,16 +928,16 @@ Section SingleAdversarySimulates.
       unfold strip_adversary; simpl; smash_universe.
 
       unfold RealWorld.build_data_step in H5.
-      eapply honest_silent_step_nochange_adversaries in H5; [| reflexivity..]. rewrite H5; trivial.
+      eapply honest_silent_step_nochange_adversaries in H5; [| reflexivity..]; rewrite H5; trivial.
 
       eapply H; eauto.
 
-    - exists U__i. constructor.
+    - exists U__i.
+      split.
       eapply TrcRefl.
       eapply adv_step_stays_in_R; eauto.
 
   Qed.
-
 
   Lemma msg_pattern_spoofable_strengthen :
     forall pat adv_keys honest_keys,
@@ -1004,7 +985,7 @@ Section SingleAdversarySimulates.
   Proof.
     simpl.
     intros.
-    invert H2. 
+    invert H2.
 
     assert (UNIV_STEP :
               RealWorld.step_universe
@@ -1016,25 +997,22 @@ Section SingleAdversarySimulates.
                                                              ; RealWorld.msg_heap := qmsgs |})) ).
 
     eapply RealWorld.StepUser; eauto.
-
     eapply honest_loud_step_advuniv_implies_honest_step_origuniv; simpl; intros; eauto.
     eapply RealWorld.find_user_keys_universe_user; eauto.
-    intro NE; invert NE.
+    admit.
     unfold strip_adversary; simpl; smash_universe.
     admit. (* Need evidence that the user didn't send keys -- strengthen notion of adversary safety *)
 
     specialize (H _ _ H1 _ _ UNIV_STEP).
+    repeat match goal with
+           | [ H : exists _, _ |- _ ] => destruct H
+           | [ H : _ /\ _ |- _ ] => destruct H
+           end.
+    do 3 eexists; intuition idtac; eauto.
 
-    destruct H as [a2].
-    destruct H as [U__i'].
-    destruct H as [U__i''].
-    destruct H. destruct H2. destruct H5. destruct H6.
-    exists a2; exists U__i'; exists U__i''; intuition; eauto.
-
-    unfold RealWorld.findUserKeys, strip_adversary, fold in H6; simpl in H6.
+    invert H7.
     unfold RealWorld.action_adversary_safe; destruct a1; auto.
-
-    invert H7. simpl. f_equal. eapply msg_pattern_spoofable_strengthen; eauto.
+    f_equal; eapply msg_pattern_spoofable_strengthen; eauto.
 
   Admitted.
 
@@ -1051,14 +1029,13 @@ Section SingleAdversarySimulates.
     inversion SIM as [H__silent H__l].
     inversion H__l as [H__loud R__start]; clear H__l.
 
-    unfold refines.
+    unfold refines. 
     exists (fun ur ui => R (strip_adversary ur) ui); unfold simulates.
-    propositional;
-      eauto using simulates_with_adversary_silent, simulates_with_adversary_loud.
+    intuition idtac.
+      (* eauto using simulates_with_adversary_silent, simulates_with_adversary_loud. *)
 
     - eapply simulates_with_adversary_silent; eauto.
       admit.
-
       admit.
 
     - eapply simulates_with_adversary_loud; eauto.

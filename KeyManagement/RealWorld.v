@@ -125,49 +125,6 @@ Inductive msg_accepted_by_pattern (cs : ciphers) (pat : msg_pat) : forall {t : t
     -> msg_accepted_by_pattern cs pat m
 .
 
-(* Fixpoint msg_accepted_by_pattern_compute {t} (cs : ciphers) (pat : msg_pat) (msg : message t) : bool := *)
-(*   match pat, msg with *)
-(*   | Accept, _ => true *)
-(*   | Paired p1 p2, MsgPair m1 m2 => msg_accepted_by_pattern_compute cs p1 m1 && msg_accepted_by_pattern_compute cs p2 m2 *)
-(*   | Paired _ _, _ => false *)
-(*   | Signed k, Signature _ c_id => *)
-(*     match cs $? c_id with *)
-(*     | Some (SigCipher _ k_id m) => if (k ==n k_id) then true else false *)
-(*     | _ => false *)
-(*     end *)
-(*   | Signed _, _ => false *)
-(*   | SignedEncrypted k__sign _, SignedCiphertext c_id => *)
-(*     match cs $? c_id with *)
-(*     | Some (SigEncCipher _ k__sign' _ m) => if (k__sign ==n k__sign') then true else false *)
-(*     | _ => false *)
-(*     end *)
-(*   | SignedEncrypted _ _, _ => false *)
-(*   end. *)
-
-(* Lemma msg_accepted_by_pattern_pred_compute : *)
-(*   forall {t} cs pat (msg : message t), *)
-(*     msg_accepted_by_pattern cs pat msg -> msg_accepted_by_pattern_compute cs pat msg = true. *)
-(* Proof. *)
-(*   induction 1; unfold msg_accepted_by_pattern_compute; subst; simpl. *)
-(*   - trivial. *)
-(*   - fold (@msg_accepted_by_pattern_compute t1) (@msg_accepted_by_pattern_compute t2); apply andb_true_iff; eauto. *)
-(*   - rewrite H1; simpl; case (k ==n k); intros; eauto. *)
-(*   - rewrite H1; simpl; case (k ==n k); intros; eauto. *)
-(* Qed. *)
-
-(* Lemma msg_accepted_by_pattern_compute_false_no_pred : *)
-(*   forall {t} cs pat (msg : message t), *)
-(*       msg_accepted_by_pattern_compute cs pat msg = false *)
-(*     -> ~ msg_accepted_by_pattern cs pat msg. *)
-(* Proof. *)
-(*   unfold "~"; induction 2; unfold msg_accepted_by_pattern_compute in H; subst; simpl in *. *)
-(*   - invert H. *)
-(*   - fold (@msg_accepted_by_pattern_compute t1) (@msg_accepted_by_pattern_compute t2) in H. *)
-(*     rewrite andb_false_iff in H; destruct H; contradiction. *)
-(*   - rewrite H2 in H; case (k ==n k) in H; simpl in H; eauto. *)
-(*   - rewrite H2 in H; case (k ==n k) in H; simpl in H; eauto. *)
-(* Qed. *)
-
 Fixpoint msg_pattern_spoofable (advk : adversary_knowledge) (pat : msg_pat) : bool :=
   match pat with
   | Accept => true
@@ -237,36 +194,52 @@ Record universe (A B : Type) :=
     ; all_ciphers : ciphers
     }.
 
+Definition add_key (k_id : key_identifier) (k : key) (ks : keys) : keys :=
+  match ks $? k_id with
+  | None     => ks $+ (k_id, k)
+  | Some k'  => if   k ==kk k'
+               then ks
+               else if   keys_compatible k k'
+                    then if   k'.(keyType) ==kt AsymKey true (* private key do nothing *)
+                         then ks
+                         else ks $+ (k_id, k)
+                    (* Don't ever want to go down this branch
+                     * Implemented this way to make the fold work nice.
+                     *)
+                    else ks $- k_id
+  end.
 
-(* Inductive key_type := *)
-(* | SymKey *)
-(* | AsymKey (has_private_access : bool). *)
+Definition merge_keys (ks ks' : keys) : keys :=
+  fold add_key ks ks'.
 
-(* Record key := MkCryptoKey { keyId : key_identifier ; *)
-(*                             keyUsage  : key_usage ; *)
-(*                             keyType : key_type }. *)
+Notation "m1 $k++ m2" := (merge_keys m2 m1) (at level 50, left associativity).
 
-Section KeyMerge.
+Fixpoint findKeys {t} (msg : message t) : keys :=
+  match msg with
+  | Plaintext _        => $0
+  | KeyMessage k       => $0 $+ (keyId k, k)
+  | MsgPair msg1 msg2  => (findKeys msg1) $k++ (findKeys msg2)
+  | SignedCiphertext _ => $0
+  | Signature m _      => findKeys m
+  end.
+  
+Definition findUserKeys {A} (us : user_list (user_data A)) : keys :=
+  fold (fun u_id u ks => ks $k++ u.(key_heap)) us $0.
+  
+Definition addUserKeys {A} (us : user_list (user_data A)) (ks : keys) : user_list (user_data A) :=
+  map (fun u => {| key_heap := u.(key_heap) $k++ ks ; protocol := u.(protocol) ;  msg_heap := u.(msg_heap) |}) us.
 
-  Definition add_key (k_id : key_identifier) (k : key) (ks : keys) : keys :=
-    match ks $? k_id with
-    | None     => ks $+ (k_id, k)
-    | Some k'  => if   k ==kk k'
-                 then ks
-                 else if   keys_compatible k k'
-                      then if   k'.(keyType) ==kt AsymKey true (* private key do nothing *)
-                           then ks
-                           else ks $+ (k_id, k)
-                      (* Don't ever want to go down this branch
-                       * Implemented this way to make the fold work nice.
-                       *)
-                      else ks $- k_id
+Definition adv_no_honest_keys (adv honest : keys) : Prop :=
+  forall k_id,
+    match adv $? k_id with
+    | None => True
+    | Some (MkCryptoKey _ _ SymKey)          => honest $? k_id = None
+    | Some (MkCryptoKey _ _ (AsymKey true) ) => honest $? k_id = None
+    | Some k' =>  honest $? k_id = None
+              \/ (exists k, honest $? k_id = Some k /\ keys_compatible k k' = true)
     end.
 
-  Definition merge_keys (ks ks' : keys) : keys :=
-    fold add_key ks ks'.
-
-  Notation "m1 $k++ m2" := (merge_keys m2 m1) (at level 50, left associativity).
+Section KeyMergeTheorems.
 
   Definition keys_good (ks : keys) :=
     forall k_id k,
@@ -552,30 +525,6 @@ Section KeyMerge.
     rewrite fold_Empty; eauto using empty_Empty.
   Qed.
 
-  Fixpoint findKeys {t} (msg : message t) : keys :=
-    match msg with
-    | Plaintext _        => $0
-    | KeyMessage k       => $0 $+ (keyId k, k)
-    | MsgPair msg1 msg2  => (findKeys msg1) $k++ (findKeys msg2)
-    | SignedCiphertext _ => $0
-    | Signature m _      => findKeys m
-    end.
-  
-  Definition findUserKeys {A} (us : user_list (user_data A)) : keys :=
-    fold (fun u_id u ks => ks $k++ u.(key_heap)) us $0.
-  
-  Definition addUserKeys {A} (us : user_list (user_data A)) (ks : keys) : user_list (user_data A) :=
-    map (fun u => {| key_heap := u.(key_heap) $k++ ks ; protocol := u.(protocol) ;  msg_heap := u.(msg_heap) |}) us.
-
-  Definition adv_no_honest_keys (adv honest : keys) : Prop :=
-    forall k_id,
-      match adv $? k_id with
-      | None => True
-      | Some (MkCryptoKey _ _ SymKey)          => honest $? k_id = None
-      | Some (MkCryptoKey _ _ (AsymKey true) ) => honest $? k_id = None
-      | Some k' =>  honest $? k_id = None
-                \/ (exists k, honest $? k_id = Some k /\ keys_compatible k k' = true)
-      end.
 
   Lemma find_user_keys_universe_user :
     forall {A B} (U : universe A B) u_id u_d,
@@ -585,7 +534,7 @@ Section KeyMerge.
   Proof.
   Admitted.
 
-End KeyMerge.
+End KeyMergeTheorems.
 
 Definition encryptMessage {t} (k__sign k__enc : key) (m : message t) (c_id : cipher_id) : option cipher :=
   match (k__sign.(keyUsage), k__enc.(keyUsage)) with
@@ -698,7 +647,7 @@ Inductive step_user : forall A B C, user_id -> rlabel -> data_step0 A B C -> dat
       qmsgs = Exm msg :: msgs (* we have a message waiting for us! *)
     -> qmsgs' = msgs
     -> findKeys msg = newkeys
-    -> ks' = ks $++ newkeys
+    -> ks' = ks $k++ newkeys
     -> msg_accepted_by_pattern cs pat msg
     -> step_user u_id (Action (Input msg pat u_id ks))
                 (usrs, adv, cs, ks , qmsgs , Recv pat)
@@ -747,7 +696,7 @@ Inductive step_user : forall A B C, user_id -> rlabel -> data_step0 A B C -> dat
     -> ks $? k__signid = Some k__sign
     (* -> k.(keyId) = k_id *)
     -> findKeys msg = newkeys
-    -> ks' = ks $++ newkeys
+    -> ks' = ks $k++ newkeys
     -> step_user u_id Silent
                 (usrs, adv, cs, ks , qmsgs, Decrypt (SignedCiphertext c_id))
                 (usrs, adv, cs, ks', qmsgs, Return msg)
