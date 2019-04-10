@@ -923,7 +923,7 @@ Section SingleAdversarySimulates.
 
       eapply RealWorld.StepUser; eauto.
       eapply honest_silent_step_advuniv_implies_honest_step_origuniv; intros; eauto.
-      eapply RealWorld.find_user_keys_universe_user; eauto.
+      eapply RealWorld.find_user_keys_universe_user; eauto. admit.
       eauto.
       unfold strip_adversary; simpl; smash_universe.
 
@@ -937,7 +937,7 @@ Section SingleAdversarySimulates.
       eapply TrcRefl.
       eapply adv_step_stays_in_R; eauto.
 
-  Qed.
+  Admitted.
 
   Lemma msg_pattern_spoofable_strengthen :
     forall pat adv_keys honest_keys,
@@ -998,7 +998,7 @@ Section SingleAdversarySimulates.
 
     eapply RealWorld.StepUser; eauto.
     eapply honest_loud_step_advuniv_implies_honest_step_origuniv; simpl; intros; eauto.
-    eapply RealWorld.find_user_keys_universe_user; eauto.
+    eapply RealWorld.find_user_keys_universe_user; eauto. admit.
     admit.
     unfold strip_adversary; simpl; smash_universe.
     admit. (* Need evidence that the user didn't send keys -- strengthen notion of adversary safety *)
