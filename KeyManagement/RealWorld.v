@@ -194,6 +194,23 @@ Record universe (A B : Type) :=
     ; all_ciphers : ciphers
     }.
 
+Definition canonical_key (k1 k2 : key) :=
+  match Coq.Init.Nat.compare k1.(keyId) k2.(keyId) with
+  | Gt => k1
+  | Lt => k2
+  | Eq =>
+    match (k1.(keyUsage), k2.(keyUsage)) with
+    | (Signing, Encryption) => k1
+    | (Encryption, Signing) => k2
+    | _                     =>
+      match (k1.(keyType), k2.(keyType)) with
+      | (SymKey, _) => k1
+      | (_, SymKey) => k2
+      | (AsymKey b1, AsymKey b2) => if b1 then k1 else k2
+      end
+    end
+  end.
+
 Definition add_key (k_id : key_identifier) (k : key) (ks : keys) : keys :=
   match ks $? k_id with
   | None     => ks $+ (k_id, k)
@@ -206,7 +223,7 @@ Definition add_key (k_id : key_identifier) (k : key) (ks : keys) : keys :=
                     (* Don't ever want to go down this branch
                      * Implemented this way to make the fold work nice.
                      *)
-                    else ks $- k_id
+                    else ks $+ (k_id, canonical_key k k')
   end.
 
 Definition merge_keys (ks ks' : keys) : keys :=
@@ -241,6 +258,12 @@ Definition adv_no_honest_keys (adv honest : keys) : Prop :=
 
 Section KeyMergeTheorems.
 
+  Lemma merge_keys_notation :
+    forall ks1 ks2,
+      fold add_key ks2 ks1 = ks1 $k++ ks2.
+    unfold merge_keys; trivial.
+  Qed.
+
   Definition keys_good (ks : keys) : Prop :=
     forall k_id k,
       ks $? k_id = Some k
@@ -250,6 +273,108 @@ Section KeyMergeTheorems.
       keys_good ks1
     /\ keys_good ks2
     /\ (forall k_id k k', ks1 $? k_id = Some k -> ks2 $? k_id = Some k' -> keys_compatible k k' = true).
+
+  Lemma canonical_key_one_other :
+    forall k1 k2,
+        canonical_key k1 k2 = k1
+      \/ canonical_key k1 k2 = k2.
+  Proof.
+    intros; unfold canonical_key.
+    destruct k1; destruct k2; simpl.
+    cases (keyId0 ?= keyId1);
+      cases keyUsage0; cases keyUsage1;
+        cases keyType0; cases keyType1; eauto;
+          try rewrite Nat.compare_refl; simpl; eauto;
+            cases has_private_access; cases has_private_access0; eauto.
+  Qed.
+
+  Lemma canonical_key_refl :
+    forall k, canonical_key k k = k.
+  Proof.
+    unfold canonical_key; intros; simpl.
+    rewrite Nat.compare_refl.
+    cases (keyUsage k); cases (keyType k); simpl; eauto; cases has_private_access; eauto.
+  Qed.
+
+  Lemma canonical_key_sym :
+    forall k1 k2,
+      canonical_key k1 k2 = canonical_key k2 k1.
+  Proof.
+    intros; destruct k1; destruct k2; unfold canonical_key; simpl.
+    cases (keyId0 ?= keyId1).
+    - apply Nat.compare_eq in Heq; subst.
+      rewrite Nat.compare_refl.
+      cases keyUsage0; cases keyUsage1; cases keyType0; cases keyType1; eauto.
+      cases has_private_access; cases has_private_access0; eauto.
+      cases has_private_access; cases has_private_access0; eauto.
+
+    - rewrite Nat.compare_antisym; rewrite Heq; simpl; auto.
+    - rewrite Nat.compare_antisym; rewrite Heq; simpl; auto.
+  Qed.
+
+  Lemma canonical_key_assoc :
+    forall k1 k2 k3,
+      canonical_key k1 (canonical_key k2 k3) = canonical_key (canonical_key k1 k2) k3.
+  Proof.
+    intros; destruct k1; destruct k2; destruct k3; unfold canonical_key; simpl.
+
+    cases (keyId0 ?= keyId1); cases (keyId1 ?= keyId2).
+    - apply Nat.compare_eq in Heq; apply Nat.compare_eq in Heq0; subst. simpl.
+      cases keyUsage0; cases keyUsage1; cases keyUsage2;
+        cases keyType0; cases keyType1; cases keyType2;
+          simpl; eauto;
+            try rewrite Nat.compare_refl; eauto;
+              cases has_private_access; cases has_private_access0; try cases has_private_access1; simpl;
+                try rewrite Nat.compare_refl; eauto.
+
+    - apply Nat.compare_eq in Heq; subst; simpl.
+      rewrite Heq0; simpl.
+      cases keyUsage0; cases keyUsage1; cases keyUsage2;
+        cases keyType0; cases keyType1; cases keyType2;
+          simpl; eauto; try rewrite Heq0; simpl; eauto;
+            cases has_private_access; cases has_private_access0; try cases has_private_access1; simpl;
+              rewrite Heq0; simpl; eauto.
+
+    - apply Nat.compare_eq in Heq; subst; simpl.
+      rewrite Nat.compare_refl.
+      cases keyUsage0; cases keyUsage1; cases keyUsage2;
+        cases keyType0; cases keyType1; cases keyType2;
+          simpl; eauto; try rewrite Heq0; simpl; eauto;
+            cases has_private_access; cases has_private_access0; try cases has_private_access1; simpl;
+              rewrite Heq0; simpl; eauto.
+
+    - apply Nat.compare_eq in Heq0; subst; simpl.
+      rewrite Nat.compare_refl; simpl.
+      cases keyUsage0; cases keyUsage1; cases keyUsage2;
+        cases keyType0; cases keyType1; cases keyType2;
+          simpl; eauto; try rewrite Heq; simpl; eauto;
+            cases has_private_access; cases has_private_access0; try cases has_private_access1; simpl;
+              rewrite Heq; simpl; eauto.
+
+    - simpl. rewrite Heq0.
+      pose proof Heq as lt1; pose proof Heq0 as lt2.
+      apply nat_compare_lt in lt1; apply nat_compare_lt in lt2.
+      pose proof (Nat.lt_trans _ _ _ lt1 lt2). apply nat_compare_lt in H.
+      rewrite H; eauto.
+
+    - simpl; rewrite Heq; rewrite Heq0; eauto.
+
+    - apply Nat.compare_eq in Heq0; subst; simpl.
+      rewrite Heq; simpl.
+      cases keyUsage0; cases keyUsage1; cases keyUsage2;
+        cases keyType0; cases keyType1; cases keyType2;
+          simpl; eauto; try rewrite Heq; simpl; eauto;
+            cases has_private_access; cases has_private_access0; try cases has_private_access1; simpl;
+              rewrite Heq; simpl; eauto.
+
+    - simpl. cases (keyId0 ?= keyId2); simpl; eauto.
+    - simpl. rewrite Heq.
+      pose proof Heq as gt1; pose proof Heq0 as gt2.
+      apply nat_compare_gt in gt1; apply nat_compare_gt in gt2.
+
+      pose proof (gt_trans _ _ _ gt1 gt2); apply nat_compare_gt in H.
+      rewrite H; simpl; eauto.
+  Qed.
 
   Lemma merge_keys_fold_fn_proper :
       Morphisms.Proper
@@ -354,52 +479,235 @@ Section KeyMergeTheorems.
   Hint Resolve merge_keys_fold_fn_proper merge_keys_fold_fn_proper_flip merge_keys_fold_fn_proper_Equal
                merge_keys_transpose merge_keys_transpose_flip merge_keys_transpose_Equal.
 
+  Ltac contra_map_lookup :=
+    match goal with
+    | [ H1 : ?ks $? ?k = Some _, H2 : ?ks $? ?k = None |- _ ] => rewrite H1 in H2; invert H2
+    | [ H : ?v1 <> ?v2, H1 : ?ks $? ?k = Some ?v1, H2 : ?ks $? ?k = Some ?v2 |- _ ] => rewrite H1 in H2; invert H2; contradiction
+    end.
+
+  Ltac clean_map_lookups1 :=
+    match goal with
+    | [ H : Some _ = None   |- _ ] => invert H
+    | [ H : None = Some _   |- _ ] => invert H
+    | [ H : Some _ = Some _ |- _ ] => invert H
+    | [ H : $0 $? _ = Some _ |- _ ] => invert H
+    | [ H : _ $+ (?k,_) $? ?k = _ |- _ ] => rewrite add_eq_o in H by trivial
+    | [ H : _ $+ (?k1,_) $? ?k2 = _ |- _ ] => rewrite add_neq_o in H by auto
+    | [ |- context[_ $+ (?k,_) $? ?k] ] => rewrite add_eq_o by trivial
+    | [ |- context[_ $+ (?k1,_) $? ?k2] ] => rewrite add_neq_o by auto
+    | [ H : ~ In _ _ |- _ ] => rewrite not_find_in_iff in H
+    end.
+
+  Ltac progress_fold_add1 :=
+    match goal with
+    | [ H : fold add_key (_ $+ (_,_)) _ $? _ = _ |- _ ] => rewrite fold_add in H
+    | [ |- context[  fold add_key (_ $+ (_,_)) _ ] ] => rewrite fold_add
+    end.
+
+  Ltac clean_map_lookups :=
+    (repeat clean_map_lookups1);
+    try discriminate;
+    try contra_map_lookup.
+
+  Hint Resolve empty_Empty.
+  Hint Extern 1 (~ In _ _) => rewrite not_find_in_iff.
+
+  Lemma merge_keys_left_identity :
+    forall ks,
+      $0 $k++ ks = ks.
+  Proof.
+    unfold merge_keys.
+    induction ks using P.map_induction_bis; intros.
+
+    - apply map_eq_Equal in H; subst; auto.
+    - apply fold_Empty; eauto.
+    - rewrite fold_add; clean_map_lookups; eauto.
+      rewrite IHks; clear IHks.
+      unfold add_key; rewrite H; eauto.
+  Qed.
+    
+  Lemma merge_keys_right_identity :
+    forall ks,
+      ks $k++ $0 = ks.
+  Proof.
+    unfold merge_keys; intros; rewrite fold_Empty; eauto.
+  Qed.
+
+  Hint Resolve merge_keys_left_identity merge_keys_right_identity.
+
+  Lemma merge_keys_adds_no_new_keys :
+    forall ks2 k ks1,
+        ks1 $? k = None
+      -> ks2 $? k = None
+      -> (ks1 $k++ ks2) $? k = None.
+  Proof.
+    induction ks2 using P.map_induction_bis; intros.
+    - apply map_eq_Equal in H; subst; auto.
+    - rewrite merge_keys_right_identity; auto.
+    - unfold merge_keys; rewrite fold_add; auto.
+      case (x ==n k); intros; subst; clean_map_lookups.
+      + rewrite merge_keys_notation; unfold add_key.
+        cases (ks1 $k++ ks2 $? x); clean_map_lookups; eauto.
+        cases (e ==kk k0); subst; eauto.
+        cases (keys_compatible e k0); subst; clean_map_lookups; eauto.
+        cases (keyType k0 ==kt AsymKey true); clean_map_lookups; eauto.
+  Qed.
+
+  Lemma merge_keys_no_disappear_keys :
+    forall ks2 k ks1,
+      (ks1 $k++ ks2) $? k = None
+    -> ks1 $? k = None
+    /\ ks2 $? k = None.
+  Proof.
+    induction ks2 using P.map_induction_bis; intros.
+    - apply map_eq_Equal in H; subst; auto.
+    - rewrite merge_keys_right_identity in H; eauto.
+    - unfold merge_keys in H0. progress_fold_add1; auto.
+      rewrite merge_keys_notation in *; clean_map_lookups.
+      unfold add_key in H0.
+      cases (ks1 $k++ ks2 $? x); clean_map_lookups.
+      + cases (e ==kk k0); subst; eauto.
+        case (x ==n k); intros; subst; clean_map_lookups; eauto.
+        cases (keys_compatible e k0); eauto.
+          case (x ==n k); intros; subst; clean_map_lookups.
+            cases (keyType k0 ==kt AsymKey true); clean_map_lookups; eauto.
+            cases (keyType k0 ==kt AsymKey true); clean_map_lookups; eauto.
+            cases (x ==n k ); subst; clean_map_lookups; eauto.
+      + case (x ==n k); intros; subst; clean_map_lookups; eauto.
+  Qed.
+
+  Hint Resolve merge_keys_adds_no_new_keys merge_keys_no_disappear_keys.
+
+  Lemma merge_keys_adds_ks1 :
+    forall ks2 ks1 k v ks,
+        ks1 $? k = Some v
+      -> ks2 $? k = None
+      -> ks = ks1 $k++ ks2
+      -> ks $? k = Some v.
+  Proof.
+    unfold merge_keys.
+    induction ks2 using P.map_induction_bis; intros.
+
+    - apply map_eq_Equal in H; subst; eauto.
+    - subst; rewrite fold_Empty; eauto.
+    - case (x ==n k); intros; subst; clean_map_lookups; eauto.
+      rewrite fold_add; eauto.
+      rewrite merge_keys_notation.
+      unfold add_key.
+      cases ( ks1 $k++ ks2 $? x ); clean_map_lookups; eauto.
+      cases ( e ==kk k0 ); eauto.
+      cases ( keys_compatible e k0 ); clean_map_lookups; eauto.
+      cases (keyType k0 ==kt AsymKey true); clean_map_lookups; eauto.
+  Qed.
+
+  Lemma merge_keys_adds_ks2 :
+    forall ks2 ks1 k v ks,
+        ks1 $? k = None
+      -> ks2 $? k = Some v
+      -> ks = ks1 $k++ ks2
+      -> ks $? k = Some v.
+  Proof.
+    unfold merge_keys.
+    induction ks2 using P.map_induction_bis; intros.
+
+    - apply map_eq_Equal in H; subst; eauto.
+    - invert H0.
+    - subst.
+      case (x ==n k); intros; subst; clean_map_lookups; eauto.
+      + rewrite fold_add; auto.
+        rewrite merge_keys_notation.
+        unfold add_key.
+        pose proof merge_keys_adds_no_new_keys.
+        cases ( ks1 $k++ ks2 $? k); clean_map_lookups; eauto.
+        cases ( v ==kk k0 ); subst; clean_map_lookups; eauto.
+        specialize (H1 _ _ _ H0 H); contra_map_lookup.
+
+      + rewrite fold_add; auto.
+        rewrite merge_keys_notation.
+        unfold add_key.
+        cases ( ks1 $k++ ks2 $? x); clean_map_lookups; eauto.
+        cases ( e ==kk k0 ); eauto.
+        cases (keys_compatible e k0); clean_map_lookups; eauto.
+        cases (keyType k0 ==kt AsymKey true); clean_map_lookups; eauto.
+  Qed.
+
+  Hint Resolve merge_keys_adds_ks1 merge_keys_adds_ks2.
+
+  Lemma merge_keys_came_from_somewhere1 :
+    forall ks2 ks1 k v,
+        ks1 $k++ ks2 $? k = Some v
+      -> ks2 $? k = None
+      -> ks1 $? k = Some v.
+  Proof.
+    unfold merge_keys.
+    induction ks2 using P.map_induction_bis; intros.
+
+    - apply map_eq_Equal in H; subst; eauto.
+    - rewrite fold_Empty in H; auto.
+
+    - case (x ==n k); intros; subst; clean_map_lookups.
+      + progress_fold_add1; auto.
+        rewrite merge_keys_notation in H0; unfold add_key at 1 in H0.
+
+        cases (ks1 $k++ ks2 $? x); clean_map_lookups; eauto.
+        * cases ( e ==kk k0 ); subst; eauto.
+          cases (keys_compatible e k0); clean_map_lookups; eauto.
+          cases (keyType k0 ==kt AsymKey true); clean_map_lookups; eauto.
+  Qed.
+
+  Lemma merge_keys_came_from_somewhere2 :
+    forall ks2 ks1 k v,
+        ks1 $k++ ks2 $? k = Some v
+      -> ks1 $? k = None
+      -> ks2 $? k = Some v.
+  Proof.
+    unfold merge_keys.
+    induction ks2 using P.map_induction_bis; intros.
+
+    - apply map_eq_Equal in H; subst; eauto.
+    - rewrite fold_Empty in H; clean_map_lookups; auto.
+
+    - case (x ==n k); intros; subst; clean_map_lookups; progress_fold_add1; auto.
+      * pose proof (merge_keys_adds_no_new_keys _ _ _ H1 H).
+        rewrite merge_keys_notation in H0; unfold add_key in H0; auto.
+        cases (ks1 $k++ ks2 $? k); clean_map_lookups; eauto.
+
+      * rewrite merge_keys_notation in H0; unfold add_key in H0; auto.
+        cases (ks1 $k++ ks2 $? x); clean_map_lookups; eauto.
+        cases ( e ==kk k0 ); subst; eauto.
+        cases (keys_compatible e k0); clean_map_lookups; eauto.
+        cases (keyType k0 ==kt AsymKey true); clean_map_lookups; eauto.
+  Qed.
+
+  Hint Resolve merge_keys_came_from_somewhere1 merge_keys_came_from_somewhere2.
+
   Lemma merge_keys_merges :
-    forall ks2 k_id k ks ks1,
-      ks = ks1 $k++ ks2
-      -> ks $? k_id = Some k
+    forall ks2 k_id k ks1,
+        ks1 $k++ ks2 $? k_id = Some k
       -> ks1 $? k_id = Some k
       \/ ks2 $? k_id = Some k.
   Proof.
     unfold merge_keys.
     induction ks2 using P.map_induction_bis; intros.
-    - apply map_eq_Equal in H; subst.
-      eapply IHks2_1; eauto.
+    - apply map_eq_Equal in H; subst; eauto.
 
-    - rewrite fold_Empty in H; eauto.
-      subst; intuition idtac.
-      unfold Empty, Raw.Empty, empty, not; simpl. intros. unfold Raw.PX.MapsTo, Raw.empty in H1; invert H1.
+    - rewrite fold_Empty in H; subst; eauto.
 
     - rewrite fold_add in H0; auto.
+      rewrite merge_keys_notation in H0; unfold add_key in H0; auto.
+      case (x ==n k_id); intros; subst; clean_map_lookups.
+      + cases (ks1 $k++ ks2 $? k_id); intros; simpl.
+        * cases (e ==kk k0); subst; clean_map_lookups.
+            rewrite Heq in H0; invert H0; auto.
+          cases (keys_compatible e k0); clean_map_lookups.
+          cases (keyType k0 ==kt AsymKey true); clean_map_lookups; eauto.
+          pose proof (canonical_key_one_other e k0).
+          invert H0; match goal with | [ H : canonical_key _ _ = _ |- _ ] => rewrite H end; eauto.
+        * clean_map_lookups; eauto.
 
-      case (x ==n k_id); intros.
-      + subst. rewrite add_eq_o by reflexivity.
-
-        remember (fold add_key ks2 ks1) as mks12.
-        unfold add_key in H1.
-        case_eq (mks12 $? k_id); intros; rewrite H0 in H1.
-        * cases (e ==kk k0).
-          rewrite H0 in H1; invert H1; auto.
-          cases (keys_compatible e k0).
-            cases (keyType k0 ==kt AsymKey true).
-              specialize (IHks2 _ _ _ _ Heqmks12 H1); invert IHks2; auto. rewrite not_find_in_iff in H. rewrite H in H2; invert H2.
-            rewrite add_eq_o in H1; intuition idtac.
-            
-          rewrite remove_eq_o in H1; invert H1; auto.
-        * rewrite add_eq_o in H1 by trivial. intuition idtac.
-
-      + rewrite add_neq_o by auto.
-        eapply IHks2; eauto.
-        remember (fold add_key ks2 ks1) as mks12.
-        unfold add_key in H0.
-        rewrite H0 in H1; clear H0.
-
-        case_eq (mks12 $? x); intros; rewrite H0 in H1.
-        * cases (e ==kk k0); auto. cases (keys_compatible e k0).
-          cases (keyType k0 ==kt AsymKey true); eauto. rewrite add_neq_o in H1; auto.
-          rewrite remove_neq_o in H1; auto.
-        * rewrite add_neq_o in H1; auto.
-
+      + cases (ks1 $k++ ks2 $? x); clean_map_lookups; eauto.
+        * cases (e ==kk k0); auto. cases (keys_compatible e k0); clean_map_lookups; eauto.
+          cases (keyType k0 ==kt AsymKey true); clean_map_lookups; eauto.
   Qed.
 
   Lemma add_key_results :
@@ -407,95 +715,15 @@ Section KeyMergeTheorems.
       ks' = add_key k v ks
       -> ks' = ks
       \/ ks' = ks $+ (k,v)
-      \/ ks' = ks $- k.
+      \/ exists k', ks' = ks $+ (k, canonical_key v k').
   Proof.
     unfold add_key; intros.
     cases (ks $? k); auto.
     cases (v ==kk k0); auto.
     cases (keys_compatible v k0); auto.
     cases (keyType k0 ==kt AsymKey true); auto.
+    intuition eauto.
   Qed.
-
-  Lemma merge_keys_adds_ks1 :
-    forall ks2 ks1 k v ks,
-      ks = ks1 $k++ ks2
-      -> ks1 $? k = Some v
-      -> ks2 $? k = None
-      -> ks $? k = Some v.
-  Proof.
-    unfold merge_keys.
-    induction ks2 using P.map_induction_bis; intros.
-
-    - apply map_eq_Equal in H; subst.
-      eapply IHks2_1; eauto.
-
-    - rewrite fold_Empty in H; auto.
-      subst; auto. apply empty_Empty.
-
-    - case (x ==n k); intros.
-      + rewrite add_eq_o in H2 by assumption; invert H2.
-      + rewrite add_neq_o in H2 by assumption.
-        rewrite H0. rewrite fold_add; auto.
-        remember (fold add_key ks2 ks1) as mks12.
-        unfold add_key.
-        cases ( mks12 $? x ).
-        cases ( e ==kk k0 ). eapply IHks2; eauto.
-        cases ( keys_compatible e k0).
-        cases (keyType k0 ==kt AsymKey true); try (rewrite add_neq_o by auto); eapply IHks2; eauto.
-        rewrite remove_neq_o by auto; eapply IHks2; eauto.
-        rewrite add_neq_o by assumption. eapply IHks2; eauto.
-  Qed.
-
-  Ltac contra_map_lookup :=
-    match goal with
-    | [ H1 : ?ks $? ?k = Some _, H2 : ?ks $? ?k = None |- _ ] => rewrite H1 in H2; invert H2
-    end.
-
-  Lemma merge_keys_adds_ks2 :
-    forall ks2 ks1 k v ks,
-      ks = ks1 $k++ ks2
-      -> ks1 $? k = None
-      -> ks2 $? k = Some v
-      -> ks $? k = Some v.
-  Proof.
-    unfold merge_keys.
-    induction ks2 using P.map_induction_bis; intros.
-
-    - apply map_eq_Equal in H; subst.
-      eapply IHks2_1; eauto.
-
-    - rewrite fold_Empty in H; auto.
-      invert H1. invert H1.
-
-    - case (x ==n k); intros.
-      + subst. rewrite add_eq_o in H2 by trivial; invert H2.
-        rewrite fold_add; auto.
-        remember (fold add_key ks2 ks1) as mks12.
-        unfold add_key.
-        cases ( mks12 $? k).
-        * cases ( v ==kk k0 ); subst; eauto.
-          cases (keys_compatible v k0); eauto.
-          cases (keyType k0 ==kt AsymKey true); eauto.
-          rewrite not_find_in_iff in H; eapply merge_keys_merges in Heq; eauto; destruct Heq; contra_map_lookup.
-          rewrite add_eq_o; auto.
-          rewrite not_find_in_iff in H; eapply merge_keys_merges in Heq; eauto; destruct Heq; contra_map_lookup.
-        * rewrite add_eq_o; auto.
-
-      + subst; rewrite add_neq_o in H2 by assumption; eauto.
-        rewrite fold_add; auto.
-        remember (fold add_key ks2 ks1) as mks12.
-        unfold add_key.
-        cases ( mks12 $? x).
-        * cases ( e ==kk k0 ); eauto.
-          cases (keys_compatible e k0); eauto.
-          cases (keyType k0 ==kt AsymKey true); eauto.
-          rewrite add_neq_o by assumption; eauto.
-          rewrite remove_neq_o by assumption; eauto.
-        * rewrite add_neq_o by assumption; eauto.
-
-  Qed.
-
-  Hint Resolve merge_keys_adds_ks1 merge_keys_adds_ks2.
 
   Lemma keys_compatible_reflexive :
     forall k,
@@ -526,176 +754,106 @@ Section KeyMergeTheorems.
       symmetry in e; contradiction.
   Qed.
 
-  Hint Resolve keys_compatible_reflexive keys_compatible_symmetric.
+  (* Hint Resolve keys_compatible_reflexive keys_compatible_symmetric. *)
 
   Lemma merge_keys_ok :
     forall ks2 k_id k1 k2 ks ks1,
-        ks = ks1 $k++ ks2
-      -> ks1 $? k_id = Some k1
-      -> ks2 $? k_id = Some k2
-      -> k1.(keyId) = k_id
-      -> k2.(keyId) = k_id
-      -> keys_compatible k1 k2 = true
-      -> ( ks $? k_id = Some k1 /\ k1 = k2 )
-      \/ ( ks $? k_id = Some k1 /\ k1.(keyType) = AsymKey true )
-      \/ ( ks $? k_id = Some k2 /\ k1.(keyType) <> AsymKey true ).
-  Proof.
-    unfold merge_keys.
-    induction ks2 using P.map_induction_bis; intros.
-
-    - apply map_eq_Equal in H; subst.
-      eapply IHks2_1; eauto.
-
-    - rewrite empty_o in H1; invert H1.
-
-    - rewrite fold_add in H0; auto.
-      remember (fold add_key ks2 ks1) as mks12.
-      case (x ==n k_id); intros.
-      + rewrite add_eq_o in H2 by assumption. inversion H2. rewrite e0 in *; clear e0. rewrite H7 in *; clear H7.
-        clear H2.
-        apply not_find_in_iff in H.
-        eapply merge_keys_adds_ks1 in Heqmks12; eauto.
-        unfold add_key in H0. rewrite Heqmks12 in H0.
-        cases (k2 ==kk k1).
-        * subst; intuition idtac.
-        * rewrite keys_compatible_symmetric in H5. rewrite H5 in H0; cases (keyType k1 ==kt AsymKey true).
-          subst; intuition idtac.
-          subst. rewrite add_eq_o by trivial. intuition idtac.
-
-      + rewrite add_neq_o in H2 by assumption.
-        apply add_key_results in H0.
-        intuition idtac;
-          subst; ( (rewrite add_neq_o by assumption) || (rewrite remove_neq_o by assumption) || idtac );
-            eapply IHks2; eauto.
-
-  Qed.
-
-  Lemma merge_keys_left_identity :
-    forall ks,
-      $0 $k++ ks = ks.
-  Proof.
-    unfold merge_keys.
-    induction ks using P.map_induction_bis; intros.
-
-    - apply map_eq_Equal in H; subst; auto.
-    - apply fold_Empty; eauto using empty_Empty.
-    - rewrite fold_add; auto.
-      rewrite IHks; clear IHks.
-      unfold add_key. apply not_find_in_iff in H. rewrite H; trivial.
-  Qed.
-    
-  Lemma merge_keys_right_identity :
-    forall ks,
-      ks $k++ $0 = ks.
-  Proof.
-    unfold merge_keys; intros.
-    rewrite fold_Empty; eauto using empty_Empty.
-  Qed.
-
-  Lemma merge_keys_adds_no_new_keys :
-    forall ks2 k ks1,
-        ks1 $? k = None
-      -> ks2 $? k = None
-      -> (ks1 $k++ ks2) $? k = None.
-  Proof.
-    induction ks2 using P.map_induction_bis; intros.
-    - apply map_eq_Equal in H; subst; auto.
-    - rewrite merge_keys_right_identity; auto.
-    - unfold merge_keys; rewrite fold_add; auto.
-      case (x ==n k); intros; subst.
-      + rewrite add_eq_o in H1 by trivial; invert H1.
-      + rewrite add_neq_o in H1 by auto.
-        remember (fold add_key ks2 ks1) as ind.
-        unfold add_key.
-        cases (ind $? x); eauto.
-        * cases (e ==kk k0); subst; eauto.
-          cases (keys_compatible e k0); subst; eauto.
-            cases (keyType k0 ==kt AsymKey true); eauto. rewrite add_neq_o; eauto.
-            rewrite remove_neq_o by auto; eauto.
-        * rewrite add_neq_o by assumption; subst; eauto.
-  Qed.
-
-  Lemma merge_keys_adds_one_unless_incompatible :
-    forall ks2 ks1 k_id k1 k2,
         ks1 $? k_id = Some k1
       -> ks2 $? k_id = Some k2
-      -> (ks1 $k++ ks2) $? k_id = Some k1
-      \/ (ks1 $k++ ks2) $? k_id = Some k2
-      \/ keys_compatible k1 k2 = false.
-  Proof.
-    induction ks2 using P.map_induction_bis; intros.
-    - apply map_eq_Equal in H; subst; auto.
-    - invert H0.
-    - unfold merge_keys.
-      case (x ==n k_id); intros; subst.
-      + rewrite add_eq_o in H1 by trivial; invert H1.
-        rewrite fold_add; auto.
-        remember (fold add_key ks2 ks1) as ind.
-        unfold add_key.
-        cases (ind $? k_id); eauto.
-        * cases (k2 ==kk k); subst; eauto.
-          rewrite not_find_in_iff in H; erewrite merge_keys_adds_ks1 in Heq; eauto; invert Heq.
-          cases (keys_compatible k2 k); subst; eauto.
-          cases (keyType k ==kt AsymKey true); eauto.
-          rewrite !add_eq_o; intuition idtac.
-        * rewrite add_eq_o by trivial; intuition idtac.
-            
-      + rewrite fold_add; eauto.
-        rewrite add_neq_o in * by assumption.
-        remember (fold add_key ks2 ks1) as ind.
-        unfold add_key.
-        cases (ind $? x); eauto.
-        * cases (e ==kk k); subst; eauto.
-          cases (keys_compatible e k); subst; eauto.
-            cases (keyType k ==kt AsymKey true); eauto. rewrite !add_neq_o; eauto.
-            rewrite remove_neq_o by auto; eauto.
-        * rewrite !add_neq_o; subst; eauto.
-  Qed.
-
-  Lemma merge_keys_adds_one_unless_incompatible' :
-    forall ks2 ks1 ks k_id k1 k2,
-        ks1 $? k_id = Some k1
-      -> ks2 $? k_id = Some k2
+      (* -> k1.(keyId) = k_id *)
+      (* -> k2.(keyId) = k_id *)
+      (* -> keys_compatible k1 k2 = true *)
       -> ks = ks1 $k++ ks2
       -> ( ks $? k_id = Some k1 /\ k1 = k2)
       \/ ( ks $? k_id = Some k1 /\ k1 <> k2 /\ keys_compatible k1 k2 = true /\ k1.(keyType) = AsymKey true )
       \/ ( ks $? k_id = Some k2 /\ k1 <> k2 /\ keys_compatible k1 k2 = true /\ k1.(keyType) <> AsymKey true )
-      \/ ( ks $? k_id = None /\ keys_compatible k1 k2 = false).
+      \/ ( ks $? k_id = Some (canonical_key k1 k2) /\ keys_compatible k1 k2 = false).
+      (* -> ( ks $? k_id = Some k1 /\ k1 = k2 ) *)
+      (* \/ ( ks $? k_id = Some k1 /\ k1.(keyType) = AsymKey true ) *)
+      (* \/ ( ks $? k_id = Some k2 /\ k1.(keyType) <> AsymKey true ). *)
   Proof.
+    unfold merge_keys.
     induction ks2 using P.map_induction_bis; intros.
+
     - apply map_eq_Equal in H; subst; eauto.
     - invert H0.
-    - subst; unfold merge_keys.
-      case (x ==n k_id); intros; subst.
-      + rewrite add_eq_o in H1 by trivial; invert H1.
-        rewrite fold_add; auto.
-        remember (fold add_key ks2 ks1) as ind.
-        unfold add_key.
-        cases (ind $? k_id); eauto.
-        * rewrite not_find_in_iff in H; erewrite merge_keys_adds_ks1 in Heq; eauto; invert Heq.
-          cases (k2 ==kk k); subst; eauto.
-          cases (keys_compatible k2 k); subst; eauto.
 
-          assert (k <> k2) by (unfold not; intros ?SYM; symmetry in SYM; auto).
-          rewrite keys_compatible_symmetric in Heq.
-          cases (keyType k ==kt AsymKey true); eauto.
-            remember (ks1 $k++ ks2) as ks. unfold merge_keys in Heqks. rewrite <- Heqks. eapply merge_keys_adds_ks1 in Heqks; eauto.
-            intuition idtac.
-            rewrite !add_eq_o; intuition idtac.
-            rewrite remove_eq_o by trivial; rewrite keys_compatible_symmetric; intuition idtac.
-        * rewrite not_find_in_iff in H; erewrite merge_keys_adds_ks1 in Heq; eauto; invert Heq.
-            
-      + rewrite fold_add; eauto.
-        rewrite add_neq_o in * by assumption.
-        remember (fold add_key ks2 ks1) as ind.
-        unfold add_key.
-        cases (ind $? x); eauto.
-        * cases (e ==kk k); subst; eauto.
-          cases (keys_compatible e k); subst; eauto.
-            cases (keyType k ==kt AsymKey true); eauto. rewrite !add_neq_o; eauto.
-            rewrite remove_neq_o by auto; eauto.
-        * rewrite !add_neq_o; subst; eauto.
+    - subst. progress_fold_add1; clean_map_lookups; eauto.
+      rewrite merge_keys_notation.
+      case (x ==n k_id); intros; subst; clean_map_lookups.
+      + remember (ks1 $k++ ks2) as ks.
+        specialize (merge_keys_adds_ks1 _ _ _ H0 H Heqks). intros; subst.
+        cases (k2 ==kk k1).
+        * unfold add_key; subst. rewrite H1.
+          rewrite keys_compatible_reflexive; simpl. cases (k1 ==kk k1); try contradiction; eauto.
+
+        * unfold add_key; rewrite H1; simpl. cases (k2 ==kk k1); try contradiction.
+          rewrite keys_compatible_symmetric.
+          assert (k1 <> k2) by auto.
+          (* apply merge_keys_came_from_somewhere1 in H1; auto. *)
+
+          cases (keys_compatible k1 k2); clean_map_lookups; eauto.
+          cases (keyType k1 ==kt AsymKey true); clean_map_lookups; eauto.
+          rewrite H1; intuition idtac.
+          intuition idtac.
+          destruct (canonical_key_one_other k2 k1);
+            match goal with | [ H : canonical_key _ _ = _ |- _ ] => rewrite H end;
+            rewrite canonical_key_sym;
+            match goal with | [ H : canonical_key _ _ = _ |- _ ] => rewrite H end;
+            eauto.
+
+      + unfold add_key.
+        cases (ks1 $k++ ks2 $? x); eauto.
+        * cases (e ==kk k); eauto.
+          cases (keys_compatible e k); clean_map_lookups; eauto.
+          cases (keyType k ==kt AsymKey true); clean_map_lookups; eauto.
+        * clean_map_lookups; eauto.
   Qed.
+
+  (* Lemma merge_keys_adds_one : *)
+  (*   forall ks2 ks1 ks k_id k1 k2, *)
+  (*       ks1 $? k_id = Some k1 *)
+  (*     -> ks2 $? k_id = Some k2 *)
+  (*     -> ks = ks1 $k++ ks2 *)
+  (*     -> ( ks $? k_id = Some k1 /\ k1 = k2) *)
+  (*     \/ ( ks $? k_id = Some k1 /\ k1 <> k2 /\ keys_compatible k1 k2 = true /\ k1.(keyType) = AsymKey true ) *)
+  (*     \/ ( ks $? k_id = Some k2 /\ k1 <> k2 /\ keys_compatible k1 k2 = true /\ k1.(keyType) <> AsymKey true ) *)
+  (*     \/ ( ks $? k_id = Some (canonical_key k1 k2) /\ keys_compatible k1 k2 = false). *)
+  (* Proof. *)
+  (*   induction ks2 using P.map_induction_bis; intros. *)
+  (*   - apply map_eq_Equal in H; subst; eauto. *)
+  (*   - invert H0. *)
+  (*   - subst; unfold merge_keys. *)
+  (*     case (x ==n k_id); intros; subst. *)
+  (*     + rewrite add_eq_o in H1 by trivial; invert H1. *)
+  (*       rewrite fold_add; auto. *)
+  (*       remember (fold add_key ks2 ks1) as ind. *)
+  (*       unfold add_key. *)
+  (*       cases (ind $? k_id); eauto. *)
+  (*       * rewrite not_find_in_iff in H; erewrite merge_keys_adds_ks1 in Heq; eauto; invert Heq. *)
+  (*         cases (k2 ==kk k); subst; eauto. *)
+  (*         cases (keys_compatible k2 k); subst; eauto. *)
+
+  (*         assert (k <> k2) by (unfold not; intros ?SYM; symmetry in SYM; auto). *)
+  (*         rewrite keys_compatible_symmetric in Heq. *)
+  (*         cases (keyType k ==kt AsymKey true); eauto. *)
+  (*           remember (ks1 $k++ ks2) as ks. unfold merge_keys in Heqks. rewrite <- Heqks. eapply merge_keys_adds_ks1 in Heqks; eauto. *)
+  (*           intuition idtac. *)
+  (*           rewrite !add_eq_o; intuition idtac. *)
+  (*           rewrite remove_eq_o by trivial; rewrite keys_compatible_symmetric; intuition idtac. *)
+  (*       * rewrite not_find_in_iff in H; erewrite merge_keys_adds_ks1 in Heq; eauto; invert Heq. *)
+            
+  (*     + rewrite fold_add; eauto. *)
+  (*       rewrite add_neq_o in * by assumption. *)
+  (*       remember (fold add_key ks2 ks1) as ind. *)
+  (*       unfold add_key. *)
+  (*       cases (ind $? x); eauto. *)
+  (*       * cases (e ==kk k); subst; eauto. *)
+  (*         cases (keys_compatible e k); subst; eauto. *)
+  (*           cases (keyType k ==kt AsymKey true); eauto. rewrite !add_neq_o; eauto. *)
+  (*           rewrite remove_neq_o by auto; eauto. *)
+  (*       * rewrite !add_neq_o; subst; eauto. *)
+  (* Qed. *)
 
   Lemma merge_keys_symmetric :
     forall ks1 ks2,
@@ -707,8 +865,8 @@ Section KeyMergeTheorems.
 
     cases (ks1 $? y); cases (ks2 $? y).
     - remember (ks1 $k++ ks2) as ks12. remember (ks2 $k++ ks1) as ks21.
-      pose proof (merge_keys_adds_one_unless_incompatible' _ _ _ Heq Heq0 Heqks12).
-      pose proof (merge_keys_adds_one_unless_incompatible' _ _ _ Heq0 Heq Heqks21).
+      pose proof (merge_keys_ok _ _ _ Heq Heq0 Heqks12).
+      pose proof (merge_keys_ok _ _ _ Heq0 Heq Heqks21).
 
       (repeat match goal with
               | [ H : _ /\ _ |- _ ] => destruct H
@@ -717,8 +875,8 @@ Section KeyMergeTheorems.
                 rewrite keys_compatible_symmetric in H1; rewrite H1 in H2; invert H2
               | [ H : keys_compatible ?k ?k = false |- _ ] => idtac k; unfold keys_compatible in H
               end); subst;
-        rewrite H;
-        rewrite H0;
+        match goal with | [ H : ks1 $k++ ks2 $? _ = _ |- _ ] => rewrite H end;
+        match goal with | [ H : ks2 $k++ ks1 $? _ = _ |- _ ] => rewrite H end;
         eauto.
       
       Ltac discharge_keys_comp_sym_false :=
@@ -748,6 +906,7 @@ Section KeyMergeTheorems.
       assert (k = k0); destruct k; destruct k0; simpl in *; subst; eauto.
 
       discharge_keys_comp_sym_false.
+      rewrite canonical_key_sym at 1; trivial.
 
     - erewrite (merge_keys_adds_ks1); eauto.
       erewrite (merge_keys_adds_ks2); eauto.
@@ -757,47 +916,393 @@ Section KeyMergeTheorems.
       rewrite merge_keys_adds_no_new_keys; eauto.
   Qed.
 
-  Lemma merge_keys_transitive :
-    forall ks3 ks1 ks2,
+  Ltac split_ands := 
+    repeat match goal with
+           | [ H : _ /\ _ |- _ ] => destruct H
+           end.
+
+  Ltac split_ors :=
+    repeat match goal with
+           | [ H : _ \/ _ |- _ ] => destruct H
+           end.
+
+  Lemma canonical_keys_compat :
+    forall k1 k2 k3,
+      k1 = canonical_key k1 k2
+      -> keys_compatible k3 k1 = false
+      -> keys_compatible k3 k2 = true
+      -> k1 = canonical_key k1 k3.
+  Admitted.
+
+  Lemma keys_compatible_incompat :
+    forall k1 k2 k3,
+      keys_compatible k2 k3 = true
+      -> keys_compatible k1 k2 = true
+      -> keys_compatible k1 k3 = false
+      -> False.
+  Admitted.
+
+  Lemma blah :
+    forall  k1 k2 k_id ks1 ks2,
+      ks1 $? k_id = Some k1
+      -> ks1 $k++ (ks2 $+ (k_id,k2)) $? k_id = Some (canonical_key k1 k2).
+  Admitted.
+
+  (*     IHks3 : ks1 $k++ ks2 $k++ ks3 = ks1 $k++ (ks2 $k++ ks3) *)
+  (* k : key *)
+  (* Heq : ks1 $k++ ks2 $k++ ks3 $? x = Some k *)
+  (* k0 : key *)
+  (* Heq0 : ks2 $k++ ks3 $? x = Some k0 *)
+  (* n : e <> k *)
+  (* n0 : k <> k0 *)
+  (* KS1 : k <> k0 -> ks1 $? x = Some k *)
+  (* H0 : ks1 $k++ (ks2 $k++ ks3) $? x = Some k *)
+  (* H1 : k <> k0 *)
+  (* H2 : keys_compatible k k0 = true *)
+  (* H3 : keyType k = AsymKey true *)
+  (* Heq1 : keys_compatible e k = true *)
+  (* n1 : e <> k0 *)
+  (* Heq2 : keys_compatible e k0 = true *)
+  (* n2 : keyType k0 <> AsymKey true *)
+  (* ============================ *)
+  (* Some k = ks1 $k++ (ks2 $k++ ks3 $+ (x, e)) $? x *)
+
+  Lemma blah1 :
+    forall k1 k2,
+      keyType k1 = AsymKey true
+      -> keys_compatible k1 k2 = true
+      -> canonical_key k1 k2 = k1.
+  Admitted.
+
+  Hint Extern 1 (keys_compatible _ _ = _) => eassumption || (rewrite keys_compatible_symmetric; eassumption).
+
+  Lemma merge_keys_assoc :
+    forall ks3 ks1 ks2 : keys,
       ks1 $k++ ks2 $k++ ks3 = ks1 $k++ (ks2 $k++ ks3).
   Proof.
     induction ks3 using P.map_induction_bis; intros.
 
-    Hint Extern 1 (~ In _ _) => apply not_find_in_iff.
-
     - apply map_eq_Equal in H; subst; eauto.
     - rewrite !merge_keys_right_identity; trivial.
     - apply map_eq_Equal; unfold Equal; subst; intros.
-      unfold merge_keys. rewrite fold_add; auto.
-      rewrite fold_add; eauto.
-      remember (fold add_key ks2 ks1) as mk12.
-      remember (fold add_key ks3 ks2) as mk23.
-      remember (fold add_key ks3 mk12) as mk123.
+      unfold merge_keys.
+      progress_fold_add1; auto. progress_fold_add1; auto.
+      rewrite merge_keys_notation with (ks1 := ks1).
+      rewrite merge_keys_notation with (ks2 := ks3).
       unfold add_key at 1; unfold add_key at 2.
-      specialize (IHks3 ks1 ks2); unfold merge_keys in IHks3. rewrite <- Heqmk12, <- Heqmk23, <- Heqmk123 in IHks3.
 
-      case (y ==n x); intros; cases (mk123 $? x); cases (mk23 $? x); (try (rewrite e0 in *; clear e0)).
+      (* clean up notation of induction hypothesis *) 
+      specialize (IHks3 ks1 ks2); unfold merge_keys in IHks3.
+      rewrite merge_keys_notation  with (ks1 := ks1) in IHks3.
+      rewrite merge_keys_notation  with (ks1 := ks2) in IHks3.
+      rewrite merge_keys_notation  with (ks2 := ks3) in IHks3.
+      rewrite merge_keys_notation  with (ks2 := ks2 $k++ ks3) in IHks3.
+
+      rewrite merge_keys_notation with (ks1 := ks2).
+
+      Ltac rewrite123 :=
+        match goal with | [ H : _ $k++ _ $k++ _ $? _ = _ |- _ ] => rewrite H end.
+
+      Ltac rewrite23 :=
+        match goal with | [ H : _ $k++ _ $? _ = _ |- _ ] => rewrite H end.
+
+      (* assert (ks2 $? x = Some k0); eauto. *)
+      (* assert ( k <> k0 -> ks1 $? x = Some k) by *)
+      (*     (intros; rewrite IHks3 in Heq; eapply merge_keys_merges in Heq; destruct Heq; [|contra_map_lookup]; eauto). *)
+
+      case (y ==n x); intros; cases (ks1 $k++ ks2 $k++ ks3 $? x);
+        intros; subst; clean_map_lookups.
+
+      + cases (ks2 $k++ ks3 $? x).
+
+        * cases (k ==kk k0); subst.
+          ** cases (e ==kk k0); cases (keys_compatible e k0).
+             rewrite merge_keys_notation with (ks2:=ks2$k++ks3); rewrite IHks3; trivial.
+             rewrite merge_keys_notation with (ks2:=ks2$k++ks3); rewrite IHks3; trivial.
+             cases (keyType k0 ==kt AsymKey true); eauto.
+             rewrite merge_keys_notation with (ks2:=ks2$k++ks3); rewrite IHks3; trivial.
+             admit. admit.
+          ** admit.
+        * admit.
+
+      + assert (ks2 $k++ ks3 $? x = None) by admit.
+        rewrite H0.
+        progress_fold_add1; auto.
+        unfold add_key at 1.
+        rewrite merge_keys_notation. rewrite <- IHks3. rewrite Heq; clean_map_lookups; trivial.
 
       + admit.
 
-      + cases (e ==kk k). rewrite e0 in *; clear e0.
-        rewrite fold_add; eauto.
-        rewrite <- IHks3.
-        unfold add_key. rewrite Heq. cases (k ==kk k); eauto. contradiction.
-        cases (keys_compatible e k); eauto.
-        cases (keyType k ==kt AsymKey true).
-        rewrite fold_add; eauto.
-        rewrite <- IHks3.
-        unfold add_key. rewrite Heq. cases (e ==kk k); eauto. rewrite Heq1. rewrite e0; simpl. rewrite Heq. trivial.
+      + assert (ks2 $k++ ks3 $? x = None) by admit.
+        rewrite H0.
+        progress_fold_add1; auto.
+        unfold add_key at 1.
+        rewrite merge_keys_notation with (ks2:= ks2 $k++ ks3). rewrite <- IHks3. rewrite Heq; clean_map_lookups; trivial.
 
-        rewrite fold_add; eauto; rewrite <- IHks3.
-        unfold add_key. rewrite Heq. cases (e ==kk k); eauto. rewrite e0; clear e0; rewrite add_eq_o; eauto.
-        rewrite Heq1. cases (keyType k ==kt AsymKey true); eauto. contradiction.
+  Admitted.
 
-        rewrite fold_add; eauto; rewrite <- IHks3.
-        unfold add_key. rewrite Heq. cases (e ==kk k); try contradiction. rewrite Heq1. trivial.
+          ** 
+            assert ( k <> k0 -> ks1 $? x = Some k) as KS1
+                by (intros; rewrite IHks3 in Heq; eapply merge_keys_merges in Heq; destruct Heq; [|contra_map_lookup]; eauto).
+            assert (k<>k0) as OK by assumption; apply KS1 in OK.
+            rewrite IHks3 in Heq.
+            apply merge_keys_ok with
+                (ks2 := (ks2 $k++ ks3))
+                (k2:=k0)
+                (ks := ks1 $k++ (ks2 $k++ ks3)) in OK; clean_map_lookups; auto.
+             
+
+
+
+
+        * cases (e ==kk k); cases (k ==kk k0); subst;
+            try rewrite123;
+            simpl.
+
+          Hint Extern 1 (_ = fold add_key ?ks _ $? _) => idtac ks; rewrite merge_keys_notation with (ks2:=ks).
+          Hint Extern 1 (_ = fold add_key ?ks _ $? _) => progress (rewrite merge_keys_notation with (ks2:=ks)).
+
+          ** rewrite canonical_key_refl; rewrite keys_compatible_reflexive; simpl.
+             cases (k0 ==kk k0); try contradiction.
+             rewrite merge_keys_notation; rewrite <- IHks3; eauto.
+          ** 
+            assert ( k <> k0 -> ks1 $? x = Some k) as KS1
+                by (intros; rewrite IHks3 in Heq; eapply merge_keys_merges in Heq; destruct Heq; [|contra_map_lookup]; eauto).
+            assert (k<>k0) as OK by assumption; apply KS1 in OK.
+            rewrite IHks3 in Heq.
+            apply merge_keys_ok with
+                (ks2 := (ks2 $k++ ks3))
+                (k2:=k0)
+                (ks := ks1 $k++ (ks2 $k++ ks3)) in OK; clean_map_lookups; auto.
+
+
+
+
+      + cases (ks2 $k++ ks3 $? x).
+        * cases (e ==kk k); subst.
+          ** cases (k ==kk k0); subst.
+             *** rewrite merge_keys_notation with (ks2:=ks2$k++ks3); rewrite IHks3; trivial.
+             ***
+               assert ( k <> k0 -> ks1 $? x = Some k) as KS1
+                 by (intros; rewrite IHks3 in Heq; eapply merge_keys_merges in Heq; destruct Heq; [|contra_map_lookup]; eauto).
+               assert (k<>k0) as OK by assumption; apply KS1 in OK.
+               rewrite Heq.
+               rewrite IHks3 in Heq.
+               apply merge_keys_ok with
+                   (ks2 := (ks2 $k++ ks3))
+                   (k2:=k0)
+                   (ks := ks1 $k++ (ks2 $k++ ks3)) in OK; clean_map_lookups; auto.
+
+               split_ors; split_ands; subst; try contradiction.
+               **** rewrite H2. cases (keyType k0 ==kt AsymKey true).
+                    rewrite merge_keys_notation; eauto.
+                    rewrite merge_keys_notation. erewrite blah; try rewrite canonical_key_refl; eauto.
+
+               **** rewrite H2.
+                    rewrite merge_keys_notation; eauto.
+                    cases (keyType k0 ==kt AsymKey true); eauto.
+                    erewrite blah; try rewrite canonical_key_refl; eauto.
+
+               **** rewrite H1. rewrite Heq in H0; invert H0.
+                    rewrite merge_keys_notation; eauto.
+                    erewrite blah; eauto.
+                    rewrite canonical_key_assoc. rewrite canonical_key_assoc. rewrite canonical_key_refl.
+                    rewrite <- canonical_key_assoc. rewrite canonical_key_refl. trivial.
+
+          ** cases (k ==kk k0); subst.
+             *** admit.
+             ***
+               assert ( k <> k0 -> ks1 $? x = Some k) as KS1
+                 by (intros; rewrite IHks3 in Heq; eapply merge_keys_merges in Heq; destruct Heq; [|contra_map_lookup]; eauto).
+               assert (k<>k0) as OK by assumption; apply KS1 in OK.
+               (* rewrite Heq. *)
+               (* rewrite IHks3 in Heq. *)
+               apply merge_keys_ok with
+                   (ks2 := (ks2 $k++ ks3))
+                   (k2:=k0)
+                   (ks := ks1 $k++ (ks2 $k++ ks3)) in OK; clean_map_lookups; auto.
+
+               split_ors; split_ands; subst; try contradiction.
+               **** rewrite H3; simpl.
+                    cases (keys_compatible e k); clean_map_lookups; eauto.
+                    rewrite Heq.
+                    cases (e ==kk k0); subst; eauto.
+                    cases (keys_compatible e k0); eauto.
+                    cases (keyType k0 ==kt AsymKey true); eauto.
+                    rewrite merge_keys_notation; eauto.
+                      erewrite blah; eauto. erewrite blah1; auto.
+
+                    exfalso; eapply keys_compatible_incompat with (k1:=e) (k2:=k) (k3:=k0); auto.
+
+                    assert (keys_compatible e k0 = false) by admit.
+                      rewrite H4. cases (e ==kk k0).
+                        subst. rewrite keys_compatible_reflexive in H4; invert H4.
+                        rewrite merge_keys_notation. erewrite blah; auto.
+                          rewrite canonical_key_sym with (k1:=e) (k2:=k0). rewrite canonical_key_assoc.
+                          rewrite blah1 with (k1:=k); auto. rewrite canonical_key_sym; trivial.
+
+               **** rewrite IHks3 in Heq. contra_map_lookup.
+
+               **** rewrite <- IHks3 in H0. rewrite Heq in H0; invert H0.
+                    rewrite <- H3.
+                    cases (keys_compatible e k); clean_map_lookups; eauto.
+                    ***** 
+                      assert (keys_compatible e k0 = false) by admit. (* easiesh *)
+                      rewrite H0. cases (keyType k ==kt AsymKey true); cases (e ==kk k0); subst; clean_map_lookups; try rewrite123.
+                      rewrite merge_keys_notation; rewrite <- IHks3; eauto.
+                      rewrite merge_keys_notation; eauto. erewrite blah; auto. rewrite canonical_key_assoc.
+                        rewrite keys_compatible_symmetric in Heq1. rewrite blah1 with (k1:=k); auto. rewrite <- H3; trivial.
+                      rewrite keys_compatible_reflexive in H0; discriminate.
+                      rewrite merge_keys_notation; eauto. erewrite blah; auto. rewrite canonical_key_sym with (k1:=e).
+                        rewrite canonical_key_assoc. rewrite <- H3. admit. (* easy *)
+                    *****
+                      admit.
+
+        * admit.  (* easy *)
+
+      + assert (ks1 $k++ ks2 $k++ ks3 $? x = None) as NODIS by auto.
+        rewrite IHks3 in NODIS; apply merge_keys_no_disappear_keys in NODIS; invert NODIS.
+        rewrite H1.
+        progress_fold_add1; auto.
+        rewrite merge_keys_notation.
+        unfold add_key.
+        rewrite <- IHks3.
+        rewrite123; clean_map_lookups; trivial.
 
       + admit.
+
+      + assert (ks1 $k++ ks2 $k++ ks3 $? x = None) as NODIS by auto.
+        rewrite IHks3 in NODIS; apply merge_keys_no_disappear_keys in NODIS; invert NODIS.
+        rewrite H1.
+        progress_fold_add1; auto.
+        rewrite merge_keys_notation with (ks2:=ks2 $k++ ks3).
+        unfold add_key.
+        rewrite <- IHks3.
+        rewrite123; clean_map_lookups; trivial.
+  Admitted.
+
+
+
+
+      + admit.
+      + admit.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      + cases (e ==kk k); subst.
+        * rewrite Heq.
+          rewrite IHks3 in Heq.
+          admit.
+        * cases (keys_compatible e k); clean_map_lookups. admit. admit.
+
+      + admit.  (* easy *)
+
+
+      + cases (ks2 $k++ ks3 $? x).
+        * cases (e ==kk k); subst.
+          ** cases (k ==kk k0); subst.
+             *** rewrite merge_keys_notation with (ks2:=ks2$k++ks3); rewrite IHks3; trivial.
+             *** 
+
+
+
+
+               cases (keys_compatible k k0).
+                 cases (keyType k0 ==kt AsymKey true).
+                 rewrite merge_keys_notation with (ks2:=ks2$k++ks3); rewrite IHks3; trivial.
+
+                 rewrite merge_keys_notation with (ks2:=ks2$k++ks3$+(x,k)); rewrite IHks3.
+                 
+
+                 admit.
+                 admit.
+
+        * cases (e ==kk k); subst;
+            progress_fold_add1; auto;
+              rewrite merge_keys_notation with (ks2:=ks2$k++ks3);
+              rewrite <- IHks3.
+          ** unfold add_key; rewrite123.
+             cases (k ==kk k); auto. rewrite keys_compatible_reflexive.
+             cases (keyType k ==kt AsymKey true); clean_map_lookups; auto.
+          ** unfold add_key; rewrite123.
+             cases (e ==kk k); subst; try contradiction; eauto.
+
+
+
+
+      case (y ==n x); intros; cases (ks1 $k++ ks2 $k++ ks3 $? x); cases (ks2 $k++ ks3 $? x);
+        intros; subst; clean_map_lookups.
+
+      + assert (ks2 $? x = Some k0); eauto.
+        assert ( k <> k0 -> ks1 $? x = Some k) by
+          (intros; rewrite IHks3 in Heq; eapply merge_keys_merges in Heq; destruct Heq; [|contra_map_lookup]; eauto).
+
+        cases (e ==kk k); cases (e ==kk k0); subst.
+        * rewrite merge_keys_notation with (ks2 := ks2 $k++ ks3).
+          rewrite <- IHks3.
+          trivial.
+        * cases (keys_compatible k k0); clean_map_lookups.
+            cases ( keyType k0 ==kt AsymKey true); eauto.
+              rewrite merge_keys_notation with (ks2 := ks2 $k++ ks3). rewrite <- IHks3. trivial.
+              rewrite merge_keys_notation with (ks2 := ks2 $k++ ks3 $+ (x,k)).
+                rewrite Heq. admit.
+
+            assert (forall x y, ks2 $k++ ks3 $- x $+ (x,y) = ks2 $k++ ks3 $+ (x,y) ).
+              intros; apply map_eq_Equal; unfold Equal; intros;
+                cases (y0 ==n x0); subst; clean_map_lookups; auto; rewrite remove_neq_o; auto.
+            specialize (H2 x (canonical_key k k0)). rewrite <- H2.
+            rewrite fold_add; auto using not_find_in_iff, remove_eq_o.
+            unfold add_key at 1.
+
+
+           admit.
+
+        * admit.
+
+        * admit.
+
+      + cases (e ==kk k); subst.
+        * rewrite fold_add; auto.
+          rewrite merge_keys_notation with (ks2 := ks2 $k++ ks3).
+          unfold add_key at 1. rewrite <- IHks3.
+          rewrite123. cases (k ==kk k); try contradiction; eauto.
+        * progress_fold_add1; auto.
+          rewrite merge_keys_notation with (ks2 := ks2 $k++ ks3).
+          rewrite <- IHks3.
+          unfold add_key. rewrite123.
+          cases (e ==kk k); try contradiction; eauto.
+
+      + rewrite IHks3 in Heq.
+        apply merge_keys_no_disappear_keys in Heq.
+        invert Heq; contra_map_lookup.
+
+      + progress_fold_add1; auto.
+        rewrite merge_keys_notation.
+        rewrite <- IHks3.
+        unfold add_key.
+        rewrite123; clean_map_lookups; trivial.
+
+      + admit.
+
+
+        cases ( e ==kk k ); subst; clean_map_lookups.
+         rewrite merge_keys_notation. rewrite <- IHks3. rewrite123; trivial.
 
       + rewrite fold_add; eauto.
         rewrite <- IHks3.
@@ -862,15 +1367,6 @@ Section KeyMergeTheorems.
     unfold merge_keys, key_heaps_compatible, keys_good.
     intros.
 
-    Ltac split_ands := 
-      repeat match goal with
-             | [ H : _ /\ _ |- _ ] => destruct H
-             end.
-
-    Ltac split_ors :=
-      repeat match goal with
-             | [ H : _ \/ _ |- _ ] => destruct H
-             end.
 
     split_ands; split; intros.
 
