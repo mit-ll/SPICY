@@ -14,7 +14,7 @@ Section RealLemmas.
   Import RealWorld.
 
   Lemma real_univ_eq_fields_eq :
-    forall {A B} (us us' : honest_users A) (a a' : adversaries B) ud ud',
+    forall {A B} (us us' : honest_users A) (a a' : user_data B) ud ud',
       us = us'
       -> a = a'
       -> ud = ud'

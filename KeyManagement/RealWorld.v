@@ -97,11 +97,17 @@ Inductive cipher : Type :=
 | SigEncCipher {t} (c_id : cipher_id) (k__sign k__enc : key_identifier) (msg : message t) : cipher
 .
 
+Definition cipher_signing_key (c : cipher) :=
+  match c with
+  | SigCipher _ k _      => k
+  | SigEncCipher _ k _ _ => k
+  end.
+
 Definition queued_messages := list exmsg.
 Definition keys            := NatMap.t key.
 Definition ciphers         := NatMap.t cipher.
 
-Definition adversary_knowledge := keys.
+(* Definition adversary_knowledge := keys. *)
 
 Inductive msg_accepted_by_pattern (cs : ciphers) (pat : msg_pat) : forall {t : type}, message t -> Prop :=
 | MsgAccept : forall {t} (m : message t),
@@ -125,21 +131,30 @@ Inductive msg_accepted_by_pattern (cs : ciphers) (pat : msg_pat) : forall {t : t
     -> msg_accepted_by_pattern cs pat m
 .
 
-Fixpoint msg_pattern_spoofable (advk : adversary_knowledge) (pat : msg_pat) : bool :=
-  match pat with
-  | Accept => true
-  | Paired p1 p2 => msg_pattern_spoofable advk p1 || msg_pattern_spoofable advk p2
-  | Signed k =>
+Definition honest_signing_key (honestk advk : keys) (k : key_identifier) : bool :=
+  match honestk $? k with
+  | None   => false
+  | Some (MkCryptoKey _ Signing SymKey)         =>
     match advk $? k with
-    | Some _ => true
-    | None   => false
+    | None   => true
+    | Some _ => false
     end
-  | SignedEncrypted k__sign K__enc =>
-    match advk $? k__sign with
-    | Some _ => true
-    | None   => false
+  | Some (MkCryptoKey _ Signing (AsymKey true)) =>
+    match advk $? k with
+    | None => true
+    | Some (MkCryptoKey _ Signing (AsymKey false)) => true
+    | _    => false
     end
+  | Some _ => false
+  end.
 
+
+Fixpoint msg_pattern_spoofable (honestk advk : keys) (pat : msg_pat) : bool :=
+  match pat with
+  | Accept                     => true
+  | Paired p1 p2               => msg_pattern_spoofable honestk advk p1 || msg_pattern_spoofable honestk advk p2
+  | Signed k                   => negb (honest_signing_key honestk advk k)
+  | SignedEncrypted k__sign k__enc => negb (honest_signing_key honestk advk k__sign)
   end.
 
 Inductive user_cmd : Type -> Type :=
@@ -184,13 +199,16 @@ Record user_data (A : Type) :=
       (* is_admin : bool *)
     }.
 
-Definition adversaries A  := user_list (user_data A).
 Definition honest_users A := user_list (user_data A).
+Definition powerless_adv {B} (b : B) : user_data B :=
+  {| key_heap := $0
+   ; protocol := Return b
+   ; msg_heap := []  |}.
 
 Record universe (A B : Type) :=
   mkUniverse {
       users       : honest_users A
-    ; adversary   : adversaries B
+    ; adversary   : user_data B
     ; all_ciphers : ciphers
     }.
 
@@ -243,19 +261,38 @@ Fixpoint findKeys {t} (msg : message t) : keys :=
   
 Definition findUserKeys {A} (us : user_list (user_data A)) : keys :=
   fold (fun u_id u ks => ks $k++ u.(key_heap)) us $0.
-  
-Definition addUserKeys {A} (us : user_list (user_data A)) (ks : keys) : user_list (user_data A) :=
-  map (fun u => {| key_heap := u.(key_heap) $k++ ks ; protocol := u.(protocol) ;  msg_heap := u.(msg_heap) |}) us.
+
+Definition addUserKeys {A} (ks : keys) (u : user_data A) : user_data A :=
+  {| key_heap := u.(key_heap) $k++ ks ; protocol := u.(protocol) ; msg_heap := u.(msg_heap) |}.
+
+Definition addUsersKeys {A} (us : user_list (user_data A)) (ks : keys) : user_list (user_data A) :=
+  map (addUserKeys ks) us.
 
 Definition adv_no_honest_keys (adv honest : keys) : Prop :=
   forall k_id,
     match adv $? k_id with
     | None => True
-    | Some (MkCryptoKey _ _ SymKey)          => honest $? k_id = None
-    | Some (MkCryptoKey _ _ (AsymKey true) ) => honest $? k_id = None
-    | Some k' =>  honest $? k_id = None
-              \/ (exists k, honest $? k_id = Some k /\ keys_compatible k k' = true)
+    | Some (MkCryptoKey _ _ SymKey)            => honest $? k_id = None
+    | Some (MkCryptoKey kid kt (AsymKey true)) => honest $? k_id = None
+                                               \/ honest $? k_id = Some (MkCryptoKey kid kt (AsymKey false) )
+    | _ => False
     end.
+
+Ltac contra_map_lookup :=
+  match goal with
+  | [ H1 : ?ks $? ?k = Some _, H2 : ?ks $? ?k = None |- _ ] => rewrite H1 in H2; invert H2
+  | [ H : ?v1 <> ?v2, H1 : ?ks $? ?k = Some ?v1, H2 : ?ks $? ?k = Some ?v2 |- _ ] => rewrite H1 in H2; invert H2; contradiction
+  end.
+
+Ltac split_ands := 
+  repeat match goal with
+         | [ H : _ /\ _ |- _ ] => destruct H
+         end.
+  
+Ltac split_ors :=
+  repeat match goal with
+         | [ H : _ \/ _ |- _ ] => destruct H
+         end.
 
 Section KeyMergeTheorems.
 
@@ -480,11 +517,6 @@ Section KeyMergeTheorems.
   Hint Resolve merge_keys_fold_fn_proper merge_keys_fold_fn_proper_flip merge_keys_fold_fn_proper_Equal
                merge_keys_transpose merge_keys_transpose_flip merge_keys_transpose_Equal.
 
-  Ltac contra_map_lookup :=
-    match goal with
-    | [ H1 : ?ks $? ?k = Some _, H2 : ?ks $? ?k = None |- _ ] => rewrite H1 in H2; invert H2
-    | [ H : ?v1 <> ?v2, H1 : ?ks $? ?k = Some ?v1, H2 : ?ks $? ?k = Some ?v2 |- _ ] => rewrite H1 in H2; invert H2; contradiction
-    end.
 
   Ltac clean_map_lookups1 :=
     match goal with
@@ -509,16 +541,6 @@ Section KeyMergeTheorems.
     (repeat clean_map_lookups1);
     try discriminate;
     try contra_map_lookup.
-
-  Ltac split_ands := 
-    repeat match goal with
-           | [ H : _ /\ _ |- _ ] => destruct H
-           end.
-  
-  Ltac split_ors :=
-    repeat match goal with
-           | [ H : _ \/ _ |- _ ] => destruct H
-           end.
 
   Hint Resolve empty_Empty.
   Hint Extern 1 (~ In _ _) => rewrite not_find_in_iff.
@@ -707,35 +729,6 @@ Section KeyMergeTheorems.
         cases (x ==n k_id); clean_map_lookups; auto.
   Qed.
 
-  (* Lemma merge_keys_merges : *)
-  (*   forall ks2 k_id k ks1, *)
-  (*       ks1 $k++ ks2 $? k_id = Some k *)
-  (*     -> ks1 $? k_id = Some k *)
-  (*     \/ ks2 $? k_id = Some k. *)
-  (* Proof. *)
-  (*   unfold merge_keys. *)
-  (*   induction ks2 using P.map_induction_bis; intros. *)
-  (*   - apply map_eq_Equal in H; subst; eauto. *)
-
-  (*   - rewrite fold_Empty in H; subst; eauto. *)
-
-  (*   - rewrite fold_add in H0; auto. *)
-  (*     rewrite merge_keys_notation in H0; unfold add_key in H0; auto. *)
-  (*     case (x ==n k_id); intros; subst; clean_map_lookups. *)
-  (*     + cases (ks1 $k++ ks2 $? k_id); intros; simpl. *)
-  (*       * cases (e ==kk k0); subst; eauto. clean_map_lookups. *)
-  (*         specialize (IHks2 _ _ _ Heq). *)
-  (*         pose proof (canonical_key_one_other e k0) as CANONICAL; *)
-  (*           destruct CANONICAL as [CAN | CAN]; *)
-  (*             rewrite CAN; intuition idtac; contra_map_lookup. *)
-
-  (*       * clean_map_lookups; eauto. *)
-
-  (*     + cases (ks1 $k++ ks2 $? x); clean_map_lookups; eauto. *)
-  (*       cases (e ==kk k0); auto. *)
-  (*       cases (x ==n k_id); clean_map_lookups; auto. *)
-  (* Qed. *)
-
   Lemma merge_keys_canonicalizes :
     forall ks2 k_id k k1 k2 ks1,
         ks1 $k++ ks2 $? k_id = Some k
@@ -827,24 +820,13 @@ Section KeyMergeTheorems.
       symmetry in e; contradiction.
   Qed.
 
-  (* Hint Resolve keys_compatible_reflexive keys_compatible_symmetric. *)
-
   Lemma merge_keys_ok :
     forall ks2 k_id k1 k2 ks ks1,
         ks1 $? k_id = Some k1
       -> ks2 $? k_id = Some k2
-      (* -> k1.(keyId) = k_id *)
-      (* -> k2.(keyId) = k_id *)
-      (* -> keys_compatible k1 k2 = true *)
       -> ks = ks1 $k++ ks2
       -> ( ks $? k_id = Some k1 /\ k1 = k2)
-      (* \/ ( ks $? k_id = Some k1 /\ k1 <> k2 /\ keys_compatible k1 k2 = true /\ k1.(keyType) = AsymKey true ) *)
-      (* \/ ( ks $? k_id = Some k2 /\ k1 <> k2 /\ keys_compatible k1 k2 = true /\ k1.(keyType) <> AsymKey true ) *)
       \/ ( ks $? k_id = Some (canonical_key k1 k2)).
-      (* -> ( ks $? k_id = Some k1 /\ k1 = k2 ) *)
-      (* \/ ( ks $? k_id = Some k1 /\ k1.(keyType) = AsymKey true ) *)
-      (* \/ ( ks $? k_id = Some k2 /\ k1.(keyType) <> AsymKey true ). *)
-      (* \/ ( ks $? k_id = Some (canonical_key k1 k2) /\ keys_compatible k1 k2 = false). *)
   Proof.
     unfold merge_keys.
     induction ks2 using P.map_induction_bis; intros.
@@ -905,64 +887,6 @@ Section KeyMergeTheorems.
       rewrite merge_keys_adds_no_new_keys; eauto.
   Qed.
 
-  (* Lemma canonical_keys_compat : *)
-  (*   forall k1 k2 k3, *)
-  (*     k1 = canonical_key k1 k2 *)
-  (*     -> keys_compatible k3 k1 = false *)
-  (*     -> keys_compatible k3 k2 = true *)
-  (*     -> k1 = canonical_key k1 k3. *)
-  (* Proof. *)
-  (*   intros. *)
-
-  (* Admitted. *)
-
-  (* Lemma keys_compatible_incompat : *)
-  (*   forall k1 k2 k3, *)
-  (*     keys_compatible k2 k3 = true *)
-  (*     -> keys_compatible k1 k2 = true *)
-  (*     -> keys_compatible k1 k3 = false *)
-  (*     -> False. *)
-  (* Admitted. *)
-
-  (* Lemma blah_full : *)
-  (*   forall  k1 k2 k_id ks1 ks2, *)
-  (*       ks1 $? k_id = Some k1 *)
-  (*     -> ks2 $? k_id = Some k2 *)
-  (*     -> ks1 $k++ ks2 $? k_id = Some (canonical_key k1 k2). *)
-  (* Admitted. *)
-
-  (* Lemma blah : *)
-  (*   forall  k1 k2 k_id ks1 ks2, *)
-  (*     ks1 $? k_id = Some k1 *)
-  (*     -> ks1 $k++ (ks2 $+ (k_id,k2)) $? k_id = Some (canonical_key k1 k2). *)
-  (* Admitted. *)
-
-  (*     IHks3 : ks1 $k++ ks2 $k++ ks3 = ks1 $k++ (ks2 $k++ ks3) *)
-  (* k : key *)
-  (* Heq : ks1 $k++ ks2 $k++ ks3 $? x = Some k *)
-  (* k0 : key *)
-  (* Heq0 : ks2 $k++ ks3 $? x = Some k0 *)
-  (* n : e <> k *)
-  (* n0 : k <> k0 *)
-  (* KS1 : k <> k0 -> ks1 $? x = Some k *)
-  (* H0 : ks1 $k++ (ks2 $k++ ks3) $? x = Some k *)
-  (* H1 : k <> k0 *)
-  (* H2 : keys_compatible k k0 = true *)
-  (* H3 : keyType k = AsymKey true *)
-  (* Heq1 : keys_compatible e k = true *)
-  (* n1 : e <> k0 *)
-  (* Heq2 : keys_compatible e k0 = true *)
-  (* n2 : keyType k0 <> AsymKey true *)
-  (* ============================ *)
-  (* Some k = ks1 $k++ (ks2 $k++ ks3 $+ (x, e)) $? x *)
-
-  (* Lemma blah1 : *)
-  (*   forall k1 k2, *)
-  (*     keyType k1 = AsymKey true *)
-  (*     -> keys_compatible k1 k2 = true *)
-  (*     -> canonical_key k1 k2 = k1. *)
-  (* Admitted. *)
-
   Hint Extern 1 (keys_compatible _ _ = _) => eassumption || (rewrite keys_compatible_symmetric; eassumption).
 
   Lemma merge_keys_inequal_addition_no_impact :
@@ -1013,13 +937,6 @@ Section KeyMergeTheorems.
 
       Ltac rewrite123 :=
         match goal with | [ H : _ $k++ _ $k++ _ $? _ = _ |- _ ] => rewrite H end.
-
-      Ltac rewrite23 :=
-        match goal with | [ H : _ $k++ _ $? _ = _ |- _ ] => rewrite H end.
-
-      (* assert (ks2 $? x = Some k0); eauto. *)
-      (* assert ( k <> k0 -> ks1 $? x = Some k) by *)
-      (*     (intros; rewrite IHks3 in Heq; eapply merge_keys_merges in Heq; destruct Heq; [|contra_map_lookup]; eauto). *)
 
       cases (ks1 $k++ ks2 $k++ ks3 $? x);
         intros; subst; clean_map_lookups.
@@ -1177,10 +1094,10 @@ Section KeyMergeTheorems.
 
   Lemma find_user_keys_universe_user :
     forall {A B} (U : universe A B) u_id u_d,
-        adv_no_honest_keys (findUserKeys U.(adversary)) (findUserKeys U.(users))
+        adv_no_honest_keys U.(adversary).(key_heap) (findUserKeys U.(users))
       -> U.(users) $? u_id = Some u_d
-      -> key_heaps_compatible (findUserKeys U.(adversary)) (findUserKeys U.(users))
-      -> adv_no_honest_keys (findUserKeys U.(adversary)) u_d.(key_heap).
+      -> key_heaps_compatible U.(adversary).(key_heap) (findUserKeys U.(users))
+      -> adv_no_honest_keys U.(adversary).(key_heap) u_d.(key_heap).
   Proof.
   Admitted.
 
@@ -1200,8 +1117,8 @@ Definition encryptMessage {t} (k__sign k__enc : key) (m : message t) (c_id : cip
 
 Definition signMessage {t} (k : key) (m : message t) (c_id : cipher_id) : option cipher :=
   match k with
-  | MkCryptoKey _ _ SymKey         => Some (SigCipher c_id k.(keyId) m)
-  | MkCryptoKey _ _ (AsymKey true) => Some (SigCipher c_id k.(keyId) m)
+  | MkCryptoKey _ Signing SymKey         => Some (SigCipher c_id k.(keyId) m)
+  | MkCryptoKey _ Signing (AsymKey true) => Some (SigCipher c_id k.(keyId) m)
   | _       => None
   end.
 
@@ -1213,26 +1130,20 @@ Definition canVerifySignature {A} (cs : ciphers)(usrDat : user_data A)(c_id : ci
     /\ usrDat.(key_heap) $? k_id = Some k.
 
 Definition buildUniverse {A B}
-           (usrs : honest_users A) (advs : adversaries B) (cs : ciphers)
+           (usrs : honest_users A) (adv : user_data B) (cs : ciphers)
            (u_id : user_id) (userData : user_data A) : universe A B :=
   {| users        := usrs $+ (u_id, userData)
-   ; adversary    := advs
+   ; adversary    := adv
    ; all_ciphers  := cs
    |}.
 
 Definition buildUniverseAdv {A B}
-           (usrs : honest_users A) (advs : adversaries B) (cs : ciphers)
-           (u_id : user_id) (userData : user_data B) : universe A B :=
+           (usrs : honest_users A) (cs : ciphers)
+           (userData : user_data B) : universe A B :=
   {| users        := usrs
-   ; adversary    := advs $+ (u_id, userData)
+   ; adversary    := userData
    ; all_ciphers  := cs
    |}.
-
-Definition addAdversaries {A B} (U : universe A B) (advs : adversaries B) :=
-  {| users       := U.(users)
-   ; adversary   := U.(adversary) $++ advs
-   ; all_ciphers := U.(all_ciphers)
-  |}.
 
 Definition extractPlainText {t} (msg : message t) : option nat :=
   match msg with
@@ -1260,74 +1171,74 @@ Definition unSig {t} (msg : message t) : option (message t) :=
 
 
 Inductive action : Type :=
-| Input  t (msg : message t) (pat : msg_pat) (u_id : user_id) (uks : keys)
-| Output t (msg : message t) (u_id : user_id)
+| Input  t (msg : message t) (pat : msg_pat) (uks : keys)
+| Output t (msg : message t)
 .
 
 Definition rlabel := @label action.
 
-Definition action_adversary_safe (advk : adversary_knowledge) (a : action) : bool :=
+Definition action_adversary_safe (honestk advk : keys) (a : action) : bool :=
   match a with
-  | Input _ pat _ _ => negb (msg_pattern_spoofable advk pat)
-  | Output _ _      => true
+  | Input _ pat _ => negb (msg_pattern_spoofable honestk advk pat)
+  | Output _      => true
   end.
 
 Definition data_step0 (A B C : Type) : Type :=
-  honest_users A * adversaries B * ciphers * keys * queued_messages * user_cmd C.
+  honest_users A * user_data B * ciphers * keys * queued_messages * user_cmd C.
 
 Definition build_data_step {A B C} (U : universe A B) (u_data : user_data C) : data_step0 A B C :=
   (U.(users), U.(adversary), U.(all_ciphers), u_data.(key_heap), u_data.(msg_heap), u_data.(protocol)).
 
 (* Labeled transition system *)
-Inductive step_user : forall A B C, user_id -> rlabel -> data_step0 A B C -> data_step0 A B C -> Prop :=
+Inductive step_user : forall A B C, rlabel -> data_step0 A B C -> data_step0 A B C -> Prop :=
 
 (* Plumbing *)
-| StepBindRecur : forall {B r r'} u_id (usrs usrs' : honest_users r') (adv adv' : adversaries B)
+| StepBindRecur : forall {B r r'} (usrs usrs' : honest_users r') (adv adv' : user_data B)
                      lbl cs cs' qmsgs qmsgs' ks ks' (cmd1 cmd1' : user_cmd r) (cmd2 : r -> user_cmd r'),
-      step_user u_id lbl (usrs, adv, cs, ks, qmsgs, cmd1) (usrs', adv', cs', ks', qmsgs', cmd1')
-    -> step_user u_id lbl (usrs, adv, cs, ks, qmsgs, Bind cmd1 cmd2) (usrs', adv', cs', ks', qmsgs', Bind cmd1' cmd2)
-| StepBindProceed : forall {B r r'} u_id (usrs : honest_users r) (adv : adversaries B) cs ks qmsgs (v : r') (cmd : r' -> user_cmd r),
-    step_user u_id Silent (usrs, adv, cs, ks, qmsgs, Bind (Return v) cmd) (usrs, adv, cs, ks, qmsgs, cmd v)
+      step_user lbl (usrs, adv, cs, ks, qmsgs, cmd1) (usrs', adv', cs', ks', qmsgs', cmd1')
+    -> step_user lbl (usrs, adv, cs, ks, qmsgs, Bind cmd1 cmd2) (usrs', adv', cs', ks', qmsgs', Bind cmd1' cmd2)
+| StepBindProceed : forall {B r r'} (usrs : honest_users r) (adv : user_data B) cs ks qmsgs (v : r') (cmd : r' -> user_cmd r),
+    step_user Silent (usrs, adv, cs, ks, qmsgs, Bind (Return v) cmd) (usrs, adv, cs, ks, qmsgs, cmd v)
 
-| StepGen : forall {A B} u_id (usrs : honest_users A) (adv : adversaries B) cs ks qmsgs n,
-    step_user u_id Silent (usrs, adv, cs, ks, qmsgs, Gen) (usrs, adv, cs, ks, qmsgs, Return n)
+| StepGen : forall {A B} (usrs : honest_users A) (adv : user_data B) cs ks qmsgs n,
+    step_user Silent (usrs, adv, cs, ks, qmsgs, Gen) (usrs, adv, cs, ks, qmsgs, Return n)
 
 (* Comms  *)
-| StepRecv : forall {A B} {t} u_id (usrs : honest_users A) (adv : adversaries B) cs ks ks' qmsgs qmsgs' (msg : message t) msgs pat newkeys,
+| StepRecv : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs ks ks' qmsgs qmsgs' (msg : message t) msgs pat newkeys,
       qmsgs = Exm msg :: msgs (* we have a message waiting for us! *)
     -> qmsgs' = msgs
     -> findKeys msg = newkeys
     -> ks' = ks $k++ newkeys
     -> msg_accepted_by_pattern cs pat msg
-    -> step_user u_id (Action (Input msg pat u_id ks))
+    -> step_user (Action (Input msg pat ks))
                 (usrs, adv, cs, ks , qmsgs , Recv pat)
                 (usrs, adv, cs, ks', qmsgs', Return msg)
 
-| StepRecvDrop : forall {A B} {t} u_id (usrs : honest_users A) (adv : adversaries B) cs ks qmsgs qmsgs' (msg : message t) pat msgs,
+| StepRecvDrop : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs ks qmsgs qmsgs' (msg : message t) pat msgs,
       qmsgs = Exm msg :: msgs (* we have a message waiting for us! *)
     -> qmsgs' = msgs
     -> ~ msg_accepted_by_pattern cs pat msg
-    -> step_user u_id Silent (* Error label ... *)
+    -> step_user Silent (* Error label ... *)
                 (usrs, adv, cs, ks, qmsgs , Recv pat)
                 (usrs, adv, cs, ks, qmsgs', Return msg)
 
 (* Augment attacker's keys with those available through messages sent,
  * including traversing through ciphers already known by attacker, etc.
  *)
-| StepSend : forall {A B} {t} u_id (usrs usrs' : honest_users A) (adv adv' : adversaries B)
+| StepSend : forall {A B} {t} (usrs usrs' : honest_users A) (adv adv' : user_data B)
                cs ks qmsgs rec_u_id rec_u newkeys (msg : message t),
     findKeys msg = newkeys
-    -> adv' = addUserKeys adv newkeys
+    -> adv' = addUserKeys newkeys adv
     -> usrs $? rec_u_id = Some rec_u
     -> usrs' = usrs $+ (rec_u_id, {| key_heap := rec_u.(key_heap)
                                   ; protocol := rec_u.(protocol) 
                                   ; msg_heap := rec_u.(msg_heap) ++ [Exm msg]  |})
-    -> step_user u_id (Action (Output msg u_id))
+    -> step_user (Action (Output msg))
                 (usrs , adv , cs, ks, qmsgs, Send rec_u_id msg)
                 (usrs', adv', cs, ks, qmsgs, Return tt)
 
 (* Encryption / Decryption *)
-| StepEncrypt : forall {A B} {t} u_id (usrs : honest_users A) (adv : adversaries B) cs cs' ks qmsgs (msg : message t) k__sign k__enc k__signid k__encid c_id cipherMsg,
+| StepEncrypt : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs cs' ks qmsgs (msg : message t) k__sign k__enc k__signid k__encid c_id cipherMsg,
       keyId k__sign = k__signid
     -> keyId k__enc = k__encid
     -> ks $? k__signid = Some k__sign
@@ -1335,11 +1246,11 @@ Inductive step_user : forall A B C, user_id -> rlabel -> data_step0 A B C -> dat
     -> ~ In c_id cs
     -> encryptMessage k__sign k__enc msg c_id = Some cipherMsg
     -> cs' = cs $+ (c_id, cipherMsg)
-    -> step_user u_id Silent
+    -> step_user Silent
                 (usrs, adv, cs , ks, qmsgs, SignEncrypt k__sign k__enc msg)
                 (usrs, adv, cs', ks, qmsgs, Return (SignedCiphertext c_id))
 
-| StepDecrypt : forall {A B} {t} u_id (usrs : honest_users A) (adv : adversaries B) cs ks ks' qmsgs (msg : message t) k__signid k__sign k__encid c_id newkeys,
+| StepDecrypt : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs ks ks' qmsgs (msg : message t) k__signid k__sign k__encid c_id newkeys,
       cs $? c_id = Some (SigEncCipher c_id k__signid k__encid msg)
     -> ( ks $? k__encid = Some (MkCryptoKey k__encid Encryption (AsymKey true)) (* check we have access to private key *)
       \/ ks $? k__encid = Some (MkCryptoKey k__encid Encryption SymKey) )
@@ -1347,29 +1258,29 @@ Inductive step_user : forall A B C, user_id -> rlabel -> data_step0 A B C -> dat
     (* -> k.(keyId) = k_id *)
     -> findKeys msg = newkeys
     -> ks' = ks $k++ newkeys
-    -> step_user u_id Silent
+    -> step_user Silent
                 (usrs, adv, cs, ks , qmsgs, Decrypt (SignedCiphertext c_id))
                 (usrs, adv, cs, ks', qmsgs, Return msg)
 
 (* Signing / Verification *)
-| StepSign : forall {A B} {t} u_id (usrs : honest_users A) (adv : adversaries B) cs cs' ks qmsgs (msg : message t) k k_id c_id cipherMsg,
+| StepSign : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs cs' ks qmsgs (msg : message t) k k_id c_id cipherMsg,
       keyId k = k_id
     -> ks $? k_id = Some k
     -> ~(In c_id cs)
     -> signMessage k msg c_id = Some cipherMsg
     -> cs' = cs $+ (c_id, cipherMsg)
-    -> step_user u_id Silent
+    -> step_user Silent
                 (usrs, adv, cs , ks, qmsgs, Sign k msg)
                 (usrs, adv, cs', ks, qmsgs, Return (Signature msg c_id))
 
-| StepVerify : forall {A B} {t} u_id (usrs : honest_users A) (adv : adversaries B) cs ks qmsgs (msg : message t) k_id k c_id,
+| StepVerify : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs ks qmsgs (msg : message t) k_id k c_id,
     keyId k = k_id
     (* k is in your key heap *)
     -> ks $? (keyId k) = Some k
     (* return true or false whether k was used to sign the message *)
     -> cs $? c_id = Some (SigCipher c_id k_id msg)
     (* -> findKeys msg = newkeys *)
-    -> step_user u_id Silent
+    -> step_user Silent
                 (usrs, adv, cs, ks, qmsgs, (Verify k (Signature msg c_id)))
                 (usrs, adv, cs, ks, qmsgs, Return true)
                 (* (usrs, adv, cs, ks, qmsgs, Return (if (k_id ==n (keyId k)) then true else false)) *)
@@ -1405,16 +1316,15 @@ Inductive step_user : forall A B C, user_id -> rlabel -> data_step0 A B C -> dat
 Inductive step_universe {A B} : universe A B -> rlabel -> universe A B -> Prop :=
 | StepUser : forall U U' u_id userData usrs adv cs ks qmsgs lbl (cmd : user_cmd A),
     U.(users) $? u_id = Some userData
-    -> step_user u_id lbl
+    -> step_user lbl
                 (build_data_step U userData)
                 (usrs, adv, cs, ks, qmsgs, cmd)
     -> U' = buildUniverse usrs adv cs u_id {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmd |}
     -> step_universe U lbl U'
-| StepAdversary : forall U U' u_id userData usrs adv cs ks qmsgs lbl (cmd : user_cmd B),
-    U.(adversary) $? u_id = Some userData
-    -> step_user u_id lbl
+| StepAdversary : forall U U' userData usrs adv cs ks qmsgs lbl (cmd : user_cmd B),
+      step_user lbl
                 (build_data_step U userData)
                 (usrs, adv, cs, ks, qmsgs, cmd)
-    -> U' = buildUniverseAdv usrs adv cs u_id {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmd |}
+    -> U' = buildUniverseAdv usrs cs {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmd |}
     -> step_universe U Silent U'
 .
