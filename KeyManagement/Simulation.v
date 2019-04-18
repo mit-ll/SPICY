@@ -138,29 +138,28 @@ Section SingleAdversarySimulates.
        ; all_ciphers := U__r.(all_ciphers)
       |}.
 
-
-    Fixpoint msg_safe {t} (msg : message t) : bool :=
+    Fixpoint msg_safe {t} (honestk advk : keys) (msg : message t) : bool :=
       match msg with
       | Plaintext _ => false
       | KeyMessage _ => false
-      | MsgPair m1 m2 => msg_safe m1 && msg_safe m2
+      | MsgPair m1 m2 => msg_safe honestk advk m1 && msg_safe honestk advk m2
       | SignedCiphertext _ => true
       | Signature _ _ => true
       end.
-
-    Definition exm_safe (msg : exmsg) : bool :=
-      match msg with
-      | Exm m => true
+    
+    Fixpoint msg_filter (honestk advk : keys) (sigM : { t & message t } ) : bool :=
+      match sigM with
+      | existT _ _ msg => msg_safe honestk advk msg
       end.
 
-    Definition clean_messages (msgs : queued_messages) :=
-      List.filter exm_safe msgs.
+    Definition clean_messages (honestk advk : keys) (msgs : queued_messages) :=
+      List.filter (msg_filter honestk advk) msgs.
 
-    Definition clean_users {A} ( usrs : honest_users A ) :=
-      usrs.
-      (* map (fun u_d => {| key_heap := u_d.(key_heap) *)
-      (*               ; protocol := u_d.(protocol) *)
-      (*               ; msg_heap := clean_messages u_d.(msg_heap) |}) usrs. *)
+    Definition clean_users {A} (honestk advk : keys) (usrs : honest_users A) :=
+      (* usrs. *)
+      map (fun u_d => {| key_heap := u_d.(key_heap)
+                    ; protocol := u_d.(protocol)
+                    ; msg_heap := clean_messages honestk advk u_d.(msg_heap) |}) usrs.
 
     Definition honest_cipher_filter_fn (honestk advk : keys) (c_id : cipher_id) (c : cipher) :=
       match c with
@@ -232,12 +231,13 @@ Section SingleAdversarySimulates.
       filter (honest_cipher_filter_fn honestk advk) cs.
 
     Definition strip_adversary {A B} (U__r : universe A B) (b : B) : universe A B :=
-      {| users       := clean_users U__r.(users)
-       ; adversary   := {| key_heap := $0
-                         ; msg_heap := []
-                         ; protocol := Return b |}
-       ; all_ciphers := clean_ciphers (findUserKeys U__r.(users)) U__r.(adversary).(key_heap) U__r.(all_ciphers)
-      |}.
+      let honestk := findUserKeys U__r.(users)
+      in {| users       := clean_users honestk U__r.(adversary).(key_heap) U__r.(users)
+          ; adversary   := {| key_heap := $0
+                            ; msg_heap := []
+                            ; protocol := Return b |}
+          ; all_ciphers := clean_ciphers honestk U__r.(adversary).(key_heap) U__r.(all_ciphers)
+         |}.
 
     (* Lemma clean_ciphers_nokeys_idempotent : *)
     (*   forall cs, *)

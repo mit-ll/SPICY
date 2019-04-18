@@ -103,7 +103,7 @@ Definition cipher_signing_key (c : cipher) :=
   | SigEncCipher _ k _ _ => k
   end.
 
-Definition queued_messages := list exmsg.
+Definition queued_messages := list (sigT message).
 Definition keys            := NatMap.t key.
 Definition ciphers         := NatMap.t cipher.
 
@@ -1190,6 +1190,8 @@ Definition build_data_step {A B C} (U : universe A B) (u_data : user_data C) : d
   (U.(users), U.(adversary), U.(all_ciphers), u_data.(key_heap), u_data.(msg_heap), u_data.(protocol)).
 
 (* Labeled transition system *)
+Print sigT.
+
 Inductive step_user : forall A B C, rlabel -> data_step0 A B C -> data_step0 A B C -> Prop :=
 
 (* Plumbing *)
@@ -1205,7 +1207,7 @@ Inductive step_user : forall A B C, rlabel -> data_step0 A B C -> data_step0 A B
 
 (* Comms  *)
 | StepRecv : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs ks ks' qmsgs qmsgs' (msg : message t) msgs pat newkeys,
-      qmsgs = Exm msg :: msgs (* we have a message waiting for us! *)
+      qmsgs = (existT _ _ msg) :: msgs (* we have a message waiting for us! *)
     -> qmsgs' = msgs
     -> findKeys msg = newkeys
     -> ks' = ks $k++ newkeys
@@ -1215,7 +1217,7 @@ Inductive step_user : forall A B C, rlabel -> data_step0 A B C -> data_step0 A B
                 (usrs, adv, cs, ks', qmsgs', Return msg)
 
 | StepRecvDrop : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs ks qmsgs qmsgs' (msg : message t) pat msgs,
-      qmsgs = Exm msg :: msgs (* we have a message waiting for us! *)
+      qmsgs = (existT _ _ msg) :: msgs (* we have a message waiting for us! *)
     -> qmsgs' = msgs
     -> ~ msg_accepted_by_pattern cs pat msg
     -> step_user Silent (* Error label ... *)
@@ -1232,7 +1234,7 @@ Inductive step_user : forall A B C, rlabel -> data_step0 A B C -> data_step0 A B
     -> usrs $? rec_u_id = Some rec_u
     -> usrs' = usrs $+ (rec_u_id, {| key_heap := rec_u.(key_heap)
                                   ; protocol := rec_u.(protocol) 
-                                  ; msg_heap := rec_u.(msg_heap) ++ [Exm msg]  |})
+                                  ; msg_heap := rec_u.(msg_heap) ++ [existT _ _ msg]  |})
     -> step_user (Action (Output msg))
                 (usrs , adv , cs, ks, qmsgs, Send rec_u_id msg)
                 (usrs', adv', cs, ks, qmsgs, Return tt)
