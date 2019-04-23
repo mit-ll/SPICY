@@ -131,23 +131,66 @@ Inductive msg_accepted_by_pattern (cs : ciphers) (pat : msg_pat) : forall {t : t
     -> msg_accepted_by_pattern cs pat m
 .
 
-Definition honest_signing_key (honestk advk : keys) (k : key_identifier) : bool :=
-  match honestk $? k with
-  | None   => false
-  | Some (MkCryptoKey _ Signing SymKey)         =>
-    match advk $? k with
-    | None   => true
-    | Some _ => false
-    end
-  | Some (MkCryptoKey _ Signing (AsymKey true)) =>
-    match advk $? k with
-    | None => true
-    | Some (MkCryptoKey _ Signing (AsymKey false)) => true
-    | _    => false
-    end
-  | Some _ => false
-  end.
+Section SafeMessages.
+  Variable honestk advk : keys.
 
+  Definition honest_signing_key (k : key_identifier) : bool :=
+    match honestk $? k with
+    | None   => false
+    | Some (MkCryptoKey _ Signing SymKey)         =>
+      match advk $? k with
+      | None   => true
+      | Some _ => false
+      end
+    | Some (MkCryptoKey _ Signing (AsymKey true)) =>
+      match advk $? k with
+      | None => true
+      | Some (MkCryptoKey _ Signing (AsymKey false)) => true
+      | _    => false
+      end
+    | Some _ => false
+    end.
+
+  Fixpoint msg_needs_encryption {t} (msg : message t) : bool :=
+    match msg with
+    | Plaintext _ => false
+    | KeyMessage k =>
+      match honestk $? k.(keyId) with
+      | Some (MkCryptoKey _ _ SymKey)         => true
+      | Some (MkCryptoKey _ _ (AsymKey true)) => true
+      | _                                     => false
+      end
+    | MsgPair msg1 msg2 => msg_needs_encryption msg1 || msg_needs_encryption msg2
+    | SignedCiphertext _ => false
+    | Signature msg _ => msg_needs_encryption msg
+    end.
+
+  Definition cipher_adversary_safe (c : cipher) : bool :=
+    match c with
+    | SigCipher _ k_id msg              => negb (msg_needs_encryption msg)
+    | SigEncCipher _ k__signid k__encid msg =>
+      negb (msg_needs_encryption msg)
+      || match honestk $? k__encid with
+        | Some (MkCryptoKey _ Encryption (AsymKey true)) =>
+          match advk $? k__encid with
+          | None => true
+          | Some (MkCryptoKey _ Encryption (AsymKey false)) => true
+          | _    => false
+          end
+        | Some (MkCryptoKey _ Encryption SymKey)         => 
+          match advk $? k__encid with
+          | None   => true
+          | Some _ => false
+          end
+        | Some _ => false
+        | None   => false
+        end
+    end.
+
+  Definition message_queue_safe : queued_messages -> bool :=
+    forallb (fun m => match m with | existT _ _ msg => msg_needs_encryption msg end).
+
+End SafeMessages.
 
 Fixpoint msg_pattern_spoofable (honestk advk : keys) (pat : msg_pat) : bool :=
   match pat with
@@ -205,6 +248,18 @@ Definition powerless_adv {B} (b : B) : user_data B :=
    ; protocol := Return b
    ; msg_heap := []  |}.
 
+Definition is_powerless {B} (usr : user_data B) : bool :=
+   is_empty usr.(key_heap)
+&& match usr.(protocol) with
+   | Return _ => true
+   | _        => false
+   end
+&& match usr.(msg_heap) with
+   | [] => true
+   | _  => false
+   end
+.
+
 Record universe (A B : Type) :=
   mkUniverse {
       users       : honest_users A
@@ -258,7 +313,7 @@ Fixpoint findKeys {t} (msg : message t) : keys :=
   | SignedCiphertext _ => $0
   | Signature m _      => findKeys m
   end.
-  
+
 Definition findUserKeys {A} (us : user_list (user_data A)) : keys :=
   fold (fun u_id u ks => ks $k++ u.(key_heap)) us $0.
 
@@ -301,6 +356,24 @@ Section KeyMergeTheorems.
       fold add_key ks2 ks1 = ks1 $k++ ks2.
     unfold merge_keys; trivial.
   Qed.
+
+  Lemma safe_messages_have_no_bad_keys :
+    forall {t} (msg : message t) advk honestk msgk,
+      msg_needs_encryption honestk msg = false
+      -> adv_no_honest_keys advk honestk
+      -> msgk = findKeys msg
+      -> forall k_id k,
+            msgk $? k_id = Some k
+          -> honestk $? k_id = None
+          \/ (exists ku, k = MkCryptoKey k_id ku (AsymKey false))
+          \/ (exists ku, k = MkCryptoKey k_id ku (AsymKey true)  /\ honestk $? k_id = Some (MkCryptoKey k_id ku (AsymKey false))).
+  Proof.
+    induction msg; eauto; intros.
+    
+
+
+  Admitted.
+
 
   Definition keys_good (ks : keys) : Prop :=
     forall k_id k,
@@ -856,6 +929,19 @@ Section KeyMergeTheorems.
         * clean_map_lookups; eauto.
   Qed.
 
+  Lemma merge_keys_refl :
+    forall ks,
+      ks $k++ ks = ks.
+  Proof.
+    intros; apply map_eq_Equal; unfold Equal; subst; intros.
+    cases (ks $? y).
+    - remember (ks $k++ ks) as ksks.
+      pose proof (merge_keys_ok _ _ _ Heq Heq Heqksks).
+      rewrite canonical_key_refl in *.
+      intuition idtac.
+    - rewrite merge_keys_adds_no_new_keys; eauto.
+  Qed.
+
   Lemma merge_keys_symmetric :
     forall ks1 ks2,
       ks1 $k++ ks2 = ks2 $k++ ks1.
@@ -1323,10 +1409,10 @@ Inductive step_universe {A B} : universe A B -> rlabel -> universe A B -> Prop :
                 (usrs, adv, cs, ks, qmsgs, cmd)
     -> U' = buildUniverse usrs adv cs u_id {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmd |}
     -> step_universe U lbl U'
-| StepAdversary : forall U U' userData usrs adv cs ks qmsgs lbl (cmd : user_cmd B),
+| StepAdversary : forall U U' usrs adv cs ks qmsgs lbl (cmd : user_cmd B),
       step_user lbl
-                (build_data_step U userData)
+                (build_data_step U U.(adversary))
                 (usrs, adv, cs, ks, qmsgs, cmd)
-    -> U' = buildUniverseAdv usrs cs {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmd |}
+    -> U' = buildUniverseAdv usrs cs {| key_heap := adv.(key_heap) $k++ ks ; msg_heap := qmsgs ; protocol := cmd |}
     -> step_universe U Silent U'
 .
