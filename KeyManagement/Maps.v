@@ -289,23 +289,58 @@ Section MapLemmas.
     - rewrite !add_neq_o; trivial.
   Qed.
 
-  Lemma fold_over_empty :
-    forall {V} (m : NatMap.t V),
-      fold (fun k v a =>
-              if match v with
-                 | _ => true
-                 end then a $+ (k,v) else a) m $0 = m.
+  Lemma map_add_remove_eq :
+    forall {V} (m : NatMap.t V) k1 v1,
+      m $+ (k1, v1) $- k1 = m $- k1.
   Proof.
+    intros. apply map_eq_Equal; unfold Equal; intros.
+    case (k1 ==n y); intros; subst.
+    - rewrite !remove_eq_o; auto.
+    - rewrite !remove_neq_o, add_neq_o; auto.
+  Qed.
 
+  Lemma map_add_remove_neq :
+    forall {V} (m : NatMap.t V) k1 v1 k2,
+        k1 <> k2
+      -> m $+ (k1, v1) $- k2 = m $- k2 $+ (k1, v1).
+  Proof.
+    intros. apply map_eq_Equal; unfold Equal; intros.
+    case (k2 ==n y); case (k1 ==n y); intros; subst.
+    - contradiction.
+    - rewrite add_neq_o by assumption; rewrite !remove_eq_o; trivial.
+    - rewrite remove_neq_o by assumption; rewrite !add_eq_o; trivial.
+    - rewrite remove_neq_o by assumption; rewrite !add_neq_o by assumption; rewrite remove_neq_o; auto.
+  Qed.
+
+  Lemma map_remove_not_in_idempotent :
+    forall {V} (m : NatMap.t V) k1,
+      m $? k1 = None
+      -> m $- k1 = m.
+  Proof.
     intros.
-    apply P.fold_rec.
-    - intros; simpl. eapply map_eq_Equal; unfold Equal; intros.
-      rewrite empty_o. admit.
-    - intros; subst.
-      apply map_eq_Equal; unfold Equal; intros.
-      unfold P.Add in H1. specialize (H1 y). symmetry; auto.
+    eapply map_eq_Equal; unfold Equal; intros.
+    cases (y ==n k1); subst; eauto.
+    rewrite remove_eq_o by trivial; rewrite H; trivial.
+    rewrite remove_neq_o; auto.
+  Qed.
 
-  Admitted.
+  (* Lemma fold_over_empty : *)
+  (*   forall {V} (m : NatMap.t V), *)
+  (*     fold (fun k v a => *)
+  (*             if match v with *)
+  (*                | _ => true *)
+  (*                end then a $+ (k,v) else a) m $0 = m. *)
+  (* Proof. *)
+
+  (*   intros. *)
+  (*   apply P.fold_rec. *)
+  (*   - intros; simpl. eapply map_eq_Equal; unfold Equal; intros. *)
+  (*     rewrite empty_o. admit. *)
+  (*   - intros; subst. *)
+  (*     apply map_eq_Equal; unfold Equal; intros. *)
+  (*     unfold P.Add in H1. specialize (H1 y). symmetry; auto. *)
+
+  (* Admitted. *)
 
 End MapLemmas.
 
