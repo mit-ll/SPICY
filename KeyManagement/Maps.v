@@ -279,6 +279,16 @@ Section MapLemmas.
     apply map_eq_elements_eq. auto.
   Qed.
 
+  Lemma map_add_eq :
+    forall {V} (m : NatMap.t V) k v1 v2,
+      m $+ (k,v1) $+ (k,v2) = m $+ (k,v2).
+  Proof.
+    intros; apply map_eq_Equal; unfold Equal; intros.
+    cases (k ==n y); subst.
+    - rewrite !add_eq_o; trivial.
+    - rewrite !add_neq_o; trivial.
+  Qed.
+
   Lemma fold_over_empty :
     forall {V} (m : NatMap.t V),
       fold (fun k v a =>

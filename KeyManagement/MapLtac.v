@@ -14,17 +14,20 @@ Section RealLemmas.
   Import RealWorld.
 
   Lemma real_univ_eq_fields_eq :
-    forall {A B} (us us' : honest_users A) (a a' : user_data B) ud ud',
+    forall {A B} (us us' : honest_users A) (a a' : user_data B) cs cs' ks ks',
       us = us'
       -> a = a'
-      -> ud = ud'
-      -> {| users := us
-         ; adversary := a
-         ; all_ciphers := ud
+      -> cs = cs'
+      -> ks = ks'
+      -> {| users       := us
+         ; adversary   := a
+         ; all_ciphers := cs
+         ; all_keys    := ks
         |} =
-        {| users := us'
-         ; adversary := a'
-         ; all_ciphers := ud'
+        {| users       := us'
+         ; adversary   := a'
+         ; all_ciphers := cs'
+         ; all_keys    := ks'
         |}.
   Proof.
     intros; subst; reflexivity.
