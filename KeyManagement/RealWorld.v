@@ -127,54 +127,6 @@ Inductive msg_accepted_by_pattern (cs : ciphers) (pat : msg_pat) : forall {t : t
     -> msg_accepted_by_pattern cs pat m
 .
 
-Ltac clean_map_lookups1 :=
-  match goal with
-  | [ H : Some _ = None   |- _ ] => invert H
-  | [ H : None = Some _   |- _ ] => invert H
-  | [ H : Some _ = Some _ |- _ ] => invert H
-  | [ H : $0 $? _ = Some _ |- _ ] => invert H
-  | [ H : _ $+ (?k,_) $? ?k = _ |- _ ] => rewrite add_eq_o in H by trivial
-  | [ H : _ $+ (?k1,_) $? ?k2 = _ |- _ ] => rewrite add_neq_o in H by auto
-  | [ |- context[_ $+ (?k,_) $? ?k] ] => rewrite add_eq_o by trivial
-  | [ |- context[_ $+ (?k1,_) $? ?k2] ] => rewrite add_neq_o by auto
-  | [ H : ~ In _ _ |- _ ] => rewrite not_find_in_iff in H
-  | [ H1 : ?m $? ?k = _ , H2 : ?m $? ?k = _ |- _] => rewrite H1 in H2
-  end.
-
-(* Ltac contra_map_lookup := *)
-(*   match goal with *)
-(*   | [ H1 : ?ks $? ?k = Some _, H2 : ?ks $? ?k = None |- _ ] => rewrite H1 in H2; invert H2 *)
-(*   | [ H : ?v1 <> ?v2, H1 : ?ks $? ?k = Some ?v1, H2 : ?ks $? ?k = Some ?v2 |- _ ] => rewrite H1 in H2; invert H2; contradiction *)
-(*   end. *)
-
-Ltac contra_map_lookup :=
-  repeat
-    match goal with
-    | [ H1 : ?ks1 $? ?k = _, H2 : ?ks2 $? ?k = _ |- _ ] => rewrite H1 in H2; invert H2
-    | [ H : ?v1 <> ?v2, H1 : ?ks $? ?k = Some ?v1, H2 : ?ks $? ?k = Some ?v2 |- _ ] => rewrite H1 in H2; invert H2; contradiction
-    end; try discriminate.
-
-Ltac clean_map_lookups :=
-  (repeat clean_map_lookups1);
-  try discriminate;
-  try contra_map_lookup.
-
-Ltac split_ands :=
-  repeat match goal with
-         | [ H : _ /\ _ |- _ ] => destruct H
-         end.
-
-Ltac split_ors :=
-  repeat match goal with
-         | [ H : _ \/ _ |- _ ] => destruct H
-         end.
-
-Ltac Equal_eq :=
-  repeat
-    match goal with
-    | [ H : Equal _ _ |- _] => apply map_eq_Equal in H; subst
-    end.
-
 Ltac context_map_rewrites :=
   repeat
     match goal with
@@ -239,6 +191,23 @@ Section SafeMessages.
     | Signature msg _    => msg_needs_encryption msg
     end.
 
+  Fixpoint msg_honestly_signed {t} (cs : ciphers) (msg : message t) : bool :=
+    match msg with
+    | Plaintext _ => false
+    | KeyMessage _ => false
+    | MsgPair m1 m2 => msg_honestly_signed cs m1 && msg_honestly_signed cs m2
+    | SignedCiphertext c_id =>
+      match cs $? c_id with
+      | None   => false
+      | Some c => honest_signing_key (cipher_signing_key c)
+      end
+    | Signature _ c_id =>
+      match cs $? c_id with
+      | None   => false
+      | Some c => honest_signing_key (cipher_signing_key c)
+      end
+    end.
+
   Definition cipher_adversary_safe (c : cipher) : bool :=
     match c with
     | SigCipher _ k_id msg              => negb (msg_needs_encryption msg)
@@ -255,8 +224,8 @@ Section SafeMessages.
   Definition ciphers_honestly_signed (cs : ciphers) : bool :=
     for_all (fun _ => cipher_honestly_signed) cs.
 
-  Definition message_queue_safe : queued_messages -> bool :=
-    forallb (fun m => match m with | existT _ _ msg => msg_needs_encryption msg end).
+  Definition message_queue_safe (cs : ciphers) : queued_messages -> bool :=
+    forallb (fun m => match m with | existT _ _ msg => (negb (msg_needs_encryption msg)) && (msg_honestly_signed cs msg) end).
 
   Fixpoint msg_pattern_spoofable (pat : msg_pat) : bool :=
     match pat with
@@ -323,16 +292,10 @@ Definition powerless_adv {B} (b : B) : user_data B :=
    ; protocol := Return b
    ; msg_heap := []  |}.
 
-Definition is_powerless {B} (usr : user_data B) : bool :=
-   is_empty usr.(key_heap)
-&& match usr.(protocol) with
-   | Return _ => true
-   | _        => false
-   end
-&& match usr.(msg_heap) with
-   | [] => true
-   | _  => false
-   end.
+Definition is_powerless {B} (usr : user_data B) (b: B) : Prop :=
+  Empty usr.(key_heap)
+/\ usr.(protocol) = Return b
+/\ usr.(msg_heap) = [].
 
 Record universe (A B : Type) :=
   mkUniverse {
@@ -498,10 +461,21 @@ Definition adv_no_honest_keys (all_keys : keys) (honestk advk : key_perms) : Pro
       end
     end.
 
+Lemma adv_no_honest_keys_empty :
+  forall gks honestk,
+    adv_no_honest_keys gks honestk $0.
+  unfold adv_no_honest_keys; intros; simpl.
+  cases (gks $? k_id); subst; auto.
+  destruct k; auto.
+  cases keyType0; auto.
+Qed.
+
 Definition universe_ok {A B} (U : universe A B) : Prop :=
   let honestk := findUserKeys U.(users)
-  in  (forall u_id (u_d : user_data A), U.(users) $? u_id = Some u_d -> message_queue_safe U.(all_keys) honestk (u_d.(msg_heap)) = true)
-    /\ message_queue_safe U.(all_keys) honestk U.(adversary).(msg_heap) = true
+  in  (forall u_id (u_d : user_data A), U.(users) $? u_id = Some u_d
+                                   -> message_queue_safe U.(all_keys) honestk U.(all_ciphers) (u_d.(msg_heap)) = true)
+    /\ message_queue_safe U.(all_keys) honestk U.(all_ciphers) U.(adversary).(msg_heap) = true
+    /\ ciphers_honestly_signed U.(all_keys) honestk U.(all_ciphers) = true
     /\ keys_good U.(all_keys)
     /\ adv_no_honest_keys U.(all_keys) honestk U.(adversary).(key_heap).
 
@@ -850,11 +824,27 @@ Section KeyMergeTheorems.
     unfold Proper, respectful; intros; subst; trivial.
   Qed.
 
+  Lemma findUserKeys_foldfn_proper_Equal :
+    forall {A},
+      Proper (eq ==> eq ==> Equal ==> Equal) (fun (_ : NatMap.key) (u : user_data A) (ks : key_perms) => ks $k++ key_heap u).
+  Proof.
+
+    unfold Proper, respectful; intros; subst; Equal_eq; unfold Equal; intros; trivial.
+  Qed.
+
   Lemma findUserKeys_foldfn_transpose :
     forall {A},
       transpose_neqkey eq (fun (_ : NatMap.key) (u : user_data A) (ks : key_perms) => ks $k++ key_heap u).
   Proof.
     unfold transpose_neqkey; intros.
+    rewrite !merge_perms_assoc,merge_perms_sym with (ks1:=key_heap e'); trivial.
+  Qed.
+
+  Lemma findUserKeys_foldfn_transpose_Equal :
+    forall {A},
+      transpose_neqkey Equal (fun (_ : NatMap.key) (u : user_data A) (ks : key_perms) => ks $k++ key_heap u).
+  Proof.
+    unfold transpose_neqkey; intros; unfold Equal; intros.
     rewrite !merge_perms_assoc,merge_perms_sym with (ks1:=key_heap e'); trivial.
   Qed.
 
@@ -864,16 +854,6 @@ Section KeyMergeTheorems.
     forall {A} (usrs : honest_users A),
       fold (fun (_ : NatMap.key) (u : user_data A) (ks : key_perms) => ks $k++ key_heap u) usrs $0 = findUserKeys usrs.
     unfold findUserKeys; trivial.
-  Qed.
-
-  Lemma map_ne_swap :
-    forall {V} (m : NatMap.t V) k v k' v',
-      k <> k'
-      -> m $+ (k,v) $+ (k',v') = m $+ (k',v') $+ (k,v).
-  Proof.
-    intros.
-    apply map_eq_Equal; unfold Equal; intros.
-    cases (y ==n k); cases (y ==n k'); subst; clean_map_lookups; auto; contradiction.
   Qed.
 
   Lemma findUserKeys_readd_user_same_keys_idempotent :
@@ -1045,7 +1025,7 @@ Inductive action : Type :=
 
 Definition rlabel := @label action.
 
-Definition action_adversary_safe (all_keys : keys) (honestk advk : key_perms) (a : action) : bool :=
+Definition action_adversary_safe (all_keys : keys) (honestk : key_perms) (a : action) : bool :=
   match a with
   | Input _ pat _ => negb (msg_pattern_spoofable all_keys honestk pat)
   | Output _      => true

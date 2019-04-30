@@ -33,6 +33,20 @@ Section RealLemmas.
     intros; subst; reflexivity.
   Qed.
 
+  Lemma real_univ_same_as_fields :
+    forall {A B} (U : universe A B) (us : honest_users A) (a : user_data B) cs ks,
+        us = U.(users)
+      -> a  = U.(adversary)
+      -> cs = U.(all_ciphers)
+      -> ks = U.(all_keys)
+      -> {| users       := us
+         ; adversary   := a
+         ; all_ciphers := cs
+         ; all_keys    := ks
+        |} = U.
+    intros; destruct U; subst; trivial.
+  Qed.
+
 End RealLemmas.
 
 Hint Rewrite add_empty_idempotent empty_add_idempotent : maps.

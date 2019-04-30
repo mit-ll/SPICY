@@ -34,6 +34,48 @@ Notation "m1 $++ m2" := (merge_maps m2 m1) (at level 50, left associativity).
 Module Import OTF := OrderedType.OrderedTypeFacts OrderedTypeEx.Nat_as_OT.
 Module Import OMF := FSets.FMapFacts.OrdProperties NatMap.
 
+Ltac clean_map_lookups1 :=
+  match goal with
+  | [ H : Some _ = None   |- _ ] => invert H
+  | [ H : None = Some _   |- _ ] => invert H
+  | [ H : Some _ = Some _ |- _ ] => invert H
+  | [ H : $0 $? _ = Some _ |- _ ] => invert H
+  | [ H : _ $+ (?k,_) $? ?k = _ |- _ ] => rewrite add_eq_o in H by trivial
+  | [ H : _ $+ (?k1,_) $? ?k2 = _ |- _ ] => rewrite add_neq_o in H by auto
+  | [ |- context[_ $+ (?k,_) $? ?k] ] => rewrite add_eq_o by trivial
+  | [ |- context[_ $+ (?k1,_) $? ?k2] ] => rewrite add_neq_o by auto
+  | [ H : ~ In _ _ |- _ ] => rewrite not_find_in_iff in H
+  | [ H1 : ?m $? ?k = _ , H2 : ?m $? ?k = _ |- _] => rewrite H1 in H2
+  end.
+
+(* Ltac contra_map_lookup := *)
+(*   match goal with *)
+(*   | [ H1 : ?ks $? ?k = Some _, H2 : ?ks $? ?k = None |- _ ] => rewrite H1 in H2; invert H2 *)
+(*   | [ H : ?v1 <> ?v2, H1 : ?ks $? ?k = Some ?v1, H2 : ?ks $? ?k = Some ?v2 |- _ ] => rewrite H1 in H2; invert H2; contradiction *)
+(*   end. *)
+
+Ltac contra_map_lookup :=
+  repeat
+    match goal with
+    | [ H1 : ?ks1 $? ?k = _, H2 : ?ks2 $? ?k = _ |- _ ] => rewrite H1 in H2; invert H2
+    | [ H : ?v1 <> ?v2, H1 : ?ks $? ?k = Some ?v1, H2 : ?ks $? ?k = Some ?v2 |- _ ] => rewrite H1 in H2; invert H2; contradiction
+    end; try discriminate.
+
+Ltac clean_map_lookups :=
+  (repeat clean_map_lookups1);
+  try discriminate;
+  try contra_map_lookup.
+
+Ltac split_ands :=
+  repeat match goal with
+         | [ H : _ /\ _ |- _ ] => destruct H
+         end.
+
+Ltac split_ors :=
+  repeat match goal with
+         | [ H : _ \/ _ |- _ ] => destruct H
+         end.
+
 Section MapLemmas.
 
   Lemma lookup_split : forall V (m : NatMap.t V) k v k' v',
@@ -312,6 +354,16 @@ Section MapLemmas.
     - rewrite remove_neq_o by assumption; rewrite !add_neq_o by assumption; rewrite remove_neq_o; auto.
   Qed.
 
+  Lemma map_ne_swap :
+    forall {V} (m : NatMap.t V) k v k' v',
+      k <> k'
+      -> m $+ (k,v) $+ (k',v') = m $+ (k',v') $+ (k,v).
+  Proof.
+    intros.
+    apply map_eq_Equal; unfold Equal; intros.
+    cases (y ==n k); cases (y ==n k'); subst; clean_map_lookups; auto; contradiction.
+  Qed.
+
   Lemma map_remove_not_in_idempotent :
     forall {V} (m : NatMap.t V) k1,
       m $? k1 = None
@@ -343,6 +395,13 @@ Section MapLemmas.
   (* Admitted. *)
 
 End MapLemmas.
+
+
+Ltac Equal_eq :=
+  repeat
+    match goal with
+    | [ H : Equal _ _ |- _] => apply map_eq_Equal in H; subst
+    end.
 
 Ltac m_equal :=
   repeat match goal with
