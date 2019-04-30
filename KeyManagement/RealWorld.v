@@ -201,7 +201,7 @@ Section SafeMessages.
       | None   => false
       | Some c => honest_signing_key (cipher_signing_key c)
       end
-    | Signature _ c_id =>
+    | Signature m c_id =>
       match cs $? c_id with
       | None   => false
       | Some c => honest_signing_key (cipher_signing_key c)
@@ -426,13 +426,16 @@ Hint Resolve
      add_key_perm_proper       add_key_perm_transpose
      add_key_perm_proper_Equal add_key_perm_transpose_Equal.
 
-Fixpoint findKeys {t} (msg : message t) : key_perms :=
+Fixpoint findKeys {t} (ks : keys) (msg : message t) : key_perms :=
   match msg with
   | Plaintext _        => $0
-  | KeyMessage k       => $0 $+ (fst k, snd k)
-  | MsgPair msg1 msg2  => (findKeys msg1) $k++ (findKeys msg2)
+  | KeyMessage k       => match (ks $? fst k) with
+                         | None   => $0
+                         | Some _ => $0 $+ (fst k, snd k)
+                         end
+  | MsgPair msg1 msg2  => (findKeys ks msg1) $k++ (findKeys ks msg2)
   | SignedCiphertext _ => $0
-  | Signature m _      => findKeys m
+  | Signature m _      => findKeys ks m
   end.
 
 Definition findUserKeys {A} (us : user_list (user_data A)) : key_perms :=
@@ -472,8 +475,9 @@ Qed.
 
 Definition universe_ok {A B} (U : universe A B) : Prop :=
   let honestk := findUserKeys U.(users)
-  in  (forall u_id (u_d : user_data A), U.(users) $? u_id = Some u_d
-                                   -> message_queue_safe U.(all_keys) honestk U.(all_ciphers) (u_d.(msg_heap)) = true)
+  in  (forall u_id (u_d : user_data A) msgs,
+          U.(users) $? u_id = Some u_d
+          -> msgs = msg_heap u_d -> message_queue_safe U.(all_keys) honestk U.(all_ciphers) msgs = true)
     /\ message_queue_safe U.(all_keys) honestk U.(all_ciphers) U.(adversary).(msg_heap) = true
     /\ ciphers_honestly_signed U.(all_keys) honestk U.(all_ciphers) = true
     /\ keys_good U.(all_keys)
@@ -877,11 +881,22 @@ Section KeyMergeTheorems.
       rewrite not_find_in_iff; clean_map_lookups; trivial.
   Qed.
 
+  Lemma findUserKeys_readd_user_same_keys_idempotent' :
+    forall {A} (usrs : honest_users A) u_id u_d proto msgs ks,
+      usrs $? u_id = Some u_d
+      -> ks = key_heap u_d
+      -> findUserKeys (usrs $+ (u_id, {| key_heap := ks; protocol := proto; msg_heap := msgs |})) = findUserKeys usrs.
+  Proof.
+    intros.
+    induction usrs using P.map_induction_bis; intros; Equal_eq; contra_map_lookup; auto.
+    subst; symmetry; eauto using findUserKeys_readd_user_same_keys_idempotent.
+  Qed.
+
   Lemma safe_messages_have_no_bad_keys :
     forall {t} (msg : message t) msgk,
       msg_needs_encryption all_keys honestk msg = false
       -> adv_no_honest_keys all_keys honestk advk
-      -> msgk = findKeys msg
+      -> msgk = findKeys all_keys msg
       -> forall k_id k,
             msgk $? k_id = Some k
           -> honest_key all_keys honestk k_id = false.
@@ -891,10 +906,12 @@ Section KeyMergeTheorems.
     - destruct k; simpl in *.
       unfold honest_key.
       cases (k ==n k_id); subst; clean_map_lookups.
-      cases (all_keys $? k_id); eauto.
-      destruct k.
-      unfold honest_key in *; context_map_rewrites.
-      cases keyType0; eauto.
+      + cases (all_keys $? k_id); eauto.
+        destruct k.
+        unfold honest_key in *; context_map_rewrites.
+        cases keyType0; eauto.
+      + cases (all_keys $? k_id); cases (all_keys $? k); subst; clean_map_lookups; eauto.
+
     - apply orb_false_elim in H; split_ands.
       apply merge_perms_split in H2; auto; split_ors; eauto.
   Qed.
@@ -1056,7 +1073,7 @@ Inductive step_user : forall A B C, rlabel -> data_step0 A B C -> data_step0 A B
 | StepRecv : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs gks ks ks' qmsgs qmsgs' (msg : message t) msgs pat newkeys,
       qmsgs = (existT _ _ msg) :: msgs (* we have a message waiting for us! *)
     -> qmsgs' = msgs
-    -> findKeys msg = newkeys
+    -> findKeys gks msg = newkeys
     -> ks' = ks $k++ newkeys
     -> msg_accepted_by_pattern cs pat msg
     -> step_user (Action (Input msg pat ks))
@@ -1076,7 +1093,7 @@ Inductive step_user : forall A B C, rlabel -> data_step0 A B C -> data_step0 A B
  *)
 | StepSend : forall {A B} {t} (usrs usrs' : honest_users A) (adv adv' : user_data B)
                cs gks ks qmsgs rec_u_id rec_u newkeys (msg : message t),
-    findKeys msg = newkeys
+    findKeys gks msg = newkeys
     -> adv' = addUserKeys newkeys adv
     -> usrs $? rec_u_id = Some rec_u
     -> usrs' = usrs $+ (rec_u_id, {| key_heap := rec_u.(key_heap)
@@ -1109,7 +1126,7 @@ Inductive step_user : forall A B C, rlabel -> data_step0 A B C -> data_step0 A B
       )
     -> gks $? k__signid = Some (MkCryptoKey k__signid Signing kt)
     -> ks $? k__signid = Some kp__sign
-    -> findKeys msg = newkeys
+    -> findKeys gks msg = newkeys
     -> ks' = ks $k++ newkeys
     -> step_user Silent
                 (usrs, adv, cs, gks, ks , qmsgs, Decrypt (SignedCiphertext c_id))
