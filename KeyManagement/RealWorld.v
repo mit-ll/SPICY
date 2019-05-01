@@ -143,12 +143,12 @@ Section SafeMessages.
   Variable all_keys : keys.
   Variable honestk advk : key_perms.
 
-  Definition has_private_key (k : key_permission) : bool :=
-    match (all_keys $? fst k) with
-    | None      => false
-    | Some (MkCryptoKey _ _ SymKey)  => true
-    | Some (MkCryptoKey _ _ AsymKey) => snd k
-    end.
+  (* Definition has_private_key (k : key_permission) : bool := *)
+  (*   match (all_keys $? fst k) with *)
+  (*   | None      => false *)
+  (*   | Some (MkCryptoKey _ _ SymKey)  => true *)
+  (*   | Some (MkCryptoKey _ _ AsymKey) => snd k *)
+  (*   end. *)
 
     Definition honest_key (k : key_identifier) : bool :=
     match all_keys $? k with
@@ -221,8 +221,30 @@ Section SafeMessages.
     | SigEncCipher _ k__signid k__encid _ => honest_signing_key k__signid
     end.
 
-  Definition ciphers_honestly_signed (cs : ciphers) : bool :=
-    for_all (fun _ => cipher_honestly_signed) cs.
+  (* Definition ciphers_honestly_signed (cs : ciphers) : bool := *)
+  (*   for_all (fun _ => cipher_honestly_signed) cs. *)
+
+  Inductive ciphers_honestly_signed : ciphers -> Prop :=
+  | Empty_Ciphers_Signed : ciphers_honestly_signed $0
+  | Add_Cipher_Signed (c_id : cipher_id) (c : cipher) (cs : ciphers) :
+      cipher_honestly_signed c = true
+      (* -> cs $? c_id = None *)
+      -> ciphers_honestly_signed cs
+      -> ciphers_honestly_signed ( cs $+ (c_id,c) )
+  .
+
+  Lemma ciphers_honestly_signed_mapsto :
+    forall cs c_id c,
+      ciphers_honestly_signed cs
+      -> MapsTo c_id c cs
+      -> cipher_honestly_signed c = true.
+  Proof.
+    induction 1; intros.
+    - rewrite empty_mapsto_iff in H; eauto.
+    - rewrite find_mapsto_iff in H1.
+      cases (c_id ==n c_id0); subst; clean_map_lookups; eauto.
+      rewrite <- find_mapsto_iff in H1; auto.
+    Qed.
 
   Definition message_queue_safe (cs : ciphers) : queued_messages -> bool :=
     forallb (fun m => match m with | existT _ _ msg => (negb (msg_needs_encryption msg)) && (msg_honestly_signed cs msg) end).
@@ -479,7 +501,7 @@ Definition universe_ok {A B} (U : universe A B) : Prop :=
           U.(users) $? u_id = Some u_d
           -> msgs = msg_heap u_d -> message_queue_safe U.(all_keys) honestk U.(all_ciphers) msgs = true)
     /\ message_queue_safe U.(all_keys) honestk U.(all_ciphers) U.(adversary).(msg_heap) = true
-    /\ ciphers_honestly_signed U.(all_keys) honestk U.(all_ciphers) = true
+    /\ ciphers_honestly_signed U.(all_keys) honestk U.(all_ciphers)
     /\ keys_good U.(all_keys)
     /\ adv_no_honest_keys U.(all_keys) honestk U.(adversary).(key_heap).
 
@@ -852,7 +874,8 @@ Section KeyMergeTheorems.
     rewrite !merge_perms_assoc,merge_perms_sym with (ks1:=key_heap e'); trivial.
   Qed.
 
-  Hint Resolve findUserKeys_foldfn_proper findUserKeys_foldfn_transpose.
+  Hint Resolve findUserKeys_foldfn_proper findUserKeys_foldfn_transpose
+       findUserKeys_foldfn_proper_Equal findUserKeys_foldfn_transpose_Equal.
 
   Lemma findUserKeys_notation :
     forall {A} (usrs : honest_users A),
@@ -887,9 +910,52 @@ Section KeyMergeTheorems.
       -> ks = key_heap u_d
       -> findUserKeys (usrs $+ (u_id, {| key_heap := ks; protocol := proto; msg_heap := msgs |})) = findUserKeys usrs.
   Proof.
+    intros; subst; symmetry; eapply findUserKeys_readd_user_same_keys_idempotent; auto.
+  Qed.
+
+  Lemma findUserKeys_readd_user_addnl_keys :
+    forall {A} (usrs : honest_users A) u_id u_d proto msgs ks ks',
+      usrs $? u_id = Some u_d
+      -> ks = key_heap u_d
+      -> findUserKeys (usrs $+ (u_id, {| key_heap := ks $k++ ks'; protocol := proto; msg_heap := msgs |})) = findUserKeys usrs $k++ ks'.
+  Proof.
     intros.
     induction usrs using P.map_induction_bis; intros; Equal_eq; contra_map_lookup; auto.
-    subst; symmetry; eauto using findUserKeys_readd_user_same_keys_idempotent.
+    cases (x ==n u_id); subst; clean_map_lookups; try rewrite map_add_eq.
+    - unfold findUserKeys. rewrite !fold_add; auto.
+      rewrite findUserKeys_notation; simpl.
+      rewrite merge_perms_assoc; trivial.
+    - rewrite map_ne_swap; auto.
+      unfold findUserKeys.
+      rewrite fold_add; auto.
+      rewrite findUserKeys_notation.
+      rewrite fold_add; auto.
+      rewrite IHusrs; auto.
+      rewrite findUserKeys_notation.
+      rewrite !merge_perms_assoc, merge_perms_sym with (ks1:=ks'); trivial.
+      rewrite not_find_in_iff; clean_map_lookups; auto.
+  Qed.
+
+  Lemma findUserKeys_has_private_key_of_user :
+    forall {A} (usrs : honest_users A) u_id u_d ks k,
+      usrs $? u_id = Some u_d
+      -> ks = key_heap u_d
+      -> ks $? k = Some true
+      -> findUserKeys usrs $? k = Some true.
+  Proof.
+    intros.
+    induction usrs using P.map_induction_bis; intros; Equal_eq; subst; contra_map_lookup; auto.
+    cases (x ==n u_id); subst; clean_map_lookups.
+    - unfold findUserKeys.
+      rewrite fold_add; auto.
+      rewrite findUserKeys_notation.
+      cases (findUserKeys usrs $? k); subst.
+      + erewrite merge_perms_chooses_greatest; eauto; unfold greatest_permission; rewrite orb_true_r; auto.
+      + erewrite merge_perms_came_from_somewhere2; eauto.
+    - unfold findUserKeys; rewrite fold_add; auto; rewrite findUserKeys_notation; eauto.
+      cases (key_heap e $? k); subst; auto.
+      + erewrite merge_perms_chooses_greatest; eauto; unfold greatest_permission; rewrite orb_true_l; auto.
+      + erewrite merge_perms_came_from_somewhere1; eauto.
   Qed.
 
   Lemma safe_messages_have_no_bad_keys :
@@ -916,18 +982,152 @@ Section KeyMergeTheorems.
       apply merge_perms_split in H2; auto; split_ors; eauto.
   Qed.
 
-  (* Lemma add_key_results : *)
-  (*   forall k v ks ks', *)
-  (*     ks' = add_key k v ks *)
-  (*     -> ks' = ks *)
-  (*     \/ ks' = ks $+ (k,v) *)
-  (*     \/ exists k', ks' = ks $+ (k, canonical_key v k'). *)
+  Lemma message_honestly_signed_after_new_cipher :
+    forall {t} (msg : message t) gks honestk cs c_id c,
+      msg_honestly_signed gks honestk cs msg = true
+      -> ~ In c_id cs
+      -> msg_honestly_signed gks honestk (cs $+ (c_id,c)) msg = true.
+  Proof.
+    induction msg; unfold msg_honestly_signed; intros; eauto.
+    - apply andb_prop in H; split_ands.
+      apply andb_true_intro; split; eauto.
+    - cases (cs $? msg_id); cases (msg_id ==n c_id); subst;
+        clean_map_lookups; try discriminate;
+          context_map_rewrites; auto.
+    - cases (cs $? sig); cases (sig ==n c_id); subst;
+        clean_map_lookups; try discriminate;
+          context_map_rewrites; auto.
+  Qed.
+
+  Lemma message_queue_safe_after_new_cipher :
+    forall gks honestk cs msgs c_id c,
+      message_queue_safe gks honestk cs msgs = true
+      -> ~ In c_id cs
+      -> message_queue_safe gks honestk (cs $+ (c_id,c)) msgs = true.
+  Proof.
+    induction msgs; auto; intros.
+    unfold message_queue_safe in *; intros.
+    assert (a :: msgs = [a] ++ msgs) by auto.
+    rewrite H1, forallb_app in *.
+    apply andb_prop in H. apply andb_true_intro; split_ands; split; auto.
+    clear H1 H2 IHmsgs.
+    simpl in *.
+    destruct a.
+    rewrite andb_true_r in *.
+    apply andb_prop in H. apply andb_true_intro; split_ands; split; eauto using message_honestly_signed_after_new_cipher.
+  Qed.
+
+  Lemma message_honestly_signed_after_new_msg_keys :
+    forall {t} (msg : message t) gks honestk msgk cs,
+      msg_honestly_signed gks honestk cs msg = true
+      -> msg_honestly_signed gks (honestk $k++ msgk) cs msg = true.
+  Proof.
+    induction msg; unfold msg_honestly_signed; intros; auto.
+    - apply andb_prop in H; split_ands.
+      apply andb_true_intro; split; eauto.
+    - cases (cs $? msg_id); subst;
+        clean_map_lookups; try discriminate;
+          context_map_rewrites; auto.
+      unfold honest_signing_key, honest_key in *.
+      apply andb_prop in H; split_ands. apply andb_true_intro; split; auto.
+      clear H0.
+      cases (gks $? cipher_signing_key c); subst; auto.
+      destruct k; cases keyType0;
+        cases (honestk0 $? cipher_signing_key c);
+        cases (msgk $? cipher_signing_key c); try discriminate.
+      + erewrite merge_perms_chooses_greatest by eauto; trivial.
+      + erewrite merge_perms_adds_ks1 by eauto; trivial.
+      + erewrite merge_perms_chooses_greatest by eauto; subst; trivial.
+      + erewrite merge_perms_adds_ks1 by eauto; trivial.
+    - cases (cs $? sig); subst; try discriminate.
+      unfold honest_signing_key, honest_key in *.
+      apply andb_prop in H; split_ands. apply andb_true_intro; split; auto.
+      clear H0.
+      cases (gks $? cipher_signing_key c); subst; auto.
+      destruct k; cases keyType0;
+        cases (honestk0 $? cipher_signing_key c);
+        cases (msgk $? cipher_signing_key c); try discriminate.
+      + erewrite merge_perms_chooses_greatest by eauto; trivial.
+      + erewrite merge_perms_adds_ks1 by eauto; trivial.
+      + erewrite merge_perms_chooses_greatest by eauto; subst; trivial.
+      + erewrite merge_perms_adds_ks1 by eauto; trivial.
+  Qed.
+
+  (* Lemma message_needs_encryption_after_new_msg_keys : *)
+  (*   forall {t} (msg : message t) gks honestk msgk, *)
+  (*     msg_needs_encryption gks honestk msg = true *)
+  (*     -> msg_needs_encryption gks (honestk $k++ msgk) msg = true. *)
   (* Proof. *)
-  (*   unfold add_key; intros. *)
-  (*   cases (ks $? k); auto. *)
-  (*   cases (v ==kk k0); auto. *)
-  (*   intuition eauto. *)
+  (*   induction msg; unfold msg_needs_encryption; intros; eauto. *)
+  (*   - destruct k; unfold honest_key; simpl in *. *)
+  (*     cases (gks $? k); auto. *)
+  (*     destruct k0; simpl in *. *)
+  (*     unfold honest_key in *; *)
+  (*       context_map_rewrites; *)
+  (*       cases keyType0; cases (honestk0 $? k); cases (msgk $? k); try discriminate. *)
+  (*     + erewrite merge_perms_chooses_greatest by eauto; trivial. *)
+  (*     + erewrite merge_perms_adds_ks1 by eauto; trivial. *)
+  (*     + subst; erewrite merge_perms_chooses_greatest by eauto; trivial. *)
+  (*     + erewrite merge_perms_adds_ks1 by eauto; trivial. *)
+  (*   - apply orb_true_iff in H. *)
+  (*     apply orb_true_iff. *)
+  (*     split_ors; eauto. *)
   (* Qed. *)
+
+  Lemma message_no_needs_encryption_after_new_msg_keys :
+    forall {t} (msg : message t) gks honestk msgk,
+      msg_needs_encryption gks honestk msg = false
+      -> (forall k_id, honestk $? k_id = None -> msgk $? k_id = None)
+      -> (forall k_id k k', honestk $? k_id = Some k -> msgk $? k_id = Some k' -> greatest_permission k k' = k)
+      -> msg_needs_encryption gks (honestk $k++ msgk) msg = false.
+  Proof.
+    induction msg; unfold msg_needs_encryption; intros; eauto.
+    - destruct k; unfold honest_key; simpl in *.
+      cases (gks $? k); auto.
+      destruct k0; simpl in *.
+      unfold honest_key in *;
+        context_map_rewrites;
+        cases keyType0; cases (honestk0 $? k); cases (msgk $? k); try discriminate;
+          try match goal with
+              | [H1 : forall k, ?hon $? k = None -> ?msg $? k = None
+               , H2 : ?hon $? ?k = None
+               , H3 : ?msg $? ?k = Some _
+                     |- _ ] => apply H1 in H2; rewrite H2 in H3; invert H3
+              | [H1 : forall k kp kp', ?hon $? k = Some kp -> ?msg $? k = Some kp' -> greatest_permission kp kp' = kp
+               , H2 : ?hon $? ?k = Some _
+               , H3 : ?msg $? ?k = Some _
+                     |- _ ] => specialize (H1 _ _ _ H2 H3)
+              end.
+
+      + rewrite merge_perms_adds_no_new_perms by auto; trivial.
+      + subst; erewrite merge_perms_chooses_greatest by eauto; auto.
+      + subst; erewrite merge_perms_adds_ks1 by eauto; trivial.
+      + rewrite merge_perms_adds_no_new_perms by auto; trivial.
+    - rewrite orb_false_iff in *; split_ands; eauto.
+  Qed.
+
+  Lemma message_queue_safe_after_msg_keys :
+    forall gks honestk msgk cs msgs,
+      message_queue_safe gks honestk cs msgs = true
+      -> (forall k_id, honestk $? k_id = None -> msgk $? k_id = None)
+      -> (forall k_id k k', honestk $? k_id = Some k -> msgk $? k_id = Some k' -> greatest_permission k k' = k)
+      -> message_queue_safe gks (honestk $k++ msgk) cs msgs = true.
+  Proof.
+    induction msgs; auto; intros.
+    unfold message_queue_safe in *; intros.
+    assert (a :: msgs = [a] ++ msgs) by auto.
+    rewrite H2, forallb_app in *.
+    apply andb_prop in H. apply andb_true_intro; split_ands; split; auto.
+    clear H2 H3 IHmsgs.
+    simpl in *; destruct a.
+    rewrite andb_true_r in *.
+    apply andb_prop in H.
+    apply andb_true_intro.
+    rewrite negb_true_iff in *.
+
+    split_ands; split;
+      eauto using message_honestly_signed_after_new_msg_keys, message_no_needs_encryption_after_new_msg_keys.
+  Qed.
 
   (* Lemma find_user_keys_includes_user_keys: *)
   (*   forall {A} (us : honest_users A) u_id u_d, *)
@@ -965,11 +1165,12 @@ Section KeyMergeTheorems.
 End KeyMergeTheorems.
 
 Definition sign_if_ok (c : cipher) (kt : key_type) (k : key_permission) : option cipher :=
-  match (kt,k) with
-  | (SymKey,  (_, _))     => Some c
-  | (AsymKey, (_, true))  => Some c
-  | (AsymKey, (_, false)) => None
-  end.
+  if snd k then Some c else None.
+  (* match (kt,k) with *)
+  (* | (SymKey,  (_, _))     => Some c *)
+  (* | (AsymKey, (_, true))  => Some c *)
+  (* | (AsymKey, (_, false)) => None *)
+  (* end. *)
 
 Definition encryptMessage {t} (ks : keys) (k__sign k__enc : key_permission) (m : message t) (c_id : cipher_id) : option cipher :=
   match (ks $? fst k__sign, ks $? fst k__enc) with
@@ -1109,7 +1310,6 @@ Inductive step_user : forall A B C, rlabel -> data_step0 A B C -> data_step0 A B
       k__sign = (k__signid, kp__sign)
     -> k__enc  = (k__encid, kp__enc)
     -> ks $? k__signid = Some (kp__sign)
-    -> has_private_key gks k__sign = true
     -> ks $? k__encid = Some (kp__enc)
     -> ~ In c_id cs
     -> encryptMessage gks k__sign k__enc msg c_id = Some cipherMsg
@@ -1135,7 +1335,6 @@ Inductive step_user : forall A B C, rlabel -> data_step0 A B C -> data_step0 A B
 (* Signing / Verification *)
 | StepSign : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs cs' gks ks qmsgs (msg : message t) kp k_id c_id cipherMsg,
       ks $? k_id = Some kp
-    -> has_private_key gks (k_id,kp) = true
     -> ~(In c_id cs)
     -> signMessage gks (k_id,kp) msg c_id = Some cipherMsg
     -> cs' = cs $+ (c_id, cipherMsg)
