@@ -679,9 +679,14 @@ Definition adv_no_honest_keys (all_keys : keys) (honestk advk : key_perms) : Pro
         \/ (honestk $? k_id = Some true /\ advk $? k_id <> Some true)
         ).
 
-Definition is_powerless {B} (usr : user_data B) (b: B) (ks : keys) (honestk advk : key_perms): Prop :=
-  usr.(key_heap) = advk
-/\ adv_no_honest_keys ks honestk advk
+(* Definition is_powerless {B} (usr : user_data B) (b: B) (ks : keys) (honestk advk : key_perms): Prop := *)
+(*   usr.(key_heap) = advk *)
+(* /\ adv_no_honest_keys ks honestk advk *)
+(* /\ usr.(protocol) = Return b *)
+(* /\ usr.(msg_heap) = []. *)
+
+Definition is_powerless {B} (usr : user_data B) (b: B) (ks : keys) (honestk : key_perms): Prop :=
+  adv_no_honest_keys ks honestk usr.(key_heap)
 /\ usr.(protocol) = Return b
 /\ usr.(msg_heap) = [].
 
