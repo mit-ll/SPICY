@@ -671,17 +671,22 @@ Section SingleAdversarySimulates.
       apply map_in_iff in H0; contradiction.
     Qed.
 
-    Lemma ok_universe_strip_adversary_ignores_users :
-      forall {A B} (U__ra U__r: universe A B) (b : B) u_id u_d,
-        U__ra.(users) $? u_id = Some u_d
-        -> U__r = strip_adversary U__ra b
-        -> universe_ok U__ra
-        -> U__r.(users) $? u_id = Some u_d.
+    Lemma user_in_univ_user_in_stripped_univ :
+      forall {A B} (U : universe A B) u_id user_data user_data' b,
+        U.(users) $? u_id = Some user_data
+        -> user_data' =
+            {| key_heap := user_data.(key_heap)
+             ; protocol := user_data.(protocol)
+             ; msg_heap := clean_messages U.(all_keys) (findUserKeys U.(users)) U.(all_ciphers) user_data.(msg_heap) |}
+        -> (strip_adversary U b).(users) $? u_id = Some user_data'.
     Proof.
-      unfold strip_adversary; intros; subst; simpl.
-      unfold universe_ok in *; split_ands.
-      rewrite clean_users_idempotent; auto.
+      unfold strip_adversary, clean_users; destruct user_data; simpl; intros.
+      rewrite <- find_mapsto_iff in H.
+      rewrite <- find_mapsto_iff, map_mapsto_iff; eexists; subst; simpl; intuition eauto.
+      simpl; trivial.
     Qed.
+
+    Hint Resolve user_in_univ_user_in_stripped_univ.
 
     Lemma ok_universe_strip_adversary_still_ok :
       forall {A B} (U__ra U__r: universe A B) (b : B),
@@ -691,10 +696,7 @@ Section SingleAdversarySimulates.
     Proof.
       intros.
       subst; unfold universe_ok in *; destruct U__ra; simpl in *.
-      split_ands;
-        try rewrite clean_users_idempotent, clean_ciphers_idempotent; eauto.
-      intuition idtac; eauto.
-      econstructor.
+      rewrite clean_users_no_change_findUserKeys; trivial.
     Qed.
 
     Lemma honest_enc_cipher_not_cleaned :
@@ -781,38 +783,8 @@ Section SingleAdversarySimulates.
             split_ands; intuition idtac; auto;
               fix_up_goals; eauto; simpl.
 
-      (* RECV message - adding keys *)
-      - assert (message_queue_safe gks' (findUserKeys usrs') cs' (existT message t0 msg :: qmsgs')) as SAFE by eauto;
-          invert SAFE; eauto.
-
-      - match goal with
-        | [ H1 : encryptMessage _ (?kid, ?kp) _ _ = Some _
-          , H2 : ?hon $? ?kid = Some _ |- _] =>
-          assert (kp = true) by eauto; subst; eapply enc_message_has_honest_signing_key with (honestk := findUserKeys usrs') in H1; idtac hon
-        end; split_ands; subst; eauto.
-        econstructor; eauto.
-        unfold cipher_honestly_signed; eauto.
-        eapply honest_signing_key_honest_signing_keyb; auto.
-
-      - 
-        remember (findKeys gks' msg) as msgk.
-        remember (findUserKeys usrs') as honestk.
-        assert (forall k_id, honestk $? k_id = None -> msgk $? k_id = None) by admit.
-        assert (forall k_id k k', honestk $? k_id = Some k -> msgk $? k_id = Some k' -> greatest_permission k k' = k) by admit.
-
-        eauto.
-
       - admit.
       - admit.
-      - admit.
-      - admit.
-      - admit.
-      - admit.
-      - admit.
-      - match goal with
-        | [ H1 : signMessage _ (?kid, ?kp) _ = Some _ |- _] =>
-          assert (kp = true) by eauto; subst; eapply sign_message_has_honest_signing_key with (honestk := findUserKeys usrs') in H1
-        end; split_ands; subst; eauto.
 
     Admitted.
 
@@ -911,12 +883,17 @@ Section SingleAdversarySimulates.
     Proof.
       induction 1; inversion 4; inversion 3; intros; subst; try discriminate.
       - econstructor; eauto.
+      (* RECV *)
       - unfold is_powerless in *; simpl in *; split_ands; destruct pwless_adv; destruct pwless_adv'; simpl in *; subst.
         econstructor; eauto.
-        (* eapply clean_ciphers_accepts_non_spoofable; eauto. *)
+        (* Move key_ids to msg payload, but what about consistency with ciphers? *)
         admit.
+      (* SEND *)
       - unfold is_powerless in *; simpl in *; split_ands; destruct pwless_adv; destruct pwless_adv'; simpl in *; subst.
         econstructor; eauto.
+        (* effectively stuck here because we don't know whether clean_users strips messages from the
+         * starting state of the receiving user, nor do we know whether the message should be stripped
+         *)
         admit.
         admit.
     Admitted.
@@ -939,57 +916,6 @@ Section SingleAdversarySimulates.
       - assert ( findKeys gks msg1 $k++ findKeys gks msg2 $? k_id = Some kp ) as SPL by assumption.
         apply merge_perms_split in SPL; split_ors; eauto.
     Qed.
-
-    (* Lemma message_good_helper : *)
-    (*   forall gks honestk msgk cs c_id, *)
-    (*     match cs $? c_id with *)
-    (*     | Some c => honest_signing_key gks honestk (cipher_signing_key c) *)
-    (*     | None => false *)
-    (*     end = true *)
-    (*     -> (forall (k_id : NatMap.key) (kp kp' : bool), msgk $? k_id = Some kp -> honestk $? k_id = Some kp' -> kp' = false) *)
-    (*     ->  match cs $? c_id with *)
-    (*        | Some c => honest_signing_key gks (honestk $k++ msgk) (cipher_signing_key c) *)
-    (*        | None => false *)
-    (*        end = true. *)
-    (* Proof. *)
-    (*   intros. *)
-    (*   cases (cs $? c_id); auto. *)
-    (*   unfold honest_signing_key,honest_key in *. *)
-    (*   cases (gks $? cipher_signing_key c); subst; try discriminate. *)
-    (*   destruct k; cases keyType; cases (honestk $? cipher_signing_key c); cases keyUsage; try discriminate. *)
-    (*   + cases (msgk $? cipher_signing_key c). *)
-    (*     * erewrite merge_perms_chooses_greatest; eauto. *)
-    (*     * erewrite merge_perms_adds_ks1; eauto. *)
-    (*   + rewrite andb_false_r in H; discriminate. *)
-    (*   + rewrite andb_true_r in H; subst. *)
-    (*     cases (msgk $? cipher_signing_key c). *)
-    (*     * erewrite merge_perms_chooses_greatest; eauto; unfold greatest_permission; auto. *)
-    (*     * erewrite merge_perms_adds_ks1; eauto; auto. *)
-    (* Qed. *)
-
-    (* Lemma message_good' : *)
-    (*   forall {t} (msg : message t) gks honestk msgk, *)
-    (*       msg_needs_encryption gks honestk msg = false *)
-    (*     -> (forall k_id kp kp', *)
-    (*           msgk $? k_id = Some kp -> honestk $? k_id = Some kp' -> kp' = false) *)
-    (*     -> msg_needs_encryption gks (honestk $k++ msgk) msg = false. *)
-    (* Proof. *)
-    (*   induction msg; subst; simpl; intros; *)
-    (*     repeat match goal with *)
-    (*            | [ H : _ && _ = true |- _ ] => apply andb_prop in H; split_ands *)
-    (*            | [ H : _ || _ = false |- _ ] => apply orb_false_elim in H; split_ands *)
-    (*            | [ |- _ || _ = false ] => apply orb_false_intro *)
-    (*            end; try discriminate; intuition idtac; eauto using message_good_helper. *)
-
-    (*   destruct k; simpl in *. *)
-    (*   cases (gks $? k); auto. *)
-    (*   unfold honest_key in *; context_map_rewrites; destruct k0. *)
-    (*   cases keyType; cases (honestk $? k); cases (msgk $? k); subst; try discriminate. *)
-
-    (*   (* NOT PROVEABLE *) *)
-
-    (* Admitted. *)
-
 
     Lemma message_good' :
       forall {t} (msg : message t) gks honestk msgk cs,
@@ -1098,38 +1024,19 @@ Section SingleAdversarySimulates.
               assert ( m $+ (k1,v1) $? k2 = Some v ) by (clean_map_lookups; auto)
             end; erewrite !findUserKeys_readd_user_same_keys_idempotent'; eauto.
 
-      (* Recv *)
-      (* all of the admitted Recv cases require that there are no private keys in msg. *)
-      - erewrite findUserKeys_readd_user_addnl_keys; eauto. 
-        cases (u_id ==n u_id0); subst; clean_map_lookups; simpl; eauto.
-        assert (message_queue_safe gks' (findUserKeys usrs') cs' (existT message t0 msg :: qmsgs') ) as SAFE by eauto;
-          invert SAFE; eauto.
-        admit.
-        admit.
-
-      - erewrite findUserKeys_readd_user_addnl_keys; eauto. admit.
-      - erewrite findUserKeys_readd_user_addnl_keys; eauto.
-      - erewrite findUserKeys_readd_user_addnl_keys; eauto. admit.
-
-      (* Send *)
-      - cases (u_id ==n u_id0); cases (u_id ==n rec_u_id); subst; clean_map_lookups; simpl;
-          findUserKeys_rewrites.
-
-        destruct u_d; clean_map_lookups; simpl.
-        cases (u_id0 ==n rec_u_id); subst; clean_map_lookups; eauto.
-        unfold message_queue_safe; rewrite Forall_app; econstructor; eauto.
-        admit.
-        eapply H1 with (u_id := rec_u_id); eauto.
-
-      - cases (u_id ==n rec_u_id); subst; clean_map_lookups; findUserKeys_rewrites.
-      - cases (u_id ==n rec_u_id); subst; clean_map_lookups; findUserKeys_rewrites.
-      - cases (u_id ==n rec_u_id); subst; clean_map_lookups; findUserKeys_rewrites; clean_map_lookups; eauto;
-          unfold addUserKeys; simpl;
-            eapply adv_no_honest_keys_after_no_leaky_msg; eauto.
-        admit.
-        admit.
-
-        Unshelve. auto. auto. auto. auto.
+      * erewrite findUserKeys_readd_user_addnl_keys; eauto. admit.
+      * cases (u_id ==n rec_u_id); subst; clean_map_lookups; simpl.
+        + rewrite map_add_eq.
+          erewrite findUserKeys_readd_user_same_keys_idempotent' with (u_id:=rec_u_id); eauto.
+          admit.
+        + assert (usrs $+ (rec_u_id, {| key_heap := key_heap rec_u
+                                      ; protocol := protocol rec_u
+                                      ; msg_heap := msg_heap rec_u ++ [existT message t0 msg]
+                                     |}) $? u_id = Some {| key_heap := ks'
+                                                         ; protocol := x
+                                                         ; msg_heap := qmsgs' |}) by (clean_map_lookups; auto).
+          erewrite !findUserKeys_readd_user_same_keys_idempotent'; eauto.
+          admit.
 
     Admitted.
 
@@ -1229,10 +1136,23 @@ Section SingleAdversarySimulates.
       rename H into for_split.
       unfold universe_ok in for_split; split_ands; simpl in *.
 
+      (* remember H1 as STEP; clear HeqSTEP. *)
+      (* rewrite HeqUU in STEP; unfold build_data_step in STEP; simpl in *. *)
+      (* eapply honest_labeled_step_advuniv_implies_univ_ok in STEP; eauto. *)
 
-      remember H1 as STEP; clear HeqSTEP.
-      rewrite HeqUU in STEP; unfold build_data_step in STEP; simpl in *.
-      eapply honest_labeled_step_advuniv_implies_univ_ok in STEP; eauto.
+      rewrite HeqUU; eapply StepUser with (u_id:=x); eauto.
+      unfold build_data_step, strip_adversary; simpl.
+      eapply honest_labeled_step_advuniv_implies_honest_step_origuniv; eauto.
+      rewrite HeqUU; unfold build_data_step; simpl.
+
+      admit.
+      unfold is_powerless; simpl. unfold universe_ok in UNIV_OK; split_ands; intuition idtac.
+        rewrite HeqUU in a; simpl in a; trivial.
+      unfold is_powerless.
+
+      rewrite H2; unfold strip_adversary, buildUniverse, build_data_step; simpl.
+      smash_universe. rewrite clean_users_idempotent; eauto.
+
       admit.
       eexists; eauto. unfold clean_users; simpl. admit.
       rewrite HeqUU; simpl. f_equal. f_equal. f_equal. f_equal. f_equal. f_equal.
@@ -1282,103 +1202,6 @@ Section SingleAdversarySimulates.
     (* admit. *)
 
     Admitted.
-
-
-    (* Lemma user_step_updates_stepped_user : *)
-    (*   forall {A B C} u_id u_d cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B) gks gks' ks ks' qmsgs qmsgs' bd bd', *)
-    (*     step_user lbl bd bd' *)
-    (*     -> forall (cmd : user_cmd C), *)
-    (*       bd = (usrs, adv, cs, gks, ks, qmsgs, cmd) *)
-    (*       -> usrs $? u_id = Some u_d *)
-    (*       (* -> u_d = {| key_heap := ks ; protocol := cmd ; msg_heap := qmsgs |} *) *)
-    (*       -> (exists p, u_d = {| key_heap := ks ; protocol := p ; msg_heap := qmsgs |}) *)
-    (*       -> forall cmd', *)
-    (*         bd' = (usrs', adv', cs', gks', ks', qmsgs', cmd') *)
-    (*         -> forall u_d', *)
-    (*             (exists p, u_d' = {| key_heap := ks' ; protocol := p ; msg_heap := qmsgs' |}) *)
-    (*               (* u_d' = {| key_heap := ks' ; protocol := cmd' ; msg_heap := qmsgs' |} *) *)
-    (*             -> usrs' $? u_id = Some u_d'. *)
-    (* Proof. *)
-    (*   induction 1; inversion 1; inversion 3; destruct u_d; destruct u_d'; intros; subst; simpl in *. eauto. *)
-
-    (*   admit. *)
-
-    (*   invert H8. invert H1. *)
-    (*   invert H10. invert H1. eauto. *)
-
-
-    (*   case (u_id' ==n rec_u_id); intro; subst; unfold not; intros; clean_map_lookups. *)
-    (* Qed. *)
-
-
-    (* Lemma user_step_adds_removes_no_adversaries : *)
-    (*   forall {A B C} cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B) ks ks' qmsgs qmsgs' bd bd', *)
-    (*     step_user lbl bd bd' *)
-    (*     -> forall (cmd : user_cmd C), *)
-    (*       bd = (usrs, adv, cs, ks, qmsgs, cmd) *)
-    (*       -> forall cmd', *)
-    (*         bd' = (usrs', adv', cs', ks', qmsgs', cmd') *)
-    (*         -> (forall u_id', *)
-    (*               adv' $? u_id' <> None *)
-    (*               <-> adv $? u_id' <> None). *)
-    (* Proof. *)
-    (*   induction 1; inversion 1; inversion 1; intros; subst; eauto; *)
-    (*     unfold iff; constructor; intro; eauto. *)
-
-    (*   - unfold addUserKeys in H. rewrite <- in_find_iff in H. *)
-    (*     rewrite map_in_iff in H. apply in_find_iff; eauto. *)
-
-    (*   - unfold addUserKeys; apply in_find_iff. *)
-    (*     rewrite <- in_find_iff in H. *)
-    (*     rewrite map_in_iff; eauto. *)
-    (* Qed. *)
-
-    (* TODO tbraje: This statement really needs to be re-stated, if needed  *)
-    (* Lemma adv_step_stays_in_R : *)
-    (*   forall {A B} (U__i : IdealWorld.universe A) (U__r : universe A B) (R : universe A B -> IdealWorld.universe A -> Prop) *)
-    (*           (cmd : user_cmd B) lbl u_id userData (usrs : honest_users A) (adv : user_data B) cs ks qmsgs, *)
-    (*     U__r.(adversary) $? u_id = Some userData *)
-    (*     -> (forall u_id', u_id' <> u_id -> U__r.(adversary) $? u_id' = None) (* single adversary *) *)
-    (*     -> step_user lbl *)
-    (*                 (build_data_step U__r userData) *)
-    (*                 (usrs, adv, cs, ks, qmsgs, cmd) *)
-    (*     -> R (strip_adversary U__r) U__i *)
-    (*     -> R (strip_adversary (buildUniverseAdv usrs adv cs {| key_heap := ks; protocol := cmd; msg_heap := qmsgs |})) U__i. *)
-    (* Proof. *)
-    (*   intros. *)
-    (*   unfold buildUniverseAdv, strip_adversary in *; simpl in *. *)
-
-    (*   assert (U__r.(adversary) = $0 $+ (u_id,userData)) by (map_equal; eauto). *)
-
-    (*   assert (findUserKeys U__r.(adversary) = userData.(key_heap)) as ADV_KEYS *)
-    (*     by (rewrite H3; unfold findUserKeys, fold, Raw.fold; simpl; rewrite merge_keys_left_identity; trivial). *)
-    (*   rewrite ADV_KEYS in H2; clear ADV_KEYS. *)
-
-    (*   assert (adv $+ (u_id, {| key_heap := ks; protocol := cmd; msg_heap := qmsgs |}) *)
-    (*           = $0 $+ (u_id, {| key_heap := ks; protocol := cmd; msg_heap := qmsgs |})) as ADV_RED; *)
-    (*     map_equal; trivial. *)
-    (*   pose proof H1 as NOADD; unfold build_data_step in NOADD; *)
-    (*     eapply user_step_adds_removes_no_adversaries with (u_id' := KEY) in NOADD; eauto; *)
-    (*       unfold iff in NOADD; invert NOADD. *)
-    (*   case_eq (adv $? KEY); intros; eauto. exfalso. *)
-
-    (*   assert (adv $? KEY <> None) as LK_KEY_NOT_NONE *)
-    (*     by (unfold not; intros; *)
-    (*         match goal with [ H1 : ?m $? ?k = Some _, H2 : ?m $? ?k = None |- _ ] => rewrite H1 in H2; invert H2 end). *)
-    (*   specialize (H0 _ n); specialize (H4 LK_KEY_NOT_NONE); contradiction. *)
-
-    (*   assert (findUserKeys (adv $+ (u_id, {| key_heap := ks; protocol := cmd; msg_heap := qmsgs |})) = ks); *)
-    (*     rewrite ADV_RED; clear ADV_RED; *)
-    (*     unfold findUserKeys, fold, Raw.fold; simpl; rewrite merge_keys_left_identity; trivial. *)
-
-    (*   match goal with *)
-    (*   | [ H : R {| users := ?us ; adversary := _ ; all_ciphers := ?cs |} _ |- R {| users := ?us' ; adversary := _ ; all_ciphers := ?cs' |} _ ] => *)
-    (*     assert ( cs = cs' ) as CS by (unfold build_data_step in *; eapply adv_step_implies_no_new_ciphers_after_cleaning; eauto); *)
-    (*       assert ( us = us' ) as US by (unfold build_data_step in *; eapply adv_step_implies_no_user_impact_after_cleaning; eauto) *)
-    (*   end; rewrite <- CS; rewrite <- US; clear US CS; *)
-    (*     assumption. *)
-
-    (* Qed. *)
 
 
     Lemma adv_step_implies_no_new_ciphers_after_cleaning :
@@ -1489,31 +1312,14 @@ Section SingleAdversarySimulates.
       unfold universe_ok in *; split_ands.
 
       (* some rewrites to get the goal matching the R assumption *)
-      match goal with
-      | [ H : R {| users := ?us ; adversary := _ ; all_ciphers := ?cs |} _ |- R {| users := ?us' ; adversary := _ ; all_ciphers := ?cs' |} _ ] =>
-        assert ( cs = cs' ) as CS by (eapply adv_step_implies_no_new_ciphers_after_cleaning; eauto);
-          assert ( us = us' ) as US by (eapply adv_step_implies_no_user_impact_after_cleaning; eauto)
-      end; rewrite <- CS, <- US; clear CS US.
-
-      (* Remaining goal is to clean the keys *)
-      admit.
+      (* match goal with *)
+      (* | [ H : R {| users := ?us ; adversary := _ ; all_ciphers := ?cs |} _ |- R {| users := ?us' ; adversary := _ ; all_ciphers := ?cs' |} _ ] => *)
+      (*   assert ( cs = cs' ) as CS by (eapply adv_step_implies_no_new_ciphers_after_cleaning; eauto); *)
+      (*     assert ( us = us' ) as US by (eapply adv_step_implies_no_user_impact_after_cleaning; eauto) *)
+      (* end; rewrite <- CS, <- US; clear CS US. *)
 
     Admitted.
 
-    Lemma user_in_univ_user_in_stripped_univ :
-      forall {A B} (U : universe A B) u_id user_data user_data' b,
-        U.(users) $? u_id = Some user_data
-        -> user_data' =
-            {| key_heap := user_data.(key_heap)
-             ; protocol := user_data.(protocol)
-             ; msg_heap := clean_messages U.(all_keys) (findUserKeys U.(users)) U.(all_ciphers) user_data.(msg_heap) |}
-        -> (strip_adversary U b).(users) $? u_id = Some user_data'.
-    Proof.
-      unfold strip_adversary, clean_users; destruct user_data; simpl; intros.
-      rewrite <- find_mapsto_iff in H.
-      rewrite <- find_mapsto_iff, map_mapsto_iff; eexists; subst; simpl; intuition eauto.
-      simpl; trivial.
-    Qed.
 
   End RealWorldLemmas.
 
@@ -1543,16 +1349,6 @@ Section SingleAdversarySimulates.
     | [ H : RealWorld.adversary _ = _ |- _ ] => rewrite <- H
     end.
   Hint Extern 1 (_ = RealWorld.adversary _) => solve [ symmetry ; assumption ].
-
-      (*   R U__r U__i *)
-      (* -> RealWorld.keys_good U__r.(RealWorld.all_keys) *)
-      (* -> RealWorld.adv_no_honest_keys U__r.(RealWorld.all_keys) U__r.(RealWorld.adversary).(RealWorld.key_heap) (RealWorld.findUserKeys U__r.(RealWorld.users)) *)
-      (* -> forall U__r', *)
-      (*     rstepSilent U__r U__r' *)
-      (*     -> exists U__i', *)
-      (*       istepSilent ^* U__i U__i' *)
-      (*       /\ R U__r' U__i') *)
-
 
   Lemma simulates_with_adversary_silent :
     forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A) (R : RealWorld.universe A B -> IdealWorld.universe A -> Prop) (b : B),
@@ -1705,9 +1501,10 @@ Section SingleAdversarySimulates.
     intuition idtac.
     unfold strip_adversary; simpl.
     erewrite real_univ_eq_fields_eq; eauto using clean_ciphers_idempotent, clean_users_idempotent.
+    admit.
     (* Stripping doesn't set keys to zero *)
     admit.
-    unfold RealWorld.message_queue_safe; constructor.
+    admit.
     eapply RealWorld.adv_no_honest_keys_empty.
   Admitted.
 

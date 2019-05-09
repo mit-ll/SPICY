@@ -705,12 +705,12 @@ Qed.
 
 Definition universe_ok {A B} (U : universe A B) : Prop :=
   let honestk := findUserKeys U.(users)
-  in  (forall u_id (u_d : user_data A) msgs,
-          U.(users) $? u_id = Some u_d
-          -> msgs = msg_heap u_d -> message_queue_safe U.(all_keys) honestk U.(all_ciphers) msgs)
-    /\ message_queue_safe U.(all_keys) honestk U.(all_ciphers) U.(adversary).(msg_heap)
-    /\ ciphers_honestly_signed U.(all_keys) honestk U.(all_ciphers)
-    /\ keys_good U.(all_keys)
+  in  keys_good U.(all_keys)
+    (* /\ (forall u_id (u_d : user_data A) msgs, *)
+    (*       U.(users) $? u_id = Some u_d *)
+    (*       -> msgs = msg_heap u_d -> message_queue_safe U.(all_keys) honestk U.(all_ciphers) msgs) *)
+    (* /\ message_queue_safe U.(all_keys) honestk U.(all_ciphers) U.(adversary).(msg_heap) *)
+    (* /\ ciphers_honestly_signed U.(all_keys) honestk U.(all_ciphers) *)
     /\ adv_no_honest_keys U.(all_keys) honestk U.(adversary).(key_heap).
 
 Section KeyMergeTheorems.
