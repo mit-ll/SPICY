@@ -242,53 +242,74 @@ Section SafeMessages.
   (*       unfold not in *; split_ors; try discriminate; try contradiction. *)
   (* Qed. *)
 
-  Inductive msg_leaks_no_honest_keys : forall {t}, message t -> Prop :=
-  | PlaintextNoKeys : forall txt,
-      msg_leaks_no_honest_keys (Plaintext txt)
-  | KeyMessageContainsNoHonestKeys : forall kp,
-        ~ honest_key (fst kp)
-      -> msg_leaks_no_honest_keys (KeyMessage kp)
-  | MsgPairNeitherLeakKeys : forall {t1 t2} (msg1 : message t1) (msg2 : message t2),
-        msg_leaks_no_honest_keys msg1
-      -> msg_leaks_no_honest_keys msg2
-      -> msg_leaks_no_honest_keys (MsgPair msg1 msg2)
-  | HonestlyEncryptedLeaksNoKeys :
+  Inductive msg_contains_only_honest_public_keys :  forall {t}, message t -> Prop :=
+  | PlaintextHPK : forall txt,
+      msg_contains_only_honest_public_keys (Plaintext txt)
+  | KeyMessageHPK : forall kp,
+        honestk $? fst kp = Some true
+      -> snd kp = false
+      -> msg_contains_only_honest_public_keys (KeyMessage kp)
+  | MsgPairHPK : forall {t1 t2} (msg1 : message t1) (msg2 : message t2),
+        msg_contains_only_honest_public_keys msg1
+      -> msg_contains_only_honest_public_keys msg2
+      -> msg_contains_only_honest_public_keys (MsgPair msg1 msg2)
+  | HonestlyEncryptedHPK :
       forall c_id k__signid k__encid,
         honest_key k__encid
-      -> msg_leaks_no_honest_keys (SignedCiphertext k__signid k__encid c_id)
-  | SignedPayloadNoLeakKeys : forall {t} (msg : message t) k c_id,
-        msg_leaks_no_honest_keys msg
-      -> msg_leaks_no_honest_keys (Signature msg k c_id).
+      -> msg_contains_only_honest_public_keys (SignedCiphertext k__signid k__encid c_id)
+  | SignedPayloadHPK : forall {t} (msg : message t) k c_id,
+        msg_contains_only_honest_public_keys msg
+      -> msg_contains_only_honest_public_keys (Signature msg k c_id).
 
-  Hint Constructors msg_leaks_no_honest_keys.
+  Hint Constructors msg_contains_only_honest_public_keys.
 
-  Fixpoint msg_leaks_no_honest_keysb {t} (msg : message t) : bool :=
-    match msg with
-    | Plaintext _   => true
-    | KeyMessage kp => negb (honest_keyb (fst kp))
-    | MsgPair m1 m2 => msg_leaks_no_honest_keysb m1 && msg_leaks_no_honest_keysb m2
-    | SignedCiphertext k__signid k__encid c_id => honest_keyb k__encid
-    | Signature m _ _ => msg_leaks_no_honest_keysb m
-    end.
+  (* Inductive msg_leaks_no_honest_keys : forall {t}, message t -> Prop := *)
+  (* | PlaintextNoKeys : forall txt, *)
+  (*     msg_leaks_no_honest_keys (Plaintext txt) *)
+  (* | KeyMessageContainsNoHonestKeys : forall kp, *)
+  (*       ~ honest_key (fst kp) *)
+  (*     -> msg_leaks_no_honest_keys (KeyMessage kp) *)
+  (* | MsgPairNeitherLeakKeys : forall {t1 t2} (msg1 : message t1) (msg2 : message t2), *)
+  (*       msg_leaks_no_honest_keys msg1 *)
+  (*     -> msg_leaks_no_honest_keys msg2 *)
+  (*     -> msg_leaks_no_honest_keys (MsgPair msg1 msg2) *)
+  (* | HonestlyEncryptedLeaksNoKeys : *)
+  (*     forall c_id k__signid k__encid, *)
+  (*       honest_key k__encid *)
+  (*     -> msg_leaks_no_honest_keys (SignedCiphertext k__signid k__encid c_id) *)
+  (* | SignedPayloadNoLeakKeys : forall {t} (msg : message t) k c_id, *)
+  (*       msg_leaks_no_honest_keys msg *)
+  (*     -> msg_leaks_no_honest_keys (Signature msg k c_id). *)
 
-  Lemma msg_leaks_no_honest_keys_msg_leaks_no_keysb :
-    forall {t} (msg : message t),
-      msg_leaks_no_honest_keys msg <-> msg_leaks_no_honest_keysb msg = true.
-  Proof.
-    split.
-    - induction 1; unfold msg_leaks_no_honest_keysb; eauto.
-      + destruct kp; simpl in *; context_map_rewrites.
-        rewrite negb_true_iff.
-        apply not_honest_key_honest_keyb; auto.
-      + unfold msg_leaks_no_honest_keysb.
-        apply andb_true_iff; eauto.
-      + rewrite <- honest_key_honest_keyb; trivial.
-    - induction msg; intros; eauto; unfold msg_leaks_no_honest_keysb in *.
-      + rewrite negb_true_iff, <- not_honest_key_honest_keyb in *; eauto.
-      + rewrite andb_true_iff in H; split_ands; eauto.
-      + rewrite <- honest_key_honest_keyb in *.
-        econstructor; auto.
-  Qed.
+  (* Hint Constructors msg_leaks_no_honest_keys. *)
+
+  (* Fixpoint msg_leaks_no_honest_keysb {t} (msg : message t) : bool := *)
+  (*   match msg with *)
+  (*   | Plaintext _   => true *)
+  (*   | KeyMessage kp => negb (honest_keyb (fst kp)) *)
+  (*   | MsgPair m1 m2 => msg_leaks_no_honest_keysb m1 && msg_leaks_no_honest_keysb m2 *)
+  (*   | SignedCiphertext k__signid k__encid c_id => honest_keyb k__encid *)
+  (*   | Signature m _ _ => msg_leaks_no_honest_keysb m *)
+  (*   end. *)
+
+  (* Lemma msg_leaks_no_honest_keys_msg_leaks_no_keysb : *)
+  (*   forall {t} (msg : message t), *)
+  (*     msg_leaks_no_honest_keys msg <-> msg_leaks_no_honest_keysb msg = true. *)
+  (* Proof. *)
+  (*   split. *)
+  (*   - induction 1; unfold msg_leaks_no_honest_keysb; eauto. *)
+  (*     + destruct kp; simpl in *; context_map_rewrites. *)
+  (*       rewrite negb_true_iff. *)
+  (*       apply not_honest_key_honest_keyb; auto. *)
+  (*     + unfold msg_leaks_no_honest_keysb. *)
+  (*       apply andb_true_iff; eauto. *)
+  (*     + rewrite <- honest_key_honest_keyb; trivial. *)
+  (*   - induction msg; intros; eauto; unfold msg_leaks_no_honest_keysb in *. *)
+  (*     + rewrite negb_true_iff, <- not_honest_key_honest_keyb in *; eauto. *)
+  (*     + rewrite andb_true_iff in H; split_ands; eauto. *)
+  (*     + rewrite <- honest_key_honest_keyb in *. *)
+  (*       econstructor; auto. *)
+  (* Qed. *)
 
   Inductive msg_honestly_signed : forall {t : type}, message t -> Prop :=
   | BothSidesPairHonestlySigned : forall {t1 t2} (msg : message (Pair t1 t2)) (msg1 : message t1) (msg2 : message t2),
@@ -370,7 +391,7 @@ Section SafeMessages.
 End SafeMessages.
 
 Hint Constructors honest_key
-     msg_leaks_no_honest_keys msg_pattern_safe
+     msg_pattern_safe
      ciphers_honestly_signed.
 
 Lemma cipher_honestly_signed_proper :
@@ -547,16 +568,34 @@ Lemma adv_no_honest_keys_empty :
   invert H.
 Qed.
 
+Definition message_queue_ok (msgs : queued_messages) (honestk : key_perms) :=
+  Forall (fun sigm => match sigm with
+                   | (existT _ _ m) =>
+                     msg_honestly_signed honestk m -> msg_contains_only_honest_public_keys honestk m
+                   end) msgs.
+
+Definition user_keys {A} (usrs : honest_users A) (u_id : user_id) : option key_perms :=
+  match usrs $? u_id with
+  | Some u_d => Some u_d.(key_heap)
+  | None     => None
+  end.
+
+Definition user_queue {A} (usrs : honest_users A) (u_id : user_id) : option queued_messages :=
+  match usrs $? u_id with
+  | Some u_d => Some u_d.(msg_heap)
+  | None     => None
+  end.
+
+Definition message_queues_ok {A} (usrs : honest_users A) (honestk : key_perms) :=
+  forall u_id msgs,
+    user_queue usrs u_id = Some msgs
+    -> message_queue_ok msgs honestk.
+
 Definition universe_ok {A B} (U : universe A B) : Prop :=
   let honestk := findUserKeys U.(users)
   in  keys_good U.(all_keys)
-    /\ (forall u_id u_d,
-          U.(users) $? u_id = Some u_d
-          -> Forall (fun sigm => match sigm with
-                             | (existT _ _ m) =>
-                               msg_honestly_signed honestk m -> msg_leaks_no_honest_keys honestk m
-                             end) u_d.(msg_heap)
-      ).
+    /\ message_queues_ok U.(users) honestk
+.
     (* /\ adv_no_honest_keys U.(all_keys) honestk U.(adversary).(key_heap). *)
 
 Section KeyMergeTheorems.
@@ -1012,18 +1051,75 @@ Section KeyMergeTheorems.
       + erewrite merge_perms_came_from_somewhere1; eauto.
   Qed.
 
-  Lemma safe_messages_have_no_bad_keys :
-    forall {t} (msg : message t),
-      msg_leaks_no_honest_keys honestk msg
-      -> forall k_id k,
-        findKeys msg $? k_id = Some k
-        -> ~ honest_key honestk k_id.
+  Lemma findUserKeys_readd_user_same_key_heap_idempotent :
+    forall {A} (usrs : honest_users A) u_id ks,
+      user_keys usrs u_id = Some ks
+      -> findUserKeys usrs $k++ ks = findUserKeys usrs.
   Proof.
-    induction 1; auto; simpl; eauto; intros; subst; clean_map_lookups; eauto.
+    intros.
+    induction usrs using P.map_induction_bis; intros; Equal_eq; subst; contra_map_lookup; auto.
+    unfold user_keys in H.
+    cases (x ==n u_id); subst.
+    - rewrite add_eq_o in H; simpl in H; auto.
+      unfold findUserKeys; rewrite fold_add; auto.
+      rewrite findUserKeys_notation.
+      invert H.
+      rewrite merge_perms_assoc; rewrite merge_perms_refl; trivial.
+    - rewrite add_neq_o in H; auto.
+      unfold findUserKeys; rewrite fold_add; auto.
+      rewrite findUserKeys_notation.
+      cases (usrs $? u_id); subst; try discriminate; invert H.
+      rewrite merge_perms_assoc. rewrite merge_perms_sym with (ks2:=key_heap u); rewrite <- merge_perms_assoc.
+      rewrite IHusrs.
+      trivial.
+      unfold user_keys; context_map_rewrites; trivial.
+  Qed.
 
+
+  (* Lemma safe_messages_have_no_bad_keys : *)
+  (*   forall {t} (msg : message t), *)
+  (*     msg_leaks_no_honest_keys honestk msg *)
+  (*     -> forall k_id k, *)
+  (*       findKeys msg $? k_id = Some k *)
+  (*       -> ~ honest_key honestk k_id. *)
+  (* Proof. *)
+  (*   induction 1; auto; simpl; eauto; intros; subst; clean_map_lookups; eauto. *)
+
+  (*   - destruct kp; simpl in *. *)
+  (*     cases (k0 ==n k_id); subst; context_map_rewrites; clean_map_lookups; auto. *)
+  (*   - apply merge_perms_split in H1; split_ors; eauto. *)
+  (* Qed. *)
+
+  (* Lemma safe_messages_have_no_bad_keys : *)
+  (*   forall {t} (msg : message t), *)
+  (*     msg_contains_only_honest_public_keys honestk msg *)
+  (*     -> forall k_id, *)
+  (*       findKeys msg $? k_id = Some true *)
+  (*       -> ~ honest_key honestk k_id. *)
+  (* Proof. *)
+  (*   induction 1; auto; simpl; eauto; intros; subst; clean_map_lookups; eauto. *)
+
+  (*   - destruct kp; simpl in *. *)
+  (*     cases (k ==n k_id); subst; clean_map_lookups. *)
+  (*   - apply merge_perms_split in H1; split_ors; eauto. *)
+  (* Qed. *)
+
+  Lemma safe_messages_have_only_honest_public_keys :
+    forall {t} (msg : message t),
+      msg_contains_only_honest_public_keys honestk msg
+      -> forall k_id,
+        findKeys msg $? k_id = None
+      \/ (honestk $? k_id <> None /\ findKeys msg $? k_id = Some false).
+  Proof.
+    induction 1; eauto; intros; subst.
     - destruct kp; simpl in *.
-      cases (k0 ==n k_id); subst; context_map_rewrites; clean_map_lookups; auto.
-    - apply merge_perms_split in H1; split_ors; eauto.
+      cases (k ==n k_id); subst; clean_map_lookups; auto.
+      right; split; unfold not; intros; clean_map_lookups; auto.
+    - specialize (IHmsg_contains_only_honest_public_keys1 k_id);
+        specialize( IHmsg_contains_only_honest_public_keys2 k_id);
+        simpl; split_ors; split_ands; eauto.
+
+      erewrite merge_perms_chooses_greatest; eauto; simpl; auto.
   Qed.
 
   Lemma honest_key_after_new_msg_keys :
@@ -1057,16 +1153,16 @@ Section KeyMergeTheorems.
 
   Hint Resolve not_honest_key_after_new_msg_keys.
 
-  Lemma message_leaks_no_honest_keys_after_no_leaky_message :
-    forall {t1 t2} (msg1 : message t1) (msg2 : message t2),
-      msg_leaks_no_honest_keys honestk msg1
-      -> (forall (k_id : NatMap.key) (kp : bool), findKeys msg2 $? k_id = Some kp -> kp = false)
-      -> msg_leaks_no_honest_keys (honestk $k++ findKeys msg2) msg1.
-  Proof.
-    induction 1; intros; eauto; econstructor; eauto.
-  Qed.
+  (* Lemma message_leaks_no_honest_keys_after_no_leaky_message : *)
+  (*   forall {t1 t2} (msg1 : message t1) (msg2 : message t2), *)
+  (*     msg_leaks_no_honest_keys honestk msg1 *)
+  (*     -> (forall (k_id : NatMap.key) (kp : bool), findKeys msg2 $? k_id = Some kp -> kp = false) *)
+  (*     -> msg_leaks_no_honest_keys (honestk $k++ findKeys msg2) msg1. *)
+  (* Proof. *)
+  (*   induction 1; intros; eauto; econstructor; eauto. *)
+  (* Qed. *)
 
-  Hint Resolve message_leaks_no_honest_keys_after_no_leaky_message.
+  (* Hint Resolve message_leaks_no_honest_keys_after_no_leaky_message. *)
 
   Lemma message_honestly_signed_after_new_msg_keys :
     forall {t} (msg : message t) msgk,
@@ -1088,27 +1184,27 @@ Section KeyMergeTheorems.
     destruct x; eauto.
   Qed.
 
-  Lemma message_leaks_no_honest_keys_after_new_msg_keys :
-    forall {t} (msg : message t) msgk,
-      msg_leaks_no_honest_keys honestk msg
-      -> (forall k_id, honestk $? k_id = None -> msgk $? k_id = None)
-      -> (forall k_id k k', honestk $? k_id = Some k -> msgk $? k_id = Some k' -> greatest_permission k k' = k)
-      -> msg_leaks_no_honest_keys (honestk $k++ msgk) msg.
-  Proof.
-    induction 1; econstructor; eauto.
-    - unfold not; intro.
-      match goal with
-      | [ H : honest_key (?honk $k++ ?msgk) ?k |- _] =>
-        destruct H; cases (honk $? k); cases (msgk $? k); subst
-      end; eauto.
+  (* Lemma message_leaks_no_honest_keys_after_new_msg_keys : *)
+  (*   forall {t} (msg : message t) msgk, *)
+  (*     msg_leaks_no_honest_keys honestk msg *)
+  (*     -> (forall k_id, honestk $? k_id = None -> msgk $? k_id = None) *)
+  (*     -> (forall k_id k k', honestk $? k_id = Some k -> msgk $? k_id = Some k' -> greatest_permission k k' = k) *)
+  (*     -> msg_leaks_no_honest_keys (honestk $k++ msgk) msg. *)
+  (* Proof. *)
+  (*   induction 1; econstructor; eauto. *)
+  (*   - unfold not; intro. *)
+  (*     match goal with *)
+  (*     | [ H : honest_key (?honk $k++ ?msgk) ?k |- _] => *)
+  (*       destruct H; cases (honk $? k); cases (msgk $? k); subst *)
+  (*     end; eauto. *)
 
-      assert (greatest_permission b b0 = b) by eauto; clean_map_lookups.
-      erewrite merge_perms_chooses_greatest in H2 by eauto.
-      invert H2. rewrite H5 in H3; subst.
-      assert (honest_key honestk (fst kp)) by eauto; contradiction.
-  Qed.
+  (*     assert (greatest_permission b b0 = b) by eauto; clean_map_lookups. *)
+  (*     erewrite merge_perms_chooses_greatest in H2 by eauto. *)
+  (*     invert H2. rewrite H5 in H3; subst. *)
+  (*     assert (honest_key honestk (fst kp)) by eauto; contradiction. *)
+  (* Qed. *)
 
-  Hint Resolve message_leaks_no_honest_keys_after_new_msg_keys.
+  (* Hint Resolve message_leaks_no_honest_keys_after_new_msg_keys. *)
 
   Lemma message_queue_safe_after_msg_keys :
     forall msgk msgs,
@@ -1335,7 +1431,7 @@ Definition action_adversary_safe (honestk : key_perms) (a : action) : Prop :=
   match a with
   | Input  msg pat _ => msg_pattern_safe honestk pat
                      /\ (forall k_id kp, findKeys msg $? k_id = Some kp -> kp = false)
-  | Output msg       => msg_leaks_no_honest_keys honestk msg
+  | Output msg       => msg_contains_only_honest_public_keys honestk msg
                      /\ msg_honestly_signed honestk msg
                        (* /\ (forall k_id kp, findKeys all_keys msg $? k_id = Some kp -> kp = false) *)
   end.
