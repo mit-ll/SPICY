@@ -1185,6 +1185,17 @@ Section KeyMergeTheorems.
     induction 1; econstructor; eauto.
   Qed.
 
+  Lemma message_contains_only_honest_public_keys_after_new_keys :
+    forall {t} (msg : message t) msgk,
+      msg_contains_only_honest_public_keys honestk msg
+      -> msg_contains_only_honest_public_keys (honestk $k++ msgk) msg.
+  Proof.
+    induction 1; econstructor; eauto.
+    cases (msgk $? fst kp); eauto.
+    erewrite merge_perms_chooses_greatest; eauto; unfold greatest_permission;
+      rewrite orb_true_l; trivial.
+  Qed.
+
   Hint Resolve message_honestly_signed_after_new_msg_keys.
 
   Lemma message_queue_safe_after_new_message_keys :
@@ -1525,13 +1536,12 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
                 (usrs, adv, cs', gks, ks, qmsgs, Return (SignedCiphertext k__signid k__encid c_id))
 
 | StepDecrypt : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks ks' qmsgs (msg : message t)
-                  k__signid kp__sign k__encid c_id newkeys kt,
+                  k__signid kp__sign k__encid c_id newkeys kt__sign kt__enc,
       cs $? c_id = Some (SigEncCipher k__signid k__encid msg)
-    -> ( (exists kp__enc, gks $? k__encid = Some (MkCryptoKey k__encid Encryption SymKey)  /\ ks $? k__encid = Some kp__enc)
-      \/ (gks $? k__encid = Some (MkCryptoKey k__encid Encryption AsymKey) /\ ks $? k__encid = Some true)
-      )
-    -> gks $? k__signid = Some (MkCryptoKey k__signid Signing kt)
+    -> gks $? k__encid = Some (MkCryptoKey k__encid Encryption kt__enc)
+    -> gks $? k__signid = Some (MkCryptoKey k__signid Signing kt__sign)
     -> ks $? k__signid = Some kp__sign
+    -> ks $? k__encid = Some true
     -> findKeys msg = newkeys
     -> ks' = ks $k++ newkeys
     -> step_user Silent u_id
