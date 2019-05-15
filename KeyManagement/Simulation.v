@@ -794,121 +794,206 @@ Section SingleAdversarySimulates.
 
     Hint Constructors ciphers_honestly_signed.
 
-    Lemma honest_silent_step_advuniv_implies_univ_ok :
-      forall {A B C} (u_id : user_id) cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B) gks gks' ks ks' qmsgs qmsgs' bd bd',
+    Lemma honest_silent_step_nochange_honestk :
+      forall {A B C} cs cs' (u_id : user_id) lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
+                gks gks' ks ks' qmsgs qmsgs' bd bd',
         step_user lbl u_id bd bd'
-        -> universe_ok
-              {| users := usrs
-               ; adversary := adv
-               ; all_ciphers := cs
-               ; all_keys := gks |}
         -> forall (cmd : user_cmd C),
-            (exists cmdc, usrs $? u_id = Some {| key_heap := ks; protocol := cmdc; msg_heap := qmsgs |})
-          -> bd = (usrs, adv, cs, gks, ks, qmsgs, cmd)
+          bd = (usrs, adv, cs, gks, ks, qmsgs, cmd)
+          (* -> user_keys usrs u_id = Some ks *)
+          -> message_queues_ok usrs (findUserKeys usrs)
+          -> lbl = Silent
           -> forall cmd',
-                bd' = (usrs', adv', cs', gks', ks', qmsgs', cmd')
-              -> lbl = Silent
-              ->  exists cmdc', universe_ok
-                  {| users := usrs' $+ (u_id, {| key_heap := ks'; protocol := cmdc'; msg_heap := qmsgs' |})
-                   ; adversary := adv'
-                   ; all_ciphers := cs'
-                   ; all_keys := gks' |}.
+              bd' = (usrs', adv', cs', gks', ks', qmsgs', cmd')
+              -> forall cmdc cmdc',
+                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc |}
+                -> findUserKeys (usrs' $+ (u_id, {| key_heap := ks'; protocol := cmdc'; msg_heap := qmsgs' |}))
+                  = findUserKeys usrs'.
     Proof.
+      induction 1; inversion 1; inversion 3; try discriminate; intros; subst; eauto;
+        try erewrite findUserKeys_readd_user_same_keys_idempotent' by eauto; trivial.
 
-      Ltac fix_up_goals :=
-        repeat match goal with
-               | [ usrs : honest_users _
-                    , H : _ $+ (?k1,_) $? ?k2 = Some _ 
-                        |- message_queue_safe _ _ _ _ ] => cases (k1 ==n k2); subst; clean_map_lookups
-               | [ |- context[ findUserKeys (_ $+ (_, {| key_heap := _ $k++ _ ; protocol := _ ; msg_heap := _ |})) ] ] =>
-                 erewrite RealWorld.findUserKeys_readd_user_addnl_keys by eauto
-               (* | [ H1 : encryptMessage _ (?kid, ?kp) _ _ _ = Some _ *)
-               (*   , H2 : ?hon $? ?kid = Some _ |- _] => *)
-               (*   assert (kp = true) by eauto; subst; eapply enc_message_has_honest_signing_key with (honestk := hon) in H1; eauto *)
-               end.
-
-      induction 1; inversion 3; inversion 1; unfold universe_ok in *; simpl in *; intros;
-        subst; try discriminate; eauto;
-          repeat match goal with
-                 | [ H : exists _, _ |- _] => destruct H
-                 | [ H : ?x = ?x |- _ ] => clear H
-                 end; eexists;
-            try erewrite findUserKeys_readd_user_same_keys_idempotent' by eauto;
-            split_ands; intuition idtac; auto;
-              fix_up_goals; eauto; simpl.
-      simpl.
-
+      (* Decrypting message -- should know it is from an honest party *)
+      admit.
     Admitted.
 
-    Lemma honest_silent_step_advuniv_implies_honest_step_origuniv :
-      forall {A B C} (u_id : user_id) cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B) gks gks' ks ks' qmsgs qmsgs' bd bd' b,
+    Lemma honest_silent_step_advuniv_implies_univ_ok' :
+      forall {A B C} (u_id : user_id) cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B) gks gks' ks ks' qmsgs qmsgs' bd bd',
         step_user lbl u_id bd bd'
-        -> forall (cmd : user_cmd C) cs__s honestk,
+        -> forall (cmd : user_cmd C) honestk,
+            bd = (usrs, adv, cs, gks, ks, qmsgs, cmd)
+          -> honestk = findUserKeys usrs
+          -> keys_good gks
+          -> message_queues_ok usrs honestk
+          -> user_queue usrs u_id = Some qmsgs
+          -> forall cmd' honestk',
+                bd' = (usrs', adv', cs', gks', ks', qmsgs', cmd')
+              -> lbl = Silent
+              -> honestk' = findUserKeys usrs'
+              -> keys_good gks'
+              /\ message_queues_ok usrs' honestk'
+              /\ message_queue_ok qmsgs' honestk'.
+    Proof.
+      induction 1; inversion 1; inversion 5; try discriminate; eauto; intros; subst; eauto.
+
+      intuition idtac.
+      specialize (H12 _ _ H13); invert H12; eauto.
+    Qed.
+
+    Lemma adv_step_advuniv_implies_univ_ok' :
+      forall {A B C} cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
+        gks gks' ks ks' qmsgs qmsgs' bd bd',
+        step_user lbl None bd bd'
+        -> forall (cmd : user_cmd C) honestk,
+            bd = (usrs, adv, cs, gks, ks, qmsgs, cmd)
+          -> honestk = findUserKeys usrs
+          -> keys_good gks
+          -> message_queues_ok usrs honestk
+          -> forall cmd' honestk',
+                bd' = (usrs', adv', cs', gks', ks', qmsgs', cmd')
+              -> honestk' = findUserKeys usrs'
+              -> keys_good gks'
+              /\ message_queues_ok usrs' honestk'.
+    Proof.
+      induction 1; inversion 1; inversion 4; try discriminate; eauto; intros; subst; eauto.
+      intuition idtac.
+      erewrite findUserKeys_readd_user_same_keys_idempotent' by eauto.
+      destruct rec_u; simpl in *.
+      unfold message_queues_ok; intros.
+      cases (rec_u_id ==n u_id0); subst; eauto; unfold user_queue in H.
+      - rewrite add_eq_o in H; simpl in *; invert H; auto.
+        assert (user_queue usrs u_id0 = Some msg_heap) as UQ by (unfold user_queue; context_map_rewrites; trivial).
+        specialize (H15 _ _ UQ); auto.
+        unfold message_queue_ok.
+        apply Forall_app; constructor; auto.
+        intros.
+        (* how do I know this message wasn't honestly signed? *)
+        admit.
+
+      - rewrite add_neq_o in H; simpl in *; auto.
+        cases (usrs $? u_id0); subst; try discriminate; invert H.
+        destruct u. assert (user_queue usrs u_id0 = Some msg_heap0) as UQ by (unfold user_queue; context_map_rewrites; auto).
+        specialize (H15 _ _ UQ); auto.
+    Admitted.
+
+    Lemma honest_silent_step_advuniv_implies_univ_ok :
+      forall {A B} (U U' : universe A B) lbl,
+        step_universe U lbl U'
+        -> lbl = Silent
+        -> universe_ok U
+        -> universe_ok U'.
+    Proof.
+      intros.
+      invert H; auto; try discriminate.
+
+      (* Honest step *)
+      - destruct U; destruct userData; unfold build_data_step in *; simpl in *.
+        unfold universe_ok in *; simpl in *; split_ands.
+
+      assert (  keys_good gks
+              /\ message_queues_ok usrs (findUserKeys usrs)
+              /\ message_queue_ok qmsgs (findUserKeys usrs) ).
+      eapply honest_silent_step_advuniv_implies_univ_ok'; eauto.
+      unfold user_queue; rewrite H2; eauto.
+
+      intuition idtac.
+      erewrite honest_silent_step_nochange_honestk; eauto.
+      unfold message_queues_ok; intros.
+      unfold user_queue in *.
+      cases (u_id ==n u_id0); subst.
+      + rewrite add_eq_o in H5; invert H5; eauto.
+      + rewrite add_neq_o in H5; auto.
+        cases (usrs $? u_id0); subst; try discriminate.
+        assert (user_queue usrs u_id0 = Some msgs) as UQ by (unfold user_queue; context_map_rewrites; auto).
+        specialize (H1 _ _ UQ); eauto.
+
+      (* adv step *)
+      - destruct U; unfold build_data_step in *; simpl in *.
+        unfold universe_ok in *; simpl in *; split_ands;
+          eauto using adv_step_advuniv_implies_univ_ok'.
+    Qed.
+
+    Lemma honest_silent_step_advuniv_implies_honest_step_origuniv :
+      forall {A B C} (u_id : user_id) cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
+                gks gks' ks ks' qmsgs qmsgs' bd bd' (b: B),
+        step_user lbl u_id bd bd'
+        -> forall (cmd : user_cmd C) cs__s usrs__s honestk,
           honestk = findUserKeys usrs
-          -> (exists cmdc, usrs $? u_id = Some {| key_heap := ks; protocol := cmdc; msg_heap := qmsgs |})
-          -> adv_no_honest_keys honestk adv.(key_heap)
-          -> ciphers_honestly_signed honestk cs
-          (* -> key_heaps_compatible honestk adv.(key_heap) *)
           -> cs__s = clean_ciphers honestk cs
+          -> usrs__s = clean_users honestk usrs
           -> bd = (usrs, adv, cs, gks, ks, qmsgs, cmd)
-          -> forall cmd' cs__s' pwless_adv,
-              cs__s' = clean_ciphers honestk cs'
+          -> user_keys usrs u_id = Some ks
+          -> forall cmd' cs__s' usrs__s' pwless_adv pwless_adv' honestk',
+              honestk' = findUserKeys usrs'
+              -> cs__s' = clean_ciphers honestk' cs'
+              -> usrs__s' = clean_users honestk' usrs'
               -> bd' = (usrs', adv', cs', gks', ks', qmsgs', cmd')
               -> lbl = Silent
-              -> is_powerless pwless_adv b honestk
-              -> step_user (B:=B) lbl u_id (usrs, pwless_adv, cs__s, gks, ks, qmsgs, cmd) (usrs', pwless_adv, cs__s', gks', ks', qmsgs', cmd').
+              -> pwless_adv = {| key_heap := key_heap adv
+                              ; protocol := Return b
+                              ; msg_heap := adv.(msg_heap) |}
+              -> pwless_adv' = {| key_heap := key_heap adv'
+                               ; protocol := Return b
+                               ; msg_heap := adv'.(msg_heap) |}
+              -> step_user lbl u_id
+                          (usrs__s, pwless_adv, cs__s, gks, ks, qmsgs, cmd)
+                          (usrs__s', pwless_adv', cs__s', gks', ks', qmsgs', cmd').
     Proof.
+      (* Ltac foo1 := *)
+      (*   match goal with *)
+      (*   |  [ H : ?x = ?x |- _ ] => clear H *)
+      (*   | [ |- clean_ciphers _ _ _ $? _ = Some _ ] => eapply clean_ciphers_keeps_honest_cipher *)
+      (*   | [ |- honest_cipher_filter_fn _ _ _ _ = _ ] => unfold honest_cipher_filter_fn, cipher_honestly_signed *)
+      (*   | [ H : ?m $? ?k = _ |- context[?m $? ?k] ] => rewrite H *)
+      (*   | [ |- context [match ?matchee with _ => _ end] ] => cases matchee; subst *)
+      (*   | [ |- ?hasp && _ = _ ] => cases hasp; simpl *)
+      (*   | [ |- false = true ] => exfalso; simpl in * *)
+      (*   | [ H : _ && _ = true |- _ ] => apply andb_prop in H; split_ands *)
+      (*   | [ H : match ?matchee with _ => _ end = _ *)
+      (*    ,  H1 : ?matchee = _ |- _] => rewrite H1 in H *)
+      (*   | [ H  : ciphers_honestly_signed ?gks ?ks ?cs *)
+      (*     , H1 : ?cs $? _ = Some ?c *)
+      (*       |- cipher_honestly_signed ?gks ?ks ?c = true] => econstructor; eauto *)
+      (*         (* unfold ciphers_honestly_signed in H; rewrite for_all_iff in H by auto; eapply H *) *)
+      (*   | [ |- MapsTo _ _ _ ] => apply find_mapsto_iff *)
+      (*   (* | [ H : cipher_honestly_signed _ _ _ = true |- _ ] => unfold cipher_honestly_signed,honest_signing_key, honest_key in H *) *)
+      (*   end. *)
 
-      Ltac foo1 :=
-        match goal with
-        |  [ H : ?x = ?x |- _ ] => clear H
-        | [ |- clean_ciphers _ _ _ $? _ = Some _ ] => eapply clean_ciphers_keeps_honest_cipher
-        | [ |- honest_cipher_filter_fn _ _ _ _ = _ ] => unfold honest_cipher_filter_fn, cipher_honestly_signed
-        | [ H : ?m $? ?k = _ |- context[?m $? ?k] ] => rewrite H
-        | [ |- context [match ?matchee with _ => _ end] ] => cases matchee; subst
-        | [ |- ?hasp && _ = _ ] => cases hasp; simpl
-        | [ |- false = true ] => exfalso; simpl in *
-        | [ H : _ && _ = true |- _ ] => apply andb_prop in H; split_ands
-        | [ H : match ?matchee with _ => _ end = _
-         ,  H1 : ?matchee = _ |- _] => rewrite H1 in H
-        | [ H  : ciphers_honestly_signed ?gks ?ks ?cs
-          , H1 : ?cs $? _ = Some ?c
-            |- cipher_honestly_signed ?gks ?ks ?c = true] => econstructor; eauto
-              (* unfold ciphers_honestly_signed in H; rewrite for_all_iff in H by auto; eapply H *)
-        | [ |- MapsTo _ _ _ ] => apply find_mapsto_iff
-        (* | [ H : cipher_honestly_signed _ _ _ = true |- _ ] => unfold cipher_honestly_signed,honest_signing_key, honest_key in H *)
-        end.
+      (* Ltac doit := *)
+      (*   repeat foo1; auto; *)
+      (*   match goal with *)
+      (*   | [ H  : ciphers_honestly_signed ?gks ?ks ?cs *)
+      (*     , H1 : ?cs $? _ = Some ?c *)
+      (*          |- False ] => assert (cipher_honestly_signed gks ks c) *)
+      (*   end; repeat foo1; eauto. *)
 
-      Ltac doit :=
-        repeat foo1; auto;
-        match goal with
-        | [ H  : ciphers_honestly_signed ?gks ?ks ?cs
-          , H1 : ?cs $? _ = Some ?c
-               |- False ] => assert (cipher_honestly_signed gks ks c)
-        end; repeat foo1; eauto.
-
-      induction 1; inversion 6; inversion 2; intros; subst;
-        repeat match goal with
-               | [ H : Action _ = Silent |- _ ] => invert H
-               end;
-        econstructor;
-        eauto using honest_enc_cipher_not_cleaned, honest_sign_cipher_not_cleaned;
-        try solve [doit; discriminate].
+      induction 1; inversion 4; inversion 5; intros; subst; try discriminate;
+        econstructor; eauto.
 
       - assert (kp__sign = true) by eauto; subst.
-        invert H8; eapply honest_enc_cipher_not_cleaned; eauto using findUserKeys_has_private_key_of_user.
-      - assert (MapsTo c_id (SigEncCipher k__signid k__encid msg) cs') by (rewrite find_mapsto_iff; auto).
-        assert (cipher_honestly_signed (findUserKeys usrs') (SigEncCipher k__signid k__encid msg) = true)
-          by eauto using ciphers_honestly_signed_mapsto.
-        eapply clean_ciphers_keeps_honest_cipher; eauto.
+        eapply honest_enc_cipher_not_cleaned; eauto.
+        unfold user_keys in *. cases (usrs' $? u_id); subst; try discriminate; invert H11.
+        eapply findUserKeys_has_private_key_of_user; eauto.
+      - admit. (* need to know that the cipher is honestly signed *)
+
+      (* assert (MapsTo c_id (SigEncCipher k__signid k__encid msg) cs') by (rewrite find_mapsto_iff; auto). *)
+        (* assert (cipher_honestly_signed (findUserKeys usrs') (SigEncCipher k__signid k__encid msg) = true). *)
+        (* eapply ciphers_honestly_signed_mapsto; eauto *)
+        (*   by eauto using ciphers_honestly_signed_mapsto. *)
+        (* eapply clean_ciphers_keeps_honest_cipher; eauto. *)
 
       - assert (kp = true) by eauto; subst.
-        invert H4; eapply honest_sign_cipher_not_cleaned; eauto using findUserKeys_has_private_key_of_user.
-      - assert (MapsTo c_id (SigCipher k_id msg) cs') by (rewrite find_mapsto_iff; auto).
-        assert (cipher_honestly_signed (findUserKeys usrs') (SigCipher k_id msg) = true)
-          by eauto using ciphers_honestly_signed_mapsto.
-        eapply clean_ciphers_keeps_honest_cipher; eauto.
-    Qed.
+        eapply honest_sign_cipher_not_cleaned; eauto.
+        unfold user_keys in *. cases (usrs' $? u_id); subst; try discriminate; invert H7.
+        eapply findUserKeys_has_private_key_of_user; eauto.
+
+      - admit. (* need to know that the cipher is honestly signed *)
+
+        (* assert (MapsTo c_id (SigCipher k_id msg) cs') by (rewrite find_mapsto_iff; auto). *)
+        (* assert (cipher_honestly_signed (findUserKeys usrs') (SigCipher k_id msg) = true) *)
+        (*   by eauto using ciphers_honestly_signed_mapsto. *)
+        (* eapply clean_ciphers_keeps_honest_cipher; eauto. *)
+    Admitted.
 
     Lemma honest_labeled_step_nochange_honestk :
       forall {A B C} cs cs' (u_id : user_id) lbl (usrs usrs' : honest_users A) (adv adv' : user_data B) gks gks' ks ks' qmsgs qmsgs' bd bd',
@@ -954,63 +1039,6 @@ Section SingleAdversarySimulates.
           erewrite !findUserKeys_readd_user_same_keys_idempotent'; eauto.
         + erewrite !findUserKeys_readd_user_same_keys_idempotent'; eauto.
     Qed.
-
-    (* Lemma honest_labeled_step_nochange_honestk : *)
-    (*   forall {A B C} cs cs' (u_id : user_id) lbl (usrs usrs' : honest_users A) (adv adv' : user_data B) gks gks' ks ks' qmsgs qmsgs' bd bd', *)
-    (*     step_user lbl u_id bd bd' *)
-    (*     -> forall (cmd : user_cmd C) a, *)
-    (*       bd = (usrs, adv, cs, gks, ks, qmsgs, cmd) *)
-    (*       -> user_keys usrs u_id = Some ks *)
-    (*       -> lbl = Action a *)
-    (*       -> forall cmd', *)
-    (*           bd' = (usrs', adv', cs', gks', ks', qmsgs', cmd') *)
-    (*           (* -> forall cmdc', *) *)
-    (*             (* usrs $? uid = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc |} *) *)
-    (*           -> user_keys usrs' u_id = Some ks' *)
-    (*             -> findUserKeys usrs' $k++ ks' *)
-    (*               = findUserKeys usrs'. *)
-    (*             (* -> findUserKeys (usrs' $+ (uid, {| key_heap := ks'; protocol := cmdc'; msg_heap := qmsgs' |})) *) *)
-    (*             (*   = findUserKeys usrs'. *) *)
-    (* Proof. *)
-    (*   induction 1; inversion 1; inversion 3; try discriminate; subst; eauto. *)
-    (* Qed. *)
-
-    (*     Lemma honest_labeled_step_nochange_honestk : *)
-    (*   forall {A B C} cs cs' (u_id : user_id) lbl (usrs usrs' : honest_users A) (adv adv' : user_data B) gks gks' ks ks' qmsgs qmsgs' bd bd', *)
-    (*     step_user lbl (Some u_id) bd bd' *)
-    (*     -> forall (cmd : user_cmd C) a, *)
-    (*       bd = (usrs, adv, cs, gks, ks, qmsgs, cmd) *)
-    (*       -> action_adversary_safe (findUserKeys usrs) a *)
-    (*       -> message_queues_ok usrs (findUserKeys usrs) *)
-    (*       -> lbl = Action a *)
-    (*       -> forall cmd', *)
-    (*           bd' = (usrs', adv', cs', gks', ks', qmsgs', cmd') *)
-    (*           -> forall uid cmdc cmdc', *)
-    (*             usrs $? uid = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc |} *)
-    (*             -> findUserKeys (usrs' $+ (uid, {| key_heap := ks'; protocol := cmdc'; msg_heap := qmsgs' |})) *)
-    (*               = findUserKeys usrs'. *)
-    (* Proof. *)
-    (*   induction 1; inversion 1; inversion 4; try discriminate; subst; eauto; *)
-    (*     unfold action_adversary_safe in *; match goal with [ H : Action _ = Action _ |- _] => invert H end; *)
-    (*       split_ands; intros. *)
-
-    (*   - specialize (H13 _ _ H1); simpl in *; invert H13. *)
-    (*     assert (msg_contains_only_honest_public_keys (findUserKeys usrs') msg) by eauto. *)
-    (*     erewrite findUserKeys_readd_user_addnl_keys; eauto. *)
-    (*     specialize (safe_messages_have_only_honest_public_keys H2); intros. *)
-    (*     apply map_eq_Equal; unfold Equal; intros. *)
-    (*     specialize (H5 y); cases (findUserKeys usrs' $? y); split_ors; split_ands; try contradiction. *)
-    (*     + erewrite merge_perms_adds_ks1; eauto. *)
-    (*     + erewrite merge_perms_chooses_greatest; eauto; *)
-    (*         unfold greatest_permission. rewrite orb_false_r; auto. *)
-    (*     + rewrite merge_perms_adds_no_new_perms; auto. *)
-
-    (*   - assert (uid <> rec_u_id) by admit. (* this should be true because of operational semantics, but fresh variable is being created *) *)
-    (*     rewrite map_ne_swap; eauto. *)
-    (*     erewrite !findUserKeys_readd_user_same_keys_idempotent'; eauto. *)
-
-    (* Admitted. *)
-
 
     Lemma honest_labeled_step_advuniv_implies_honest_step_origuniv :
       forall {A B C} cs cs' lbl u_id (usrs usrs' : honest_users A) (adv adv' : user_data B) gks gks' ks ks' qmsgs qmsgs' bd bd' a (b : B),
@@ -1086,53 +1114,6 @@ Section SingleAdversarySimulates.
       destruct x.
       apply message_honestly_signed_after_new_msg_keys; auto.
     Qed.
-
-    Lemma Forall_app :
-      forall {A} (P : A -> Prop) (l : list A) a,
-        Forall P (l ++ [a]) <-> Forall P (a :: l).
-    Proof.
-      split; intros;
-        rewrite Forall_forall in *; intros;
-          eapply H.
-      - destruct H0; eauto; subst; apply in_or_app; eauto.
-      - apply in_app_or in H0; split_ors; eauto.
-        invert H0; eauto.
-        invert H1.
-    Qed.
-
-    (* Lemma honest_labeled_step_advuniv_implies_univ_ok' : *)
-    (*   forall {A B C} (u_id : user_id) cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B) gks gks' ks ks' qmsgs qmsgs' bd bd' a, *)
-    (*     step_user lbl u_id bd bd' *)
-    (*     -> universe_ok *)
-    (*           {| users := usrs *)
-    (*            ; adversary := adv *)
-    (*            ; all_ciphers := cs *)
-    (*            ; all_keys := gks |} *)
-    (*     (* -> ciphers_honestly_signed gks honestk cs *) *)
-    (*     -> forall (cmd : user_cmd C) honestk, *)
-    (*         (exists cmdc, usrs $? u_id = Some {| key_heap := ks; protocol := cmdc; msg_heap := qmsgs |}) *)
-    (*       -> bd = (usrs, adv, cs, gks, ks, qmsgs, cmd) *)
-    (*       -> honestk = findUserKeys usrs *)
-    (*       -> forall cmd', *)
-    (*             bd' = (usrs', adv', cs', gks', ks', qmsgs', cmd') *)
-    (*           -> lbl = Action a *)
-    (*           (* -> action_adversary_safe gks honestk cs a *) *)
-    (*           ->  exists cmdc', universe_ok *)
-    (*               {| users := usrs' $+ (u_id, {| key_heap := ks'; protocol := cmdc'; msg_heap := qmsgs' |}) *)
-    (*                ; adversary := adv' *)
-    (*                ; all_ciphers := cs' *)
-    (*                ; all_keys := gks' |}. *)
-    (* Proof. *)
-    (*   induction 1; inversion 3; inversion 2; unfold universe_ok in *; simpl in *; intros; *)
-    (*     subst; try discriminate; eauto; *)
-    (*       match goal with *)
-    (*       | [ H : exists _, _ |- _ ] => destruct H *)
-    (*       end; split_ands; eexists; intuition idtac. *)
-
-    (*   - erewrite findUserKeys_readd_user_addnl_keys; eauto. *)
-
-
-    (* Admitted. *)
 
     Lemma honest_labeled_step_advuniv_implies_univ_ok' :
       forall {A B C} (u_id : user_id) cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B) gks gks' ks ks' qmsgs qmsgs' bd bd' a,
@@ -1487,10 +1468,9 @@ Section SingleAdversarySimulates.
       (forall (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A),
           R U__r U__i
           -> RealWorld.universe_ok U__r
-          -> forall U__r' : RealWorld.universe A B,
+          -> forall U__r',
               rstepSilent U__r U__r'
-              -> exists U__i' : IdealWorld.universe A, (istepSilent) ^* U__i U__i' /\ RealWorld.universe_ok U__r' /\ R U__r' U__i')
-
+              -> exists U__i', (istepSilent) ^* U__i U__i' /\ RealWorld.universe_ok U__r' /\ R U__r' U__i')
       -> RealWorld.universe_ok U__ra
       -> R (strip_adversary U__ra b) U__i
       -> forall U__ra',
@@ -1499,8 +1479,7 @@ Section SingleAdversarySimulates.
                  /\ RealWorld.universe_ok U__ra'
                  /\ R (strip_adversary U__ra' b) U__i'.
   Proof.
-    intros. 
-    (* unfold RealWorld.universe_ok in H0; RealWorld.split_ands; simpl in *. *)
+    intros.
 
     assert (RealWorld.universe_ok U__ra) as UNIV_OK by assumption.
     rename H0 into for_split.
@@ -1576,7 +1555,6 @@ Section SingleAdversarySimulates.
               /\ IdealWorld.lstep_universe U__i' (Action a2) U__i''
               /\ action_matches a1 a2
               /\ R U__r' U__i''
-              (* /\ RealWorld.action_adversary_safe (RealWorld.findUserKeys U__r.(RealWorld.users)) a1 *)
               /\ RealWorld.universe_ok U__r')
       -> (forall (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A),
             R U__r U__i ->
@@ -1619,6 +1597,31 @@ Section SingleAdversarySimulates.
     do 3 eexists; intuition idtac; eauto.
 
     eapply honest_labeled_step_advuniv_implies_univ_ok; eauto.
+  Qed.
+
+  Lemma simulates_labeled_step_adversary_safe :
+    forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A)
+            (R : RealWorld.universe A B -> IdealWorld.universe A -> Prop) (b : B),
+      (forall (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A),
+          R U__r U__i ->
+          forall (a__r : RealWorld.action) (U__ra U__r' : RealWorld.universe A B),
+            RealWorld.step_universe U__ra (Action a__r) U__r'
+          -> RealWorld.findUserKeys (U__ra.(RealWorld.users)) = RealWorld.findUserKeys (U__r.(RealWorld.users))
+          -> RealWorld.action_adversary_safe (RealWorld.findUserKeys (RealWorld.users U__r)) a__r)
+      -> R (strip_adversary U__ra b) U__i
+      -> forall a__r (U U__ra' : RealWorld.universe A B),
+          RealWorld.step_universe U (Action a__r) U__ra'
+          -> RealWorld.findUserKeys (RealWorld.users U) = RealWorld.findUserKeys (RealWorld.users U__ra)
+          -> RealWorld.action_adversary_safe (RealWorld.findUserKeys (RealWorld.users U__ra)) a__r.
+  Proof.
+    intros.
+
+    assert (RealWorld.action_adversary_safe (RealWorld.findUserKeys (RealWorld.users (strip_adversary U__ra b))) a__r)
+      as ADV_SAFE.
+    eapply H; eauto.
+    erewrite <- findUserKeys_same_stripped_univ; eauto.
+
+    erewrite findUserKeys_same_stripped_univ; eauto.
   Qed.
 
   Lemma simulates_start_ok_adding_adversary :
@@ -1667,7 +1670,8 @@ Section SingleAdversarySimulates.
     split; intros.
     eapply simulates_with_adversary_labeled; eauto.
 
-    split. admit.
+    split; intros.
+    eapply simulates_labeled_step_adversary_safe; eauto.
 
     eapply simulates_start_ok_adding_adversary; intuition eauto.
 

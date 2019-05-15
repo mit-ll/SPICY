@@ -568,6 +568,19 @@ Lemma adv_no_honest_keys_empty :
   invert H.
 Qed.
 
+Lemma Forall_app :
+  forall {A} (P : A -> Prop) (l : list A) a,
+    Forall P (l ++ [a]) <-> Forall P (a :: l).
+Proof.
+  split; intros;
+    rewrite Forall_forall in *; intros;
+      eapply H.
+  - apply in_or_app; invert H0; simpl; eauto.
+  - apply in_app_or in H0; split_ors; simpl; eauto.
+    destruct H0; subst; eauto.
+    invert H0.
+Qed.
+
 Definition message_queue_ok (msgs : queued_messages) (honestk : key_perms) :=
   Forall (fun sigm => match sigm with
                    | (existT _ _ m) =>
