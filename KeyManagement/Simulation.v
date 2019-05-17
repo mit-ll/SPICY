@@ -67,6 +67,197 @@ Inductive action_matches :
     -> action_matches rw iw
 .
 
+Section Hygiene.
+  Import RealWorld.
+
+  Inductive protocol_hygienic : forall {A}, list cipher_id -> user_cmd A -> Prop :=
+  (* | BindRecvHygienic : *)
+  (*     forall {A t} cs cs' (rec : user_cmd (message t)) (cmd : message t -> user_cmd A) msg pat, *)
+  (*       rec = Recv pat *)
+  (*       -> cs' = match msg with *)
+  (*               | Plaintext _ => cs' *)
+  (*               | KeyMessage _ => cs' *)
+  (*               | MsgPair m1 m2 => cs' *)
+  (*               | SignedCiphertext _ _ c_id => c_id :: cs *)
+  (*               | Signature m _ c_id => c_id :: cs *)
+  (*               end *)
+  (*       -> protocol_hygienic cs' (cmd msg) *)
+  (*       -> protocol_hygienic cs (Bind rec cmd) *)
+  | BindRecvHygienic :
+      forall {A t} cs (rec : user_cmd (message t)) (cmd : message t -> user_cmd A) pat,
+        rec = Recv pat
+        -> forall cs' msg,
+          cs' = match msg with
+                | SignedCiphertext _ _ c_id => c_id :: cs
+                | _ => cs
+                end
+          -> protocol_hygienic cs' (cmd msg)
+          -> protocol_hygienic cs (Bind rec cmd)
+  (* | BindRecvHygienic' : *)
+  (*     forall {A t} cs (rec : user_cmd (message t)) (cmd : message t -> user_cmd A) pat, *)
+  (*       rec = Recv pat *)
+  (*       -> (forall cs' msg, cs' = match msg with *)
+  (*                           | SignedCiphertext _ _ c_id => c_id :: cs *)
+  (*                           | _ => cs *)
+  (*                           end *)
+  (*                     -> protocol_hygienic cs' (cmd msg) *)
+  (*         ) *)
+  (*       -> protocol_hygienic cs (Bind rec cmd) *)
+  | BindHygienic :
+      forall {A B} cs (rec : user_cmd B) (cmd : B -> user_cmd A) b,
+        protocol_hygienic cs (cmd b)
+        -> protocol_hygienic cs (Bind rec cmd)
+  | ReturnHygienic : forall {A} cs (a : A),
+      protocol_hygienic cs (Return a)
+  | GenHygienic : forall cs,
+      protocol_hygienic cs Gen
+  | SendHygienic :
+      forall {t} cs (uid : user_id) (msg : message t),
+        protocol_hygienic cs (Send uid msg)
+  | RecvHygienic : forall {t} cs pat,
+      protocol_hygienic cs (@Recv t pat)
+  | SignEncryptHygienic : forall {t} cs (msg : message t) k__s k__e,
+      protocol_hygienic cs (SignEncrypt k__s k__e msg)
+  | DecryptHygienic : forall {t} cs msg k__s k__e c_id,
+      msg = SignedCiphertext k__s k__e c_id
+      -> List.In c_id cs
+      -> protocol_hygienic cs (@Decrypt t msg).
+
+  Hint Constructors protocol_hygienic.
+  Hint Extern 1 nat => exact 1.
+
+  Definition testHygProto1 := Gen.
+
+  Lemma testHygProto1_ok :
+    protocol_hygienic [] testHygProto1.
+  Proof.
+    intros; eauto.
+    Show Proof.
+  Qed.
+
+  Definition testHygProto2 := (_ <- Gen ; _ <- Gen ; n <- Gen ; Return n).
+
+  Lemma testHygProto2_ok :
+    protocol_hygienic [] testHygProto2.
+    econstructor; eauto.
+    Unshelve. auto.
+    Show Proof.
+  Qed.
+
+  Definition testHygProto3 := (n <- Gen ; m <- Recv Accept ; @Decrypt Nat m ).
+
+  Lemma testHygProto3_ok :
+    protocol_hygienic [] testHygProto3.
+    econstructor; auto.
+    econstructor; auto.
+    econstructor; simpl; auto.
+    simpl; auto.
+
+    Unshelve.  exact 1. exact 1. exact 1.
+    Show Proof.
+  Qed.
+
+  Definition testHygProto4 := (n <- Gen ; m <- Return (SignedCiphertext 1 2 3) ; @Decrypt Nat m ).
+
+  Lemma testHygProto4_ok :
+    protocol_hygienic [] testHygProto4.
+    econstructor; auto.
+    eapply BindHygienic; auto.
+    econstructor.
+    trivial.
+  Abort.
+
+  Definition testHygProto5 := (n <- Gen ; m1 <- Return (SignedCiphertext 1 2 3) ; m2 <- @Recv CipherId Accept ; @Decrypt Nat m1 ).
+
+  Lemma testHygProto5_ok :
+    protocol_hygienic [] testHygProto5.
+    econstructor; auto.
+    eapply BindHygienic.
+    econstructor.
+    trivial.
+    auto.
+    econstructor.
+    trivial.
+
+    Unshelve.
+    5:exact 3.
+    2:exact (SignedCiphertext 5 6 3).
+    simpl; auto.
+    exact 1.
+    exact 1.
+    Show Proof.
+  Qed.
+
+End Hygiene.
+
+(*   | BindRecvHygenic: forall {A t} (rec : user_cmd (message t)) (cmd : message t -> user_cmd A) cs, *)
+(*       match  *)
+(*       protocol_hygenic cs (Bind rec cmd) *)
+(*   . *)
+
+
+(*   | ReturnHygenic : forall {A} (a : A) cs, protocol_hygenic cs (Return a) *)
+(*   | BindHygenic: forall {A B} (cmd' : user_cmd B) (cmd : B -> user_cmd A) cs, *)
+(*       protocol_hygenic cs cmd' *)
+(*       -> protocol_hygenic cs (Bind cmd' cmd) *)
+(*   | GenHygenic : forall cs, protocol_hygenic cs Gen *)
+(*   | SendHygenic : forall {t} (uid : user_id) (msg : message t) cs, *)
+(*       protocol_hygenic cs (Send uid msg) *)
+(*   | RecvHygenic : forall {t} (pat : msg_pat) cs, *)
+(*       protocol_hygenic cs (Recv pat) *)
+(*   | SignEncryptHygenic : forall {t} (k__sign k__enc : key_permission) (msg : message t) cs, *)
+(*       protocol_hygenic cs (SignEncrypt k__sign k__enc msg) *)
+(*   | DecryptHygenic : forall {t} (msg : message CipherId) cs, *)
+(*       match msg with *)
+(*       |  *)
+
+(* | Sign    {t} (k : key_permission) (msg : message t) : user_cmd (message t) *)
+(* | Verify  {t} (k : key_permission) (msg : message t) : user_cmd bool *)
+
+(* | GenerateSymKey  (usage : key_usage) : user_cmd key_permission *)
+(* | GenerateAsymKey (usage : key_usage) : user_cmd key_permission *)
+
+(*   . *)
+
+(* (* Messaging *) *)
+(* | Send {t} (uid : user_id) (msg : message t) : user_cmd unit *)
+(* | Recv {t} (pat : msg_pat) : user_cmd (message t) *)
+
+(* (* Crypto!! *) *)
+(* | SignEncrypt {t} (k__sign k__enc : key_permission) (msg : message t) : user_cmd (message CipherId) *)
+(* | Decrypt {t} (msg : message CipherId) : user_cmd (message t) *)
+
+(* | Sign    {t} (k : key_permission) (msg : message t) : user_cmd (message t) *)
+(* | Verify  {t} (k : key_permission) (msg : message t) : user_cmd bool *)
+
+(* | GenerateSymKey  (usage : key_usage) : user_cmd key_permission *)
+(* | GenerateAsymKey (usage : key_usage) : user_cmd key_permission *)
+
+(*   . *)
+
+
+(* | Return {A : Type} (res : A) : user_cmd A *)
+(* | Bind {A A' : Type} (cmd1 : user_cmd A') (cmd2 : A' -> user_cmd A) : user_cmd A *)
+
+(* | Gen : user_cmd nat *)
+
+(* (* Messaging *) *)
+(* | Send {t} (uid : user_id) (msg : message t) : user_cmd unit *)
+(* | Recv {t} (pat : msg_pat) : user_cmd (message t) *)
+
+(* (* Crypto!! *) *)
+(* | SignEncrypt {t} (k__sign k__enc : key_permission) (msg : message t) : user_cmd (message CipherId) *)
+(* | Decrypt {t} (msg : message CipherId) : user_cmd (message t) *)
+
+(* | Sign    {t} (k : key_permission) (msg : message t) : user_cmd (message t) *)
+(* | Verify  {t} (k : key_permission) (msg : message t) : user_cmd bool *)
+
+(* | GenerateSymKey  (usage : key_usage) : user_cmd key_permission *)
+(* | GenerateAsymKey (usage : key_usage) : user_cmd key_permission *)
+
+
+(* End Hygene. *)
+
 Definition simulates {A B : Type}
            (R : RealWorld.universe A B -> IdealWorld.universe A -> Prop)
            (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A) :=
@@ -161,7 +352,7 @@ Section SingleAdversarySimulates.
     Definition msg_filter (sigM : { t & message t } ) : bool :=
       match sigM with
       (* | existT _ _ msg => msg_leaks_no_honest_keysb global_keys honestk cs msg *)
-      | existT _ _ msg => msg_honestly_signedb honestk msg
+      | existT _ _ msg => msg_honestly_signed honestk msg
       end.
 
     Definition clean_messages (msgs : queued_messages) :=
@@ -283,7 +474,7 @@ Section SingleAdversarySimulates.
       cases c; subst; rewrite <- honest_key_honest_keyb; eauto.
     Qed.
 
-    Hint Constructors msg_accepted_by_pattern msg_honestly_signed msg_contains_only_honest_public_keys.
+    Hint Constructors msg_accepted_by_pattern msg_contains_only_honest_public_keys.
 
     Lemma cipher_in_honest_ciphers_are_honestly_signed :
       forall cs c_id c honestk,
@@ -595,16 +786,13 @@ Section SingleAdversarySimulates.
       rewrite H2; trivial.
     Qed.
 
-
-
     Lemma clean_messages_keeps_honestly_signed :
       forall {t} (msg : message t) msgs honestk,
-        msg_honestly_signed honestk msg
+        msg_honestly_signed honestk msg = true
         -> clean_messages honestk (msgs ++ [existT _ _ msg])
           = clean_messages honestk msgs ++ [existT _ _ msg].
     Proof.
       intros; unfold clean_messages.
-      rewrite message_honestly_signed_message_honestly_signedb in *.
       induction msgs; simpl; eauto.
       - rewrite H; trivial.
       - cases (msg_filter honestk a); subst; eauto.
@@ -613,7 +801,7 @@ Section SingleAdversarySimulates.
 
     Lemma clean_messages_drops_not_honestly_signed :
       forall {t} (msg : message t) msgs honestk,
-        msg_honestly_signedb honestk msg = false
+        msg_honestly_signed honestk msg = false
         -> clean_messages honestk (msgs ++ [existT _ _ msg])
           = clean_messages honestk msgs.
     Proof.
@@ -624,19 +812,19 @@ Section SingleAdversarySimulates.
         rewrite IHmsgs; trivial.
     Qed.
 
+    Hint Extern 1 (honest_keyb _ _ = true) => rewrite <- honest_key_honest_keyb.
+    Hint Extern 1 (_ && _ = true) => rewrite andb_true_iff.
+
     Lemma accepted_safe_msg_pattern_honestly_signed :
       forall {t} (msg : message t) honestk pat,
         msg_pattern_safe honestk pat
         -> msg_accepted_by_pattern pat msg
-        -> msg_honestly_signed honestk msg.
+        -> msg_honestly_signed honestk msg = true.
     Proof.
       induction 2;
         match goal with
         | [ H : msg_pattern_safe _ _ |- _] => invert H
-        end; econstructor; eauto;
-          match goal with
-          | [ m1 : message ?t1 , m2 : message ?t2 |- message (Pair ?t1 ?t2) ] => exact (MsgPair m1 m2)
-          end.
+        end; simpl; eauto.
     Qed.
 
     Hint Resolve accepted_safe_msg_pattern_honestly_signed.
@@ -649,10 +837,10 @@ Section SingleAdversarySimulates.
           = (existT _ _ msg) :: clean_messages honestk msgs.
     Proof.
       intros.
-      assert (msg_honestly_signed honestk msg) by eauto.
+      assert (msg_honestly_signed honestk msg = true) by eauto.
       unfold clean_messages; simpl;
         match goal with
-        | [ H : msg_honestly_signed _ _ |- _ ] => rewrite message_honestly_signed_message_honestly_signedb in H; rewrite H
+        | [ H : msg_honestly_signed _ _ = _ |- _ ] => rewrite H
         end; trivial.
     Qed.
 
@@ -663,7 +851,6 @@ Section SingleAdversarySimulates.
     Proof.
       induction msg_heap; auto; intros.
       destruct a; invert H.
-      rewrite message_honestly_signed_message_honestly_signedb in H2.
       unfold clean_messages, msg_filter; simpl. rewrite H2. f_equal; eauto.
     Qed.
 
@@ -865,16 +1052,13 @@ Section SingleAdversarySimulates.
 
     Hint Resolve message_queues_ok_readd_user_same_msgs.
 
-    (* Lemma message_queue_ok_addnl_keys : *)
-    (*   forall msgs ks ks', *)
-    (*     message_queue_ok msgs ks *)
-    (*     -> message_queue_ok msgs (ks $k++ ks'). *)
-    (* Proof. *)
-    (*   induction 1; econstructor; eauto. *)
-    (*   destruct x; intros. *)
-    (*   apply message_contains_only_honest_public_keys_after_new_keys. *)
-    (*   apply H. *)
-
+    Ltac clean_context :=
+      try discriminate;
+      repeat
+        match goal with
+        | [ H : ?X = ?X |- _ ] => clear H
+        | [ H : Some _ = Some _ |- _ ] => invert H
+        end.
 
     Lemma message_queues_ok_after_silent_honest_step :
       forall {A B C} cs cs' (u_id : user_id) lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
@@ -892,7 +1076,7 @@ Section SingleAdversarySimulates.
                 -> message_queues_ok (usrs' $+ (u_id, {| key_heap := ks'; protocol := cmdc'; msg_heap := qmsgs' |}))
                                     (findUserKeys (usrs' $+ (u_id, {| key_heap := ks'; protocol := cmdc'; msg_heap := qmsgs' |}))).
     Proof.
-      induction 1; inversion 1; inversion 3; try discriminate; intros; subst;
+      induction 1; inversion 1; inversion 3; intros; subst; clean_context;
         try
           erewrite findUserKeys_readd_user_same_keys_idempotent' by eauto; eauto.
 
@@ -913,6 +1097,7 @@ Section SingleAdversarySimulates.
 
         (* need that no private keys are in msg unless they are honest *)
         admit.
+
     Admitted.
 
     Lemma honest_silent_step_advuniv_implies_univ_ok' :
@@ -1004,7 +1189,7 @@ Section SingleAdversarySimulates.
           eauto using adv_step_advuniv_implies_univ_ok'.
     Qed.
 
-    Lemma honest_silent_step_advuniv_implies_honest_step_origuniv :
+    Lemma honest_silent_step_advuniv_implies_honest_or_no_step_origuniv :
       forall {A B C} (u_id : user_id) cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
                 gks gks' ks ks' qmsgs qmsgs' bd bd' (b: B),
         step_user lbl u_id bd bd'
@@ -1028,14 +1213,53 @@ Section SingleAdversarySimulates.
                                ; msg_heap := adv'.(msg_heap) |}
               -> step_user lbl u_id
                           (usrs__s, pwless_adv, cs__s, gks, ks, clean_messages honestk qmsgs, cmd)
-                          (usrs__s', pwless_adv', cs__s', gks', ks', clean_messages honestk' qmsgs', cmd').
+                          (usrs__s', pwless_adv', cs__s', gks', ks', clean_messages honestk' qmsgs', cmd')
+              \/ (usrs__s, pwless_adv, cs__s, gks, ks, clean_messages honestk qmsgs, cmd)
+                = (usrs__s', pwless_adv', cs__s', gks', ks', clean_messages honestk' qmsgs', cmd')
+    .
+
     Proof.
-      induction 1; inversion 4; inversion 5; intros; subst; try discriminate;
-        econstructor; eauto.
+      induction 1; inversion 4; inversion 5; intros; subst; clean_context;
+        try solve [ left; econstructor; eauto ].
 
-      - admit. (* hrm. not proveable.  un-accepted message could be anything  *)
+      - remember (findUserKeys usrs) as honestk.
+        remember (findUserKeys usrs') as honestk'.
+        remember (clean_ciphers honestk cs) as cs__s.
+        remember (clean_ciphers honestk' cs') as cs__s'.
+        remember (clean_users honestk usrs) as usrs__s.
+        remember (clean_users honestk' usrs') as usrs__s'.
+        remember ({| key_heap := key_heap adv; protocol := Return b; msg_heap := msg_heap adv |})
+          as pwless_adv.
+        remember ({| key_heap := key_heap adv'; protocol := Return b; msg_heap := msg_heap adv' |})
+          as pwless_adv'.
+        assert (@Silent action = Silent) as SIL by trivial.
+        assert ((usrs,adv,cs,gks,ks,qmsgs,cmd1)=(usrs,adv,cs,gks,ks,qmsgs,cmd1)) as bd1 by trivial.
+        assert ((usrs',adv',cs',gks',ks',qmsgs',cmd1')=(usrs',adv',cs',gks',ks',qmsgs',cmd1')) as bd1' by trivial.
 
-      - assert (kp__sign = true) by eauto; subst.
+        specialize (IHstep_user _ _ _ _ _ _ _ _ _
+                                Heqhonestk
+                                Heqcs__s
+                                Hequsrs__s
+                                bd1
+                                H4
+                                _ _ _ _ _ _
+                                Heqhonestk'
+                                Heqcs__s'
+                                Hequsrs__s'
+                                bd1'
+                                SIL
+                                Heqpwless_adv
+                                Heqpwless_adv'
+                   ); split_ors.
+        + left; econstructor; eauto.
+        + right; invert H0; eauto.
+
+      - cases (msg_honestly_signed (findUserKeys usrs') msg).
+        + left. econstructor; eauto.
+          unfold clean_messages, msg_filter; simpl; rewrite Heq; eauto.
+        + right. simpl. rewrite Heq. trivial.
+
+      - left; econstructor; eauto; assert (kp__sign = true) by eauto; subst.
         eapply honest_enc_cipher_not_cleaned; eauto.
         unfold user_keys in *. cases (usrs' $? u_id); subst; try discriminate; invert H11.
         eapply findUserKeys_has_private_key_of_user; eauto.
@@ -1047,7 +1271,7 @@ Section SingleAdversarySimulates.
         (*   by eauto using ciphers_honestly_signed_mapsto. *)
         (* eapply clean_ciphers_keeps_honest_cipher; eauto. *)
 
-      - assert (kp = true) by eauto; subst.
+      - left; econstructor; eauto; assert (kp = true) by eauto; subst.
         eapply honest_sign_cipher_not_cleaned; eauto.
         unfold user_keys in *. cases (usrs' $? u_id); subst; try discriminate; invert H7.
         eapply findUserKeys_has_private_key_of_user; eauto.
@@ -1059,6 +1283,9 @@ Section SingleAdversarySimulates.
         (*   by eauto using ciphers_honestly_signed_mapsto. *)
         (* eapply clean_ciphers_keeps_honest_cipher; eauto. *)
     Admitted.
+
+
+
 
     Lemma honest_labeled_step_nochange_honestk :
       forall {A B C} cs cs' (u_id : user_id) lbl (usrs usrs' : honest_users A) (adv adv' : user_data B) gks gks' ks ks' qmsgs qmsgs' bd bd',
@@ -1080,7 +1307,7 @@ Section SingleAdversarySimulates.
           split_ands; intros.
 
       - erewrite findUserKeys_readd_user_addnl_keys; eauto.
-        assert (msg_honestly_signed (findUserKeys usrs') msg) by eauto.
+        assert (msg_honestly_signed (findUserKeys usrs') msg = true) by eauto.
         unfold message_queues_ok in *.
         assert (user_queue usrs' u_id = Some (existT _ _ msg :: qmsgs'))
           as UQ
@@ -1380,7 +1607,9 @@ Section SingleAdversarySimulates.
 
     Admitted.
 
-    Lemma silent_honest_step_advuniv_implies_stripped_univ_step :
+    Hint Extern 1 (user_keys _ _ = Some _ ) => unfold user_keys; context_map_rewrites.
+
+    Lemma silent_honest_step_advuniv_implies_stripped_univ_step_or_none :
       forall {A B} (U U' : universe A B) b (u_id : user_id) userData usrs adv cs gks ks qmsgs cmd,
         universe_ok U
         (* -> step_universe U Silent U' *)
@@ -1389,28 +1618,50 @@ Section SingleAdversarySimulates.
                     (build_data_step U userData)
                     (usrs, adv, cs, gks, ks, qmsgs, cmd)
         -> U' = buildUniverse usrs adv cs gks u_id {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmd |}
-        -> step_universe (strip_adversary U b) Silent (strip_adversary U' b).
+        -> step_universe (strip_adversary U b) Silent (strip_adversary U' b)
+        \/ strip_adversary U b = strip_adversary U' b.
     Proof.
       intros.
       subst; simpl.
       destruct U; unfold build_data_step in *; simpl in *.
-      eapply StepUser; eauto.
-      unfold build_data_step; simpl.
-      eapply honest_silent_step_advuniv_implies_honest_step_origuniv; eauto.
-      unfold user_keys; context_map_rewrites; eauto.
 
-      unfold strip_adversary, buildUniverse; simpl.
-      rewrite clean_users_add_pull; simpl.
+      remember H1 as RW. clear HeqRW.
+      eapply honest_silent_step_advuniv_implies_honest_or_no_step_origuniv in RW; eauto.
 
-      (* In order to resolve this, we will need to state that cleaning users and ciphers is the
-       * same in the presence of honest silent steps.  At first this is troubling, since silent
-       * steps can create keys (not implemented right now).  However, this will not be a problem,
-       * since there shouldn't be any ciphers signed by keys which have just been created.
-       *)
-      destruct userData; erewrite honest_silent_step_nochange_clean_ciphers; eauto; simpl in *.
-      erewrite honest_silent_step_nochange_clean_messages; eauto.
-      erewrite honest_silent_step_nochange_clean_users; eauto.
+      split_ors.
+      - left.
+        eapply StepUser; eauto.
+        unfold build_data_step; simpl.
+        + exact H2.
+        + unfold strip_adversary, buildUniverse; simpl.
+          rewrite clean_users_add_pull; simpl.
+          clear H2.
 
+          (* In order to resolve this, we will need to state that cleaning users and ciphers is the
+           * same in the presence of honest silent steps.  At first this is troubling, since silent
+           * steps can create keys (not implemented right now).  However, this will not be a problem,
+           * since there shouldn't be any ciphers signed by keys which have just been created.
+           *)
+          destruct userData.
+          erewrite honest_silent_step_nochange_clean_ciphers; eauto; simpl in *.
+          erewrite honest_silent_step_nochange_clean_messages; eauto.
+          erewrite honest_silent_step_nochange_clean_users; eauto.
+      - right.
+        unfold strip_adversary, buildUniverse; simpl.
+        destruct userData; invert H2.
+        assert (clean_users (findUserKeys users) users = clean_users (findUserKeys usrs) usrs)
+          by (apply map_eq_elements_eq; simpl; auto). clear H4.
+        f_equal.
+        + rewrite clean_users_add_pull; simpl.
+          erewrite honest_silent_step_nochange_clean_users; eauto.
+          rewrite H2.
+          erewrite honest_silent_step_nochange_clean_messages; eauto.
+          rewrite <- !H2.
+          apply map_eq_Equal; unfold Equal; intros.
+          cases (y ==n u_id); subst; clean_map_lookups; trivial.
+          eapply clean_users_cleans_user; eauto.
+          simpl. rewrite H10; trivial.
+        + erewrite honest_silent_step_nochange_clean_ciphers; eauto.
     Qed.
 
     Lemma labeled_honest_step_advuniv_implies_stripped_univ_step :
@@ -1512,7 +1763,7 @@ Section SingleAdversarySimulates.
       apply map_eq_Equal; unfold Equal; intros.
       cases (y ==n rec_u_id); subst; clean_map_lookups; eauto.
 
-      assert (msg_honestly_signedb (findUserKeys usrs) msg = false) by admit.
+      assert (msg_honestly_signed (findUserKeys usrs) msg = false) by admit.
       rewrite clean_messages_drops_not_honestly_signed; auto.
       erewrite clean_users_cleans_user; eauto.
 
@@ -1611,17 +1862,19 @@ Section SingleAdversarySimulates.
     - remember (RealWorld.buildUniverse usrs adv cs gks u_id
                                         {| RealWorld.key_heap := ks ; RealWorld.msg_heap := qmsgs ; RealWorld.protocol := cmd |})
                as U__ra'.
-      assert (rstepSilent (strip_adversary U__ra b) (strip_adversary U__ra' b))
-        as UNIV_STEP.
-      eapply silent_honest_step_advuniv_implies_stripped_univ_step; eauto.
 
-      specialize (H _ _ H1 STRIP_UNIV_OK _ UNIV_STEP).
-      repeat match goal with
-             | [ H : exists _, _ |- _ ] => destruct H
-             | [ H : _ /\ _ |- _ ] => destruct H
-             end.
-      unfold RealWorld.universe_ok in *.
-      eexists; eauto.
+      pose proof (silent_honest_step_advuniv_implies_stripped_univ_step_or_none b H0 H4 H5 HeqU__ra'); split_ors.
+
+      + specialize (H _ _ H1 STRIP_UNIV_OK _ H2).
+        repeat match goal with
+               | [ H : exists _, _ |- _ ] => destruct H
+               | [ H : _ /\ _ |- _ ] => destruct H
+               end.
+        unfold RealWorld.universe_ok in *.
+        eexists; eauto.
+
+      + exists U__i; intuition idtac; eauto.
+        rewrite <- H2; trivial.
 
     (* Adversary step *)
     - exists U__i; intuition idtac.
