@@ -70,10 +70,6 @@ Inductive action_matches :
 Section Hygiene.
   Import RealWorld.
 
-  Inductive protocol_hygienic : forall {A}, list cipher_id -> user_cmd A -> Prop :=
-  (* | BindRecvHygienic : *)
-  (*     forall {A t} cs cs' (rec : user_cmd (message t)) (cmd : message t -> user_cmd A) msg pat, *)
-  (*       rec = Recv pat *)
   (*       -> cs' = match msg with *)
   (*               | Plaintext _ => cs' *)
   (*               | KeyMessage _ => cs' *)
@@ -81,50 +77,43 @@ Section Hygiene.
   (*               | SignedCiphertext _ _ c_id => c_id :: cs *)
   (*               | Signature m _ c_id => c_id :: cs *)
   (*               end *)
-  (*       -> protocol_hygienic cs' (cmd msg) *)
-  (*       -> protocol_hygienic cs (Bind rec cmd) *)
+  Definition ciphers_of {t} (msg : message t) : list cipher_id :=
+    match msg with
+    | SignedCiphertext _ _ c_id => [c_id]
+    | Signature _ _ c_id        => [c_id]
+    | _                         => []
+    end.
+
+  Inductive protocol_hygienic (cs : list cipher_id): forall {A}, user_cmd A -> Prop :=
   | BindRecvHygienic :
-      forall {A t} cs (rec : user_cmd (message t)) (cmd : message t -> user_cmd A) pat,
+      forall {A t} (rec : user_cmd (message t)) (cmd : message t -> user_cmd A) pat,
         rec = Recv pat
-        -> forall cs' msg,
-          cs' = match msg with
-                | SignedCiphertext _ _ c_id => c_id :: cs
-                | _ => cs
-                end
-          -> protocol_hygienic cs' (cmd msg)
-          -> protocol_hygienic cs (Bind rec cmd)
-  (* | BindRecvHygienic' : *)
-  (*     forall {A t} cs (rec : user_cmd (message t)) (cmd : message t -> user_cmd A) pat, *)
-  (*       rec = Recv pat *)
-  (*       -> (forall cs' msg, cs' = match msg with *)
-  (*                           | SignedCiphertext _ _ c_id => c_id :: cs *)
-  (*                           | _ => cs *)
-  (*                           end *)
-  (*                     -> protocol_hygienic cs' (cmd msg) *)
-  (*         ) *)
-  (*       -> protocol_hygienic cs (Bind rec cmd) *)
-  | BindHygienic :
-      forall {A B} cs (rec : user_cmd B) (cmd : B -> user_cmd A) b,
+        -> (forall cs' msg,
+              cs' = ciphers_of msg ++ cs
+              -> protocol_hygienic cs' (cmd msg)
+          )
+        -> protocol_hygienic cs (Bind rec cmd)
+  | BindHygienic : forall {A B} (rec : user_cmd B) (cmd : B -> user_cmd A) b,
         protocol_hygienic cs (cmd b)
         -> protocol_hygienic cs (Bind rec cmd)
-  | ReturnHygienic : forall {A} cs (a : A),
+  | ReturnHygienic : forall {A} (a : A),
       protocol_hygienic cs (Return a)
-  | GenHygienic : forall cs,
+  | GenHygienic :
       protocol_hygienic cs Gen
-  | SendHygienic :
-      forall {t} cs (uid : user_id) (msg : message t),
-        protocol_hygienic cs (Send uid msg)
-  | RecvHygienic : forall {t} cs pat,
+  | SendHygienic : forall {t} (uid : user_id) (msg : message t),
+      protocol_hygienic cs (Send uid msg)
+  | RecvHygienic : forall {t} pat,
       protocol_hygienic cs (@Recv t pat)
-  | SignEncryptHygienic : forall {t} cs (msg : message t) k__s k__e,
+  | SignEncryptHygienic : forall {t} (msg : message t) k__s k__e,
       protocol_hygienic cs (SignEncrypt k__s k__e msg)
-  | DecryptHygienic : forall {t} cs msg k__s k__e c_id,
+  | DecryptHygienic : forall {t} msg k__s k__e c_id,
       msg = SignedCiphertext k__s k__e c_id
       -> List.In c_id cs
       -> protocol_hygienic cs (@Decrypt t msg).
 
   Hint Constructors protocol_hygienic.
   Hint Extern 1 nat => exact 1.
+  Hint Extern 1 key_identifier => exact 1.
 
   Definition testHygProto1 := Gen.
 
@@ -144,16 +133,18 @@ Section Hygiene.
     Show Proof.
   Qed.
 
-  Definition testHygProto3 := (n <- Gen ; m <- Recv Accept ; @Decrypt Nat m ).
+  Definition testHygProto3 := (n <- Gen ; m <- Recv Accept ; match m with
+                                                           | SignedCiphertext _ _ _ => @Decrypt Nat m
+                                                           | _                      => Return (Plaintext 1)
+                                                           end).
 
   Lemma testHygProto3_ok :
     protocol_hygienic [] testHygProto3.
     econstructor; auto.
     econstructor; auto.
-    econstructor; simpl; auto.
-    simpl; auto.
-
-    Unshelve.  exact 1. exact 1. exact 1.
+    intros; eauto.
+    dependent destruction msg; eauto.
+    econstructor; simpl; auto. simpl in *; subst; eauto.
     Show Proof.
   Qed.
 
@@ -175,88 +166,12 @@ Section Hygiene.
     eapply BindHygienic.
     econstructor.
     trivial.
-    auto.
-    econstructor.
-    trivial.
-
-    Unshelve.
-    5:exact 3.
-    2:exact (SignedCiphertext 5 6 3).
-    simpl; auto.
-    exact 1.
-    exact 1.
-    Show Proof.
-  Qed.
+    intros.
+    dependent destruction msg; simpl in *.
+    econstructor. trivial.
+  Abort.
 
 End Hygiene.
-
-(*   | BindRecvHygenic: forall {A t} (rec : user_cmd (message t)) (cmd : message t -> user_cmd A) cs, *)
-(*       match  *)
-(*       protocol_hygenic cs (Bind rec cmd) *)
-(*   . *)
-
-
-(*   | ReturnHygenic : forall {A} (a : A) cs, protocol_hygenic cs (Return a) *)
-(*   | BindHygenic: forall {A B} (cmd' : user_cmd B) (cmd : B -> user_cmd A) cs, *)
-(*       protocol_hygenic cs cmd' *)
-(*       -> protocol_hygenic cs (Bind cmd' cmd) *)
-(*   | GenHygenic : forall cs, protocol_hygenic cs Gen *)
-(*   | SendHygenic : forall {t} (uid : user_id) (msg : message t) cs, *)
-(*       protocol_hygenic cs (Send uid msg) *)
-(*   | RecvHygenic : forall {t} (pat : msg_pat) cs, *)
-(*       protocol_hygenic cs (Recv pat) *)
-(*   | SignEncryptHygenic : forall {t} (k__sign k__enc : key_permission) (msg : message t) cs, *)
-(*       protocol_hygenic cs (SignEncrypt k__sign k__enc msg) *)
-(*   | DecryptHygenic : forall {t} (msg : message CipherId) cs, *)
-(*       match msg with *)
-(*       |  *)
-
-(* | Sign    {t} (k : key_permission) (msg : message t) : user_cmd (message t) *)
-(* | Verify  {t} (k : key_permission) (msg : message t) : user_cmd bool *)
-
-(* | GenerateSymKey  (usage : key_usage) : user_cmd key_permission *)
-(* | GenerateAsymKey (usage : key_usage) : user_cmd key_permission *)
-
-(*   . *)
-
-(* (* Messaging *) *)
-(* | Send {t} (uid : user_id) (msg : message t) : user_cmd unit *)
-(* | Recv {t} (pat : msg_pat) : user_cmd (message t) *)
-
-(* (* Crypto!! *) *)
-(* | SignEncrypt {t} (k__sign k__enc : key_permission) (msg : message t) : user_cmd (message CipherId) *)
-(* | Decrypt {t} (msg : message CipherId) : user_cmd (message t) *)
-
-(* | Sign    {t} (k : key_permission) (msg : message t) : user_cmd (message t) *)
-(* | Verify  {t} (k : key_permission) (msg : message t) : user_cmd bool *)
-
-(* | GenerateSymKey  (usage : key_usage) : user_cmd key_permission *)
-(* | GenerateAsymKey (usage : key_usage) : user_cmd key_permission *)
-
-(*   . *)
-
-
-(* | Return {A : Type} (res : A) : user_cmd A *)
-(* | Bind {A A' : Type} (cmd1 : user_cmd A') (cmd2 : A' -> user_cmd A) : user_cmd A *)
-
-(* | Gen : user_cmd nat *)
-
-(* (* Messaging *) *)
-(* | Send {t} (uid : user_id) (msg : message t) : user_cmd unit *)
-(* | Recv {t} (pat : msg_pat) : user_cmd (message t) *)
-
-(* (* Crypto!! *) *)
-(* | SignEncrypt {t} (k__sign k__enc : key_permission) (msg : message t) : user_cmd (message CipherId) *)
-(* | Decrypt {t} (msg : message CipherId) : user_cmd (message t) *)
-
-(* | Sign    {t} (k : key_permission) (msg : message t) : user_cmd (message t) *)
-(* | Verify  {t} (k : key_permission) (msg : message t) : user_cmd bool *)
-
-(* | GenerateSymKey  (usage : key_usage) : user_cmd key_permission *)
-(* | GenerateAsymKey (usage : key_usage) : user_cmd key_permission *)
-
-
-(* End Hygene. *)
 
 Definition simulates {A B : Type}
            (R : RealWorld.universe A B -> IdealWorld.universe A -> Prop)
