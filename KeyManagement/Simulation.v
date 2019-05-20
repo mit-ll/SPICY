@@ -109,7 +109,13 @@ Section Hygiene.
   | DecryptHygienic : forall {t} msg k__s k__e c_id,
       msg = SignedCiphertext k__s k__e c_id
       -> List.In c_id cs
-      -> protocol_hygienic cs (@Decrypt t msg).
+      -> protocol_hygienic cs (@Decrypt t msg)
+  | SignHygienic : forall {t} (msg : message t) k,
+      protocol_hygienic cs (Sign k msg)
+  | VerifyHygienic : forall {t} msg msg' k kp c_id,
+      msg = Signature msg' k c_id
+      -> List.In c_id cs
+      -> protocol_hygienic cs (@Verify t kp msg).
 
   Hint Constructors protocol_hygienic.
   Hint Extern 1 nat => exact 1.
@@ -199,7 +205,6 @@ Definition simulates {A B : Type}
             /\ IdealWorld.lstep_universe U__i' (Action a2) U__i''
             /\ action_matches a1 a2
             /\ R U__r' U__i''
-            (* /\ RealWorld.action_adversary_safe U__r.(RealWorld.all_keys) (RealWorld.findUserKeys U__r.(RealWorld.users)) U__r.(RealWorld.all_ciphers) a1 *)
             /\ RealWorld.universe_ok U__r'
   )
 
