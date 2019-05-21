@@ -196,47 +196,34 @@ Section SafeMessages.
     | _ => false
     end.
 
-  (* Lemma message_honestly_signed_message_honestly_signedb : *)
-  (*   forall {t} (msg : message t), *)
-  (*     msg_honestly_signed msg <-> msg_honestly_signedb msg = true. *)
-  (* Proof. *)
-  (*   split. *)
-  (*   - induction 1; unfold msg_honestly_signedb; *)
-  (*       try rewrite <- honest_key_honest_keyb; simpl; auto. *)
-  (*     fold (@msg_honestly_signedb t1); fold (@msg_honestly_signedb t2). *)
-  (*     apply andb_true_intro; eauto. *)
-  (*   - induction msg; unfold msg_honestly_signedb; intros; try discriminate. *)
-  (*     + apply andb_prop in H; split_ands; econstructor; eauto. *)
-  (*       exact (MsgPair msg1 msg2). *)
-  (*     + econstructor; rewrite honest_key_honest_keyb; auto. *)
-  (*     + econstructor; rewrite honest_key_honest_keyb; auto. *)
-  (* Qed. *)
-
   Definition cipher_honestly_signed (c : cipher) : bool :=
     match c with
     | SigCipher k_id _              => honest_keyb k_id
     | SigEncCipher k__signid k__encid _ => honest_keyb k__signid
     end.
 
-  Inductive ciphers_honestly_signed : ciphers -> Prop :=
-  | Empty_Ciphers_Signed : ciphers_honestly_signed $0
-  | Add_Cipher_Signed (c_id : cipher_id) (c : cipher) (cs : ciphers) :
-      cipher_honestly_signed c = true
-      -> ciphers_honestly_signed cs
-      -> ciphers_honestly_signed ( cs $+ (c_id,c) ).
+  Definition ciphers_honestly_signed :=
+    Forall_natmap (fun c => cipher_honestly_signed c = true).
 
-  Lemma ciphers_honestly_signed_mapsto :
-    forall cs c_id c,
-      ciphers_honestly_signed cs
-      -> MapsTo c_id c cs
-      -> cipher_honestly_signed c = true.
-  Proof.
-    induction 1; intros.
-    - rewrite empty_mapsto_iff in H; contradiction.
-    - rewrite find_mapsto_iff in H1.
-      cases (c_id ==n c_id0); subst; clean_map_lookups; eauto.
-      rewrite <- find_mapsto_iff in H1; auto.
-  Qed.
+  (* Inductive ciphers_honestly_signed : ciphers -> Prop := *)
+  (* | Empty_Ciphers_Signed : ciphers_honestly_signed $0 *)
+  (* | Add_Cipher_Signed (c_id : cipher_id) (c : cipher) (cs : ciphers) : *)
+  (*     cipher_honestly_signed c = true *)
+  (*     -> ciphers_honestly_signed cs *)
+  (*     -> ciphers_honestly_signed ( cs $+ (c_id,c) ). *)
+
+  (* Lemma ciphers_honestly_signed_mapsto : *)
+  (*   forall cs c_id c, *)
+  (*     ciphers_honestly_signed cs *)
+  (*     -> MapsTo c_id c cs *)
+  (*     -> cipher_honestly_signed c = true. *)
+  (* Proof. *)
+  (*   induction 1; intros. *)
+  (*   - rewrite empty_mapsto_iff in H; contradiction. *)
+  (*   - rewrite find_mapsto_iff in H1. *)
+  (*     cases (c_id ==n c_id0); subst; clean_map_lookups; eauto. *)
+  (*     rewrite <- find_mapsto_iff in H1; auto. *)
+  (* Qed. *)
 
   Definition message_queue_safe : queued_messages -> Prop :=
     Forall (fun m => match m with | existT _ _ msg => msg_honestly_signed msg = true end).
@@ -256,8 +243,7 @@ Section SafeMessages.
 End SafeMessages.
 
 Hint Constructors honest_key
-     msg_pattern_safe
-     ciphers_honestly_signed.
+     msg_pattern_safe.
 
 Lemma cipher_honestly_signed_proper :
   Proper (eq ==> eq ==> eq) (fun _ : NatMap.key => cipher_honestly_signed).
@@ -279,11 +265,11 @@ Inductive user_cmd : Type -> Type :=
 | Recv {t} (pat : msg_pat) : user_cmd (message t)
 
 (* Crypto!! *)
-| SignEncrypt {t} (k__sign k__enc : key_permission) (msg : message t) : user_cmd (message CipherId)
+| SignEncrypt {t} (k__sign k__enc : key_identifier) (msg : message t) : user_cmd (message CipherId)
 | Decrypt {t} (msg : message CipherId) : user_cmd (message t)
 
-| Sign    {t} (k : key_permission) (msg : message t) : user_cmd (message t)
-| Verify  {t} (k : key_permission) (msg : message t) : user_cmd bool
+| Sign    {t} (k : key_identifier) (msg : message t) : user_cmd (message t)
+| Verify  {t} (k : key_identifier) (msg : message t) : user_cmd bool
 
 | GenerateSymKey  (usage : key_usage) : user_cmd key_permission
 | GenerateAsymKey (usage : key_usage) : user_cmd key_permission
@@ -1237,35 +1223,6 @@ Section KeyMergeTheorems.
 
 End KeyMergeTheorems.
 
-Definition sign_if_ok (c : cipher) (kt : key_type) (k : key_permission) : option cipher :=
-  if snd k then Some c else None.
-  (* match (kt,k) with *)
-  (* | (SymKey,  (_, _))     => Some c *)
-  (* | (AsymKey, (_, true))  => Some c *)
-  (* | (AsymKey, (_, false)) => None *)
-  (* end. *)
-
-Definition encryptMessage {t} (ks : keys) (k__sign k__enc : key_permission) (m : message t) : option cipher :=
-  match (ks $? fst k__sign, ks $? fst k__enc) with
-  | (Some (MkCryptoKey _ Signing kt__sign), Some (MkCryptoKey _ Encryption kt__enc)) =>
-    sign_if_ok (SigEncCipher (fst k__sign) (fst k__enc) m) kt__sign k__sign
-  | _ => None
-  end.
-
-Definition signMessage {t} (ks : keys) (k : key_permission) (m : message t) : option cipher :=
-  match ks $? fst k with
-  | Some (MkCryptoKey _ Signing kt)     =>
-    sign_if_ok (SigCipher (fst k) m) kt k
-  | _ => None
-  end.
-
-Definition canVerifySignature {A} (cs : ciphers) (usrDat : user_data A) (c_id : cipher_id) : Prop :=
-  forall t (m : message t) k_id k ,
-    cs $? c_id = Some (SigCipher k_id m)
-    (*  Make sure that the user has access to the key.  If we are doing asymmetric signatures,
-        we only need the public part of the key, so no additional checks necessary! *)
-    /\ usrDat.(key_heap) $? k_id = Some k.
-
 Definition buildUniverse {A B}
            (usrs : honest_users A) (adv : user_data B) (cs : ciphers) (ks : keys)
            (u_id : user_id) (userData : user_data A) : universe A B :=
@@ -1295,19 +1252,6 @@ Definition unSig {t} (msg : message t) : option (message t) :=
   | Signature m _ _ => Some m
   | _               => None
   end.
-
-(* Definition unPair {t1 t2} (msg : message (Pair t1 t2)) : option (message t1 * message t2)  := *)
-(*   match msg *)
-(*         in (message t) *)
-(*         (* return (match t with _ => option (message t1 * message t2) end) *) *)
-(*         return (match t with *)
-(*                 | Pair t1 t2 => option (message t1 * message t2) *)
-(*                 | _ => option (message t1 * message t2) end) *)
-(*   with *)
-(*   | MsgPair m1 m2 => Some (m1,m2) *)
-(*   | _             => None *)
-(*   end. *)
-
 
 Inductive action : Type :=
 | Input  t (msg : message t) (pat : msg_pat) (uks : key_perms)
@@ -1387,26 +1331,26 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
 
 (* Encryption / Decryption *)
 | StepEncrypt : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs cs' u_id gks ks qmsgs (msg : message t)
-                  k__sign k__enc k__signid k__encid kp__sign kp__enc c_id cipherMsg,
-      k__sign = (k__signid, kp__sign)
-    -> k__enc  = (k__encid, kp__enc)
-    -> ks $? k__signid = Some (kp__sign)
-    -> ks $? k__encid = Some (kp__enc)
+                   k__signid k__encid kp__enc kt__enc kt__sign c_id cipherMsg,
+      gks $? k__encid  = Some (MkCryptoKey k__encid Encryption kt__enc)
+    -> gks $? k__signid = Some (MkCryptoKey k__signid Signing kt__sign)
+    -> ks $? k__encid   = Some kp__enc
+    -> ks $? k__signid  = Some true
     -> ~ In c_id cs
     -> keys_mine ks (findKeys msg)
-    -> encryptMessage gks k__sign k__enc msg = Some cipherMsg
+    -> cipherMsg = SigEncCipher k__signid k__encid msg
     -> cs' = cs $+ (c_id, cipherMsg)
     -> step_user Silent u_id
-                (usrs, adv, cs , gks, ks, qmsgs, SignEncrypt k__sign k__enc msg)
+                (usrs, adv, cs , gks, ks, qmsgs, SignEncrypt k__signid k__encid msg)
                 (usrs, adv, cs', gks, ks, qmsgs, Return (SignedCiphertext k__signid k__encid c_id))
 
 | StepDecrypt : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks ks' qmsgs (msg : message t)
                   k__signid kp__sign k__encid c_id newkeys kt__sign kt__enc,
-      cs $? c_id = Some (SigEncCipher k__signid k__encid msg)
-    -> gks $? k__encid = Some (MkCryptoKey k__encid Encryption kt__enc)
+      cs $? c_id     = Some (SigEncCipher k__signid k__encid msg)
+    -> gks $? k__encid  = Some (MkCryptoKey k__encid Encryption kt__enc)
     -> gks $? k__signid = Some (MkCryptoKey k__signid Signing kt__sign)
-    -> ks $? k__signid = Some kp__sign
-    -> ks $? k__encid = Some true
+    -> ks  $? k__encid  = Some true
+    -> ks  $? k__signid = Some kp__sign
     -> findKeys msg = newkeys
     -> ks' = ks $k++ newkeys
     -> step_user Silent u_id
@@ -1414,25 +1358,23 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
                 (usrs, adv, cs, gks, ks', qmsgs, Return msg)
 
 (* Signing / Verification *)
-| StepSign : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs cs' u_id gks ks qmsgs (msg : message t) kp k_id c_id cipherMsg,
-      ks $? k_id = Some kp
-    -> ~(In c_id cs)
-    -> signMessage gks (k_id,kp) msg = Some cipherMsg
+| StepSign : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs cs' u_id gks ks qmsgs (msg : message t) k_id kt c_id cipherMsg,
+      gks $? k_id = Some (MkCryptoKey k_id Signing kt)
+    -> ks  $? k_id = Some true
+    -> ~ In c_id cs
+    -> cipherMsg = SigCipher k_id msg
     -> cs' = cs $+ (c_id, cipherMsg)
     -> step_user Silent u_id
-                (usrs, adv, cs , gks, ks, qmsgs, Sign (k_id,kp) msg)
+                (usrs, adv, cs , gks, ks, qmsgs, Sign k_id msg)
                 (usrs, adv, cs', gks, ks, qmsgs, Return (Signature msg k_id c_id))
 
-| StepVerify : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks qmsgs (msg : message t) k_id kp c_id,
-    (* k is in your key heap *)
-      ks $? k_id = Some kp
-    (* return true or false whether k was used to sign the message *)
+| StepVerify : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks qmsgs (msg : message t) k_id kp kt c_id,
+      gks $? k_id = Some (MkCryptoKey k_id Signing kt)
+    -> ks  $? k_id = Some kp
     -> cs $? c_id = Some (SigCipher k_id msg)
-    (* -> findKeys msg = newkeys *)
     -> step_user Silent u_id
-                (usrs, adv, cs, gks, ks, qmsgs, (Verify (k_id,kp) (Signature msg k_id c_id)))
+                (usrs, adv, cs, gks, ks, qmsgs, (Verify k_id (Signature msg k_id c_id)))
                 (usrs, adv, cs, gks, ks, qmsgs, Return true)
-                (* (usrs, adv, cs, ks, qmsgs, Return (if (k_id ==n (keyId k)) then true else false)) *)
 .
 
 (* Key creation *)

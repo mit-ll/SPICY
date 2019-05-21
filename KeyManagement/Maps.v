@@ -396,6 +396,28 @@ Section MapLemmas.
 
 End MapLemmas.
 
+Section MapPredicates.
+  Variable V : Type.
+  Variable P : V -> Prop.
+
+  Inductive Forall_natmap : NatMap.t V -> Prop :=
+  | Empty_Natmap : Forall_natmap $0
+  | Add_Natmap k v (m : NatMap.t V) :
+      P v
+      -> Forall_natmap m
+      -> Forall_natmap ( m $+ (k,v)).
+
+  Lemma Forall_natmap_in_prop :
+    forall k v m,
+      Forall_natmap m
+      -> m $? k = Some v
+      -> P v.
+  Proof.
+    induction 1; contra_map_lookup.
+    cases (k ==n k0); intros; subst; clean_map_lookups; auto.
+  Qed.
+
+End MapPredicates.
 
 Ltac Equal_eq :=
   repeat
