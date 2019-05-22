@@ -37,11 +37,6 @@ Defined.
 
 Definition key_permission : Set := key_identifier * bool.
 
-(* Record key_permission := *)
-(*   MkKeyPerm { key_ref            : key_identifier *)
-(*             ; has_private_access : bool *)
-(*             }. *)
-
 Lemma key_permission_eq_dec :
   forall kp1 kp2 : key_permission, { kp1 = kp2 } + { kp1 <> kp2 }.
   decide equality; auto using Nat.eq_dec, Bool.bool_dec.
@@ -104,6 +99,7 @@ Definition queued_messages := list (sigT message).
 Definition keys            := NatMap.t key.
 Definition key_perms       := NatMap.t bool.
 Definition ciphers         := NatMap.t cipher.
+Definition my_ciphers      := list cipher_id.
 
 Inductive msg_accepted_by_pattern : forall {t : type}, msg_pat -> message t -> Prop :=
 | MsgAccept : forall {t} (m : message t),
@@ -196,6 +192,12 @@ Section SafeMessages.
     | _ => false
     end.
 
+  Definition keys_mine (my_perms key_perms: key_perms) : Prop :=
+    forall k_id kp,
+      key_perms $? k_id = Some kp
+    ->  my_perms $? k_id = Some kp
+    \/ (my_perms $? k_id = Some true /\ kp = false).
+
   Definition cipher_honestly_signed (c : cipher) : bool :=
     match c with
     | SigCipher k_id _              => honest_keyb k_id
@@ -204,6 +206,7 @@ Section SafeMessages.
 
   Definition ciphers_honestly_signed :=
     Forall_natmap (fun c => cipher_honestly_signed c = true).
+
 
   (* Inductive ciphers_honestly_signed : ciphers -> Prop := *)
   (* | Empty_Ciphers_Signed : ciphers_honestly_signed $0 *)
@@ -291,6 +294,7 @@ Record user_data (A : Type) :=
       key_heap : key_perms
     ; protocol : user_cmd A
     ; msg_heap : queued_messages
+    ; c_heap   : my_ciphers
     }.
 
 Definition honest_users A := user_list (user_data A).
@@ -373,26 +377,15 @@ Hint Resolve
      add_key_perm_proper       add_key_perm_transpose
      add_key_perm_proper_Equal add_key_perm_transpose_Equal.
 
-Fixpoint findKeys {t} (msg : message t) : key_perms :=
-  match msg with
-  | Plaintext _            => $0
-  | KeyMessage k           => $0 $+ (fst k, snd k)
-  | MsgPair msg1 msg2      => findKeys msg1 $k++ findKeys msg2
-  | SignedCiphertext _ _ _ => $0
-  | Signature m _ _        => findKeys m
-  end.
-
-Definition keys_mine (my_perms key_perms: key_perms) : Prop :=
-  forall k_id kp,
-      key_perms $? k_id = Some kp
-    ->  my_perms $? k_id = Some kp
-    \/ (my_perms $? k_id = Some true /\ kp = false).
 
 Definition findUserKeys {A} (us : user_list (user_data A)) : key_perms :=
   fold (fun u_id u ks => ks $k++ u.(key_heap)) us $0.
 
 Definition addUserKeys {A} (ks : key_perms) (u : user_data A) : user_data A :=
-  {| key_heap := u.(key_heap) $k++ ks ; protocol := u.(protocol) ; msg_heap := u.(msg_heap) |}.
+  {| key_heap := u.(key_heap) $k++ ks
+   ; protocol := u.(protocol)
+   ; msg_heap := u.(msg_heap)
+   ; c_heap   := u.(c_heap) |}.
 
 Definition addUsersKeys {A} (us : user_list (user_data A)) (ks : key_perms) : user_list (user_data A) :=
   map (addUserKeys ks) us.
@@ -407,7 +400,6 @@ Definition adv_no_honest_keys (honestk advk : key_perms) : Prop :=
 Definition is_powerless {B} (usr : user_data B) (b: B) (honestk : key_perms): Prop :=
   adv_no_honest_keys honestk usr.(key_heap)
 /\ usr.(protocol) = Return b.
-(* /\ usr.(msg_heap) = []. *)
 
 Lemma adv_no_honest_keys_empty :
   forall honestk,
@@ -432,11 +424,109 @@ Proof.
     invert H0.
 Qed.
 
+Lemma Forall_dup :
+  forall {A} (P : A -> Prop) (l : list A) a,
+    Forall P (a :: a :: l) <-> Forall P (a :: l).
+Proof.
+  split; intros;
+    rewrite Forall_forall in *; intros;
+      eapply H;
+      apply in_inv in H0; split_ors; subst; simpl; eauto.
+Qed.
+
 Definition message_queue_ok (msgs : queued_messages) (honestk : key_perms) :=
   Forall (fun sigm => match sigm with
                    | (existT _ _ m) =>
                      msg_honestly_signed honestk m = true -> msg_contains_only_honest_public_keys honestk m
                    end) msgs.
+
+Fixpoint findKeys {t} (msg : message t) : key_perms :=
+  match msg with
+  | Plaintext _            => $0
+  | KeyMessage k           => $0 $+ (fst k, snd k)
+  | MsgPair msg1 msg2      => findKeys msg1 $k++ findKeys msg2
+  | SignedCiphertext _ _ _ => $0
+  | Signature m _ _        => findKeys m
+  end.
+
+Fixpoint findCiphers {t} (msg : message t) : my_ciphers :=
+  match msg with
+  | Plaintext _            => []
+  | KeyMessage _           => []
+  | MsgPair msg1 msg2      => findCiphers msg1 ++ findCiphers msg2
+  | SignedCiphertext _ _ c => [c]
+  | Signature m _ c        => c :: findCiphers m
+  end.
+
+Inductive user_cipher_queue_safe (honestk : key_perms) (cs : ciphers) : my_ciphers -> Prop :=
+| EmptyQueueSafe : user_cipher_queue_safe honestk cs []
+| ConsQueueSafe  : forall cid cids c,
+    user_cipher_queue_safe honestk cs cids
+    (* -> ~ List.In cid cids *)
+    -> cs $? cid = Some c
+    -> cipher_honestly_signed honestk c = true
+    -> (forall {t} k__s k__e (msg : message t),
+          c = SigEncCipher k__s k__e msg
+          -> keys_mine honestk (findKeys msg)
+          /\ incl (findCiphers msg) cids)
+    -> user_cipher_queue_safe honestk cs (cid :: cids).
+
+
+Lemma cons_app_split :
+  forall {A} (l l1 l2 : list A) a,
+    a :: l = l1 ++ l2
+    -> (l1 = [] /\ l2 = a :: l)
+    \/ (exists l1', l1 = a :: l1' /\ l = l1' ++ l2).
+Proof.
+  destruct l1; eauto; intros.
+
+  right. invert H.
+  eexists; eauto.
+Qed.
+
+Lemma user_cipher_queue_safe_split :
+  forall honestk cs mycs,
+    user_cipher_queue_safe honestk cs mycs
+    -> forall mycs2 mycs1,
+      mycs = mycs1 ++ mycs2
+      -> user_cipher_queue_safe honestk cs mycs2.
+Proof.
+  induction 1; intros; eauto.
+  - symmetry in H; eapply app_eq_nil in H; split_ands; subst; econstructor.
+  - apply cons_app_split in H3; split_ors; split_ands; subst.
+    + econstructor; eauto.
+    + invert H3; split_ands; subst; eauto.
+Qed.
+
+Lemma cipher_id_in_user_cipher_queue_prop :
+  forall honestk cs c_id mycs,
+    List.In c_id mycs
+    -> user_cipher_queue_safe honestk cs mycs
+    -> exists c, cs $? c_id = Some c
+         /\ cipher_honestly_signed honestk c = true
+         /\ exists l1 l2, mycs = l1 ++ c_id :: l2 /\
+                    (forall {t} k__s k__e (msg : message t),
+                        c = SigEncCipher k__s k__e msg
+                        -> keys_mine honestk (findKeys msg)
+                        /\ incl (findCiphers msg) l2).
+Proof.
+  intros.
+  eapply in_split in H; destruct H as [l1 H]; destruct H as [l2 H].
+  eapply user_cipher_queue_safe_split in H0; eauto.
+  invert H0.
+  eexists; intuition eauto.
+Qed.
+
+
+(* Definition user_cipher_queue_safe (honestk : key_perms) (cs : ciphers) (mycs : my_ciphers) : Prop := *)
+(*   Forall (fun c_id => exists c, cs $? c_id = Some c *)
+(*                       /\ cipher_honestly_signed honestk c = true *)
+(*                       /\ (forall {t} k__s k__e (msg : message t), *)
+(*                             c = SigEncCipher k__s k__e msg *)
+(*                             ->  keys_mine honestk (findKeys msg)) *)
+(*                             (* -> incl (findCiphers msg) mycs *) *)
+(*            ) mycs. *)
+
 
 Definition user_keys {A} (usrs : honest_users A) (u_id : user_id) : option key_perms :=
   match usrs $? u_id with
@@ -450,17 +540,28 @@ Definition user_queue {A} (usrs : honest_users A) (u_id : user_id) : option queu
   | None     => None
   end.
 
+Definition user_cipher_queue {A} (usrs : honest_users A) (u_id : user_id) : option my_ciphers :=
+  match usrs $? u_id with
+  | Some u_d => Some u_d.(c_heap)
+  | None     => None
+  end.
+
 Definition message_queues_ok {A} (usrs : honest_users A) (honestk : key_perms) :=
   forall u_id msgs,
     user_queue usrs u_id = Some msgs
     -> message_queue_ok msgs honestk.
 
+Definition user_cipher_queues_ok {A} (usrs : honest_users A) (honestk : key_perms) (cs : ciphers) :=
+  forall u_id mycs,
+    user_cipher_queue usrs u_id = Some mycs
+    -> user_cipher_queue_safe honestk cs mycs.
+
 Definition universe_ok {A B} (U : universe A B) : Prop :=
   let honestk := findUserKeys U.(users)
   in  keys_good U.(all_keys)
     /\ message_queues_ok U.(users) honestk
+    /\ user_cipher_queues_ok U.(users) honestk U.(all_ciphers)
 .
-    (* /\ adv_no_honest_keys U.(all_keys) honestk U.(adversary).(key_heap). *)
 
 Section KeyMergeTheorems.
   Variable all_keys : keys.
@@ -841,9 +942,12 @@ Section KeyMergeTheorems.
   Qed.
 
   Lemma findUserKeys_readd_user_same_keys_idempotent :
-    forall {A} (usrs : honest_users A) u_id u_d proto msgs,
+    forall {A} (usrs : honest_users A) u_id u_d proto msgs mycs,
       usrs $? u_id = Some u_d
-      -> findUserKeys usrs = findUserKeys (usrs $+ (u_id, {| key_heap := key_heap u_d; protocol := proto; msg_heap := msgs |})).
+      -> findUserKeys usrs = findUserKeys (usrs $+ (u_id, {| key_heap := key_heap u_d
+                                                          ; protocol := proto
+                                                          ; msg_heap := msgs
+                                                          ; c_heap   := mycs |} )).
   Proof.
     intros.
     induction usrs using P.map_induction_bis; intros; Equal_eq; contra_map_lookup; auto.
@@ -862,19 +966,25 @@ Section KeyMergeTheorems.
   Qed.
 
   Lemma findUserKeys_readd_user_same_keys_idempotent' :
-    forall {A} (usrs : honest_users A) u_id u_d proto msgs ks,
+    forall {A} (usrs : honest_users A) u_id u_d proto msgs ks mycs,
       usrs $? u_id = Some u_d
       -> ks = key_heap u_d
-      -> findUserKeys (usrs $+ (u_id, {| key_heap := ks; protocol := proto; msg_heap := msgs |})) = findUserKeys usrs.
+      -> findUserKeys (usrs $+ (u_id, {| key_heap := ks
+                                      ; protocol := proto
+                                      ; msg_heap := msgs
+                                      ; c_heap   := mycs |})) = findUserKeys usrs.
   Proof.
     intros; subst; symmetry; eapply findUserKeys_readd_user_same_keys_idempotent; auto.
   Qed.
 
   Lemma findUserKeys_readd_user_addnl_keys :
-    forall {A} (usrs : honest_users A) u_id u_d proto msgs ks ks',
+    forall {A} (usrs : honest_users A) u_id u_d proto msgs ks ks' mycs,
       usrs $? u_id = Some u_d
       -> ks = key_heap u_d
-      -> findUserKeys (usrs $+ (u_id, {| key_heap := ks $k++ ks'; protocol := proto; msg_heap := msgs |})) = findUserKeys usrs $k++ ks'.
+      -> findUserKeys (usrs $+ (u_id, {| key_heap := ks $k++ ks'
+                                      ; protocol := proto
+                                      ; msg_heap := msgs
+                                      ; c_heap   := mycs |})) = findUserKeys usrs $k++ ks'.
   Proof.
     intros.
     induction usrs using P.map_induction_bis; intros; Equal_eq; contra_map_lookup; auto.
@@ -891,6 +1001,28 @@ Section KeyMergeTheorems.
       rewrite findUserKeys_notation.
       rewrite !merge_perms_assoc, merge_perms_sym with (ks1:=ks'); trivial.
       rewrite not_find_in_iff; clean_map_lookups; auto.
+  Qed.
+
+  Lemma findUserKeys_has_key_of_user :
+    forall {A} (usrs : honest_users A) u_id u_d ks k kp,
+      usrs $? u_id = Some u_d
+      -> ks = key_heap u_d
+      -> ks $? k = Some kp
+      -> findUserKeys usrs $? k <> None.
+  Proof.
+    intros.
+    induction usrs using P.map_induction_bis; intros; Equal_eq; subst; contra_map_lookup; auto.
+    cases (x ==n u_id); subst; clean_map_lookups.
+    - unfold findUserKeys.
+      rewrite fold_add; auto.
+      rewrite findUserKeys_notation.
+      cases (findUserKeys usrs $? k); subst; unfold not; intros.
+      + erewrite merge_perms_chooses_greatest in H; eauto; discriminate.
+      + eapply merge_perms_no_disappear_perms in H; split_ands; contra_map_lookup.
+    - unfold findUserKeys; rewrite fold_add; auto; rewrite findUserKeys_notation; unfold not; intros.
+      cases (key_heap e $? k); subst; auto.
+      + eapply merge_perms_no_disappear_perms in H0; split_ands; contra_map_lookup.
+      + eapply merge_perms_no_disappear_perms in H0; split_ands. assert ( findUserKeys usrs $? k <> None ); eauto.
   Qed.
 
   Lemma findUserKeys_has_private_key_of_user :
@@ -938,35 +1070,6 @@ Section KeyMergeTheorems.
       trivial.
       unfold user_keys; context_map_rewrites; trivial.
   Qed.
-
-
-  (* Lemma safe_messages_have_no_bad_keys : *)
-  (*   forall {t} (msg : message t), *)
-  (*     msg_leaks_no_honest_keys honestk msg *)
-  (*     -> forall k_id k, *)
-  (*       findKeys msg $? k_id = Some k *)
-  (*       -> ~ honest_key honestk k_id. *)
-  (* Proof. *)
-  (*   induction 1; auto; simpl; eauto; intros; subst; clean_map_lookups; eauto. *)
-
-  (*   - destruct kp; simpl in *. *)
-  (*     cases (k0 ==n k_id); subst; context_map_rewrites; clean_map_lookups; auto. *)
-  (*   - apply merge_perms_split in H1; split_ors; eauto. *)
-  (* Qed. *)
-
-  (* Lemma safe_messages_have_no_bad_keys : *)
-  (*   forall {t} (msg : message t), *)
-  (*     msg_contains_only_honest_public_keys honestk msg *)
-  (*     -> forall k_id, *)
-  (*       findKeys msg $? k_id = Some true *)
-  (*       -> ~ honest_key honestk k_id. *)
-  (* Proof. *)
-  (*   induction 1; auto; simpl; eauto; intros; subst; clean_map_lookups; eauto. *)
-
-  (*   - destruct kp; simpl in *. *)
-  (*     cases (k ==n k_id); subst; clean_map_lookups. *)
-  (*   - apply merge_perms_split in H1; split_ors; eauto. *)
-  (* Qed. *)
 
   Lemma safe_messages_have_only_honest_public_keys :
     forall {t} (msg : message t),
@@ -1034,6 +1137,35 @@ Section KeyMergeTheorems.
   Proof.
     induction msg; intros; simpl in *; eauto.
     rewrite andb_true_iff in *; split_ands; auto.
+  Qed.
+
+  Lemma message_honestly_signed_after_remove_pub_keys :
+    forall {t} (msg : message t) pubk,
+      msg_honestly_signed (honestk $k++ pubk) msg = true
+      -> (forall k kp, pubk $? k = Some kp -> kp = false)
+      -> msg_honestly_signed honestk msg = true.
+  Proof.
+    induction msg; intros; simpl in *; eauto.
+    - rewrite andb_true_iff in *; split_ands; eauto.
+    - unfold honest_keyb in *.
+      cases (honestk $? k__sign); cases (pubk $? k__sign); subst.
+      + erewrite merge_perms_chooses_greatest in H; unfold greatest_permission in *; simpl in *; eauto.
+        specialize (H0 _ _ Heq0);
+          cases b; subst; eauto.
+      + erewrite merge_perms_adds_ks1 in H; eauto.
+      + erewrite merge_perms_adds_ks2 in H; eauto.
+        specialize (H0 _ _ Heq0); subst; discriminate.
+      + rewrite merge_perms_adds_no_new_perms in H; auto.
+
+    - unfold honest_keyb in *.
+      cases (honestk $? k); cases (pubk $? k); subst.
+      + erewrite merge_perms_chooses_greatest in H; unfold greatest_permission in *; simpl in *; eauto.
+        specialize (H0 _ _ Heq0);
+          cases b; subst; eauto.
+      + erewrite merge_perms_adds_ks1 in H; eauto.
+      + erewrite merge_perms_adds_ks2 in H; eauto.
+        specialize (H0 _ _ Heq0); subst; discriminate.
+      + rewrite merge_perms_adds_no_new_perms in H; auto.
   Qed.
 
   Lemma message_contains_only_honest_public_keys_after_new_keys :
@@ -1270,12 +1402,10 @@ Definition action_adversary_safe (honestk : key_perms) (a : action) : Prop :=
   end.
 
 Definition data_step0 (A B C : Type) : Type :=
-  honest_users A * user_data B * ciphers * keys * key_perms * queued_messages * user_cmd C.
+  honest_users A * user_data B * ciphers * keys * key_perms * queued_messages * my_ciphers * user_cmd C.
 
 Definition build_data_step {A B C} (U : universe A B) (u_data : user_data C) : data_step0 A B C :=
-  (U.(users), U.(adversary), U.(all_ciphers), U.(all_keys), u_data.(key_heap), u_data.(msg_heap), u_data.(protocol)).
-
-(* Labeled transition system *)
+  (U.(users), U.(adversary), U.(all_ciphers), U.(all_keys), u_data.(key_heap), u_data.(msg_heap), u_data.(c_heap), u_data.(protocol)).
 
 Definition user_id_option (uid : user_id) : option user_id := Some uid.
 Coercion user_id_option : user_id >-> option.
@@ -1284,97 +1414,111 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
 
 (* Plumbing *)
 | StepBindRecur : forall {B r r'} (usrs usrs' : honest_users r') (adv adv' : user_data B)
-                     lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' (cmd1 cmd1' : user_cmd r) (cmd2 : r -> user_cmd r'),
-      step_user lbl u_id (usrs, adv, cs, gks, ks, qmsgs, cmd1) (usrs', adv', cs', gks', ks', qmsgs', cmd1')
-    -> step_user lbl u_id (usrs, adv, cs, gks, ks, qmsgs, Bind cmd1 cmd2) (usrs', adv', cs', gks', ks', qmsgs', Bind cmd1' cmd2)
-| StepBindProceed : forall {B r r'} (usrs : honest_users r) (adv : user_data B) cs u_id gks ks qmsgs (v : r') (cmd : r' -> user_cmd r),
-    step_user Silent u_id (usrs, adv, cs, gks, ks, qmsgs, Bind (Return v) cmd) (usrs, adv, cs, gks, ks, qmsgs, cmd v)
+                    lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs'
+                    (cmd1 cmd1' : user_cmd r) (cmd2 : r -> user_cmd r'),
+      step_user lbl u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd1) (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd1')
+    -> step_user lbl u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, Bind cmd1 cmd2) (usrs', adv', cs', gks', ks', qmsgs', mycs', Bind cmd1' cmd2)
+| StepBindProceed : forall {B r r'} (usrs : honest_users r) (adv : user_data B) cs u_id gks ks qmsgs mycs (v : r') (cmd : r' -> user_cmd r),
+    step_user Silent u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, Bind (Return v) cmd) (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd v)
 
-| StepGen : forall {A B} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks qmsgs n,
-    step_user Silent u_id (usrs, adv, cs, gks, ks, qmsgs, Gen) (usrs, adv, cs, gks, ks, qmsgs, Return n)
+| StepGen : forall {A B} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks qmsgs mycs n,
+    step_user Silent u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, Gen) (usrs, adv, cs, gks, ks, qmsgs, mycs, Return n)
 
 (* Comms  *)
-| StepRecv : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks ks' qmsgs qmsgs' (msg : message t) msgs pat newkeys,
+| StepRecv : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks ks' qmsgs qmsgs' mycs mycs'
+               (msg : message t) msgs pat newkeys newcs,
       qmsgs = (existT _ _ msg) :: msgs (* we have a message waiting for us! *)
     -> qmsgs' = msgs
     -> findKeys msg = newkeys
+    -> newcs = findCiphers msg
     -> ks' = ks $k++ newkeys
+    -> mycs' = newcs ++ mycs
     -> msg_accepted_by_pattern pat msg
     -> step_user (Action (Input msg pat ks)) u_id
-                (usrs, adv, cs, gks, ks , qmsgs , Recv pat)
-                (usrs, adv, cs, gks, ks', qmsgs', Return msg)
+                (usrs, adv, cs, gks, ks , qmsgs , mycs,  Recv pat)
+                (usrs, adv, cs, gks, ks', qmsgs', mycs', Return msg)
 
-| StepRecvDrop : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks qmsgs qmsgs' (msg : message t) pat msgs,
+| StepRecvDrop : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks qmsgs qmsgs' mycs (msg : message t) pat msgs,
       qmsgs = (existT _ _ msg) :: msgs (* we have a message waiting for us! *)
     -> qmsgs' = msgs
     -> ~ msg_accepted_by_pattern pat msg
     -> step_user Silent u_id (* Error label ... *)
-                (usrs, adv, cs, gks, ks, qmsgs , Recv pat)
-                (usrs, adv, cs, gks, ks, qmsgs', @Recv t pat)
+                (usrs, adv, cs, gks, ks, qmsgs , mycs, Recv pat)
+                (usrs, adv, cs, gks, ks, qmsgs', mycs, @Recv t pat)
 
 (* Augment attacker's keys with those available through messages sent,
  * including traversing through ciphers already known by attacker, etc.
  *)
 | StepSend : forall {A B} {t} (usrs usrs' : honest_users A) (adv adv' : user_data B)
-               cs (u_id : user_id) gks ks qmsgs rec_u_id rec_u newkeys (msg : message t),
+               cs (u_id : user_id) gks ks qmsgs mycs rec_u_id rec_u newkeys (msg : message t),
     findKeys msg = newkeys
     -> keys_mine ks newkeys
-    -> adv' = addUserKeys newkeys adv
+    -> adv' = addUserKeys newkeys adv (* TODO: also add ciphers to adv??? *)
     -> usrs $? rec_u_id = Some rec_u
     -> rec_u_id <> u_id
     -> usrs' = usrs $+ (rec_u_id, {| key_heap := rec_u.(key_heap)
                                   ; protocol := rec_u.(protocol)
-                                  ; msg_heap := rec_u.(msg_heap) ++ [existT _ _ msg]  |})
+                                  ; msg_heap := rec_u.(msg_heap) ++ [existT _ _ msg]
+                                  ; c_heap   := rec_u.(c_heap) |})
     -> step_user (Action (Output msg)) u_id
-                (usrs , adv , cs, gks, ks, qmsgs, Send rec_u_id msg)
-                (usrs', adv', cs, gks, ks, qmsgs, Return tt)
+                (usrs , adv , cs, gks, ks, qmsgs, mycs, Send rec_u_id msg)
+                (usrs', adv', cs, gks, ks, qmsgs, mycs, Return tt)
 
 (* Encryption / Decryption *)
-| StepEncrypt : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs cs' u_id gks ks qmsgs (msg : message t)
-                   k__signid k__encid kp__enc kt__enc kt__sign c_id cipherMsg,
+| StepEncrypt : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs cs' u_id gks ks qmsgs mycs mycs'
+                  (msg : message t) k__signid k__encid kp__enc kt__enc kt__sign c_id cipherMsg,
       gks $? k__encid  = Some (MkCryptoKey k__encid Encryption kt__enc)
     -> gks $? k__signid = Some (MkCryptoKey k__signid Signing kt__sign)
     -> ks $? k__encid   = Some kp__enc
     -> ks $? k__signid  = Some true
     -> ~ In c_id cs
     -> keys_mine ks (findKeys msg)
+    -> incl (findCiphers msg) mycs
     -> cipherMsg = SigEncCipher k__signid k__encid msg
     -> cs' = cs $+ (c_id, cipherMsg)
+    -> mycs' = c_id :: mycs
     -> step_user Silent u_id
-                (usrs, adv, cs , gks, ks, qmsgs, SignEncrypt k__signid k__encid msg)
-                (usrs, adv, cs', gks, ks, qmsgs, Return (SignedCiphertext k__signid k__encid c_id))
+                (usrs, adv, cs , gks, ks, qmsgs, mycs,  SignEncrypt k__signid k__encid msg)
+                (usrs, adv, cs', gks, ks, qmsgs, mycs', Return (SignedCiphertext k__signid k__encid c_id))
 
-| StepDecrypt : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks ks' qmsgs (msg : message t)
-                  k__signid kp__sign k__encid c_id newkeys kt__sign kt__enc,
+| StepDecrypt : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks ks' qmsgs mycs mycs'
+                  (msg : message t) k__signid kp__sign k__encid c_id newkeys kt__sign kt__enc newcs,
       cs $? c_id     = Some (SigEncCipher k__signid k__encid msg)
     -> gks $? k__encid  = Some (MkCryptoKey k__encid Encryption kt__enc)
     -> gks $? k__signid = Some (MkCryptoKey k__signid Signing kt__sign)
     -> ks  $? k__encid  = Some true
     -> ks  $? k__signid = Some kp__sign
     -> findKeys msg = newkeys
+    -> newcs = findCiphers msg
     -> ks' = ks $k++ newkeys
+    -> mycs' = newcs ++ mycs
+    -> List.In c_id mycs
     -> step_user Silent u_id
-                (usrs, adv, cs, gks, ks , qmsgs, Decrypt (SignedCiphertext k__signid k__encid c_id))
-                (usrs, adv, cs, gks, ks', qmsgs, Return msg)
+                (usrs, adv, cs, gks, ks , qmsgs, mycs,  Decrypt (SignedCiphertext k__signid k__encid c_id))
+                (usrs, adv, cs, gks, ks', qmsgs, mycs', Return msg)
 
 (* Signing / Verification *)
-| StepSign : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs cs' u_id gks ks qmsgs (msg : message t) k_id kt c_id cipherMsg,
+| StepSign : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs cs' u_id gks ks qmsgs mycs mycs'
+               (msg : message t) k_id kt c_id cipherMsg,
       gks $? k_id = Some (MkCryptoKey k_id Signing kt)
     -> ks  $? k_id = Some true
     -> ~ In c_id cs
     -> cipherMsg = SigCipher k_id msg
     -> cs' = cs $+ (c_id, cipherMsg)
+    -> mycs' = c_id :: mycs
     -> step_user Silent u_id
-                (usrs, adv, cs , gks, ks, qmsgs, Sign k_id msg)
-                (usrs, adv, cs', gks, ks, qmsgs, Return (Signature msg k_id c_id))
+                (usrs, adv, cs , gks, ks, qmsgs, mycs,  Sign k_id msg)
+                (usrs, adv, cs', gks, ks, qmsgs, mycs', Return (Signature msg k_id c_id))
 
-| StepVerify : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks qmsgs (msg : message t) k_id kp kt c_id,
+| StepVerify : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks qmsgs mycs
+                 (msg : message t) k_id kp kt c_id,
       gks $? k_id = Some (MkCryptoKey k_id Signing kt)
     -> ks  $? k_id = Some kp
     -> cs $? c_id = Some (SigCipher k_id msg)
+    -> List.In c_id mycs
     -> step_user Silent u_id
-                (usrs, adv, cs, gks, ks, qmsgs, (Verify k_id (Signature msg k_id c_id)))
-                (usrs, adv, cs, gks, ks, qmsgs, Return true)
+                (usrs, adv, cs, gks, ks, qmsgs, mycs, Verify k_id (Signature msg k_id c_id))
+                (usrs, adv, cs, gks, ks, qmsgs, mycs, Return true)
 .
 
 (* Key creation *)
@@ -1391,31 +1535,24 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
 
 (* | Barrier {result : Set} : user_cmd result. *)
 
-(* Lemma LStepRecv' : forall {B t} u_id (adv : adversaries B) globals globals' uks uks' (msg : message t) pat msgs newkeys, *)
-(*       globals.(users_msg_buffer) $? u_id = Some (Exm msg :: msgs) (* we have a message waiting for us! *) *)
-(*     -> globals' = setGlobalUserMsgs u_id msgs globals *)
-(*     -> findKeys msg = newkeys *)
-(*     -> msg_accepted_by_pattern globals.(all_ciphers) pat msg = true *)
-(*     -> uks' = uks $++ newkeys *)
-(*     -> lstep_user u_id (Action (Input msg pat u_id uks globals.(all_ciphers))) *)
-(*                  (globals , adv, uks,  Recv pat) *)
-(*                  (globals', adv, uks', Return msg). *)
-(* Proof. *)
-(*   intros; subst; econstructor; eauto. *)
-(* Qed. *)
-
 Inductive step_universe {A B} : universe A B -> rlabel -> universe A B -> Prop :=
-| StepUser : forall U U' (u_id : user_id) userData usrs adv cs gks ks qmsgs lbl (cmd : user_cmd A),
+| StepUser : forall U U' (u_id : user_id) userData usrs adv cs gks ks qmsgs mycs lbl (cmd : user_cmd A),
     U.(users) $? u_id = Some userData
     -> step_user lbl u_id
                 (build_data_step U userData)
-                (usrs, adv, cs, gks, ks, qmsgs, cmd)
-    -> U' = buildUniverse usrs adv cs gks u_id {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmd |}
+                (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+    -> U' = buildUniverse usrs adv cs gks u_id {| key_heap := ks
+                                               ; msg_heap := qmsgs
+                                               ; protocol := cmd
+                                               ; c_heap   := mycs |}
     -> step_universe U lbl U'
-| StepAdversary : forall U U' usrs adv cs gks ks qmsgs lbl (cmd : user_cmd B),
-      step_user lbl None
-                (build_data_step U U.(adversary))
-                (usrs, adv, cs, gks, ks, qmsgs, cmd)
-    -> U' = buildUniverseAdv usrs cs gks {| key_heap := adv.(key_heap) $k++ ks ; msg_heap := qmsgs ; protocol := cmd |}
+| StepAdversary : forall U U' usrs adv cs gks ks qmsgs mycs lbl (cmd : user_cmd B),
+    step_user lbl None
+              (build_data_step U U.(adversary))
+              (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+    -> U' = buildUniverseAdv usrs cs gks {| key_heap := adv.(key_heap) $k++ ks
+                                         ; msg_heap := qmsgs
+                                         ; protocol := cmd
+                                         ; c_heap   := mycs |}
     -> step_universe U Silent U'
 .
