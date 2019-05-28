@@ -1071,24 +1071,6 @@ Section KeyMergeTheorems.
       unfold user_keys; context_map_rewrites; trivial.
   Qed.
 
-  Lemma safe_messages_have_only_honest_public_keys :
-    forall {t} (msg : message t),
-      msg_contains_only_honest_public_keys honestk msg
-      -> forall k_id,
-        findKeys msg $? k_id = None
-      \/ (honestk $? k_id <> None /\ findKeys msg $? k_id = Some false).
-  Proof.
-    induction 1; eauto; intros; subst.
-    - destruct kp; simpl in *.
-      cases (k ==n k_id); subst; clean_map_lookups; auto.
-      right; split; unfold not; intros; clean_map_lookups; auto.
-    - specialize (IHmsg_contains_only_honest_public_keys1 k_id);
-        specialize( IHmsg_contains_only_honest_public_keys2 k_id);
-        simpl; split_ors; split_ands; eauto.
-
-      erewrite merge_perms_chooses_greatest; eauto; simpl; auto.
-  Qed.
-
   Lemma honest_key_after_new_keys :
     forall msgk k_id,
         honest_key honestk k_id
@@ -1354,6 +1336,42 @@ Section KeyMergeTheorems.
   (*   Qed. *)
 
 End KeyMergeTheorems.
+
+Lemma safe_messages_have_only_honest_public_keys :
+  forall {t} (msg : message t) honestk,
+    msg_contains_only_honest_public_keys honestk msg
+    -> forall k_id,
+      findKeys msg $? k_id = None
+      \/ (honestk $? k_id <> None /\ findKeys msg $? k_id = Some false).
+Proof.
+  induction 1; eauto; intros; subst.
+  - destruct kp; simpl in *; subst.
+    cases (k ==n k_id); subst; clean_map_lookups; auto.
+    right; split; unfold not; intros; clean_map_lookups; auto.
+  - specialize (IHmsg_contains_only_honest_public_keys1 k_id);
+      specialize( IHmsg_contains_only_honest_public_keys2 k_id);
+      simpl; split_ors; split_ands; eauto.
+
+    + rewrite merge_perms_adds_no_new_perms; eauto.
+    + erewrite merge_perms_adds_ks1; eauto.
+    + erewrite merge_perms_adds_ks2; eauto.
+    + erewrite merge_perms_chooses_greatest; eauto; simpl; auto.
+Qed.
+
+Lemma safe_messages_perm_merge_honestk_idempotent :
+  forall {t} (msg : message t) honestk,
+    msg_contains_only_honest_public_keys honestk msg
+    -> honestk $k++ findKeys msg = honestk.
+Proof.
+    intros.
+    apply map_eq_Equal; unfold Equal; intros.
+    apply safe_messages_have_only_honest_public_keys with (k_id := y) in H; split_ors; split_ands.
+    - cases (honestk $? y); eauto.
+      + erewrite merge_perms_adds_ks1; eauto.
+      + rewrite merge_perms_adds_no_new_perms; auto.
+    - cases (honestk $? y); try contradiction.
+      erewrite merge_perms_chooses_greatest; eauto; unfold greatest_permission; rewrite orb_false_r; auto.
+Qed.
 
 Definition buildUniverse {A B}
            (usrs : honest_users A) (adv : user_data B) (cs : ciphers) (ks : keys)
