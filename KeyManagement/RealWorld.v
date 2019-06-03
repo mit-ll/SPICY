@@ -163,6 +163,14 @@ Section SafeMessages.
     - unfold not; intro HK; destruct HK; context_map_rewrites; discriminate.
   Qed.
 
+  Lemma honest_keyb_true_findKeys :
+    forall k,
+      honest_keyb k = true
+      -> honestk $? k = Some true.
+  Proof.
+    intros; rewrite <- honest_key_honest_keyb in H; invert H; eauto.
+  Qed.
+
   Inductive msg_contains_only_honest_public_keys :  forall {t}, message t -> Prop :=
   | PlaintextHPK : forall txt,
       msg_contains_only_honest_public_keys (Plaintext txt)
