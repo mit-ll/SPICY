@@ -854,21 +854,34 @@ Section KeyMergeTheorems.
   Qed.
 
   Lemma findUserKeys_readd_user_same_keys_idempotent' :
-    forall {A} (usrs : honest_users A) u_id u_d proto msgs ks mycs,
-      usrs $? u_id = Some u_d
-      -> ks = key_heap u_d
+    forall {A} (usrs : honest_users A) u_id ks proto msgs mycs,
+      user_keys usrs u_id = Some ks
       -> findUserKeys (usrs $+ (u_id, {| key_heap := ks
                                       ; protocol := proto
                                       ; msg_heap := msgs
                                       ; c_heap   := mycs |})) = findUserKeys usrs.
   Proof.
-    intros; subst; symmetry; eapply findUserKeys_readd_user_same_keys_idempotent; auto.
+    intros.
+    induction usrs using P.map_induction_bis; intros; Equal_eq; contra_map_lookup; auto.
+    cases (x ==n u_id); subst; clean_map_lookups.
+    - rewrite map_add_eq.
+      unfold findUserKeys.
+      unfold user_keys in *; rewrite add_eq_o in H; invert H; auto.
+      rewrite !fold_add; simpl; eauto.
+    - rewrite map_ne_swap; auto.
+      unfold findUserKeys.
+      assert (user_keys usrs u_id = Some ks) by (unfold user_keys in H; rewrite add_neq_o in H; auto).
+      rewrite fold_add; auto.
+      rewrite !findUserKeys_notation.
+      rewrite IHusrs; auto.
+      unfold findUserKeys at 2.
+      rewrite fold_add; auto.
+      rewrite not_find_in_iff; clean_map_lookups; trivial.
   Qed.
 
   Lemma findUserKeys_readd_user_addnl_keys :
-    forall {A} (usrs : honest_users A) u_id u_d proto msgs ks ks' mycs,
-      usrs $? u_id = Some u_d
-      -> ks = key_heap u_d
+    forall {A} (usrs : honest_users A) u_id proto msgs ks ks' mycs,
+      user_keys usrs u_id = Some ks
       -> findUserKeys (usrs $+ (u_id, {| key_heap := ks $k++ ks'
                                       ; protocol := proto
                                       ; msg_heap := msgs
@@ -879,9 +892,11 @@ Section KeyMergeTheorems.
     cases (x ==n u_id); subst; clean_map_lookups; try rewrite map_add_eq.
     - unfold findUserKeys. rewrite !fold_add; auto.
       rewrite findUserKeys_notation; simpl.
+      unfold user_keys in H; rewrite add_eq_o in H; invert H; auto.
       rewrite merge_perms_assoc; trivial.
     - rewrite map_ne_swap; auto.
       unfold findUserKeys.
+      assert (user_keys usrs u_id = Some ks) by (unfold user_keys in H; rewrite add_neq_o in H; auto).
       rewrite fold_add; auto.
       rewrite findUserKeys_notation.
       rewrite fold_add; auto.
@@ -1188,9 +1203,6 @@ Definition data_step0 (A B C : Type) : Type :=
 Definition build_data_step {A B C} (U : universe A B) (u_data : user_data C) : data_step0 A B C :=
   (U.(users), U.(adversary), U.(all_ciphers), U.(all_keys), u_data.(key_heap), u_data.(msg_heap), u_data.(c_heap), u_data.(protocol)).
 
-Definition user_id_option (uid : user_id) : option user_id := Some uid.
-Coercion user_id_option : user_id >-> option.
-
 Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C -> data_step0 A B C -> Prop :=
 
 (* Plumbing *)
@@ -1231,7 +1243,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
  * including traversing through ciphers already known by attacker, etc.
  *)
 | StepSend : forall {A B} {t} (usrs usrs' : honest_users A) (adv adv' : user_data B)
-               cs (u_id : user_id) gks ks qmsgs mycs rec_u_id rec_u newkeys (msg : message t),
+               cs u_id gks ks qmsgs mycs rec_u_id rec_u newkeys (msg : message t),
     findKeys msg = newkeys
     -> keys_mine ks newkeys
     -> adv' = addUserKeys newkeys adv (* TODO: also add ciphers to adv??? *)
@@ -1241,7 +1253,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
                                   ; protocol := rec_u.(protocol)
                                   ; msg_heap := rec_u.(msg_heap) ++ [existT _ _ msg]
                                   ; c_heap   := rec_u.(c_heap) |})
-    -> step_user (Action (Output msg)) u_id
+    -> step_user (Action (Output msg)) (Some u_id)
                 (usrs , adv , cs, gks, ks, qmsgs, mycs, Send rec_u_id msg)
                 (usrs', adv', cs, gks, ks, qmsgs, mycs, Return tt)
 
@@ -1319,7 +1331,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
 Inductive step_universe {A B} : universe A B -> rlabel -> universe A B -> Prop :=
 | StepUser : forall U U' (u_id : user_id) userData usrs adv cs gks ks qmsgs mycs lbl (cmd : user_cmd A),
     U.(users) $? u_id = Some userData
-    -> step_user lbl u_id
+    -> step_user lbl (Some u_id)
                 (build_data_step U userData)
                 (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
     -> U' = buildUniverse usrs adv cs gks u_id {| key_heap := ks
