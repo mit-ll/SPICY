@@ -6,7 +6,9 @@ From Coq Require Import
   Program.Equality
 .
 
-Require Import MyPrelude.
+Require Import
+        MyPrelude
+        Tactics.
 
 Module Import NatMap := FMapList.Make(Nat_as_OT).
 Module P := WProperties_fun Nat_as_OT NatMap.
@@ -66,15 +68,15 @@ Ltac clean_map_lookups :=
   try discriminate;
   try contra_map_lookup.
 
-Ltac split_ands :=
-  repeat match goal with
-         | [ H : _ /\ _ |- _ ] => destruct H
-         end.
-
-Ltac split_ors :=
-  repeat match goal with
-         | [ H : _ \/ _ |- _ ] => destruct H
-         end.
+Ltac context_map_rewrites :=
+  repeat
+    match goal with
+    | [ H : ?m $? ?k = _ |- context[?m $? ?k] ] => rewrite H
+    | [ H : match ?matchee with _ => _ end $? _ = _
+     ,  H1 : ?matchee = _ |- _] => rewrite H1 in H
+    | [ H : match ?matchee with _ => _ end = _
+     ,  H1 : ?matchee = _ |- _] => rewrite H1 in H
+    end.
 
 Section MapLemmas.
 

@@ -25,6 +25,68 @@ Set Implicit Arguments.
 Hint Resolve in_eq in_cons.
 Remove Hints absurd_eq_true trans_eq_bool.
 
+Ltac clean_context :=
+  try discriminate;
+  repeat
+    match goal with
+    | [ H : ?X = ?X |- _ ] => clear H
+    | [ H : Some _ = Some _ |- _ ] => invert H
+    | [ H : Action _ = Action _ |- _ ] => invert H; simpl in *; split_ands
+    end.
+
+Ltac simplify_key_merges1 :=
+  match goal with
+  | [ H1 : ?ks1 $? ?kid = Some _
+    , H2 : ?ks2 $? ?kid = Some _ |- context [?ks1 $k++ ?ks2 $? ?kid]]
+      => rewrite (merge_perms_chooses_greatest _ _ H1 H2) by trivial; unfold greatest_permission; simpl
+  | [ H1 : ?ks1 $? ?kid = Some _
+    , H2 : ?ks2 $? ?kid = None |- context [?ks1 $k++ ?ks2 $? ?kid]]
+      => rewrite (merge_perms_adds_ks1 _ _ _ H1 H2) by trivial
+  | [ H1 : ?ks1 $? ?kid = None
+    , H2 : ?ks2 $? ?kid = Some _ |- context [?ks1 $k++ ?ks2 $? ?kid]]
+      => rewrite (merge_perms_adds_ks2 _ _ _ H1 H2) by trivial
+  | [ H1 : ?ks1 $? ?kid = None
+    , H2 : ?ks2 $? ?kid = None |- context [?ks1 $k++ ?ks2 $? ?kid]]
+      => rewrite (merge_perms_adds_no_new_perms _ _ _ H1 H2) by trivial
+  | [ H1 : ?ks1 $? ?kid = Some _
+    , H2 : ?ks2 $? ?kid = Some _
+    , H3 : ?ks1 $k++ ?ks2 $? ?kid = _ |- _ ]
+      => rewrite (merge_perms_chooses_greatest _ _ H1 H2) in H3 by trivial; unfold greatest_permission in H3; simpl in *
+  | [ H1 : ?ks1 $? ?kid = Some _
+    , H2 : ?ks2 $? ?kid = None
+    , H3 : ?ks1 $k++ ?ks2 $? ?kid = _ |- _ ]
+      => rewrite (merge_perms_adds_ks1 _ _ _ H1 H2) in H3 by trivial
+  | [ H1 : ?ks1 $? ?kid = None
+    , H2 : ?ks2 $? ?kid = Some _
+    , H3 : ?ks1 $k++ ?ks2 $? ?kid = _ |- _ ]
+      => rewrite (merge_perms_adds_ks2 _ _ _ H1 H2) in H3 by trivial
+  | [ H1 : ?ks1 $? ?kid = None
+    , H2 : ?ks2 $? ?kid = None
+    , H3 : ?ks1 $k++ ?ks2 $? ?kid = _ |- _ ]
+      => rewrite (merge_perms_adds_no_new_perms _ _ _ H1 H2) in H3 by trivial
+  end.
+
+  (* Ltac simplify_key_merges2 := *)
+  (* match goal with *)
+  (* | [ H1 : ?ks1 $? ?kid = Some _ *)
+  (*   , H2 : ?ks2 $? ?kid = Some _ *)
+  (*   , H3 : ?ks1 $k++ ?ks2 $? ?kid = _ |- _ ] *)
+  (*     => rewrite (merge_perms_chooses_greatest _ _ H1 H2) in H3 by trivial; unfold greatest_permission in H3; simpl in * *)
+  (* | [ H1 : ?ks1 $? ?kid = Some _ *)
+  (*   , H2 : ?ks2 $? ?kid = None *)
+  (*   , H3 : ?ks1 $k++ ?ks2 $? ?kid = _ |- _ ] *)
+  (*     => rewrite (merge_perms_adds_ks1 _ _ _ H1 H2) in H3 by trivial *)
+  (* | [ H1 : ?ks1 $? ?kid = None *)
+  (*   , H2 : ?ks2 $? ?kid = Some _ *)
+  (*   , H3 : ?ks1 $k++ ?ks2 $? ?kid = _ |- _ ] *)
+  (*     => rewrite (merge_perms_adds_ks2 _ _ _ H1 H2) in H3 by trivial *)
+  (* | [ H1 : ?ks1 $? ?kid = None *)
+  (*   , H2 : ?ks2 $? ?kid = None *)
+  (*   , H3 : ?ks1 $k++ ?ks2 $? ?kid = _ |- _ ] *)
+  (*     => rewrite (merge_perms_adds_no_new_perms _ _ _ H1 H2) in H3 by trivial *)
+  (* end. *)
+
+
 Section UniverseLemmas.
   Import RealWorld.
 
@@ -35,18 +97,16 @@ Section UniverseLemmas.
       -> adv_no_honest_keys (honestk $k++ findKeys msg) advk.
   Proof.
     unfold adv_no_honest_keys; intros; eauto;
-      specialize (H k_id); split_ors; intuition idtac.
-
-    - cases (findKeys msg $? k_id); eauto.
-      + specialize (H0 _ _ Heq); subst; erewrite merge_perms_adds_ks2; eauto.
-      + rewrite merge_perms_adds_no_new_perms; auto.
-    - cases (findKeys msg $? k_id); eauto.
-      + specialize (H0 _ _ Heq); subst; erewrite merge_perms_chooses_greatest; eauto;
-          unfold greatest_permission; simpl; intuition idtac.
-      + erewrite merge_perms_adds_ks1; eauto.
-    - cases (findKeys msg $? k_id); split_ands; eauto.
-      + erewrite merge_perms_chooses_greatest; eauto; unfold greatest_permission; simpl; eauto.
-      + erewrite merge_perms_adds_ks1; eauto.
+      match goal with
+      | [ kid : ?T, H : forall _ : ?T, _ \/ _ |- _ ] => specialize (H kid)
+      end;
+        split_ors; intuition idtac;
+        cases (findKeys msg $? k_id);
+        try match goal with
+            | [ H1 : findKeys _ $? ?k_id = Some ?kp
+              , H2 : forall k p, _ |- _ ] => specialize (H2 _ _ H1)
+            end;
+        subst; simplify_key_merges1; auto.
   Qed.
 
   Lemma msgCiphersSigned_after_msg_keys :
@@ -191,11 +251,9 @@ Section UniverseLemmas.
       user_cipher_queue_ok cs honestk mycs
       -> user_cipher_queue_ok cs (honestk $k++ pubk) mycs.
   Proof.
-    induction 1; intros; eauto.
-    - econstructor.
-    - econstructor; eauto.
-      invert H; eexists; intuition eauto.
-      eapply cipher_honestly_signed_after_msg_keys; auto.
+    induction 1; intros; econstructor; eauto.
+    invert H; eexists; intuition eauto.
+    eapply cipher_honestly_signed_after_msg_keys; auto.
   Qed.
 
   Lemma user_cipher_queues_ok_addnl_pubk :
@@ -203,9 +261,7 @@ Section UniverseLemmas.
       user_cipher_queues_ok cs honestk usrs
       -> user_cipher_queues_ok cs (honestk $k++ pubk) usrs.
   Proof.
-    induction 1; intros; eauto.
-    - econstructor.
-    - econstructor; eauto using user_cipher_queue_ok_addnl_pubk.
+    induction 1; intros; econstructor; eauto using user_cipher_queue_ok_addnl_pubk.
   Qed.
 
   Lemma msgCiphersSigned_user_cipher_queue_ok_findCiphers :
@@ -297,15 +353,13 @@ Section UniverseLemmas.
     unfold keys_mine; intros.
     apply map_eq_Equal; unfold Equal; intros.
     specialize (H y).
-    cases (ks1 $? y); cases (ks2 $? y); subst.
-    - specialize (H b0).
-      erewrite merge_perms_chooses_greatest; unfold greatest_permission;
-        intuition idtac; subst; eauto.
-      + invert H; rewrite orb_diag; trivial.
-      + rewrite orb_false_r; trivial.
-    - erewrite merge_perms_adds_ks1; eauto.
-    - specialize (H b); intuition idtac; discriminate.
-    - rewrite merge_perms_adds_no_new_perms; auto.
+    cases (ks1 $? y); cases (ks2 $? y); subst;
+      try match goal with
+          | [ H1 : ks2 $? _ = Some ?b
+            , H2 : forall _ : bool, _ |- _ ]  =>   generalize  (H2 b); intro
+          end;
+      simplify_key_merges1; intuition (clean_context; eauto).
+    rewrite orb_diag; trivial.
   Qed.
 
   Lemma accepted_safe_msg_pattern_honestly_signed :
@@ -345,18 +399,17 @@ Section UniverseLemmas.
                 -> user_cipher_queues_ok cs' honestk' usrs''.
   Proof.
     induction 1; inversion 2; inversion 4; intros; subst; try discriminate; eauto;
-      autorewrite with find_user_keys.
+      autorewrite with find_user_keys;
+      clean_context.
 
-    - invert H20; simpl in *.
-      assert (msg_honestly_signed (findUserKeys usrs') msg = true) by eauto.
+    - assert (msg_honestly_signed (findUserKeys usrs') msg = true) by eauto.
       eapply Forall_natmap_in_prop in H17; eauto; simpl in *.
       invert H17. specialize (H2 H); split_ands.
 
       eapply user_cipher_queues_ok_add_user; eauto.
       autorewrite with find_user_keys; trivial.
 
-    - invert H5.
-      remember ((usrs $+ (rec_u_id,
+    - remember ((usrs $+ (rec_u_id,
                           {| key_heap := key_heap rec_u;
                              protocol := protocol rec_u;
                              msg_heap := msg_heap rec_u ++ [existT message t0 msg];
@@ -365,7 +418,7 @@ Section UniverseLemmas.
       assert (findUserKeys usrs = findUserKeys usrs')
         by (subst; autorewrite with find_user_keys; eauto).
 
-      rewrite H.
+      rewrite H4.
 
       eapply user_cipher_queues_ok_readd_user; subst; clean_map_lookups; eauto.
       destruct rec_u; simpl in *.
@@ -507,15 +560,8 @@ Section UniverseLemmas.
     - invert H.
     - destruct kp; simpl in *; subst.
       cases (k ==n k0); subst; clean_map_lookups.
-    - cases (findKeys msg1 $? k); cases (findKeys msg2 $? k).
-      + cases b; cases b0; try contradiction.
-        erewrite merge_perms_chooses_greatest in H1; unfold greatest_permission in *; eauto.
-        invert H1.
-      + cases b; try contradiction.
-        erewrite merge_perms_adds_ks1 in H1; eauto.
-      + cases b; try contradiction.
-        erewrite merge_perms_adds_ks2 in H1; eauto.
-      + rewrite merge_perms_adds_no_new_perms in H1; eauto.
+    - cases (findKeys msg1 $? k); cases (findKeys msg2 $? k); simplify_key_merges1; clean_context; try contradiction.
+      cases b; cases b0; simpl in *; try contradiction; try discriminate.
     - invert H0.
   Qed.
 
@@ -542,10 +588,7 @@ Section UniverseLemmas.
   Proof.
     induction 1; inversion 2; inversion 3; intros; subst; try discriminate;
       eauto 2; autorewrite with find_user_keys; eauto;
-        repeat match goal with
-               | [ H: Action _ = _ |- _ ] => invert H; simpl in *; split_ands
-               | [ H: Some _ = Some _ |- _ ] => invert H
-               end.
+        clean_context.
 
     - assert (msg_honestly_signed (findUserKeys usrs') msg = true) by eauto.
       assert (message_queues_ok (findUserKeys usrs') usrs') as MQOK by assumption.
@@ -684,9 +727,7 @@ Section UniverseLemmas.
     induction 1; inversion 2; inversion 4; intros; subst;
       try discriminate; eauto 2;
         autorewrite with find_user_keys; eauto;
-          repeat match goal with
-                 | [ H : Action _ = _ |- _ ] => invert H; simpl in *; split_ands
-                 end.
+          clean_context.
 
     - assert (msg_honestly_signed (findUserKeys usrs') msg = true) by eauto.
       eapply Forall_natmap_in_prop in H17; eauto; invert H17.
@@ -694,21 +735,8 @@ Section UniverseLemmas.
       unfold adv_no_honest_keys, message_no_adv_private in *.
       intros.
       specialize (H18 k_id); specialize (H0 k_id); subst;
-        intuition idtac; cases (findKeys msg $? k_id); eauto.
-      + cases b; subst; eauto.
-        exfalso; eauto.
-        erewrite merge_perms_adds_ks2; eauto.
-      + rewrite merge_perms_adds_no_new_perms; eauto.
-      + cases b; subst; eauto.
-        exfalso; eauto.
-        erewrite merge_perms_chooses_greatest; unfold greatest_permission; simpl; eauto.
-        right; left; eauto.
-      + erewrite merge_perms_adds_ks1; eauto.
-      + cases b; subst; eauto.
-        exfalso; eauto.
-        erewrite merge_perms_chooses_greatest; unfold greatest_permission; simpl; eauto.
-        right; right; eauto.
-      + erewrite merge_perms_adds_ks1; eauto.
+        intuition idtac; cases (findKeys msg $? k_id); simplify_key_merges1; auto;
+          cases b; auto.
 
     - unfold adv_no_honest_keys in *; intros.
       specialize (H17 k_id).
@@ -717,7 +745,7 @@ Section UniverseLemmas.
       right; right.
       split; eauto.
       intros.
-      eapply merge_perms_split in H8; split_ors; eauto.
+      eapply merge_perms_split in H6; split_ors; eauto.
   Qed.
 
   Lemma honest_silent_step_adv_no_honest_keys :
@@ -1639,23 +1667,15 @@ Section SingleAdversarySimulates.
         unfold cipher_honestly_signed;
         cases v; unfold honest_keyb; simpl.
 
-      - cases (honestk $? k_id); cases (pubk $? k_id).
-        + cases b; cases b0; try discriminate;
-            erewrite merge_perms_chooses_greatest by eauto; unfold greatest_permission;
-              simpl; eauto; exfalso; eauto.
-        + erewrite merge_perms_adds_ks1; eauto; simpl; trivial.
-        + erewrite merge_perms_adds_ks2; eauto.
-          cases b; subst; simpl; auto; exfalso; eauto.
-        + rewrite merge_perms_adds_no_new_perms; auto.
+      - cases (honestk $? k_id); cases (pubk $? k_id); simplify_key_merges1; auto;
+          cases b; auto.
+        destruct b0; simpl; eauto; exfalso; eauto.
+        exfalso; eauto.
 
-      - cases (honestk $? k__sign); cases (pubk $? k__sign).
-        + cases b; cases b0; try discriminate;
-            erewrite merge_perms_chooses_greatest by eauto; unfold greatest_permission;
-              simpl; eauto; exfalso; eauto.
-        + erewrite merge_perms_adds_ks1; eauto; simpl; trivial.
-        + erewrite merge_perms_adds_ks2; eauto.
-          cases b; subst; simpl; auto; exfalso; eauto.
-        + rewrite merge_perms_adds_no_new_perms; auto.
+      - cases (honestk $? k__sign); cases (pubk $? k__sign); simplify_key_merges1; auto;
+          cases b; auto.
+        destruct b0; simpl; eauto; exfalso; eauto.
+        exfalso; eauto.
     Qed.
 
     Lemma clean_ciphers_nochange_pubk :
@@ -1677,23 +1697,14 @@ Section SingleAdversarySimulates.
     Proof.
       unfold msg_filter, msg_honestly_signed; destruct m; intros; 
         cases m; unfold honest_keyb; simpl; auto.
-      - cases (honestk $? k__sign); cases (pubk $? k__sign).
-        + cases b; cases b0; try discriminate;
-            erewrite merge_perms_chooses_greatest by eauto; unfold greatest_permission;
-              simpl; eauto; exfalso; eauto.
-        + erewrite merge_perms_adds_ks1; eauto; simpl; trivial.
-        + erewrite merge_perms_adds_ks2; eauto.
-          cases b; subst; simpl; auto; exfalso; eauto.
-        + rewrite merge_perms_adds_no_new_perms; auto.
-
-      - cases (honestk $? k); cases (pubk $? k).
-        + cases b; cases b0; try discriminate;
-            erewrite merge_perms_chooses_greatest by eauto; unfold greatest_permission;
-              simpl; eauto; exfalso; eauto.
-        + erewrite merge_perms_adds_ks1; eauto; simpl; trivial.
-        + erewrite merge_perms_adds_ks2; eauto.
-          cases b; subst; simpl; auto; exfalso; eauto.
-        + rewrite merge_perms_adds_no_new_perms; auto.
+      - cases (honestk $? k__sign); cases (pubk $? k__sign); simplify_key_merges1; auto;
+          destruct b; auto.
+        destruct b0; simpl; eauto; exfalso; eauto.
+        exfalso; eauto.
+      - cases (honestk $? k); cases (pubk $? k); simplify_key_merges1; auto;
+          destruct b; auto.
+        destruct b0; simpl; eauto; exfalso; eauto.
+        exfalso; eauto.
     Qed.
 
     Lemma clean_messages_nochange_pubk :
@@ -1748,10 +1759,7 @@ Section SingleAdversarySimulates.
     Proof.
       induction 1; inversion 4; inversion 2; intros; subst; try discriminate;
         eauto 2; autorewrite with find_user_keys;
-          repeat match goal with
-                 | [ H : Action _ = _ |- _ ] => invert H; simpl in *; split_ands
-                 | [ H : Some = Some _ |- _ ] => invert H
-                 end.
+          clean_context.
 
       - eapply Forall_natmap_in_prop in H8; eauto; simpl in *; invert H8.
         assert (message_no_adv_private msg /\ msgCiphersSigned (findUserKeys usrs') msg) by eauto; split_ands.
@@ -1859,9 +1867,8 @@ Section SingleAdversarySimulates.
       induction 1; inversion 7; inversion 6; intros;
         subst; try discriminate;
           try solve [ econstructor; eauto ];
-          match goal with [ H : Action _ = Action _ |- _] => invert H end;
-          simpl in *; split_ands;
-            autorewrite with find_user_keys.
+          clean_context;
+          autorewrite with find_user_keys.
 
  
       - eapply Forall_natmap_in_prop in H8; eauto; invert H8.
@@ -1911,8 +1918,7 @@ Section SingleAdversarySimulates.
       induction 1; inversion 6; inversion 4; intros;
         subst; try discriminate;
           try solve [ econstructor; eauto ];
-          match goal with [ H : Action _ = Action _ |- _] => invert H end;
-          simpl in *; split_ands;
+          clean_context;
             autorewrite with find_user_keys.
 
       - assert ( msg_honestly_signed (findUserKeys usrs') msg = true ) by eauto.
@@ -2015,7 +2021,7 @@ Section SingleAdversarySimulates.
                | [ H : ?us $? ?uid = Some _ |- ?us $? ?uid <> None ] => solve [ rewrite H; intro C; invert C ]
                end.
 
-      case (u_id' ==n rec_u_id); intro; subst; unfold not; intros; clean_map_lookups.
+       case (u_id' ==n rec_u_id); intro; subst; unfold not; intros; clean_map_lookups.
     Qed.
 
     Lemma labeled_univ_step_inv :
