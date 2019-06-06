@@ -84,15 +84,20 @@ Inductive msg_pat :=
 | SignedEncrypted (k__sign k__enc : key_identifier)
 .
 
+Inductive message_form :=
+| PtKeyForm : message_form
+| CryptoForm : message_form -> message_form
+| PairForm : message_form * message_form -> message_form.
+
 Inductive cipher : Type :=
-| SigCipher {t} (k_id : key_identifier) (msg : message t) : cipher
-| SigEncCipher {t} (k__sign k__enc : key_identifier) (msg : message t) : cipher
+| SigCipher {t} (k_id : key_identifier) (msg : message t) (f : message_form) : cipher
+| SigEncCipher {t} (k__sign k__enc : key_identifier) (msg : message t) (f : message_form) : cipher
 .
 
 Definition cipher_signing_key (c : cipher) :=
   match c with
-  | SigCipher k _      => k
-  | SigEncCipher k _ _ => k
+  | SigCipher k _ _      => k
+  | SigEncCipher k _ _ _ => k
   end.
 
 Definition queued_messages := list (sigT message).
@@ -200,33 +205,12 @@ Section SafeMessages.
 
   Definition cipher_honestly_signed (c : cipher) : bool :=
     match c with
-    | SigCipher k_id _              => honest_keyb k_id
-    | SigEncCipher k__signid k__encid _ => honest_keyb k__signid
+    | SigCipher k_id _ _              => honest_keyb k_id
+    | SigEncCipher k__signid k__encid _ _ => honest_keyb k__signid
     end.
 
   Definition ciphers_honestly_signed :=
     Forall_natmap (fun c => cipher_honestly_signed c = true).
-
-
-  (* Inductive ciphers_honestly_signed : ciphers -> Prop := *)
-  (* | Empty_Ciphers_Signed : ciphers_honestly_signed $0 *)
-  (* | Add_Cipher_Signed (c_id : cipher_id) (c : cipher) (cs : ciphers) : *)
-  (*     cipher_honestly_signed c = true *)
-  (*     -> ciphers_honestly_signed cs *)
-  (*     -> ciphers_honestly_signed ( cs $+ (c_id,c) ). *)
-
-  (* Lemma ciphers_honestly_signed_mapsto : *)
-  (*   forall cs c_id c, *)
-  (*     ciphers_honestly_signed cs *)
-  (*     -> MapsTo c_id c cs *)
-  (*     -> cipher_honestly_signed c = true. *)
-  (* Proof. *)
-  (*   induction 1; intros. *)
-  (*   - rewrite empty_mapsto_iff in H; contradiction. *)
-  (*   - rewrite find_mapsto_iff in H1. *)
-  (*     cases (c_id ==n c_id0); subst; clean_map_lookups; eauto. *)
-  (*     rewrite <- find_mapsto_iff in H1; auto. *)
-  (* Qed. *)
 
   Definition message_queue_safe : queued_messages -> Prop :=
     Forall (fun m => match m with | existT _ _ msg => msg_honestly_signed msg = true end).
@@ -460,13 +444,13 @@ Fixpoint findCiphers {t} (msg : message t) : my_ciphers :=
 
 Inductive user_cipher_queue_safe (honestk : key_perms) (cs : ciphers) : my_ciphers -> Prop :=
 | EmptyQueueSafe : user_cipher_queue_safe honestk cs []
-| ConsQueueSafe  : forall cid cids c,
+| ConsQueueSafe  : forall cid cids c f,
     user_cipher_queue_safe honestk cs cids
     (* -> ~ List.In cid cids *)
     -> cs $? cid = Some c
     -> cipher_honestly_signed honestk c = true
     -> (forall {t} k__s k__e (msg : message t),
-          c = SigEncCipher k__s k__e msg
+          c = SigEncCipher k__s k__e msg f
           -> keys_mine honestk (findKeys msg)
           /\ incl (findCiphers msg) cids)
     -> user_cipher_queue_safe honestk cs (cid :: cids).
@@ -499,14 +483,14 @@ Proof.
 Qed.
 
 Lemma cipher_id_in_user_cipher_queue_prop :
-  forall honestk cs c_id mycs,
+  forall honestk cs c_id mycs f,
     List.In c_id mycs
     -> user_cipher_queue_safe honestk cs mycs
     -> exists c, cs $? c_id = Some c
          /\ cipher_honestly_signed honestk c = true
          /\ exists l1 l2, mycs = l1 ++ c_id :: l2 /\
                     (forall {t} k__s k__e (msg : message t),
-                        c = SigEncCipher k__s k__e msg
+                        c = SigEncCipher k__s k__e msg f 
                         -> keys_mine honestk (findKeys msg)
                         /\ incl (findCiphers msg) l2).
 Proof.
@@ -514,8 +498,8 @@ Proof.
   eapply in_split in H; destruct H as [l1 H]; destruct H as [l2 H].
   eapply user_cipher_queue_safe_split in H0; eauto.
   invert H0.
-  eexists; intuition eauto.
-Qed.
+  eexists; intuition eauto. admit.
+Admitted.
 
 
 (* Definition user_cipher_queue_safe (honestk : key_perms) (cs : ciphers) (mycs : my_ciphers) : Prop := *)
@@ -1259,100 +1243,6 @@ Section KeyMergeTheorems.
       erewrite merge_perms_chooses_greatest; eauto; unfold greatest_permission; simpl; eauto.
   Qed.
 
-  (* Lemma adv_no_honest_keys_after_no_leaky_msg : *)
-  (*   forall {t} (msg : message t) cs, *)
-  (*     adv_no_honest_keys all_keys honestk advk *)
-  (*     -> msg_leaks_no_honest_keys all_keys honestk cs msg *)
-  (*     -> adv_no_honest_keys all_keys honestk (advk $k++ findKeys all_keys msg). *)
-  (* Proof. *)
-  (*   unfold adv_no_honest_keys. *)
-
-  (*   induction 2; intros; eauto; *)
-  (*     specialize (H k_id); split_ors; intuition idtac; *)
-  (*       right; destruct H as [ky H]; split_ands; *)
-  (*         exists ky; intuition idtac; *)
-  (*           right; right; *)
-  (*             intuition idtac. *)
-
-  (*   - destruct kp; simpl in *. *)
-  (*     rewrite H0 in *. *)
-  (*     cases (k0 ==n k_id); subst; eauto. *)
-  (*     cases (advk $? k_id); try contradiction; eauto. *)
-  (*     + cases b0; subst; try contradiction. *)
-  (*       erewrite merge_perms_adds_ks1 in H2; eauto; clean_map_lookups; trivial. *)
-  (*     + erewrite merge_perms_adds_no_new_perms in H2; eauto; clean_map_lookups; trivial. *)
-
-  (*   - specialize (IHmsg_leaks_no_honest_keys1 k_id); *)
-  (*       specialize (IHmsg_leaks_no_honest_keys2 k_id); *)
-  (*       split_ors; contra_map_lookup. *)
-
-  (*     invert H3; invert H4; *)
-  (*       split_ands; split_ors; contra_map_lookup; *)
-  (*         split_ands. *)
-  (*     simpl in *. *)
-
-  (*     cases (advk $? k_id); *)
-  (*       cases (findKeys all_keys msg1 $? k_id); *)
-  (*       cases (findKeys all_keys msg2 $? k_id); *)
-  (*       contra_map_lookup; auto; *)
-  (*         try match goal with *)
-  (*         | [ H : advk $? k_id = Some ?b |- _ ] => cases b; try contradiction *)
-  (*         end; *)
-  (*         repeat *)
-  (*           match goal with *)
-  (*           | [ H : Some _ = Some _ |- _ ] => invert H *)
-  (*           | [ H : _ || _ =  true |- _ ] => rewrite orb_true_iff in H; split_ors; subst *)
-  (*           | [ H : greatest_permission _ _ = _ |- _] => unfold greatest_permission in H; simpl in H; subst *)
-  (*           | [ H1 : ?fk1 $? k_id = None *)
-  (*             , H2 : ?fk2 $? k_id = None *)
-  (*             , H3 : advk $k++ (?fk1 $k++ ?fk2) $? k_id = Some true |- _ ] => *)
-  (*                  assert (fk1 $k++ fk2 $? k_id = None) by (apply merge_perms_adds_no_new_perms; auto); *)
-  (*                    rewrite merge_perms_adds_ks1 *)
-  (*                      with (ks1 := advk) (ks2 := fk1 $k++ fk2) (v := false) in H3 by auto *)
-  (*           | [ H1 : advk $? k_id = Some false *)
-  (*             , H3 : advk $k++ (?fk1 $k++ ?fk2) $? k_id = Some true *)
-  (*               |- _ ] => idtac H1 H3; *)
-  (*                         erewrite merge_perms_chooses_greatest *)
-  (*                            with (ks1:=advk) (ks2:=fk1 $k++ fk2)in H3 by eauto *)
-  (*           | [ H1 : advk $? k_id = None *)
-  (*             , H3 : ?fk1 $k++ ?fk2 $? k_id = Some true *)
-  (*             , H4 : ?fk1 $? k_id = Some _ *)
-  (*             , H5 : ?fk2 $? k_id = Some _ *)
-  (*               |- _ ] => erewrite merge_perms_chooses_greatest in H3 by eauto *)
-  (*           | [ H1 : advk $? k_id = None *)
-  (*             , H3 : ?fk1 $k++ ?fk2 $? k_id = Some true *)
-  (*             , H4 : ?fk1 $? k_id = Some _ *)
-  (*             , H5 : ?fk2 $? k_id = None *)
-  (*               |- _ ] => erewrite merge_perms_adds_ks1 with (ks1:=fk1) (ks2:=fk2) in H3 by eauto *)
-  (*           | [ H1 : advk $? k_id = None *)
-  (*             , H3 : ?fk1 $k++ ?fk2 $? k_id = Some true *)
-  (*             , H4 : ?fk1 $? k_id = None *)
-  (*             , H5 : ?fk2 $? k_id = Some _ *)
-  (*               |- _ ] => erewrite merge_perms_adds_ks2 with (ks1:=fk1) (ks2:=fk2) in H3 by eauto *)
-  (*           | [ H1 : advk $? k_id = None *)
-  (*             , H3 : ?fk1 $k++ ?fk2 $? k_id = Some true *)
-  (*             , H4 : ?fk1 $? k_id = None *)
-  (*             , H5 : ?fk2 $? k_id = None *)
-  (*               |- _ ] => erewrite merge_perms_adds_no_new_perms in H3 by eauto *)
-  (*           | [ H1 : advk $? k_id = None *)
-  (*             , H3 : advk $k++ (?fk1 $k++ ?fk2) $? k_id = Some true *)
-  (*               |- _ ] => assert (fk1 $k++ fk2 $? k_id = Some true) by (eapply merge_perms_came_from_somewhere2; eauto); clear H3 *)
-  (*           | [ H1: advk $? k_id = Some false *)
-  (*             , H2: findKeys all_keys ?m $? k_id = Some true *)
-  (*             , H3: advk $k++ findKeys all_keys ?m $? k_id = Some true -> False *)
-  (*               |- _ ] => assert (advk $k++ findKeys all_keys m $? k_id = Some true) *)
-  (*                             by (erewrite merge_perms_chooses_greatest; eauto; unfold greatest_permission; auto); contradiction *)
-  (*           | [ H1: advk $? k_id = None *)
-  (*             , H2: findKeys all_keys ?m $? k_id = Some true *)
-  (*             , H3: advk $k++ findKeys all_keys ?m $? k_id = Some true -> False *)
-  (*               |- _ ] => assert (advk $k++ findKeys all_keys m $? k_id = Some true) *)
-  (*                             by (erewrite merge_perms_came_from_somewhere2; eauto); contradiction *)
-  (*           end. *)
-
-  (*     contradiction. *)
-
-  (*   Qed. *)
-
 End KeyMergeTheorems.
 
 Definition buildUniverse {A B}
@@ -1410,6 +1300,24 @@ Definition build_data_step {A B C} (U : universe A B) (u_data : user_data C) : d
 Definition user_id_option (uid : user_id) : option user_id := Some uid.
 Coercion user_id_option : user_id >-> option.
 
+Fixpoint make_message_form {t} (m : message t) (cs : ciphers):=
+  match m with
+  | Plaintext _
+  | KeyMessage _ => PtKeyForm
+  | MsgPair m1 m2 => PairForm ((make_message_form m1 cs), (make_message_form m2 cs))
+  | SignedCiphertext _ _ c__id => CryptoForm
+                                 (match cs $? c__id with
+                                  | Some (SigEncCipher _ _ _ f) => f
+                                  | Some _ => PtKeyForm (* garbage, should be prevented elsewhere might change to option *)
+                                  | None => PtKeyForm
+                                  end)
+  | Signature _ _ c__id => CryptoForm (match cs $? c__id with
+                                          | Some (SigCipher _ _ f) => f
+                                          | Some _ => PtKeyForm (* garbage, should be prevented elsewhere might change to option *)
+                                          | None => PtKeyForm
+                                          end)
+  end.
+
 Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C -> data_step0 A B C -> Prop :=
 
 (* Plumbing *)
@@ -1466,7 +1374,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
 
 (* Encryption / Decryption *)
 | StepEncrypt : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs cs' u_id gks ks qmsgs mycs mycs'
-                  (msg : message t) k__signid k__encid kp__enc kt__enc kt__sign c_id cipherMsg,
+                  (msg : message t) k__signid k__encid kp__enc kt__enc kt__sign c_id cipherMsg mf,
       gks $? k__encid  = Some (MkCryptoKey k__encid Encryption kt__enc)
     -> gks $? k__signid = Some (MkCryptoKey k__signid Signing kt__sign)
     -> ks $? k__encid   = Some kp__enc
@@ -1474,7 +1382,8 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> ~ In c_id cs
     -> keys_mine ks (findKeys msg)
     -> incl (findCiphers msg) mycs
-    -> cipherMsg = SigEncCipher k__signid k__encid msg
+    -> mf = make_message_form msg cs
+    -> cipherMsg = SigEncCipher k__signid k__encid msg mf
     -> cs' = cs $+ (c_id, cipherMsg)
     -> mycs' = c_id :: mycs
     -> step_user Silent u_id
@@ -1482,8 +1391,8 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
                 (usrs, adv, cs', gks, ks, qmsgs, mycs', Return (SignedCiphertext k__signid k__encid c_id))
 
 | StepDecrypt : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks ks' qmsgs mycs mycs'
-                  (msg : message t) k__signid kp__sign k__encid c_id newkeys kt__sign kt__enc newcs,
-      cs $? c_id     = Some (SigEncCipher k__signid k__encid msg)
+                  (msg : message t) k__signid kp__sign k__encid c_id newkeys kt__sign kt__enc newcs f,
+      cs $? c_id     = Some (SigEncCipher k__signid k__encid msg f)
     -> gks $? k__encid  = Some (MkCryptoKey k__encid Encryption kt__enc)
     -> gks $? k__signid = Some (MkCryptoKey k__signid Signing kt__sign)
     -> ks  $? k__encid  = Some true
@@ -1499,11 +1408,12 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
 
 (* Signing / Verification *)
 | StepSign : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs cs' u_id gks ks qmsgs mycs mycs'
-               (msg : message t) k_id kt c_id cipherMsg,
+               (msg : message t) k_id kt c_id cipherMsg mf,
       gks $? k_id = Some (MkCryptoKey k_id Signing kt)
     -> ks  $? k_id = Some true
     -> ~ In c_id cs
-    -> cipherMsg = SigCipher k_id msg
+    -> mf = make_message_form msg cs
+    -> cipherMsg = SigCipher k_id msg mf
     -> cs' = cs $+ (c_id, cipherMsg)
     -> mycs' = c_id :: mycs
     -> step_user Silent u_id
@@ -1511,10 +1421,10 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
                 (usrs, adv, cs', gks, ks, qmsgs, mycs', Return (Signature msg k_id c_id))
 
 | StepVerify : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks qmsgs mycs
-                 (msg : message t) k_id kp kt c_id,
+                 (msg : message t) k_id kp kt c_id mf,
       gks $? k_id = Some (MkCryptoKey k_id Signing kt)
     -> ks  $? k_id = Some kp
-    -> cs $? c_id = Some (SigCipher k_id msg)
+    -> cs $? c_id = Some (SigCipher k_id msg mf)
     -> List.In c_id mycs
     -> step_user Silent u_id
                 (usrs, adv, cs, gks, ks, qmsgs, mycs, Verify k_id (Signature msg k_id c_id))

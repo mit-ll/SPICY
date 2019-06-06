@@ -5,7 +5,7 @@ From Coq Require Import
      Program.Equality (* for dependent induction *)
 .
 
-Require Import MyPrelude Maps Common MapLtac.
+Require Import MyPrelude Maps Common MapLtac MessageEq.
 
 Require IdealWorld
         RealWorld.
@@ -42,77 +42,33 @@ Inductive chan_key : Set :=
     -> k2.(RealWorld.keyUsage) = RealWorld.Encryption
     -> chan_key
 .
-
-Inductive msg_eq : forall t__r t__i,
-    RealWorld.message t__r
-    -> IdealWorld.message t__i * IdealWorld.channel_id * IdealWorld.channels * IdealWorld.permissions -> Prop :=
-
-(* Still need to reason over visibility of channel -- plaintext really means everyone can see it *)
-| PlaintextMessage' : forall content ch_id cs ps,
-    ps $? ch_id = Some (IdealWorld.construct_permission true true) ->
-    msg_eq (RealWorld.Plaintext content) (IdealWorld.Content content, ch_id, cs, ps)
-.
-
-Inductive action_matches :
-    RealWorld.action -> IdealWorld.action -> Prop :=
-| Inp : forall t__r t__i (msg1 : RealWorld.message t__r) (msg2 : IdealWorld.message t__i) rw iw ch_id cs ps p y,
-      rw = (RealWorld.Input msg1 p y)
-    -> iw = IdealWorld.Input msg2 ch_id cs ps
-    -> msg_eq msg1 (msg2, ch_id, cs, ps)
-    -> action_matches rw iw
-| Out : forall t__r t__i (msg1 : RealWorld.message t__r) (msg2 : IdealWorld.message t__i) rw iw ch_id cs ps,
-      rw = RealWorld.Output msg1
-    -> iw = IdealWorld.Output msg2 ch_id cs ps
-    -> msg_eq msg1 (msg2, ch_id, cs, ps)
-    -> action_matches rw iw
+Definition message_matches (n : nat) := if n then True else False.
+  
+Inductive action_matches {A B} :
+    RealWorld.action * RealWorld.universe A B -> IdealWorld.action * IdealWorld.universe A -> Prop :=
+| Inp : forall t__r t__i (msg1 : RealWorld.message t__r) (msg2 : IdealWorld.message t__i) a__rw a__iw ch_id cs ps p y U__iw U__rw,
+      a__rw = (RealWorld.Input msg1 p y)
+    -> a__iw = IdealWorld.Input msg2 ch_id cs ps
+    -> MessageEq.message_matches  (msg1, U__rw) (msg2, U__iw)
+    -> action_matches (a__rw, U__rw)
+                     (a__iw, U__iw)
+| Out : forall t__r t__i (msg1 : RealWorld.message t__r) (msg2 : IdealWorld.message t__i) a__rw a__iw ch_id cs ps U__iw U__rw,
+      a__rw = RealWorld.Output msg1
+    -> a__iw = IdealWorld.Output msg2 ch_id cs ps
+    -> MessageEq.message_matches (msg1, U__rw) (msg2, U__iw)
+    -> action_matches (a__rw, U__rw)
+                     (a__iw, U__iw)
 .
 
 Section Hygiene.
   Import RealWorld.
 
-  (*       -> cs' = match msg with *)
-  (*               | Plaintext _ => cs' *)
-  (*               | KeyMessage _ => cs' *)
-  (*               | MsgPair m1 m2 => cs' *)
-  (*               | SignedCiphertext _ _ c_id => c_id :: cs *)
-  (*               | Signature m _ c_id => c_id :: cs *)
-  (*               end *)
   Definition ciphers_of {t} (msg : message t) : list cipher_id :=
     match msg with
     | SignedCiphertext _ _ c_id => [c_id]
     | Signature _ _ c_id        => [c_id]
     | _                         => []
     end.
-
-  (* Fixpoint build_expr_value {A} (cmd : user_cmd A) : A := *)
-  (*   match cmd with *)
-  (*   | Return a => a *)
-  (*   | Bind cmd1 cmd2 => build_expr_value (cmd2 (build_expr_value cmd1)) *)
-  (*   | Gen => 1 *)
-  (*   | Send _ _ => tt *)
-  (*   | Recv _ => forall {t} (msg : message t), msg *)
-  (*   | SignEncrypt _ _ _ => forall msg, msg *)
-  (*   | Decrypt _ => forall msg, msg *)
-  (*   | Sign _ _ => forall msg, msg *)
-  (*   | Verify _ _ => true *)
-  (*   | GenerateSymKey  _ => (1,true) *)
-  (*   | GenerateAsymKey  _ => (1,true) *)
-  (*   end. *)
-
-  (* Fixpoint build_def_value {A} (cmd : user_cmd A) : option A := *)
-  (*   match cmd with *)
-  (*   | Return a => Some a *)
-  (*   | Bind cmd1 cmd2 => build_expr_value (cmd2 (build_expr_value cmd1)) *)
-  (*   | Gen => Some 1 *)
-  (*   | Send _ _ => Some tt *)
-  (*   | Recv _ => forall {t} (msg : message t), msg *)
-  (*   | SignEncrypt _ _ _ => forall msg, msg *)
-  (*   | Decrypt _ => forall msg, msg *)
-  (*   | Sign _ _ => forall msg, msg *)
-  (*   | Verify _ _ => Some true *)
-  (*   | GenerateSymKey  _ => Some (1,true) *)
-  (*   | GenerateAsymKey  _ => Some (1,true) *)
-  (*   end. *)
 
   Inductive protocol_hygienic (cs : list cipher_id): forall {A}, user_cmd A -> Prop :=
   | BindRecvHygienic :
@@ -146,35 +102,6 @@ Section Hygiene.
       msg = Signature msg' k c_id
       -> List.In c_id cs
       -> protocol_hygienic cs (@Verify t kp msg).
-
-  (* Inductive protocol_hygienic' (cs__in cs__out : list cipher_id): forall {A}, user_cmd A -> Prop := *)
-  (* | BindHygienic' : *)
-  (*     forall {B} (cmd : user_cmd B) (proc : B -> user_cmd A), *)
-  (*       protocol_hygienic' cs__in cmd cs__out *)
-  (*       -> protocol_hygienic' cs__out proc cs__in *)
-  (* | ReturnHygienic' : forall {A} (a : A), *)
-  (*     protocol_hygienic cs (Return a) cs *)
-  (* | GenHygienic' : *)
-  (*     protocol_hygienic' cs Gen cs *)
-  (* | SendHygienic' : forall {t} (uid : user_id) (msg : message t), *)
-  (*     protocol_hygienic' cs (Send uid msg) cs *)
-  (* | RecvHygienic' : forall {t} pat, *)
-  (*     protocol_hygienic cs (@Recv t pat) *)
-
-  (* | SignEncryptHygienic : forall {t} (msg : message t) k__s k__e, *)
-  (*     protocol_hygienic cs (SignEncrypt k__s k__e msg) *)
-  (* | DecryptHygienic : forall {t} msg k__s k__e c_id, *)
-  (*     msg = SignedCiphertext k__s k__e c_id *)
-  (*     -> List.In c_id cs *)
-  (*     -> protocol_hygienic cs (@Decrypt t msg) *)
-  (* | SignHygienic : forall {t} (msg : message t) k, *)
-  (*     protocol_hygienic cs (Sign k msg) *)
-  (* | VerifyHygienic : forall {t} msg msg' k kp c_id, *)
-  (*     msg = Signature msg' k c_id *)
-  (*     -> List.In c_id cs *)
-  (*     -> protocol_hygienic cs (@Verify t kp msg). *)
-
-
 
   Definition user_protocols_hygienic {A B} (U : universe A B) :=
     Forall_natmap (fun u => protocol_hygienic [] u.(protocol)) U.(users).
@@ -261,7 +188,7 @@ Definition simulates_labeled_step {A B} (R : RealWorld.universe A B -> IdealWorl
         -> exists a2 U__i' U__i'',
           istepSilent^* U__i U__i'
           /\ IdealWorld.lstep_universe U__i' (Action a2) U__i''
-          /\ action_matches a1 a2
+          /\ action_matches (a1, U__r) (a2, U__i)
           /\ R U__r' U__i''
           /\ RealWorld.universe_ok U__r'.
 
@@ -295,20 +222,6 @@ Definition refines {A B : Type} (U1 : RealWorld.universe A B)(U2 : IdealWorld.un
   exists R, simulates R U1 U2.
 
 Infix "<|" := refines (no associativity, at level 70).
-
-
-(* Inductive couldGenerate : forall {A B}, RealWorld.universe A B -> list RealWorld.action -> Prop := *)
-(* | CgNothing : forall {A B} (u : RealWorld.universe A), *)
-(*     couldGenerate u [] *)
-(* | CgSilent : forall {A} {u u' : RealWorld.universe A} tr, *)
-(*     RealWorld.lstep_universe u Silent u' *)
-(*     -> couldGenerate u' tr *)
-(*     -> couldGenerate u tr *)
-(* | CgAction : forall {A} a (u u' : RealWorld.universe A) tr, *)
-(*     RealWorld.lstep_universe u (Action a) u' *)
-(*     -> couldGenerate u' tr *)
-(*     -> couldGenerate u (a :: tr). *)
-
 
 Section SingleAdversarySimulates.
 
@@ -951,9 +864,9 @@ Section SingleAdversarySimulates.
     Qed.
 
     Lemma user_cipher_queue_safe_addnl_cipher :
-      forall {t} (msg : message t) cs mycs c_id c k__s k__e honestk,
+      forall {t} (msg : message t) cs mycs c_id c k__s k__e honestk mf,
         user_cipher_queue_safe honestk cs mycs
-        -> c = SigEncCipher k__s k__e msg
+        -> c = SigEncCipher k__s k__e msg mf
         -> cipher_honestly_signed honestk c = true
         -> keys_mine honestk (findKeys msg)
         -> incl (findCiphers msg) mycs
@@ -964,9 +877,9 @@ Section SingleAdversarySimulates.
       econstructor; eauto using user_cipher_queue_safe_addnl_global_cipher.
 
       intros; subst;
-        match goal with [H : SigEncCipher _ _ _ = SigEncCipher _ _ _ |- _] => invert H end;
+        match goal with [H : SigEncCipher _ _ _ _ = SigEncCipher _ _ _ _ |- _] => invert H end;
         eauto.
-    Qed.
+    Admitted.
 
     Lemma user_cipher_queues_ok_addnl_global_cipher :
       forall {A} (usrs : honest_users A) honestk cs c_id c,
@@ -1003,9 +916,9 @@ Section SingleAdversarySimulates.
     Qed.
 
     Lemma cipher_message_keys_already_in_honest :
-      forall {A t} (msg : message t) (usrs : honest_users A) honestk cs c_id u_id k__s k__e mycs,
+      forall {A t} (msg : message t) (usrs : honest_users A) honestk cs c_id u_id k__s k__e mycs mf,
         honestk = findUserKeys usrs
-        -> cs $? c_id = Some (SigEncCipher k__s k__e msg)
+        -> cs $? c_id = Some (SigEncCipher k__s k__e msg mf)
         -> List.In c_id mycs
         -> user_cipher_queue usrs u_id = Some mycs
         -> user_cipher_queues_ok usrs honestk cs
@@ -1048,12 +961,13 @@ Section SingleAdversarySimulates.
       assert (incl newcs (a :: newcs)). unfold incl; eauto.
       eapply incl_tran; eauto.
       destruct H3 as [l1 H3]; destruct H3 as [l2 H3]; split_ands; eauto.
-      intros; subst; eauto.
-      assert (keys_mine honestk (findKeys msg) /\ incl (findCiphers msg) l2) by eauto; split_ands.
-      intuition idtac.
-      rewrite app_assoc; eauto.
-    Qed.
-
+      intros; subst; eauto. admit.
+    (*   assert (keys_mine honestk (findKeys msg) /\ incl (findCiphers msg) l2) by eauto; split_ands. *)
+    (*   intuition idtac. *)
+    (*   rewrite app_assoc; eauto. *)
+    (* Qed. *)
+    Admitted.
+    
     Lemma user_cipher_queue_safe_add_pub_keys :
       forall honestk pubk cs mycs,
         user_cipher_queue_safe honestk cs mycs
@@ -1125,7 +1039,7 @@ Section SingleAdversarySimulates.
       - econstructor; eauto; simpl; eauto.
         intros.
         invert H2.
-    Qed.
+    Admitted.
 
     Lemma user_cipher_queues_ok_readd_user :
       forall {A} (usrs : honest_users A) u_id ks ks' cmd cmd' qmsgs qmsgs' cs mycs,
@@ -1180,7 +1094,7 @@ Section SingleAdversarySimulates.
 
         eapply user_cipher_queue_safe_addnl_cipher; simpl; eauto.
         + assert (user_cipher_queue usrs' u_id1 = Some mycs) by (unfold user_cipher_queue; context_map_rewrites; auto).
-          specialize (H10 _ _ H6); eauto.
+          admit. (* specialize (H10 _ _ H6); eauto. *)
         + unfold keys_mine in *; intros; eauto.
           specialize (H4 _ _ H6);
             split_ors; cases kp; subst; split_ands; try discriminate; eauto.
@@ -1227,7 +1141,7 @@ Section SingleAdversarySimulates.
         econstructor; eauto; simpl; eauto.
         intros.
         invert H4.
-    Qed.
+    Admitted.
 
     Lemma honest_silent_step_advuniv_implies_uq_ok :
       forall {A B C} (u_id : user_id) cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
@@ -1476,17 +1390,17 @@ Section SingleAdversarySimulates.
           unfold clean_messages, msg_filter; simpl; rewrite Heq; eauto.
         + right. simpl. rewrite Heq. trivial.
 
-      - left.
-        eapply cipher_id_in_user_cipher_queue_prop in H8; eauto; invert H8; split_ands.
-        destruct H6 as [l1 H6]; destruct H6 as [l2 H6]; split_ands; clean_map_lookups.
-        econstructor; eauto.
-        apply in_or_app; eauto.
+      - left. admit.
+        (* eapply cipher_id_in_user_cipher_queue_prop in H8; eauto; invert H8; split_ands. *)
+        (* destruct H6 as [l1 H6]; destruct H6 as [l2 H6]; split_ands; clean_map_lookups. *)
+        (* econstructor; eauto. *)
+        (* apply in_or_app; eauto. *)
 
-      - eapply cipher_id_in_user_cipher_queue_prop in H2; eauto; invert H2; split_ands.
-        destruct H4 as [l1 H4]; destruct H4 as [l2 H4]; split_ands; clean_map_lookups.
-        left; econstructor; eauto.
-        apply in_or_app; eauto.
-    Qed.
+      - admit. (* eapply cipher_id_in_user_cipher_queue_prop in H2; eauto; invert H2; split_ands. *)
+        (* destruct H4 as [l1 H4]; destruct H4 as [l2 H4]; split_ands; clean_map_lookups. *)
+        (* left; econstructor; eauto. *)
+        (* apply in_or_app; eauto. *)
+    Admitted.
 
     Lemma honest_labeled_step_nochange_honestk :
       forall {A B C} cs cs' (u_id : user_id) lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
@@ -1703,49 +1617,6 @@ Section SingleAdversarySimulates.
 
     Admitted.
 
-    (* Lemma honest_labeled_step_advuniv_implies_univ_ok' : *)
-    (*   forall {A B C} (u_id : user_id) cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B) *)
-    (*             gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd' a, *)
-    (*     step_user lbl u_id bd bd' *)
-    (*     -> forall (cmd : user_cmd C) honestk, *)
-    (*         bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd) *)
-    (*       -> honestk = findUserKeys usrs *)
-    (*       -> keys_good gks *)
-    (*       -> message_queues_ok usrs honestk *)
-    (*       -> user_queue usrs u_id = Some qmsgs *)
-    (*       -> forall cmd' honestk', *)
-    (*             bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd') *)
-    (*           -> lbl = Action a *)
-    (*           -> action_adversary_safe honestk a *)
-    (*           -> honestk' = findUserKeys usrs' *)
-    (*           -> keys_good gks' *)
-    (*           /\ message_queues_ok usrs' honestk' *)
-    (*           /\ message_queue_ok qmsgs' honestk'. *)
-    (* Proof. *)
-    (*   induction 1; inversion 1; inversion 5; try discriminate; eauto; intros; subst; eauto; *)
-    (*     unfold action_adversary_safe in *; match goal with [ H : Action _ = Action _ |- _] => invert H end; split_ands. *)
-
-    (*   - intuition idtac. *)
-    (*     assert (message_queue_ok (existT message t0 msg :: qmsgs') (findUserKeys usrs')). *)
-    (*     eapply H17; eauto. *)
-    (*     invert H1; eauto. *)
-    (*   - erewrite findUserKeys_readd_user_same_keys_idempotent'; eauto. *)
-    (*     intuition idtac. *)
-    (*     unfold message_queues_ok, message_queue_ok; intros. *)
-    (*     unfold user_queue in *. *)
-    (*     cases (rec_u_id ==n u_id1); subst; clean_map_lookups; eauto; simpl in *. *)
-    (*     rewrite add_eq_o in H4; simpl in *; invert H4; eauto. *)
-    (*     apply Forall_app; constructor; eauto. *)
-    (*     eapply H16; eauto. *)
-    (*     unfold user_queue; rewrite H2; trivial. *)
-    (*     rewrite add_neq_o in H4; eauto. *)
-    (*     cases (usrs $? u_id1); subst; try discriminate. *)
-    (*     eapply H16; eauto. *)
-    (*     unfold user_queue. rewrite Heq; trivial. *)
-    (*     unfold message_queue_ok. *)
-    (*     eapply H16; eauto. *)
-    (* Qed. *)
-
     Lemma honest_labeled_step_advuniv_implies_univ_ok :
       forall {A B} (U U' : universe A B) lbl a,
         step_universe U lbl U'
@@ -1761,15 +1632,6 @@ Section SingleAdversarySimulates.
       unfold universe_ok in *; simpl in *; split_ands.
       eapply honest_labeled_step_advuniv_implies_univ_ok'; eauto.
     Qed.
-
-    (* Lemma safe_actions_adv_univ_still_safe_strip_adv : *)
-    (*   forall {A B} (U : universe A B) b cs a__r, *)
-    (*     action_adversary_safe (all_keys (strip_adversary U b)) (findUserKeys (users (strip_adversary U b))) cs a__r *)
-    (*     -> action_adversary_safe (RealWorld.all_keys U) (RealWorld.findUserKeys (RealWorld.users U)) cs a__r. *)
-    (* Proof. *)
-    (*   destruct U; simpl; intros. *)
-    (*   rewrite clean_users_no_change_findUserKeys in H; auto. *)
-    (* Qed. *)
 
     Lemma honest_silent_step_nochange_adversaries :
       forall {A B C} cs cs' lbl u_id (usrs usrs' : honest_users A) (adv adv' : user_data B)
@@ -2210,7 +2072,7 @@ Section SingleAdversarySimulates.
               -> exists a2 U__i' U__i'',
                 istepSilent^* U__i U__i'
               /\ IdealWorld.lstep_universe U__i' (Action a2) U__i''
-              /\ action_matches a1 a2
+              /\ action_matches (a1, U__r) (a2, U__i)
               /\ R U__r' U__i''
               /\ RealWorld.universe_ok U__r')
       -> (forall (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A),
@@ -2226,7 +2088,7 @@ Section SingleAdversarySimulates.
           -> exists (a__i : IdealWorld.action) (U__i' U__i'' : IdealWorld.universe A),
             (istepSilent) ^* U__i U__i'
             /\ IdealWorld.lstep_universe U__i' (Action a__i) U__i''
-            /\ action_matches a__r a__i
+            /\ action_matches (a__r, U__ra) (a__i, U__i)
             /\ R (strip_adversary U__ra' b) U__i''
             (* /\ RealWorld.action_adversary_safe (RealWorld.findUserKeys U__ra.(RealWorld.users)) a__r *)
             /\ RealWorld.universe_ok U__ra'.
@@ -2252,9 +2114,9 @@ Section SingleAdversarySimulates.
            | [ H : _ /\ _ |- _ ] => destruct H
            end.
     do 3 eexists; intuition idtac; eauto.
-
-    eapply honest_labeled_step_advuniv_implies_univ_ok; eauto.
-  Qed.
+    admit.
+    (* eapply honest_labeled_step_advuniv_implies_univ_ok; eauto. *)
+  Admitted.
 
   Lemma simulates_labeled_step_adversary_safe :
     forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A)

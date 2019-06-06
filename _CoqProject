@@ -7,8 +7,9 @@ KeyManagement/MapLtac.v
 KeyManagement/Common.v
 KeyManagement/IdealWorld.v
 KeyManagement/RealWorld.v
-KeyManagement/Simulation.v
-KeyManagement/EncPingProtocol.v
+ KeyManagement/Simulation.v
+# KeyManagement/EncPingProtocol.v
+KeyManagement/MessageEq.v
 # KeyManagement/PingProtocol.v
 # KeyManagement/SimpleAuth.v
 # KeyManagement/SimpleEnc.v

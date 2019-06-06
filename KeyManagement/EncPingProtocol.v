@@ -107,10 +107,10 @@ Section RealProtocolParams.
   Definition KID1 : key_identifier := 0.
   Definition KID2 : key_identifier := 1.
 
-  Definition KEY1  := MkCryptoKey KID1 Signing (AsymKey true).
-  Definition KEY2  := MkCryptoKey KID2 Signing (AsymKey true).
-  Definition KEY__pub1 := MkCryptoKey KID1 Signing (AsymKey false).
-  Definition KEY__pub2 := MkCryptoKey KID2 Signing (AsymKey false).
+  Definition KEY1  := MkCryptoKey KID1 Signing AsymKey.
+  Definition KEY2  := MkCryptoKey KID2 Signing AsymKey.
+  Definition KEY__pub1 := MkCryptoKey KID1 Signing AsymKey. 
+  Definition KEY__pub2 := MkCryptoKey KID2 Signing AsymKey.
   Definition KEYS  := $0 $+ (KID1, KEY1) $+ (KID2, KEY2).
 
   Definition A__keys := $0 $+ (KID1, KEY1) $+ (KID2, KEY__pub2).
