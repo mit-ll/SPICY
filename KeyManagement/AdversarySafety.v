@@ -249,7 +249,7 @@ Section UniverseLemmas.
       -> user_cipher_queue_ok cs (honestk $k++ findKeys msg) (findCiphers msg).
   Proof.
     induction msg; intros; simpl in *; try solve [econstructor].
-    - invert H; simpl in *.
+    - invert H. simpl in *.
       econstructor; eauto.
       rewrite merge_keys_right_identity.
       eexists; eauto.
@@ -676,8 +676,10 @@ Section UniverseLemmas.
       apply honest_keyb_true_findKeys in H.
       invert H16; try contradiction.
       intuition eauto.
-
-      admit.  (* need to expand notion of ciphers_ok predicate *)
+      unfold msgCiphersSigned; simpl.
+      econstructor; eauto.
+      simpl.
+      unfold honest_keyb; context_map_rewrites; trivial.
 
   Admitted.
 
@@ -790,19 +792,15 @@ Section UniverseLemmas.
           unfold adv_no_honest_keys; intros;
             specialize (H21 k_id); clean_map_lookups; intuition idtac.
 
-        * right; right; split; eauto; intros.
-          eapply merge_perms_split in H6; split_ors; eauto.
-        * right; right; split; eauto; intros.
-          eapply merge_perms_split in H6; split_ors; eauto.
+        right; right; split; eauto; intros.
+        eapply merge_perms_split in H6; split_ors; eauto.
 
       + eapply Forall_natmap_in_prop in H20; eauto; invert H20; 
           unfold adv_no_honest_keys; intros;
             specialize (H21 k_id); clean_map_lookups; intuition idtac.
 
-        * right; right; split; eauto; intros.
-          eapply merge_perms_split in H6; split_ors; eauto.
-        * right; right; split; eauto; intros.
-          eapply merge_perms_split in H6; split_ors; eauto.
+        right; right; split; eauto; intros.
+        eapply merge_perms_split in H6; split_ors; eauto.
 
   Admitted.
 

@@ -106,6 +106,7 @@ Section RealWorldUniverseProperties.
   | SigCipherHonestOk : forall {t} (msg : message t) k,
       honestk $? k = Some true
       -> (forall k, findKeys msg $? k = Some true -> False)
+      -> msgCiphersSigned msg
       -> encrypted_cipher_ok (SigCipher k msg)
   | SigCipherNotHonestOk : forall {t} (msg : message t) k,
       honestk $? k <> Some true
@@ -115,18 +116,17 @@ Section RealWorldUniverseProperties.
       -> (forall k, findKeys msg $? k = Some true
               -> honestk $? k <> Some true)
       -> encrypted_cipher_ok (SigEncCipher k__s k__e msg)
-  | SigEncCipherHonestSignedEncKeyNotHonestOk : forall {t} (msg : message t) k__e k__s,
-      honestk $? k__s = Some true
-      -> honestk $? k__e <> Some true
-      -> (forall k, findKeys msg $? k = Some true
-              -> honestk $? k <> Some true)
-      -> encrypted_cipher_ok (SigEncCipher k__s k__e msg)
+  (* | SigEncCipherHonestSignedEncKeyNotHonestOk : forall {t} (msg : message t) k__e k__s, *)
+  (*     honestk $? k__s = Some true *)
+  (*     -> honestk $? k__e <> Some true *)
+  (*     -> (forall k, findKeys msg $? k = Some true *)
+  (*             -> honestk $? k <> Some true) *)
+  (*     -> encrypted_cipher_ok (SigEncCipher k__s k__e msg) *)
   | SigEncCipherHonestSignedEncKeyHonestOk : forall {t} (msg : message t) k__e k__s,
       honestk $? k__s = Some true
       -> honestk $? k__e = Some true
       -> keys_mine honestk (findKeys msg)
       -> msgCiphersSigned msg
-      (* -> user_cipher_queue_ok cs honestk (findCiphers msg) *)
       -> encrypted_cipher_ok (SigEncCipher k__s k__e msg).
 
   Definition encrypted_ciphers_ok :=
