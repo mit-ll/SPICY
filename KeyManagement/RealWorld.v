@@ -165,9 +165,6 @@ Section SafeMessages.
   Definition ciphers_honestly_signed :=
     Forall_natmap (fun c => cipher_honestly_signed c = true).
 
-  (* Definition message_queue_safe : queued_messages -> Prop := *)
-  (*   Forall (fun m => match m with | existT _ _ msg => msg_honestly_signed msg = true end). *)
-
   Inductive msg_pattern_safe : msg_pat -> Prop :=
   (* | PairedPatternSafe : forall p1 p2, *)
   (*       msg_pattern_safe p1 *)
@@ -310,6 +307,22 @@ Fixpoint findMsgCiphers {t} (msg : message t) : queued_messages :=
   | SignedCiphertext _ _ _ => [existT _ _ msg]
   | Signature m k c        => (existT _ _ msg) :: findMsgCiphers m
   end.
+
+Definition msgCipherOk (honestk : key_perms) (cs : ciphers) (sigm : sigT message):=
+  match sigm with
+  | (existT _ _ m) =>
+    msg_honestly_signed honestk m = true
+  /\ match m with
+    | SignedCiphertext k__sign k__enc msg_id
+      => exists t (m' : message t), cs $? msg_id = Some (SigEncCipher k__sign k__enc m')
+    | Signature m' k sig
+      => cs $? sig = Some (SigCipher k m')
+    | _ => False
+    end
+  end.
+
+Definition msgCiphersSigned {t} (honestk : key_perms) (cs : ciphers) (msg : message t) :=
+  Forall (msgCipherOk honestk cs) (findMsgCiphers msg).
 
 Definition user_keys {A} (usrs : honest_users A) (u_id : user_id) : option key_perms :=
   match usrs $? u_id with
@@ -695,13 +708,12 @@ Inductive action : Type :=
 
 Definition rlabel := @label action.
 
-Definition action_adversary_safe (honestk : key_perms) (a : action) : Prop :=
+Definition action_adversary_safe (honestk : key_perms) (cs : ciphers) (a : action) : Prop :=
   match a with
   | Input  msg pat _ => msg_pattern_safe honestk pat
-                     (* /\ (forall k_id kp, findKeys msg $? k_id = Some kp -> kp = false) *)
   | Output msg       => msg_contains_only_honest_public_keys honestk msg
                      /\ msg_honestly_signed honestk msg = true
-                       (* /\ (forall k_id kp, findKeys all_keys msg $? k_id = Some kp -> kp = false) *)
+                     /\ msgCiphersSigned honestk cs msg
   end.
 
 Definition data_step0 (A B C : Type) : Type :=
