@@ -11,7 +11,8 @@ Require Import
         Common
         MapLtac
         Keys
-        Tactics.
+        Tactics
+        Messages.
 
 Require IdealWorld
         RealWorld.

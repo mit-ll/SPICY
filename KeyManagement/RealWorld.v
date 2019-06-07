@@ -5,7 +5,8 @@ Require Import
         Common
         Maps
         Tactics
-        Keys.
+        Keys
+        Messages.
 
 Set Implicit Arguments.
 

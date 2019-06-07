@@ -1,11 +1,11 @@
-From Coq Require Import String Bool.Sumbool.
+From Coq Require Import String Bool.Sumbool Logic.
 
 Require Import MyPrelude.
 
 Module Foo <: EMPTY. End Foo.
 Module Import SN := SetNotations(Foo).
 
-Require Import Common Maps.
+Require Import Common Maps Messages.
 
 Set Implicit Arguments.
 
@@ -42,7 +42,7 @@ Inductive message : type -> Type :=
 .
 
 (* shouldn't this be just Permissions ? *)
-Definition channels := NatMap.t (set exmsg).
+Definition channels := NatMap.t (set (sigT message)).
 
 Inductive cmd : Type -> Type :=
 | Return {result : Type} (r : result) : cmd result
@@ -136,11 +136,11 @@ Inductive lstep_user : forall A, ilabel -> channels * cmd A * permissions -> cha
     lstep_user
       (Action (Output m ch_id cv ps))
       (cv, Send m ch_id, ps)
-      (cv $+ (ch_id, {Exm m} \cup ch_d), Return tt, ps)
+      (cv $+ (ch_id, {existT _ _ m} \cup ch_d), Return tt, ps)
 | LStepRecv : forall t (cv : channels) ch_d ps (m : message t) ch_id b,
     cv $? ch_id = Some ch_d ->
     ps $? ch_id = Some {| read := true ; write := b |} ->
-    (Exm m) \in ch_d ->
+    (existT _ _ m) \in ch_d ->
     lstep_user
       (Action (Input m ch_id cv ps))
       (cv, Recv ch_id, ps)
@@ -151,7 +151,7 @@ Lemma LStepSend' : forall t cv cv' (m : message t) ch_id ps ch_d b,
     ps $? ch_id = Some {| read := b ; write := true |}
     -> cv $? ch_id = Some ch_d
     -> msg_permissions_valid m ps
-    -> cv' = cv $+ (ch_id, {Exm m} \cup ch_d)
+    -> cv' = cv $+ (ch_id, {existT _ _ m} \cup ch_d)
     -> lstep_user (Action (Output m ch_id cv ps)) (cv, Send m ch_id, ps) (cv', Return tt, ps).
 Proof.
   intros; subst; econstructor; eauto.
@@ -160,7 +160,7 @@ Qed.
 Lemma LStepRecv' : forall t (cv : channels) ch_d ps ps' (m : message t) ch_id b,
     cv $? ch_id = Some ch_d
     -> ps $? ch_id = Some {| read := true ; write := b |}
-    -> (Exm m) \in ch_d
+    -> (existT _ _ m) \in ch_d
     -> ps' = add_chs_to_set (chs_search m) ps
     -> lstep_user
         (Action (Input m ch_id cv ps))
