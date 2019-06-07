@@ -2,13 +2,13 @@
 -R ./KeyManagement KeyManagement
 
 KeyManagement/MyPrelude.v
+KeyManagement/Maps.v
 KeyManagement/MapLtac.v
-KeyManagement/Users.v
 KeyManagement/Common.v
+KeyManagement/Keys.v
 KeyManagement/IdealWorld.v
 KeyManagement/RealWorld.v
 KeyManagement/Simulation.v
+KeyManagement/AdversarySafety.v
+KeyManagement/Tactics.v
 KeyManagement/EncPingProtocol.v
-# KeyManagement/PingProtocol.v
-# KeyManagement/SimpleAuth.v
-# KeyManagement/SimpleEnc.v

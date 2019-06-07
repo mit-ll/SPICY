@@ -4,7 +4,10 @@ From Coq Require Import
 
 Require Import MyPrelude.
 
-Require Import Users Common Simulation MapLtac.
+Module Foo <: EMPTY. End Foo.
+Module Import SN := SetNotations(Foo).
+
+Require Import Common Maps Simulation MapLtac.
 
 Require IdealWorld RealWorld.
 
@@ -104,14 +107,14 @@ Section RealProtocolParams.
   Definition KID1 : key_identifier := 0.
   Definition KID2 : key_identifier := 1.
 
-  Definition KEY1  := MkCryptoKey KID1 Signing.
-  Definition KEY2  := MkCryptoKey KID2 Signing.
-  Definition KEY__A  := AsymKey KEY1 true.
-  Definition KEY__B  := AsymKey KEY2 true.
-  Definition KEYS  := $0 $+ (KID1, AsymKey KEY1 true) $+ (KID2, AsymKey KEY2 true).
+  Definition KEY1  := MkCryptoKey KID1 Signing (AsymKey true).
+  Definition KEY2  := MkCryptoKey KID2 Signing (AsymKey true).
+  Definition KEY__pub1 := MkCryptoKey KID1 Signing (AsymKey false).
+  Definition KEY__pub2 := MkCryptoKey KID2 Signing (AsymKey false).
+  Definition KEYS  := $0 $+ (KID1, KEY1) $+ (KID2, KEY2).
 
-  Definition A__keys := $0 $+ (KID1, AsymKey KEY1 true)  $+ (KID2, AsymKey KEY2 false).
-  Definition B__keys := $0 $+ (KID1, AsymKey KEY1 false) $+ (KID2, AsymKey KEY2 true).
+  Definition A__keys := $0 $+ (KID1, KEY1) $+ (KID2, KEY__pub2).
+  Definition B__keys := $0 $+ (KID1, KEY__pub1) $+ (KID2, KEY2).
 End RealProtocolParams.
 
 Module Type enemy.
@@ -122,101 +125,97 @@ End enemy.
 Section RealProtocol.
   Import RealWorld.
 
-  Definition mkrU (usr_msgs : queued_messages) (cs : ciphers) (p__a p__b : user_cmd bool) (adversaries : user_list (user_data unit)) : universe bool :=
+  Definition mkrU (msgs1 msgs2 : queued_messages) (cs : ciphers) (p__a p__b : user_cmd bool) (adversaries : adversaries unit) : universe bool unit :=
     {| users            := $0
-         $+ (A, {| key_heap := A__keys ; protocol := p__a |})
-         $+ (B, {| key_heap := B__keys ; protocol := p__b |})
+         $+ (A, {| key_heap := A__keys ; protocol := p__a ; msg_heap := msgs1 |})
+         $+ (B, {| key_heap := B__keys ; protocol := p__b ; msg_heap := msgs2 |})
      ; adversary        := adversaries
-     ; univ_data        := {| users_msg_buffer := usr_msgs
-                            ; all_keys         := KEYS
-                            ; all_ciphers      := cs
-                            |}
+     ; all_ciphers      := cs
      |}.
 
   Definition real_univ_start cs :=
-    mkrU $0 cs
+    mkrU [] [] cs
          ( n  <- Gen
-         ; m  <- Sign KEY__A (Plaintext n)
+         ; m  <- Sign KEY1 (Plaintext n)
          ; _  <- Send B m
-         ; m' <- @Recv (Pair Nat CipherId) (Signed KID2 Accept)
-         ; Return match unPair m' with
-                  | Some (Plaintext n', _) => if n ==n n' then true else false (* also do verify? *)
-                  | _ => false
+         ; m' <- @Recv Nat (Signed KID2)
+         ; Return match unSig m' with
+                  | Some (Plaintext n') => if n ==n n' then true else false (* also do verify? *)
+                  | _       => false
                   end)
 
-         ( m  <- @Recv (Pair Nat CipherId) (Signed KID1 Accept)
-         ; v  <- Verify (AsymKey KEY1 false) m
-         ; m' <- match unPair m with
-                | Some (p,_) => Sign KEY__B p
-                | Nothing    => Sign KEY__B (Plaintext 1)
+         ( m  <- @Recv Nat (Signed KID1)
+         ; v  <- Verify KEY__pub1 m
+         ; m' <- match unSig m with
+                | Some p => Sign KEY2 p
+                | _      => Sign KEY2 (Plaintext 1)
                 end
          ; _  <- Send A m'
          ; Return v).
 
   Definition real_univ_sent1 n cs cid1 :=
-    mkrU ($0 $+ (B, [Exm (Signature (Plaintext n) cid1)]))
-         (cs $+ (cid1, Cipher cid1 KID1 (Plaintext n)))
+    mkrU [] [Exm (Signature (Plaintext n) cid1)]
+         (cs $+ (cid1, SigCipher cid1 KID1 (Plaintext n)))
          ( _  <- Return tt
-         ; m' <- @Recv (Pair Nat CipherId) (Signed KID2 Accept)
-         ; Return match unPair m' with
-                  | Some (Plaintext n', _) => if n ==n n' then true else false (* also do verify? *)
-                  | _ => false
+         ; m' <- @Recv Nat (Signed KID2)
+         ; Return match unSig m' with
+                  | Some (Plaintext n') => if n ==n n' then true else false (* also do verify? *)
+                  | _       => false
                   end)
-
-         ( m  <- @Recv (Pair Nat CipherId) (Signed KID1 Accept)
-         ; v  <- Verify (AsymKey KEY1 false) m
-         ; m' <- match unPair m with
-                | Some (p,_) => Sign KEY__B p
-                | Nothing    => Sign KEY__B (Plaintext 1)
+         ( m  <- @Recv Nat (Signed KID1)
+         ; v  <- Verify KEY__pub1 m
+         ; m' <- match unSig m with
+                | Some p => Sign KEY2 p
+                | _      => Sign KEY2 (Plaintext 1)
                 end
          ; _  <- Send A m'
          ; Return v).
 
   Definition real_univ_recd1 n cs cid1 :=
-    mkrU $0
-         (cs $+ (cid1, Cipher cid1 KID1 (Plaintext n)))
+    mkrU [] []
+         (cs $+ (cid1, SigCipher cid1 KID1 (Plaintext n)))
          ( _  <- Return tt
-         ; m' <- @Recv (Pair Nat CipherId) (Signed KID2 Accept)
-         ; Return match unPair m' with
-                  | Some (Plaintext n', _) => if n ==n n' then true else false (* also do verify? *)
-                  | _ => false
+         ; m' <- @Recv Nat (Signed KID2)
+         ; Return match unSig m' with
+                  | Some (Plaintext n') => if n ==n n' then true else false (* also do verify? *)
+                  | _       => false
                   end)
 
          ( m  <- Return (Signature (Plaintext n) cid1)
-         ; v  <- Verify (AsymKey KEY1 false) m
-         ; m' <- match unPair m with
-                | Some (p,_) => Sign KEY__B p
-                | Nothing    => Sign KEY__B (Plaintext 1)
+         ; v  <- Verify KEY__pub1 m
+         ; m' <- match unSig m with
+                | Some p => Sign KEY2 p
+                | _      => Sign KEY2 (Plaintext 1)
                 end
          ; _  <- Send A m'
          ; Return v).
 
-  Definition real_univ_sent2 n cid1 cid2 :=
-    mkrU ($0 $+ (A, [Exm (Signature (Plaintext n) cid2)]))
-         ($0 $+ (cid1, Cipher cid1 KID1 (Plaintext n)) $+ (cid2, Cipher cid2 KID2 (Plaintext n)))
+  Definition real_univ_sent2 n cs cid1 cid2 :=
+    mkrU [Exm (Signature (Plaintext n) cid2)] []
+         (cs $+ (cid1, SigCipher cid1 KID1 (Plaintext n)) $+ (cid2, SigCipher cid2 KID2 (Plaintext n)))
          ( _  <- Return tt
-         ; m' <- @Recv (Pair Nat CipherId) (Signed KID2 Accept)
-         ; Return match unPair m' with
-                  | Some (Plaintext n', _) => if n ==n n' then true else false (* also do verify? *)
-                  | _ => false
+         ; m' <- @Recv Nat (Signed KID2)
+         ; Return match unSig m' with
+                  | Some (Plaintext n') => if n ==n n' then true else false (* also do verify? *)
+                  | _       => false
                   end)
 
          ( _  <- Return tt ; Return true).
 
-  Definition real_univ_recd2 n cid1 cid2 :=
-    mkrU $0 ($0 $+ (cid1, Cipher cid1 KID1 (Plaintext n)) $+ (cid2, Cipher cid2 KID2 (Plaintext n)))
+  Definition real_univ_recd2 n cs cid1 cid2 :=
+    mkrU [] [] (cs $+ (cid1, SigCipher cid1 KID1 (Plaintext n)) $+ (cid2, SigCipher cid2 KID2 (Plaintext n)))
          ( m' <- Return (Signature (Plaintext n) cid2)
-         ; Return match unPair m' with
-                  | Some (Plaintext n', _) => if n ==n n' then true else false (* also do verify? *)
-                  | _ => false
+         ; Return match unSig m' with
+                  | Some (Plaintext n') => if n ==n n' then true else false (* also do verify? *)
+                  | _       => false
                   end)
 
          ( _  <- Return tt ; Return true).
 
   Definition real_univ_done cs :=
-    mkrU $0 cs (Return true) (Return true).
+    mkrU [] [] cs (Return true) (Return true).
 
-  Inductive RPingPongBase: RealWorld.universe bool -> IdealWorld.universe bool -> Prop :=
+  Inductive RPingPongBase: RealWorld.universe bool unit -> IdealWorld.universe bool -> Prop :=
   | Start : forall U__r cs,
         rstepSilent^* (real_univ_start cs $0) U__r
       -> RPingPongBase U__r ideal_univ_start
@@ -229,12 +228,12 @@ Section RealProtocol.
         rstepSilent^* (real_univ_recd1 n cs cid1 $0) U__r
       -> RPingPongBase U__r (ideal_univ_recd1 n)
 
-  | Sent2 : forall U__r cid1 cid2 n,
-        rstepSilent^* (real_univ_sent2 n cid1 cid2 $0) U__r
+  | Sent2 : forall U__r cs cid1 cid2 n,
+        rstepSilent^* (real_univ_sent2 n cs cid1 cid2 $0) U__r
       -> RPingPongBase U__r (ideal_univ_sent2 n)
 
-  | Recd2 : forall U__r cid1 cid2 n,
-        rstepSilent^* (real_univ_recd2 n cid1 cid2 $0) U__r
+  | Recd2 : forall U__r cs cid1 cid2 n,
+        rstepSilent^* (real_univ_recd2 n cs cid1 cid2 $0) U__r
       -> RPingPongBase U__r (ideal_univ_recd2 n)
 
   | Done : forall cs n,
@@ -243,71 +242,171 @@ Section RealProtocol.
 
 End RealProtocol.
 
+Section RealWorldLemmas.
+  Import RealWorld.
+
+
+  Lemma multiStepSilentInv :
+    forall {A B} (U__r U__r': universe A B),
+        rstepSilent ^* U__r U__r'
+      -> U__r.(adversary) = $0
+      -> U__r = U__r'
+      \/ exists usrs adv cs u_id userData ks cmd qmsgs,
+            rstepSilent ^* (buildUniverse usrs adv cs u_id {| key_heap := ks; protocol := cmd; msg_heap := qmsgs |}) U__r'
+          /\ users U__r $? u_id = Some userData
+          /\ step_user u_id Silent (RealWorld.build_data_step U__r userData) (usrs, adv, cs, ks, qmsgs, cmd).
+  Proof.
+    intros.
+    invert H.
+    - left; trivial.
+    - right. invert H1.
+      + do 9 eexists; intuition; eauto.
+      + rewrite H0 in H; invert H.
+  Qed.
+
+
+  Lemma add_univ_simpl1 :
+    forall {v} (m : NatMap.t v) k1 v1 k2 v2,
+      k1 = k2
+      -> m $+ (k1,v1) $+ (k2,v2) = m $+ (k2,v2).
+  Proof.
+    intros. simpl.
+    apply map_eq_Equal; unfold Equal; intros; subst.
+    case (k2 ==n y); intros; subst.
+    rewrite !add_eq_o; trivial.
+    rewrite !add_neq_o; trivial.
+  Qed.
+
+  Lemma add_univ_simpl2 :
+    forall {v} (m : NatMap.t v) k1 v1 k2 v2 k3 v3,
+      k1 = k3
+      -> k2 <> k3
+      -> m $+ (k1,v1) $+ (k2,v2) $+ (k3,v3) = m $+ (k3,v3) $+ (k2,v2).
+  Proof.
+    intros. simpl.
+    apply map_eq_Equal; unfold Equal; intros; subst.
+    case (y ==n k2); intros; subst.
+    rewrite add_neq_o by auto; rewrite !add_eq_o; trivial.
+    case (y ==n k3); intros; subst.
+    rewrite add_eq_o by trivial. rewrite add_neq_o by auto. rewrite add_eq_o; trivial.
+    rewrite !add_neq_o by auto; trivial.
+  Qed.
+
+  Lemma add_univ_simpl3 :
+    forall {v} (m : NatMap.t v) k1 v1 k2 v2 k3 v3,
+      k1 = k2
+      -> k2 <> k3
+      -> m $+ (k1,v1) $+ (k2,v2) $+ (k3,v3) = m $+ (k2,v2) $+ (k3,v3).
+  Proof.
+    intros. simpl.
+    apply map_eq_Equal; unfold Equal; intros; subst.
+    case (y ==n k3); intros; subst.
+    rewrite !add_eq_o; trivial.
+    case (y ==n k2); intros; subst.
+    do 2 (rewrite add_neq_o by auto; rewrite add_eq_o by auto); trivial.
+    rewrite !add_neq_o by auto; trivial.
+  Qed.
+
+  Lemma simplify_build_univ1 :
+    forall {A B} (U__r : universe A B) (usrs : honest_users A) uid__a uid__b ud__a ud__b uid ud (adv : adversaries B) cs,
+        uid__a <> uid__b
+      -> uid = uid__a
+      -> buildUniverse (usrs $+ (uid__a,ud__a) $+ (uid__b,ud__b)) adv cs uid ud
+        = {| users       := usrs $+ (uid,ud) $+ (uid__b,ud__b)
+           ; adversary   := adv
+           ; all_ciphers := cs
+          |}.
+  Proof.
+    intros. unfold buildUniverse; simpl.
+    f_equal; subst.
+    rewrite add_univ_simpl2 by auto; trivial.
+  Qed.
+
+  Lemma simplify_build_univ2 :
+    forall {A B} (U__r : universe A B) (usrs : honest_users A) uid__a uid__b ud__a ud__b uid ud (adv : adversaries B) cs,
+        uid__a <> uid__b
+      -> uid = uid__b
+      -> buildUniverse (usrs $+ (uid__a,ud__a) $+ (uid__b,ud__b)) adv cs uid ud
+        = {| users       := usrs $+ (uid__a,ud__a) $+ (uid,ud)
+           ; adversary   := adv
+           ; all_ciphers := cs
+          |}.
+  Proof.
+    intros. unfold buildUniverse; simpl.
+    f_equal.
+    rewrite add_univ_simpl1 by auto; trivial.
+  Qed.
+
+End RealWorldLemmas.
+
 Module SimulationAutomation.
+
+  Hint Constructors RealWorld.msg_accepted_by_pattern.
 
   Ltac churn1 :=
     match goal with
-    | [ H : List.In _ _ |- _ ] => progress (simpl in H); intuition
+    | [ H : List.In _ _ |- _ ] => progress (simpl in H); intuition idtac
 
-    | [ H : _ $? _ = Some _ |- _ ] => progress (simpl in H)
-
-    (* | [ H : $0 $? _ = Some _ |- _ ] => apply lookup_empty_not_Some in H; contradiction *)
     | [ H : $0 $? _ = Some _ |- _ ] => apply find_mapsto_iff in H; apply empty_mapsto_iff in H; contradiction
+    | [ H : _  $? _ = Some _ |- _ ] => progress (simpl in H)
 
-    (* | [ H : _ $? _ = Some _ |- _ ] => apply lookup_split in H; intuition (* propositional *); subst *)
-    | [ H : _ $? _ = Some _ |- _ ] => apply lookup_some_implies_in in H
-    (* | [ H : (_ $- _) $? _ = Some _ |- _ ] => rewrite addRemoveKey in H by auto *)
+    | [ H : add _ _ _ $? _ = Some ?UD |- _ ] =>
+      match type of UD with
+      | RealWorld.user_data bool => apply lookup_some_implies_in in H
+      | _ => apply lookup_split in H; intuition idtac
+      end
+
+    | [ H : RealWorld.users _ $? _ = Some _ |- _ ] => progress (simpl in H)
+
+    | [ H : _ = RealWorld.mkUserData _ _ _ |- _ ] => invert H
     | [ H : Some _ = Some _ |- _ ] => invert H
-
     | [ H : (_ :: _) = _ |- _ ] => invert H
+    | [ H : _ = (_ :: _) |- _ ] => invert H
     | [ H : (_,_) = (_,_) |- _ ] => invert H
 
-    (* | [ H : updF _ _ _ = _ |- _ ] => unfold updF; simpl in H *)
-
-    | [ H: RealWorld.Cipher _ _ _ = RealWorld.Cipher _ _ _ |- _ ] => invert H
-    | [ H: RealWorld.SymKey _ = _ |- _ ] => invert H
-    | [ H: RealWorld.AsymKey _ _ = _ |- _ ] => invert H
+    | [ H: RealWorld.SigCipher _ _ _ = RealWorld.SigCipher _ _ _ |- _ ] => invert H
+    | [ H: RealWorld.SigEncCipher _ _ _ _ = RealWorld.SigEncCipher _ _ _ _ |- _ ] => invert H
+    | [ H: RealWorld.MkCryptoKey _ _ _ = _ |- _ ] => invert H
+    | [ H: RealWorld.AsymKey _ = _ |- _ ] => invert H
+    (* | [ H: RealWorld.AsymKey _ _ = _ |- _ ] => invert H *)
 
     | [ H: exists _, _ |- _ ] => invert H
     | [ H: _ /\ _ |- _ ] => invert H
 
     | [ H : RealWorld.keyId _ = _ |- _] => invert H
 
-    | [H : RealWorld.users_msg_buffer _ $? _ = _ |- _ ] => progress (simpl in H)
+    (* NEW | [H : RealWorld.users_msg_buffer _ $? _ = _ |- _ ] => progress (simpl in H) *)
 
-    (* | [ H: RealWorld.msg_accepted_by_pattern _ _ _ = _ |- _ ] => *)
+    (* | [ H: RealWorld.msg_accepted_by_pattern_compute _ _ _ = false |- _ ] => *)
     (*   simpl in H; *)
-    (*   rewrite lookup_add_eq in H by eauto; *)
+    (*   rewrite add_eq_o in H by auto; *)
     (*   try discriminate *)
 
-    | [ H: RealWorld.msg_accepted_by_pattern _ _ _ = _ |- _ ] =>
-      simpl in H;
-      rewrite add_eq_o in H by auto;
-      try discriminate
+    | [ H : ~ RealWorld.msg_accepted_by_pattern ?cs ?pat ?msg |- _ ] =>
+      assert ( RealWorld.msg_accepted_by_pattern cs pat msg ) by eauto; contradiction
 
-    (* | [ H : RealWorld.msg_spoofable _ _ _ = _ |- _] => *)
-    (*   unfold RealWorld.msg_spoofable in H; *)
-    (*   rewrite lookup_add_eq in H by eauto; *)
-    (*   simplify; *)
-    (*   discriminate *)
-
-    | [ H: RealWorld.signMessage _ _ _ = _ |- _ ] => unfold RealWorld.encryptMessage; simpl in H
-    | [ H: RealWorld.encryptMessage _ _ _ = _ |- _ ] => unfold RealWorld.encryptMessage; simpl in H
+    | [ H: RealWorld.signMessage _ _ _ = _ |- _ ] => unfold RealWorld.signMessage; simpl in H
+    | [ H: RealWorld.encryptMessage _ _ _ _ = _ |- _ ] => unfold RealWorld.encryptMessage; simpl in H
 
     (* Only take a user step if we have chosen a user *)
-    | [ H: RealWorld.lstep_user A _ _ _ |- _ ] => invert H
-    | [ H: RealWorld.lstep_user B _ _ _ |- _ ] => invert H
+    | [ H: RealWorld.step_user A _ _ _ |- _ ] => invert H
+    | [ H: RealWorld.step_user B _ _ _ |- _ ] => invert H
 
     | [ H: rstepSilent _ _ |- _ ] => invert H
-    | [ H: RealWorld.lstep_universe _ _ _ |- _ ] => invert H
+    | [ H: RealWorld.step_universe _ _ _ |- _ ] => invert H
 
+    | [ H :rstepSilent ^* (RealWorld.buildUniverse _ _ _ _ _) _ |- _] =>
+      (rewrite simplify_build_univ1 in H by auto) || (rewrite simplify_build_univ2 in H by auto)
     | [ S: rstepSilent ^* ?U _ |- _ ] => 
       (* Don't actually multiStep unless we know the state of the starting universe
        * meaning it is not some unknown hypothesis in the context...
        *)
       match goal with
       | [U1 : U |- _] => fail 1
-      | [ |- _ ] => invert S
+      | [ |- _ ] =>
+        (* invert S *)
+        (* eapply multiStepSilentInv in S; intuition; repeat match goal with [ H : exists _, _ |- _] => destruct H end; intuition; subst *)
+        eapply multiStepSilentInv in S; intuition idtac; repeat match goal with [ H : exists _, _ |- _] => destruct H end; intuition idtac; subst
       end
 
     end.
@@ -325,16 +424,16 @@ Module SimulationAutomation.
       eapply elements_mapsto_iff;
       eapply SetoidList.InA_alt;
       eexists;
-      unfold eq_key_elt, Raw.PX.eqke; constructor; [intuition | ..].
+      unfold eq_key_elt, Raw.PX.eqke; constructor; [intuition idtac | ..].
 
   Ltac user0 := usr_first; left.
   Ltac user1 := usr_first; right; left.
 
   Ltac istep_univ pick :=
     eapply IdealWorld.LStepUser'; simpl; swap 2 3; [ pick | ..];
-    unfold updateUserList; (try eapply @eq_refl); (try f_equal); simpl.
+      (try eapply @eq_refl); (try f_equal); simpl.
   Ltac rstep_univ pick :=
-    eapply  RealWorld.LStepUser'; simpl; swap 2 3; [ pick | ..]; (try eapply @eq_refl); simpl.
+    eapply  RealWorld.StepUser; simpl; swap 2 3; [ pick | ..]; (try eapply @eq_refl); simpl.
 
   Ltac istep_univ0 := istep_univ user0.
   Ltac istep_univ1 := istep_univ user1.
@@ -348,21 +447,21 @@ Module SimulationAutomation.
   .
 
   Ltac r_single_silent_step :=
-      eapply RealWorld.LStepBindProceed
-    || eapply RealWorld.LGen
-    || eapply RealWorld.LStepRecvDrop
-    || eapply RealWorld.LStepEncrypt
-    || eapply RealWorld.LStepDecrypt
-    || eapply RealWorld.LStepSign
-    || eapply RealWorld.LStepVerify
+      eapply RealWorld.StepBindProceed
+    || eapply RealWorld.StepGen
+    || eapply RealWorld.StepRecvDrop
+    || eapply RealWorld.StepEncrypt
+    || eapply RealWorld.StepDecrypt
+    || eapply RealWorld.StepSign
+    || eapply RealWorld.StepVerify
   .
 
   Ltac isilent_step_univ pick :=
     eapply IdealWorld.LStepUser'; simpl; swap 2 3; [ pick | ..]; (try simple eapply @eq_refl);
       ((eapply IdealWorld.LStepBindRecur; i_single_silent_step) || i_single_silent_step).
   Ltac rsilent_step_univ pick :=
-    eapply  RealWorld.LStepUser'; simpl; swap 2 3; [ pick | ..]; (try simple eapply @eq_refl);
-      ((eapply RealWorld.LStepBindRecur; r_single_silent_step) || r_single_silent_step).
+    eapply  RealWorld.StepUser; simpl; swap 2 3; [ pick | ..]; (try simple eapply @eq_refl);
+      ((eapply RealWorld.StepBindRecur; r_single_silent_step) || r_single_silent_step).
 
   Ltac silent_step usr_step := eapply TrcFront; [usr_step |]; simpl.
 
@@ -395,13 +494,13 @@ Module SimulationAutomation.
     intros. subst. apply TrcRefl.
   Qed.
 
-  Hint Extern 0 (rstepSilent ^* _ _) => solve [eapply TrcRefl || eapply TrcRefl'; smash_universe].
+  Hint Extern 0 (rstepSilent ^* _ _) => solve [eapply TrcRefl || eapply TrcRefl'; simpl; smash_universe].
   Hint Extern 1 (rstepSilent ^* _ _) => real_silent_step0.
   Hint Extern 1 (rstepSilent ^* _ _) => real_silent_step1.
   Hint Extern 1 (rstepSilent ^* _ _) =>
         progress(unfold real_univ_start, real_univ_sent1, real_univ_recd1,
                         real_univ_sent2, real_univ_recd2, real_univ_done, mkrU; simpl).
-  Hint Extern 1 (RPingPongBase (RealWorld.updateUniverse _ _ _ _ _ _) _) => unfold RealWorld.updateUniverse; simpl.
+  Hint Extern 1 (RPingPongBase (RealWorld.buildUniverse _ _ _ _ _) _) => unfold RealWorld.buildUniverse; simpl.
 
   Hint Extern 2 (IdealWorld.lstep_universe _ _ _) => istep_univ0.
   Hint Extern 2 (IdealWorld.lstep_universe _ _ _) => istep_univ1.
@@ -418,8 +517,8 @@ Module SimulationAutomation.
   Hint Extern 1 (RealWorld.action_adversary_safe _ _ = _) => unfold RealWorld.action_adversary_safe; simplify.
   Hint Extern 1 (IdealWorld.msg_permissions_valid _ _) => progress simpl.
 
-  Hint Extern 1 (A__keys $? _ = _) => unfold A__keys, B__keys, KEY1, KEY2, KEY__A, KEY__B, KID1, KID2.
-  Hint Extern 1 (B__keys $? _ = _) => unfold A__keys, B__keys, KEY1, KEY2, KEY__A, KEY__B, KID1, KID2.
+  Hint Extern 1 (A__keys $? _ = _) => unfold A__keys, B__keys, KEY1, KEY2, KEY__pub1, KEY__pub2, KID1, KID2.
+  Hint Extern 1 (B__keys $? _ = _) => unfold A__keys, B__keys, KEY1, KEY2, KEY__pub1, KEY__pub2, KID1, KID2.
   Hint Extern 1 (PERMS__a $? _ = _) => unfold PERMS__a.
   Hint Extern 1 (PERMS__b $? _ = _) => unfold PERMS__b.
   Hint Extern 1 (_ = RealWorld.addUserKeys _ _) => unfold RealWorld.addUserKeys, map; simpl.
@@ -433,6 +532,13 @@ Import SimulationAutomation.
 
 Section FeebleSimulates.
 
+  Ltac simplUniv :=
+    repeat match goal with
+           | [ |- context[ _ $+ (?A,_) $+ (?A,_) ] ] => rewrite add_univ_simpl1 by trivial
+           | [ |- context[ _ $+ (?A,_) $+ (?B,_) $+ (?A,_) ] ] => rewrite add_univ_simpl2 by auto
+           | [ |- context[ _ $+ (?A,_) $+ (?A,_) $+ (?B,_) ] ] => rewrite add_univ_simpl3 by auto
+           end.
+
   Lemma rpingbase_silent_simulates :
     forall U__r U__i,
       RPingPongBase U__r U__i
@@ -442,20 +548,38 @@ Section FeebleSimulates.
           istepSilent ^* U__i U__i'
           /\ RPingPongBase U__r' U__i'.
   Proof.
+
     time (
-      intros;
+        intros;
         invert H;
-        churn;
-        [> eexists; constructor; swap 1 2 .. ];
-        eauto 9).
+        churn; simplUniv;
+        [> eexists; constructor; swap 1 2 ; eauto 9 .. ]
+      ).
+
+    (* Tactic call ran for 2481.944 secs (2480.162u,1.672s) (success) *)
+    (* No more subgoals. *)
+ 
+    (* Tactic call ran for 494.024 secs (493.416u,0.596s) (success) *)
+
+    (* time ( *)
+    (*     intros; *)
+    (*     invert H; *)
+    (*     churn; simplUniv; *)
+    (*     [> eexists; constructor; swap 1 2 .. ]; *)
+    (*     eauto 9). *)
+
+    (* Tactic call ran for 2579.235 secs (2577.438u,1.502s) (success) *)
+    (* No more subgoals. *)
+
   Qed.
+
 
 
   Lemma rpingbase_loud_simulates : 
     forall U__r U__i,
       RPingPongBase U__r U__i
       -> forall a1 U__r',
-        RealWorld.lstep_universe U__r (Action a1) U__r'
+        RealWorld.step_universe U__r (Action a1) U__r'
         -> exists a2 U__i' U__i'',
             istepSilent^* U__i U__i'
             /\ IdealWorld.lstep_universe U__i' (Action a2) U__i''
@@ -464,13 +588,13 @@ Section FeebleSimulates.
             /\ RealWorld.action_adversary_safe (RealWorld.findUserKeys U__r.(RealWorld.adversary)) a1 = true.
   Proof.
 
+
     time
       (intros;
        invert H;
        churn;
-       unfold RealWorld.updateUniverse, RealWorld.setGlobalUserMsgs, RealWorld.addGlobalUserMsg,
-              RealWorld.multiMapAdd, updateUserList;
-       simpl;
+       unfold RealWorld.buildUniverse;
+       simpl; simplUniv;
        (do 3 eexists;
         propositional; swap 3 4; swap 1 3;
         [ .. | admit (* action matches predicate *) ]; eauto; eauto 12)).
@@ -478,135 +602,10 @@ Section FeebleSimulates.
   Admitted.
 
   Theorem base_pingpong_refines_ideal_pingpong :
-    real_univ_start $0 [] <| ideal_univ_start.
+    real_univ_start $0 $0 <| ideal_univ_start.
   Proof.
     exists RPingPongBase.
     firstorder; eauto using rpingbase_silent_simulates, rpingbase_loud_simulates.
   Qed.
 
 End FeebleSimulates. 
-
-Section SingleAdversarySimulates.
-
-  (* If we have a simulation proof, we know that:
-   *   1) No receives could have accepted spoofable messages
-   *   2) Sends we either of un-spoofable, or were 'public' and are safely ignored
-   *
-   * This should mean we can write some lemmas that say we can:
-   *   safely ignore all adversary messages (wipe them from the universe) -- Adam's suggestion, I am not exactly sure how...
-   *   or, prove an appended simulation relation, but I am not sure how to generically express this
-   *)
-
-  Definition add_adversary {A} (U__r : RealWorld.universe A) (advcode : RealWorld.user_cmd A) :=
-    RealWorld.addUniverseUsers U__r [(ADV, {| RealWorld.key_heap := $0 ; RealWorld.protocol := advcode |})].
-
-  Definition strip_adversary {A} (U__r : RealWorld.universe A) : RealWorld.universe A :=
-    {|
-      RealWorld.users            := removelast U__r.(RealWorld.users)
-    ; RealWorld.users_msg_buffer := U__r.(RealWorld.users_msg_buffer)
-    ; RealWorld.all_keys         := U__r.(RealWorld.all_keys)
-    ; RealWorld.all_ciphers      := U__r.(RealWorld.all_ciphers)
-    ; RealWorld.adversary        := U__r.(RealWorld.adversary)
-    |}.
-
-
-  Lemma step_clean_or_adversary :
-    forall {A} (U__r U__ra U__ra' : RealWorld.universe A) advcode lbl u_id u,
-      In (u_id,u) U__r.(RealWorld.users)
-      -> u_id <> ADV
-      -> U__ra = add_adversary U__r advcode
-      -> RealWorld.lstep_universe U__ra lbl U__ra'
-      -> forall stepUdata uks advk cs ks qmsgs (cmd' : RealWorld.user_cmd A),
-          (* Legit step *)
-          ( forall stepUid,
-              In (stepUid,stepUdata) U__r.(RealWorld.users)
-            /\ RealWorld.lstep_user
-                stepUid lbl
-                (RealWorld.universe_data_step U__r stepUdata)
-                (advk, cs, ks, qmsgs, uks, cmd')
-
-          ) \/
-          (* Adversary step *)
-          ( In (ADV,stepUdata) U__ra.(RealWorld.users)
-          /\ RealWorld.lstep_user
-              ADV lbl
-              (RealWorld.universe_data_step U__ra stepUdata)
-              (advk, cs, ks, qmsgs, uks, cmd')
-
-          )
-  .
-  Proof.
-  Admitted.
-
-  Lemma simulates_implies_noninterference:
-    forall {A} (U__r U__ra : RealWorld.universe A) (U__i : IdealWorld.universe A),
-      U__r <| U__i
-      -> forall U__ra' u_id advcode a udata,
-        U__ra = add_adversary U__r advcode
-        -> RealWorld.lstep_universe U__ra (Action a) U__ra'
-        -> RealWorld.lstep_user u_id (Action a) (RealWorld.universe_data_step U__ra udata) (RealWorld.universe_data_step U__ra' udata) 
-        -> In (u_id,udata) U__ra.(RealWorld.users)
-        -> u_id <> ADV.
-  Proof.
-  Admitted.
-
-
-  (* Maybe this isn't provable.  One big question I have is whether we can actually
-   * make the connection for some arbitrary relation.  The biggest problem (maybe)
-   * being that adversaries will certainly affect the book keeping fields of the
-   * simulation relation like: all_keys, all_ciphers, users_message_buffer.
-   * There is no guarantee that the R in the original simulation relation doesn't say
-   * something relevant about those fields.
-   *)
-  Theorem simulates_implies_sim_with_adv :
-    forall {A} (U__r U__ra : RealWorld.universe A) (U__i : IdealWorld.universe A),
-      U__r <| U__i
-      -> forall advcode,
-        U__ra = add_adversary U__r advcode
-        -> U__ra <| U__i.
-  Proof.
-
-  Admitted.
-
-
-
-  (* Can't really write this as is.  Perhaps derive some
-   * kind of traces predicate like in MessagesAndRefinement?  Does that
-   * get to the final theorem we want to prove?
-   *)
-  (* Definition final_answers_agree {A} (U__r : RealWorld.universe A) (U__i : IdealWorld.universe A) : *)
-  (*   forall U__r' U__i', *)
-  (*     RealWorld.lstep_universe^* U__r lbl U__r' *)
-  (*     -> IdealWorld.lstep_universe^* U__i lbl' U__i' *)
-  (*     ->  *)
-
-
-
-
-
-
-
-
-
-  Definition still_simulates_with_adversary (U__i : IdealWorld.universe bool)  (U__r : RealWorld.universe bool) :=
-    U__r <| U__i
-    -> forall U__r' advcode,
-      U__r' = RealWorld.addUniverseUsers U__r [(ADV, {| RealWorld.key_heap := $0 ; RealWorld.protocol := advcode |})]
-      -> U__r' <| U__i.
-
-
-
-    (* Idea:  We have a relation: R : Ureal -> Uideal and need R' : U'real -> Uideal  where U'real is augmented
-     *        with the adversary.  One approach may be to find R'' : U'real -> Ureal and then compose the relations.
-     *        Hrm.  Relations don't really compose...
-     *  What components could go into this R''?
-     *    1. rstepSilent^* -- could provide some support for dropping messages sent by the adversary
-     *    2. some U'real -> Ureal which just peels off the adversary
-     * 
-     * I think the biggest remaining challenge is handling Sends from the adversary.  Should these be 'loud?'
-     *
-     *)
-
-(* How do we augment the simulation relation from above to include an arbitrary adversary? *)
-
-End SingleAdversarySimulates.

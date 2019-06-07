@@ -5,6 +5,7 @@ From Frap
 (* From Frap *)
 (*      Require Import Map Var Invariant ModelCheck. *)
 (* Export String Arith Sets Relations Map Var Invariant Bool ModelCheck. *)
+
 Export String Arith Sets Relations Bool.
 
 Require Import List.
@@ -425,5 +426,5 @@ Ltac sets := propositional;
 (* Require Export FrapWithoutSets. *)
 (* Module Export SN := SetNotations(FrapWithoutSets). *)
 
-Module Foo <: EMPTY. End Foo.
-Module Export SN := SetNotations(Foo).
+(* Module Foo <: EMPTY. End Foo. *)
+(* Module Export SN := SetNotations(Foo). *)
