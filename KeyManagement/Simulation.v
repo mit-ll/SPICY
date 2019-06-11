@@ -197,6 +197,7 @@ Definition simulates_silent_step {A B} (R : RealWorld.universe A B -> IdealWorld
   forall U__r U__i,
     R U__r U__i
     -> universe_ok U__r
+    -> adv_universe_ok U__r
     -> forall U__r',
         rstepSilent U__r U__r'
         -> exists U__i',
@@ -208,6 +209,7 @@ Definition simulates_labeled_step {A B} (R : RealWorld.universe A B -> IdealWorl
   forall U__r U__i,
     R U__r U__i
     -> universe_ok U__r
+    -> adv_universe_ok U__r
     -> forall a1 U__r',
         RealWorld.step_universe U__r (Action a1) U__r' (* excludes adversary steps *)
         -> exists a2 U__i' U__i'',
@@ -241,6 +243,7 @@ Definition simulates {A B : Type}
   (* conditions for start *)
 /\ R U__r U__i
 /\ universe_ok U__r
+/\ adv_universe_ok U__r
 .
 
 Definition refines {A B : Type} (U1 : RealWorld.universe A B)(U2 : IdealWorld.universe A) :=
