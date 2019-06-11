@@ -1501,6 +1501,24 @@ Section SingleAdversarySimulates.
 
     Hint Resolve prop_in_adv_message_queues_still_good_after_cleaning.
 
+    Lemma msgCiphersSigned_before_clean_ciphers' :
+      forall msgs honestk cs,
+        Forall (msgCipherOk honestk (clean_ciphers honestk cs)) msgs
+        -> Forall (msgCipherOk honestk cs) msgs.
+    Proof.
+      induction 1; econstructor; eauto.
+      unfold msgCipherOk in *.
+      destruct x; intuition idtac.
+      destruct m; eauto.
+      - repeat match goal with [H : exists _, _ |- _] => destruct H end.
+        rewrite <- find_mapsto_iff in H; rewrite clean_ciphers_mapsto_iff in H;
+          repeat eexists; split_ands;
+            rewrite <- find_mapsto_iff; eauto.
+      - rewrite <- find_mapsto_iff in H2; rewrite clean_ciphers_mapsto_iff in H2;
+          repeat eexists; split_ands;
+            rewrite <- find_mapsto_iff; eauto.
+    Qed.
+
     Lemma msgCiphersSigned_after_clean_ciphers' :
       forall msgs honestk cs,
         Forall (msgCipherOk honestk cs) msgs
@@ -1521,6 +1539,14 @@ Section SingleAdversarySimulates.
         -> msgCiphersSigned honestk (clean_ciphers honestk cs) msg.
     Proof.
       intros; eapply msgCiphersSigned_after_clean_ciphers'; eauto.
+    Qed.
+
+    Lemma msgCiphersSigned_before_clean_ciphers :
+      forall {t} (msg : message t) honestk cs,
+        msgCiphersSigned honestk (clean_ciphers honestk cs) msg
+        -> msgCiphersSigned honestk cs msg.
+    Proof.
+      intros; eapply msgCiphersSigned_before_clean_ciphers'; eauto.
     Qed.
 
     Hint Resolve msgCiphersSigned_after_clean_ciphers.
@@ -1561,6 +1587,56 @@ Section SingleAdversarySimulates.
       intros.
       subst; unfold universe_ok in *; destruct U__ra; simpl in *; intuition idtac;
         rewrite clean_users_no_change_findUserKeys; subst; simpl in *; eauto.
+    Qed.
+
+    Lemma user_cipher_queues_ok_after_cleaning :
+      forall {A} (usrs : honest_users A) honestk cs,
+        user_cipher_queues_ok cs honestk usrs
+        -> honestk = findUserKeys usrs
+        -> user_cipher_queues_ok (clean_ciphers honestk cs) honestk (clean_users honestk usrs).
+    Proof.
+      unfold user_cipher_queues_ok; intros.
+      rewrite Forall_natmap_forall in *; intros.
+      rewrite <- find_mapsto_iff in H1; unfold clean_users in H1; rewrite map_mapsto_iff in H1.
+      invert H1; split_ands; rewrite H0. simpl in *.
+      rewrite find_mapsto_iff in H1; specialize (H _ _ H1).
+      unfold user_cipher_queue_ok in *; rewrite Forall_forall in *; intros.
+      specialize (H _ H2); invert H; eexists.
+      intuition eauto.
+    Qed.
+
+    Lemma message_queues_ok_after_cleaning :
+      forall {A} (usrs : honest_users A) honestk cs,
+        message_queues_ok honestk cs usrs
+        -> honestk = findUserKeys usrs
+        -> message_queues_ok honestk (clean_ciphers honestk cs) (clean_users honestk usrs).
+    Proof.
+      unfold message_queues_ok; intros.
+      rewrite Forall_natmap_forall in *; intros.
+      rewrite <- find_mapsto_iff in H1; unfold clean_users in H1; rewrite map_mapsto_iff in H1.
+      invert H1; split_ands; subst. simpl in *.
+      rewrite find_mapsto_iff in H1; specialize (H _ _ H1).
+      unfold message_queue_ok in *; rewrite Forall_forall in *; intros.
+      destruct x0; simpl in *; intros.
+
+      apply filter_In in H0; split_ands.
+      specialize (H _ H0); simpl in H; intuition eauto.
+    Qed.
+
+    Lemma ok_adv_universe_strip_adversary_still_ok :
+      forall {A B} (U__ra U__r: universe A B) (b : B),
+          U__r = strip_adversary U__ra b
+        -> adv_universe_ok U__ra
+        -> adv_universe_ok U__r.
+    Proof.
+      unfold adv_universe_ok.
+      intros.
+      subst; unfold adv_universe_ok in *; destruct U__ra; simpl in *; intuition idtac;
+        rewrite clean_users_no_change_findUserKeys;
+        subst; simpl in *;
+          eauto using user_cipher_queues_ok_after_cleaning
+                    , message_queues_ok_after_cleaning.
+
     Qed.
 
     Hint Resolve
@@ -2420,9 +2496,36 @@ Section SingleAdversarySimulates.
 
   Admitted.
 
+  Lemma simulates_labeled_step_adversary_safe :
+    forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A)
+      (R : RealWorld.universe A B -> IdealWorld.universe A -> Prop) (b : B),
+      simulates_labeled_step_safe R
+      -> R (strip_adversary U__ra b) U__i
+      -> forall a__r (U U__ra' : RealWorld.universe A B),
+          RealWorld.step_universe U (Action a__r) U__ra'
+          -> RealWorld.findUserKeys (RealWorld.users U) = RealWorld.findUserKeys (RealWorld.users U__ra)
+          -> RealWorld.action_adversary_safe (RealWorld.findUserKeys (RealWorld.users U__ra)) U__ra.(RealWorld.all_ciphers) a__r.
+  Proof.
+    intros.
+
+    assert (RealWorld.action_adversary_safe (RealWorld.findUserKeys (RealWorld.users (strip_adversary U__ra b))) (RealWorld.all_ciphers (strip_adversary U__ra b)) a__r)
+      as ADV_SAFE.
+    eapply H; eauto.
+    erewrite <- findUserKeys_same_stripped_univ; eauto.
+
+    erewrite findUserKeys_same_stripped_univ with (b0:=b); eauto.
+    destruct a__r; simpl in *; eauto.
+    intuition eauto.
+    eapply msgCiphersSigned_before_clean_ciphers; eauto.
+    rewrite clean_users_no_change_findUserKeys in *.
+    auto.
+  Qed.
+
   Lemma simulates_with_adversary_labeled :
-    forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A) (R : RealWorld.universe A B -> IdealWorld.universe A -> Prop) (b : B),
+    forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A)
+            (R : RealWorld.universe A B -> IdealWorld.universe A -> Prop) (b : B),
       simulates_labeled_step R
+      -> simulates_labeled_step_safe R
       (* (forall U__r U__i, *)
       (*     R U__r U__i *)
       (*     -> universe_ok U__r *)
@@ -2434,12 +2537,12 @@ Section SingleAdversarySimulates.
       (*         /\ action_matches a1 a2 *)
       (*         /\ R U__r' U__i'' *)
       (*         /\ universe_ok U__r') *)
-      -> (forall (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A),
-            R U__r U__i ->
-            forall (a__r : RealWorld.action) (U__ra U__r' : RealWorld.universe A B),
-              RealWorld.step_universe U__ra (Action a__r) U__r'
-              -> RealWorld.findUserKeys (U__ra.(RealWorld.users)) = RealWorld.findUserKeys (U__r.(RealWorld.users))
-              -> RealWorld.action_adversary_safe (RealWorld.findUserKeys (RealWorld.users U__r)) U__r.(RealWorld.all_ciphers) a__r)
+      (* -> (forall (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A), *)
+      (*       R U__r U__i -> *)
+      (*       forall (a__r : RealWorld.action) (U__ra U__r' : RealWorld.universe A B), *)
+      (*         RealWorld.step_universe U__ra (Action a__r) U__r' *)
+      (*         -> RealWorld.findUserKeys (U__ra.(RealWorld.users)) = RealWorld.findUserKeys (U__r.(RealWorld.users)) *)
+      (*         -> RealWorld.action_adversary_safe (RealWorld.findUserKeys (RealWorld.users U__r)) U__r.(RealWorld.all_ciphers) a__r) *)
       -> R (strip_adversary U__ra b) U__i
       -> universe_ok U__ra
       -> adv_universe_ok U__ra
@@ -2451,7 +2554,6 @@ Section SingleAdversarySimulates.
             /\ IdealWorld.lstep_universe U__i' (Action a__i) U__i''
             /\ action_matches a__r a__i
             /\ R (strip_adversary U__ra' b) U__i''
-            (* /\ RealWorld.action_adversary_safe (RealWorld.findUserKeys U__ra.(RealWorld.users)) a__r *)
             /\ universe_ok U__ra'.
   Proof.
     intros.
@@ -2469,49 +2571,27 @@ Section SingleAdversarySimulates.
       as STRIP_UNIV_OK
         by (eauto using ok_universe_strip_adversary_still_ok).
 
-    assert (RealWorld.step_universe (strip_adversary U__ra b) (Action a__r) (strip_adversary U__ra' b))
-      as UNIV_STEP.
-    eapply labeled_honest_step_advuniv_implies_stripped_univ_step; eauto.
-    admit.
+    assert (adv_universe_ok (strip_adversary U__ra b))
+      as STRIP_ADV_UNIV_OK
+      by eauto using ok_adv_universe_strip_adversary_still_ok.
+    unfold adv_universe_ok in H3; split_ands.
 
-    (* specialize (H _ _ H1 STRIP_UNIV_OK _ _ UNIV_STEP). *)
-    (* repeat match goal with *)
-    (*        | [ H : exists _, _ |- _ ] => destruct H *)
-    (*        | [ H : _ /\ _ |- _ ] => destruct H *)
-    (*        end. *)
-    (* do 3 eexists; intuition idtac; eauto. *)
+    assert (RealWorld.step_universe (strip_adversary U__ra b) (Action a__r) (strip_adversary U__ra' b))
+      as UNIV_STEP
+        by eauto using labeled_honest_step_advuniv_implies_stripped_univ_step
+                     , simulates_labeled_step_adversary_safe.
+
+    specialize (H _ _ H1 STRIP_UNIV_OK STRIP_ADV_UNIV_OK _ _ UNIV_STEP).
+    repeat match goal with
+           | [ H : exists _, _ |- _ ] => destruct H
+           | [ H : _ /\ _ |- _ ] => destruct H
+           end.
+    do 3 eexists; intuition idtac; eauto.
 
     (* eapply honest_labeled_step_advuniv_implies_univ_ok; eauto. *)
-    admit.
+
 
   Admitted.
-
-  Lemma simulates_labeled_step_adversary_safe :
-    forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A)
-            (R : RealWorld.universe A B -> IdealWorld.universe A -> Prop) (b : B),
-      (forall (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A),
-          R U__r U__i ->
-          forall (a__r : RealWorld.action) (U__ra U__r' : RealWorld.universe A B),
-            RealWorld.step_universe U__ra (Action a__r) U__r'
-          -> RealWorld.findUserKeys (U__ra.(RealWorld.users)) = RealWorld.findUserKeys (U__r.(RealWorld.users))
-          -> RealWorld.action_adversary_safe (RealWorld.findUserKeys (RealWorld.users U__r)) U__r.(RealWorld.all_ciphers) a__r)
-      -> R (strip_adversary U__ra b) U__i
-      -> forall a__r (U U__ra' : RealWorld.universe A B),
-          RealWorld.step_universe U (Action a__r) U__ra'
-          -> RealWorld.findUserKeys (RealWorld.users U) = RealWorld.findUserKeys (RealWorld.users U__ra)
-          -> RealWorld.action_adversary_safe (RealWorld.findUserKeys (RealWorld.users U__ra)) U__ra.(RealWorld.all_ciphers) a__r.
-  Proof.
-    intros.
-
-    assert (RealWorld.action_adversary_safe (RealWorld.findUserKeys (RealWorld.users (strip_adversary U__ra b))) (RealWorld.all_ciphers (strip_adversary U__ra b)) a__r)
-      as ADV_SAFE.
-    eapply H; eauto.
-    erewrite <- findUserKeys_same_stripped_univ; eauto.
-
-    erewrite findUserKeys_same_stripped_univ; eauto.
-  Admitted.
-
-  Print Assumptions simulates_with_adversary_labeled.
 
   Definition universe_starts_ok {A B} (U : RealWorld.universe A B) :=
     let honestk := RealWorld.findUserKeys U.(RealWorld.users)
@@ -2596,6 +2676,7 @@ Section SingleAdversarySimulates.
     forall {A B} (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A) b,
       U__r <| U__i
       -> is_powerless (RealWorld.findUserKeys U__r.(RealWorld.users)) U__r.(RealWorld.adversary) b
+      -> universe_starts_ok U__r
       -> universe_ok U__r
       -> adv_universe_ok U__r
       -> forall U__ra advcode,
