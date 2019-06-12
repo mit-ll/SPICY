@@ -105,18 +105,6 @@ Section RealWorldUniverseProperties.
     Forall_natmap
       (fun u => user_cipher_queue_ok cs honestk u.(c_heap)) usrs.
 
-  Lemma cons_app_split :
-    forall {A} (l l1 l2 : list A) a,
-      a :: l = l1 ++ l2
-      -> (l1 = [] /\ l2 = a :: l)
-      \/ (exists l1', l1 = a :: l1' /\ l = l1' ++ l2).
-  Proof.
-    destruct l1; eauto; intros.
-
-    right. invert H.
-    eexists; eauto.
-  Qed.
-
   Inductive encrypted_cipher_ok (cs : ciphers) : cipher -> Prop :=
   | SigCipherHonestOk : forall {t} (msg : message t) k,
       honestk $? k = Some true
@@ -146,6 +134,13 @@ Section RealWorldUniverseProperties.
   (* -> (honestk $? k = None \/ honestk $? k = Some false). *)
 
   Hint Unfold message_no_adv_private.
+
+  Definition adv_message_queue_ok (honestk : key_perms) (msgs : queued_messages) :=
+    Forall (fun sigm => match sigm with
+                     | (existT _ _ m) =>
+                       forall k, findKeys m $? k = Some true -> honestk $? k <> Some true
+                     end
+           ) msgs.
 
   Definition message_queue_ok (cs : ciphers) (msgs : queued_messages) :=
     Forall (fun sigm => match sigm with
@@ -191,6 +186,7 @@ Definition adv_universe_ok {A B} (U : RealWorld.universe A B) : Prop :=
   in  keys_good U.(RealWorld.all_keys)
     /\ user_cipher_queues_ok U.(RealWorld.all_ciphers) honestk U.(RealWorld.users)
     /\ message_queues_ok honestk U.(RealWorld.all_ciphers) U.(RealWorld.users)
+    /\ adv_message_queue_ok honestk U.(RealWorld.adversary).(RealWorld.msg_heap)
     /\ adv_no_honest_keys honestk U.(RealWorld.adversary).(RealWorld.key_heap).
 
 Definition simulates_silent_step {A B} (R : RealWorld.universe A B -> IdealWorld.universe A -> Prop) :=

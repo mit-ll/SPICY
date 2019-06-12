@@ -18,6 +18,11 @@ Ltac split_ors :=
          | [ H : _ \/ _ |- _ ] => destruct H
          end.
 
+Ltac split_ex :=
+  repeat match goal with
+         | [ H : exists _, _ |- _ ] => destruct H
+         end.
+
 Ltac invert H :=
   (MyPrelude.invert H || (inversion H; clear H));
   repeat match goal with
