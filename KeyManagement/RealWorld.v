@@ -10,33 +10,19 @@ Require Import
 
 Set Implicit Arguments.
 
+Module RW_message <: GRANT_ACCESS.
+  Definition access := key_identifier.
+End RW_message.
+
+Module message := Messages(RW_message).
+Import message.
+
 Definition cipher_id := nat.
 
-Inductive type : Set :=
-| Nat
-(* | Text *)
-| Key
-| CipherId
-| Pair (t1 t2 : type)
-.
-
-Fixpoint typeDenote (t : type) : Set :=
-  match t with
-  | Nat => nat
-  | Key => key_permission
-  | CipherId => cipher_id
-  | Pair t1 t2 => typeDenote t1 * typeDenote t2
-  end.
-
-Inductive message : type -> Type :=
-(* This will eventually be a message Text, using nat for now *)
-| Plaintext (txt : nat) : message Nat
-| KeyMessage  (k : key_permission) : message Key
-
-| MsgPair {t1 t2 : type} (msg1 : message t1) (msg2 : message t2) : message (Pair t1 t2)
-
-| SignedCiphertext (k__sign k__enc : key_identifier) (msg_id : cipher_id) : message CipherId
-| Signature {t} (msg : message t) (k : key_identifier) (sig : cipher_id) : message t
+Inductive crypto : type -> Type :=
+| Content {t} (c : message t) : crypto t
+| SignedCiphertext (k__sign k__enc : key_identifier) (msg_id : cipher_id) : crypto Access
+| Signature {t} (msg : message t) (k : key_identifier) (sig : cipher_id) : crypto t
 .
 
 (* We need to handle non-deterministic message  -- external choice on ordering *)
@@ -62,13 +48,9 @@ Definition queued_messages := list (sigT message).
 Definition ciphers         := NatMap.t cipher.
 Definition my_ciphers      := list cipher_id.
 
-Inductive msg_accepted_by_pattern : forall {t : type}, msg_pat -> message t -> Prop :=
-| MsgAccept : forall {t} (m : message t),
+Inductive msg_accepted_by_pattern : forall {t : type}, msg_pat -> crypto t -> Prop :=
+| MsgAccept : forall {t} (m : crypto t),
     msg_accepted_by_pattern Accept m
-| BothPairsAccepted : forall {t1 t2} p1 p2 (m1 : message t1) (m2 : message t2),
-      msg_accepted_by_pattern p1 m1
-    -> msg_accepted_by_pattern p2 m2
-    -> msg_accepted_by_pattern (Paired p1 p2) (MsgPair m1 m2)
 | ProperlySigned : forall {t} c_id k (m : message t),
     msg_accepted_by_pattern (Signed k) (Signature m k c_id)
 | ProperlyEncrypted : forall {t} c_id k__sign k__enc (m : message t),
@@ -129,10 +111,6 @@ Section SafeMessages.
         honestk $? fst kp = Some true
       -> snd kp = false
       -> msg_contains_only_honest_public_keys (KeyMessage kp)
-  | MsgPairHPK : forall {t1 t2} (msg1 : message t1) (msg2 : message t2),
-        msg_contains_only_honest_public_keys msg1
-      -> msg_contains_only_honest_public_keys msg2
-      -> msg_contains_only_honest_public_keys (MsgPair msg1 msg2)
   | HonestlyEncryptedHPK :
       forall c_id k__signid k__encid,
         honest_key k__encid

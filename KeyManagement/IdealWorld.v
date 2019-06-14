@@ -6,7 +6,7 @@ Module Foo <: EMPTY. End Foo.
 Module Import SN := SetNotations(Foo).
 
 Require Import Common Maps Messages.
-
+Require Messages.
 Set Implicit Arguments.
 
 Definition channel_id := nat.
@@ -19,27 +19,16 @@ Definition permissions := NatMap.t permission.
 
 Definition creator_permission := construct_permission true true.
 
-Inductive type :=
-| Nat
-| ChanId
-| Perm
-(* | Text *)
-| Pair (t1 t2 : type)
-.
+Record access := construct_access
+                   { ch_perm : permission ;
+                     ch_id : channel_id }.
 
-Fixpoint typeDenote (t : type) : Set :=
-  match t with
-  | Nat => nat
-  | ChanId => channel_id
-  | Perm => permission
-  | Pair t1 t2 => typeDenote t1 * typeDenote t2
-  end.
+Module IW_message <: GRANT_ACCESS.
+  Definition access := access.
+End IW_message.
 
-Inductive message : type -> Type :=
-| Permission (id : channel_id) (p : permission) : message (Pair ChanId Perm)
-| Content (n : nat) : message Nat
-| MsgPair {t1 t2} (m1 : message t1) (m2 : message t2) : message (Pair t1 t2)
-.
+Module message := Messages(IW_message).
+Import message.
 
 (* shouldn't this be just Permissions ? *)
 Definition channels := NatMap.t (set (sigT message)).
@@ -73,7 +62,7 @@ Record universe A :=
 (* write as inductive relation *)
 Fixpoint chs_search {A} (m : message A) : list (channel_id * permission) :=
   match m with
-  | Permission id p => [(id, p)]
+  | Permission (construct_access p id) => [(id, p)]
   | Content _ => []
   | MsgPair m1 m2 => chs_search m1 ++ chs_search m2        
   end.
