@@ -1,5 +1,6 @@
 -R ./frap Frap
 -R ./KeyManagement KeyManagement
+-R ./protocols protocols
 
 KeyManagement/MyPrelude.v
 KeyManagement/Maps.v
@@ -11,4 +12,5 @@ KeyManagement/RealWorld.v
 KeyManagement/Simulation.v
 KeyManagement/AdversarySafety.v
 KeyManagement/Tactics.v
-KeyManagement/EncPingProtocol.v
+
+#protocols/EncPingProtocol.v
