@@ -553,47 +553,37 @@ Section FeebleSimulates.
       | [ H : RealWorld.findKeys _ $? _ = Some true |- False ] => progress simpl in H; invert H
       end.
 
-  (* Lemma rpingbase_silent_simulates : *)
-  (*   simulates_silent_step RPingPongBase. *)
-  (* Proof. *)
+  Lemma rpingbase_silent_simulates :
+    simulates_silent_step RPingPongBase.
+  Proof.
 
-  (*   unfold simulates_silent_step. *)
-  (*   (* intros; invert H. *) *)
-  (*   (* - churn; *) *)
-  (*   (*     [> eexists; split; [|split]; swap 1 3; simplUniv; eauto 9; solve_universe_ok; eauto ..]. *) *)
-  (*   (* - churn; *) *)
-  (*   (*     [> eexists; split; [|split]; swap 1 3; simplUniv; eauto 9; solve_universe_ok; eauto ..]. *) *)
-  (*   (* - churn; *) *)
-  (*   (*     [> eexists; split; [|split]; swap 1 3; simplUniv; eauto 9; solve_universe_ok; eauto ..]. *) *)
-  (*   (* - churn; *) *)
-  (*   (*     [> eexists; split; [|split]; swap 1 3; simplUniv; eauto 9; solve_universe_ok; eauto ..]. *) *)
-  (*   (* - churn; *) *)
-  (*   (*     [> eexists; split; [|split]; swap 1 3; simplUniv; eauto 9; solve_universe_ok; eauto ..]. *) *)
-  (*   (* - churn; *) *)
-  (*   (*     [> eexists; split; [|split]; swap 1 3; simplUniv; eauto 9; solve_universe_ok; eauto ..]. *) *)
+    unfold simulates_silent_step.
+    (* intros; invert H. *)
+    (* - churn; *)
+    (*     [> eexists; split; [|split]; swap 1 3; simplUniv; eauto 9; solve_universe_ok; eauto ..]. *)
+    (* - churn; *)
+    (*     [> eexists; split; [|split]; swap 1 3; simplUniv; eauto 9; solve_universe_ok; eauto ..]. *)
+    (* - churn; *)
+    (*     [> eexists; split; [|split]; swap 1 3; simplUniv; eauto 9; solve_universe_ok; eauto ..]. *)
+    (* - churn; *)
+    (*     [> eexists; split; [|split]; swap 1 3; simplUniv; eauto 9; solve_universe_ok; eauto ..]. *)
+    (* - churn; *)
+    (*     [> eexists; split; [|split]; swap 1 3; simplUniv; eauto 9; solve_universe_ok; eauto ..]. *)
+    (* - churn; *)
+    (*     [> eexists; split; [|split]; swap 1 3; simplUniv; eauto 9; solve_universe_ok; eauto ..]. *)
 
-  (*   time ( *)
-  (*       intros; *)
-  (*       invert H; *)
-  (*       churn; *)
-  (*       [> eexists; split; [|split]; swap 1 3; simplUniv; eauto 9; solve_universe_ok; eauto .. ] *)
-  (*   ). *)
+    time (
+        intros;
+        invert H;
+        churn;
+        [> eexists; split; [|split]; swap 1 3; simplUniv; eauto 9; solve_universe_ok; eauto .. ]
+    ).
 
-  (* Qed. *)
+  Qed.
 
 
   Lemma rpingbase_loud_simulates :
     simulates_labeled_step RPingPongBase.
-    (* forall U__r U__i, *)
-    (*   RPingPongBase U__r U__i *)
-    (*   -> forall a1 U__r', *)
-    (*     RealWorld.step_universe U__r (Action a1) U__r' *)
-    (*     -> exists a2 U__i' U__i'', *)
-    (*         istepSilent^* U__i U__i' *)
-    (*         /\ IdealWorld.lstep_universe U__i' (Action a2) U__i'' *)
-    (*         /\ action_matches a1 a2 *)
-    (*         /\ RPingPongBase U__r' U__i'' *)
-    (*         /\ RealWorld.action_adversary_safe (RealWorld.findUserKeys U__r.(RealWorld.adversary)) a1 = true. *)
   Proof.
     unfold simulates_labeled_step.
 
