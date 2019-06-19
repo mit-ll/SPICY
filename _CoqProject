@@ -13,4 +13,4 @@ KeyManagement/Simulation.v
 KeyManagement/AdversarySafety.v
 KeyManagement/Tactics.v
 
-#protocols/EncPingProtocol.v
+protocols/EncPingProtocol.v
