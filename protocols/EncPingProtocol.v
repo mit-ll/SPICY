@@ -7,7 +7,7 @@ Require Import MyPrelude.
 Module Foo <: EMPTY. End Foo.
 Module Import SN := SetNotations(Foo).
 
-Require Import Common Maps Keys Simulation MapLtac Tactics AdversarySafety.
+Require Import Common Maps Keys Simulation MapLtac Tactics AdversaryUniverse.
 
 Require IdealWorld RealWorld.
 

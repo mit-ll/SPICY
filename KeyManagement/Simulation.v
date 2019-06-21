@@ -7,6 +7,7 @@ From Coq Require Import
 
 Require Import
         MyPrelude
+        AdversaryUniverse
         Maps
         Common
         MapLtac
@@ -188,98 +189,6 @@ Definition adv_universe_ok {A B} (U : RealWorld.universe A B) : Prop :=
     /\ message_queues_ok honestk U.(RealWorld.all_ciphers) U.(RealWorld.users)
     /\ adv_message_queue_ok honestk U.(RealWorld.adversary).(RealWorld.msg_heap)
     /\ adv_no_honest_keys honestk U.(RealWorld.adversary).(RealWorld.key_heap).
-
-
-Section AdversaryHelpers.
-  Import RealWorld.
-
-  Variable honestk : key_perms.
-
-  Definition msg_filter (sigM : { t & message t } ) : bool :=
-    match sigM with
-    | existT _ _ msg => msg_honestly_signed honestk msg
-    end.
-
-  Definition clean_messages (msgs : queued_messages) :=
-    List.filter msg_filter msgs.
-
-  Definition clean_users {A} (usrs : honest_users A) :=
-    (* usrs. *)
-    map (fun u_d => {| key_heap := u_d.(key_heap)
-                  ; protocol := u_d.(protocol)
-                  ; msg_heap := clean_messages u_d.(msg_heap)
-                  ; c_heap   := u_d.(c_heap) |}) usrs.
-
-  Definition honest_cipher_filter_fn (c_id : cipher_id) (c : cipher) :=
-    cipher_honestly_signed honestk c.
-
-  Lemma honest_cipher_filter_fn_proper :
-    Proper (eq  ==>  eq  ==>  eq) honest_cipher_filter_fn.
-  Proof.
-    unfold Proper, Morphisms.respectful; intros; subst; reflexivity.
-  Qed.
-
-  Lemma honest_cipher_filter_fn_filter_proper :
-    Proper
-      ( eq  ==>  eq  ==>  Equal  ==>  Equal)
-      (fun (k : NatMap.key) (e : cipher) (m : t cipher) => if honest_cipher_filter_fn k e then m $+ (k, e) else m).
-  Proof.
-    unfold Proper, respectful;
-      unfold Equal; intros; apply map_eq_Equal in H1; subst; auto.
-  Qed.
-
-  Lemma honest_cipher_filter_fn_filter_transpose :
-    transpose_neqkey Equal
-       (fun (k : NatMap.key) (e : cipher) (m : t cipher) => if honest_cipher_filter_fn k e then m $+ (k, e) else m).
-  Proof.
-    unfold transpose_neqkey, Equal, honest_cipher_filter_fn, cipher_honestly_signed; intros.
-    cases e; cases e'; simpl;
-      repeat match goal with
-             | [ |- context[if ?cond then _ else _] ] => cases cond
-             | [ |- context[_ $+ (?k1,_) $? ?k2] ] => cases (k1 ==n k2); subst; clean_map_lookups
-             end; eauto.
-  Qed.
-
-  Lemma honest_cipher_filter_fn_filter_proper_eq :
-    Proper
-      ( eq  ==>  eq  ==>  eq  ==>  eq)
-      (fun (k : NatMap.key) (e : cipher) (m : t cipher) => if honest_cipher_filter_fn k e then m $+ (k, e) else m).
-  Proof.
-    unfold Proper, respectful; intros; subst; trivial.
-  Qed.
-
-  Lemma honest_cipher_filter_fn_filter_transpose_eq :
-    transpose_neqkey eq
-       (fun (k : NatMap.key) (e : cipher) (m : t cipher) => if honest_cipher_filter_fn k e then m $+ (k, e) else m).
-  Proof.
-    unfold transpose_neqkey, honest_cipher_filter_fn, cipher_honestly_signed; intros.
-    cases e; cases e'; subst; simpl;
-      repeat match goal with
-             | [ |- context[if ?cond then _ else _] ] => cases cond
-             | [ |- context[_ $+ (?k1,_) $? ?k2] ] => cases (k1 ==n k2); subst; clean_map_lookups
-             end; eauto;
-        rewrite map_ne_swap; eauto.
-  Qed.
-
-  Definition clean_ciphers (cs : ciphers) :=
-    filter honest_cipher_filter_fn cs.
-
-End AdversaryHelpers.
-
-Section StripAdv.
-  Import RealWorld.
-
-  Definition strip_adversary {A B} (U__r : universe A B) (b : B) : universe A B :=
-    let honestk := findUserKeys U__r.(users)
-    in {| users       := clean_users honestk U__r.(users)
-        ; adversary   := {| key_heap := U__r.(adversary).(key_heap)
-                          ; msg_heap := U__r.(adversary).(msg_heap)
-                          ; protocol := Return b
-                          ; c_heap   := U__r.(adversary).(c_heap) |}
-        ; all_ciphers := clean_ciphers honestk U__r.(all_ciphers)
-        ; all_keys    := U__r.(all_keys)
-       |}.
-End StripAdv.
 
 Definition simulates_silent_step {A B} (R : RealWorld.universe A B -> IdealWorld.universe A -> Prop) :=
   forall U__r U__i,
