@@ -7,7 +7,7 @@ Require Import MyPrelude.
 Module Foo <: EMPTY. End Foo.
 Module Import SN := SetNotations(Foo).
 
-Require Import Common Maps Keys Simulation MapLtac.
+Require Import Common Maps Keys Simulation MapLtac Tactics AdversarySafety.
 
 Require IdealWorld RealWorld.
 
@@ -572,14 +572,14 @@ Section FeebleSimulates.
     (* - churn; *)
     (*     [> eexists; split; [|split]; swap 1 3; simplUniv; eauto 9; solve_universe_ok; eauto ..]. *)
 
-    time (
-        intros;
-        invert H;
-        churn;
-        [> eexists; split; [|split]; swap 1 3; simplUniv; eauto 9; solve_universe_ok; eauto .. ]
-    ).
+    (* time ( *)
+    (*     intros; *)
+    (*     invert H; *)
+    (*     churn; *)
+    (*     [> eexists; split; [|split]; swap 1 3; simplUniv; eauto 9; solve_universe_ok; eauto .. ] *)
+    (* ). *)
 
-  Qed.
+  Admitted.
 
 
   Lemma rpingbase_loud_simulates :
@@ -587,31 +587,440 @@ Section FeebleSimulates.
   Proof.
     unfold simulates_labeled_step.
 
-    time
-      (intros;
-       invert H;
-       churn;
-       unfold RealWorld.buildUniverse;
-       simpl; simplUniv;
-       (do 3 eexists;
-        repeat
-          match goal with
-          | [ |- _ /\ _ ] => split
-          end; swap 3 4; swap 4 5; swap 1 3; [ .. | admit (* action matches predicate *)];
-        eauto; eauto 12)).
+    (* time *)
+    (*   (intros; *)
+    (*    invert H; *)
+    (*    churn; *)
+    (*    unfold RealWorld.buildUniverse; *)
+    (*    simpl; simplUniv; *)
+    (*    (do 3 eexists; *)
+    (*     repeat *)
+    (*       match goal with *)
+    (*       | [ |- _ /\ _ ] => split *)
+    (*       end; swap 3 4; swap 4 5; swap 1 3; [ .. | admit (* action matches predicate *)]; *)
+    (*     eauto; eauto 12)). *)
 
   Admitted.
+
+  (*
+   * Tactic call ran for 1468.475 secs (1467.238u,1.061s) (success)
+   * Tactic call ran for 257.673 secs (257.516u,0.091s) (success)
+   * No more subgoals, but there are some goals you gave up:
+   *)
+
+  Section UniverseStep.
+    Import RealWorld.
+
+    Definition rewrite_messages {A} (usr : user_data A) (qmsgs : queued_messages) :=
+      {| key_heap := usr.(key_heap)
+       ; protocol := usr.(protocol)
+       ; msg_heap := qmsgs
+       ; c_heap   := usr.(c_heap)
+      |}.
+
+    Lemma invert_universe' :
+      forall {A B} (U__r U__ra : universe A B) b usrs honestk u_id u u',
+        U__r = strip_adversary U__ra b
+        -> honestk = findUserKeys U__r.(users)
+        -> usrs = U__r.(users)
+        -> U__ra.(users) $? u_id = Some u'
+        -> usrs $? u_id = Some u
+        -> exists msgs, u' = rewrite_messages u msgs
+                /\ Forall (fun m => msg_filter honestk m = false \/ List.In m u.(msg_heap)) msgs.
+    Proof.
+      intros.
+      destruct U__r; destruct U__ra; destruct u; destruct u'; subst; simpl in *.
+      unfold strip_adversary in H; simpl in H.
+      inversion H; clear H.
+      subst.
+      unfold clean_users in H3; rewrite map_o in H3; rewrite H2 in H3; simpl in H3.
+      inversion H3.
+      exists msg_heap0. subst.
+      eexists; intuition eauto.
+      rewrite Forall_forall; intros.
+      rewrite clean_users_no_change_findUserKeys.
+      cases (msg_filter (findUserKeys users0) x); auto.
+      right.
+      unfold clean_messages; rewrite filter_In; auto.
+    Qed.
+
+    Lemma invert_universe :
+      forall {A B} (U__r U__ra : universe A B) b u_id u,
+        U__r = strip_adversary U__ra b
+        -> U__ra.(users) $? u_id = Some u
+        -> exists msgs u', U__r.(users) $? u_id = Some u'
+                   /\ u = rewrite_messages u' msgs
+                   /\ Forall (fun m => msg_filter (findUserKeys U__ra.(users)) m = false \/ List.In m u'.(msg_heap)) msgs.
+    Proof.
+      intros.
+      destruct U__r; destruct U__ra; destruct u; subst; simpl in *.
+      unfold strip_adversary in H; simpl in H.
+      inversion H; clear H.
+      subst.
+      repeat eexists.
+      eapply clean_users_cleans_user; eauto.
+      unfold rewrite_messages; reflexivity.
+      rewrite Forall_forall; intros.
+      cases (msg_filter (findUserKeys users0) x); auto.
+      right; simpl.
+      unfold clean_messages; rewrite filter_In; auto.
+    Qed.
+
+  End UniverseStep.
+
+  Hint Rewrite @add_univ_simpl1 using (trivial || discriminate) : simpl_univ.
+  Hint Rewrite @add_univ_simpl2 using (trivial || discriminate) : simpl_univ.
+  Hint Rewrite @add_univ_simpl3 using (trivial || discriminate) : simpl_univ.
+
+  Hint Resolve
+       RealWorld.findUserKeys_foldfn_proper_Equal
+       RealWorld.findUserKeys_foldfn_transpose_Equal.
 
   Lemma rpingbase_labeled_simulates_safe :
     simulates_labeled_step_safe RPingPongBase.
   Proof.
     unfold simulates_labeled_step_safe.
-    intros; invert H; churn.
-    unfold RealWorld.action_adversary_safe; simplify.
-    churn.
-    destruct U; simpl in *.
-    unfold strip_adversary, real_univ_start, mkrU in *; simpl in *.
-     invert H0. inve
+    intros.
+
+    assert (RealWorld.findUserKeys U.(RealWorld.users) =
+            RealWorld.findUserKeys (clean_users (RealWorld.findUserKeys U.(RealWorld.users)) U.(RealWorld.users)))
+      by (symmetry; eapply clean_users_no_change_findUserKeys).
+    remember (RealWorld.findUserKeys U.(RealWorld.users)) as honestk.
+
+      Ltac solveU :=
+        repeat
+          match goal with
+          | [ H : RealWorld.buildUniverse _ _ _ _ _ _ = strip_adversary _ _ |- _ ] => unfold RealWorld.buildUniverse in H
+          | [ H : _ = strip_adversary _ _ |- _ ] =>
+            progress(unfold real_univ_start, real_univ_sent1, real_univ_recd1,
+                            real_univ_sent2, real_univ_recd2, real_univ_done, mkrU in H; simpl in H)
+          | [ H : _ = strip_adversary _ _ |- _ ] =>
+            progress (autorewrite with simpl_univ in H)
+          end.
+
+      Ltac invUniv :=
+        match goal with
+        | [ H1 : ?u0 = strip_adversary ?u _
+          , H2 : RealWorld.users ?u $? _ = _ |- _ ] =>
+          generalize (invert_universe _ H1 H2); intro;
+          assert (RealWorld.users u0 = (clean_users (RealWorld.findUserKeys u.(RealWorld.users)) u.(RealWorld.users)))
+            by (simpl; unfold strip_adversary in H1; simpl in H1; inversion H1; auto);
+          assert (RealWorld.all_ciphers u0 = (clean_ciphers (RealWorld.findUserKeys u.(RealWorld.users)) u.(RealWorld.all_ciphers)))
+            by (simpl; unfold strip_adversary in H1; simpl in H1; inversion H1; auto)
+        end.
+
+      Ltac solve_adv_safe :=
+        repeat
+          match goal with
+          | [ |- RealWorld.action_adversary_safe _ _ _] => unfold RealWorld.action_adversary_safe
+          | [ |- RealWorld.msg_pattern_safe _ _ ] => econstructor
+          | [ |- RealWorld.honest_key _ _ ] => econstructor
+          | [ |- RealWorld.honest_keyb _ _ = true ] => rewrite <- RealWorld.honest_key_honest_keyb
+          | [ H : RealWorld.findUserKeys ?usrs = _ |- RealWorld.findUserKeys ?usrs $? _ = Some _ ] => rewrite H
+          | [ H : _ = clean_users ?honestk ?usrs |- context [ clean_users ?honestk ?usrs ] ] => rewrite <- H
+          | [ |- RealWorld.msg_contains_only_honest_public_keys _ _ ] => econstructor
+          | [ |- RealWorld.msgCiphersSigned _ _ _ ] => econstructor
+          | [ |- RealWorld.msgCipherOk _ _ _ ] => unfold RealWorld.msgCipherOk
+          | [ |- RealWorld.msg_honestly_signed _ _ = true] => unfold RealWorld.msg_honestly_signed
+          | [ |- _ /\ _ ] => split
+          | [ H : _ = clean_ciphers ?honk ?cs |- ?cs $? ?cid = Some ?c ] =>
+            assert (clean_ciphers honk cs $? cid = Some c) by (rewrite <- H; clean_map_lookups; trivial); clear H
+          | [ H : clean_ciphers _ ?cs $? ?cid = Some ?c |- ?cs $? ?cid = Some ?c ] =>
+            rewrite <- find_mapsto_iff in H; rewrite clean_ciphers_mapsto_iff in H; split_ands;
+              rewrite <- find_mapsto_iff; assumption
+          end.
+
+    destruct H.
+
+    - churn.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            | [ H : _ = clean_ciphers _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+
+    - churn.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+
+    - churn.
+
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+
+    - churn.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+
+    - churn.
+
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+
+    - churn.
+
+      + solveU; invUniv;
+          repeat
+            match goal with
+            | [ H : exists _, _ |- _ ] => destruct H
+            | [ H : _ = clean_users _ _ |- _ ] => progress (simpl in H)
+            end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto.
+
+  Qed.
+
 
 
   Theorem base_pingpong_refines_ideal_pingpong :
@@ -622,3 +1031,4 @@ Section FeebleSimulates.
   Qed.
 
 End FeebleSimulates. 
+
