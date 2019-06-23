@@ -385,14 +385,17 @@ Module SimulationAutomation.
     (* Only take a user step if we have chosen a user *)
     | [ H: RealWorld.step_user _ (Some A) _ _ |- _ ] => invert H
     | [ H: RealWorld.step_user _ (Some B) _ _ |- _ ] => invert H
-    | [ H : RealWorld.step_user _ None _ _ |- _ ] => progress simpl in H
+    | [ H : RealWorld.step_user _ None _ _ |- _ ] => progress (simpl in H)
     | [ H : RealWorld.step_user _ None (RealWorld.build_data_step _ adv) _ |- _ ] => unfold adv in H; invert H
 
     | [ H: rstepSilent _ _ |- _ ] => invert H
     | [ H: RealWorld.step_universe _ _ _ |- _ ] => invert H
 
-    | [ H :rstepSilent ^* (RealWorld.buildUniverse _ _ _ _ _) _ |- _] =>
-      (rewrite simplify_build_univ1 in H by auto) || (rewrite simplify_build_univ2 in H by auto)
+    | [ H :rstepSilent ^* (RealWorld.buildUniverse _ _ _ _ _ _) _ |- _] =>
+      unfold RealWorld.buildUniverse in H; autorewrite with simpl_univ in H
+    | [ |- context [RealWorld.buildUniverse _ _ _ _ _ _] ] =>
+      unfold RealWorld.buildUniverse
+      (* (rewrite simplify_build_univ1 in H by auto) || (rewrite simplify_build_univ2 in H by auto) *)
     | [ S: rstepSilent ^* ?U _ |- _ ] => 
       (* Don't actually multiStep unless we know the state of the starting universe
        * meaning it is not some unknown hypothesis in the context...
@@ -401,7 +404,6 @@ Module SimulationAutomation.
       | [U1 : U |- _] => fail 1
       | [ |- _ ] =>
         (* invert S *)
-        (* eapply multiStepSilentInv in S; intuition; repeat match goal with [ H : exists _, _ |- _] => destruct H end; intuition; subst *)
         eapply multiStepSilentInv in S; intuition idtac; repeat match goal with [ H : exists _, _ |- _] => destruct H end; intuition idtac; subst
       end
 
@@ -528,6 +530,10 @@ Import SimulationAutomation.
 
 Section FeebleSimulates.
 
+  Hint Rewrite @add_univ_simpl1 using (trivial || discriminate) : simpl_univ.
+  Hint Rewrite @add_univ_simpl2 using (trivial || discriminate) : simpl_univ.
+  Hint Rewrite @add_univ_simpl3 using (trivial || discriminate) : simpl_univ.
+
   Ltac simplUniv :=
     repeat match goal with
            | [ |- context[ _ $+ (?A,_) $+ (?A,_) ] ] => rewrite add_univ_simpl1 by trivial
@@ -543,9 +549,7 @@ Section FeebleSimulates.
       | [ H : universe_ok _ |- universe_ok _ ] =>
         unfold universe_ok, RealWorld.buildUniverse in H;
         unfold universe_ok, RealWorld.buildUniverse;
-        simpl in H; simpl;
-        rewrite !RealWorld.findUserKeys_readd_user_same_keys_idempotent' in H by auto;
-        rewrite !RealWorld.findUserKeys_readd_user_same_keys_idempotent' by auto
+        simpl in H; simpl
       | [ |- encrypted_ciphers_ok _ _ ] => econstructor
       | [ |- encrypted_cipher_ok _ _ _ ] => econstructor
       | [ |- RealWorld.msgCiphersSigned _ _ _ ] => econstructor
@@ -572,33 +576,32 @@ Section FeebleSimulates.
     (* - churn; *)
     (*     [> eexists; split; [|split]; swap 1 3; simplUniv; eauto 9; solve_universe_ok; eauto ..]. *)
 
-    (* time ( *)
-    (*     intros; *)
-    (*     invert H; *)
-    (*     churn; *)
-    (*     [> eexists; split; [|split]; swap 1 3; simplUniv; eauto 9; solve_universe_ok; eauto .. ] *)
-    (* ). *)
+    time (
+        intros;
+        invert H;
+        churn; autorewrite with simpl_univ;
+        [> eexists; split; [|split]; swap 1 3; eauto 9; solve_universe_ok; eauto .. ]
+      ).
 
-  Admitted.
-
+  Qed.
 
   Lemma rpingbase_loud_simulates :
     simulates_labeled_step RPingPongBase.
   Proof.
     unfold simulates_labeled_step.
 
-    (* time *)
-    (*   (intros; *)
-    (*    invert H; *)
-    (*    churn; *)
-    (*    unfold RealWorld.buildUniverse; *)
-    (*    simpl; simplUniv; *)
-    (*    (do 3 eexists; *)
-    (*     repeat *)
-    (*       match goal with *)
-    (*       | [ |- _ /\ _ ] => split *)
-    (*       end; swap 3 4; swap 4 5; swap 1 3; [ .. | admit (* action matches predicate *)]; *)
-    (*     eauto; eauto 12)). *)
+    time
+      (intros;
+       invert H;
+       churn;
+       autorewrite with simpl_univ;
+       simpl;
+       (do 3 eexists;
+        repeat
+          match goal with
+          | [ |- _ /\ _ ] => split
+          end; swap 3 4; swap 4 5; swap 1 3; [ .. | admit (* action matches predicate *)];
+        eauto; eauto 12)).
 
   Admitted.
 
@@ -682,10 +685,6 @@ Section FeebleSimulates.
     Admitted.
 
   End UniverseStep.
-
-  Hint Rewrite @add_univ_simpl1 using (trivial || discriminate) : simpl_univ.
-  Hint Rewrite @add_univ_simpl2 using (trivial || discriminate) : simpl_univ.
-  Hint Rewrite @add_univ_simpl3 using (trivial || discriminate) : simpl_univ.
 
   Hint Resolve
        RealWorld.findUserKeys_foldfn_proper
