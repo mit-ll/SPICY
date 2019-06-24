@@ -374,8 +374,8 @@ Module SimulationAutomation.
     | [ H: MkCryptoKey _ _ _ = _ |- _ ] => invert H
     (* | [ H: AsymKey _ = _ |- _ ] => invert H *)
 
-    | [ H: exists _, _ |- _ ] => invert H
-    | [ H: _ /\ _ |- _ ] => invert H
+    | [ H: exists _, _ |- _ ] => destruct H
+    | [ H: _ /\ _ |- _ ] => destruct H; subst
 
     | [ H : keyId _ = _ |- _] => invert H
 
@@ -388,9 +388,6 @@ Module SimulationAutomation.
     | [ H : RealWorld.step_user _ None _ _ |- _ ] => progress (simpl in H)
     | [ H : RealWorld.step_user _ None (RealWorld.build_data_step _ adv) _ |- _ ] => unfold adv in H; invert H
 
-    | [ H: rstepSilent _ _ |- _ ] => invert H
-    | [ H: RealWorld.step_universe _ _ _ |- _ ] => invert H
-
     | [ H :rstepSilent ^* (RealWorld.buildUniverse _ _ _ _ _ _) _ |- _] =>
       unfold RealWorld.buildUniverse in H; autorewrite with simpl_univ in H
     | [ |- context [RealWorld.buildUniverse _ _ _ _ _ _] ] =>
@@ -402,10 +399,20 @@ Module SimulationAutomation.
        *)
       match goal with
       | [U1 : U |- _] => fail 1
+      (* | [U1 : RealWorld.step_user _ _ _ _ |- _ ] => idtac "nope1"; fail 1 *)
+      (* | [U1 : RealWorld.step_universe _ _ _ |- _ ] => idtac "nope2"; fail 1 *)
+      (* | [U1 : rstepSilent _ _ |- _ ] => idtac "nope3"; fail 1 *)
       | [ |- _ ] =>
         (* invert S *)
-        eapply multiStepSilentInv in S; intuition idtac; repeat match goal with [ H : exists _, _ |- _] => destruct H end; intuition idtac; subst
+        eapply multiStepSilentInv in S; split_ors; split_ex; intuition idtac; subst
       end
+
+    | [ H: rstepSilent ?U _ |- _ ] =>
+      match goal with
+      | [ U1 : U |- _ ] => fail 1
+      | [ |- _ ] => invert H
+      end
+    | [ H: RealWorld.step_universe _ _ _ |- _ ] => invert H
 
     end.
 
@@ -563,8 +570,8 @@ Section FeebleSimulates.
 
     unfold simulates_silent_step.
     (* intros; invert H. *)
-    (* - churn; *)
-    (*     [> eexists; split; [|split]; swap 1 3; simplUniv; eauto 9; solve_universe_ok; eauto ..]. *)
+    (* time(churn; *)
+    (*   [> eexists; split; [|split]; swap 1 3; simplUniv; eauto 9; solve_universe_ok; eauto ..]). *)
     (* - churn; *)
     (*     [> eexists; split; [|split]; swap 1 3; simplUniv; eauto 9; solve_universe_ok; eauto ..]. *)
     (* - churn; *)
@@ -604,12 +611,6 @@ Section FeebleSimulates.
         eauto; eauto 12)).
 
   Admitted.
-
-  (*
-   * Tactic call ran for 1468.475 secs (1467.238u,1.061s) (success)
-   * Tactic call ran for 257.673 secs (257.516u,0.091s) (success)
-   * No more subgoals, but there are some goals you gave up:
-   *)
 
   Section UniverseStep.
     Import RealWorld.
@@ -756,6 +757,19 @@ Section FeebleSimulates.
             end; split_ands; subst; simpl in *; churn; solve_adv_safe; eauto ..]).
 
   Qed.
+
+  (* Timings:
+   *
+   * 20190624 (laptop run: block inversion of rstepSilent if don't know start univ -- saving restepping through protocol for adversary)
+   * Tactic call ran for 1272.565 secs (1271.919u,0.596s) (success)
+   * Tactic call ran for 314.031 secs (314.027u,0.004s) (success)
+   * Tactic call ran for 283.061 secs (282.885u,0.148s) (success)
+   * --------------------------------------------------------------
+   * (no date, desktop run (laptop more like 1700): starting point after refactor)
+   * Tactic call ran for 1468.475 secs (1467.238u,1.061s) (success)
+   * Tactic call ran for 257.673 secs (257.516u,0.091s) (success)
+   * --------------------------------------------------------------
+   *)
 
   Hint Resolve
        rpingbase_silent_simulates
