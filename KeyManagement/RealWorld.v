@@ -847,6 +847,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
 
 (* | Barrier {result : Set} : user_cmd result. *)
 
+
 Inductive step_universe {A B} : universe A B -> rlabel -> universe A B -> Prop :=
 | StepUser : forall U U' (u_id : user_id) userData usrs adv cs gks ks qmsgs mycs lbl (cmd : user_cmd A),
     U.(users) $? u_id = Some userData
