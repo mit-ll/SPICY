@@ -612,33 +612,38 @@ Module SimulationAutomation.
 
     (* Only take a user step if we have chosen a user *)
 
-    | [ H : RealWorld.step_user _ (Some A) (_,_,_,_,_,_,_,?cmd) _ |- _ ] =>
-      match cmd with
-      | Return _ => invert H
-      | Bind _ _ => apply step_user_inv_bind' in H; split_ands; split_ors; split_ands; subst; try discriminate
-      | Gen => apply step_user_inv_gen' in H
-      | Send _ _ => apply step_user_inv_send in H
-      | Recv _ => apply step_user_inv_recv in H
-      | SignEncrypt _ _ _ => apply step_user_inv_enc in H
-      | Decrypt _ => apply step_user_inv_dec in H
-      | Sign _ _ => apply step_user_inv_sign in H
-      | Verify _ _ => apply step_user_inv_verify in H
-      | _ => idtac cmd; intuition idtac; subst; fail 3
+    | [ H : RealWorld.step_user _ (Some ?u) (_,_,_,_,_,_,_,?cmd) _ |- _ ] =>
+      match goal with
+      (* If ?u is a hypothesis, then it is unkonwn, and we don't want to step *)
+      | [usr : u |- _] => fail 1
+      | [ |- _ ] =>
+        match cmd with
+        | Return _ => invert H
+        | Bind _ _ => apply step_user_inv_bind' in H; split_ands; split_ors; split_ands; subst; try discriminate
+        | Gen => apply step_user_inv_gen' in H
+        | Send _ _ => apply step_user_inv_send in H
+        | Recv _ => apply step_user_inv_recv in H
+        | SignEncrypt _ _ _ => apply step_user_inv_enc in H
+        | Decrypt _ => apply step_user_inv_dec in H
+        | Sign _ _ => apply step_user_inv_sign in H
+        | Verify _ _ => apply step_user_inv_verify in H
+        | _ => idtac cmd; intuition idtac; subst; (progress (simpl in H) || invert H)
+        end
       end
 
-    | [ H : RealWorld.step_user _ (Some B) (_,_,_,_,_,_,_,?cmd) _ |- _ ] =>
-      match cmd with
-      | Return _ => invert H
-      | Bind _ _ => apply step_user_inv_bind' in H; split_ands; split_ors; split_ands; subst; try discriminate
-      | Gen => apply step_user_inv_gen' in H
-      | Send _ _ => apply step_user_inv_send in H
-      | Recv _ => apply step_user_inv_recv in H
-      | SignEncrypt _ _ _ => apply step_user_inv_enc in H
-      | Decrypt _ => apply step_user_inv_dec in H
-      | Sign _ _ => apply step_user_inv_sign in H
-      | Verify _ _ => apply step_user_inv_verify in H
-      | _ => idtac cmd; intuition idtac; subst; simpl in H
-      end
+    (* | [ H : RealWorld.step_user _ (Some B) (_,_,_,_,_,_,_,?cmd) _ |- _ ] => *)
+    (*   match cmd with *)
+    (*   | Return _ => invert H *)
+    (*   | Bind _ _ => apply step_user_inv_bind' in H; split_ands; split_ors; split_ands; subst; try discriminate *)
+    (*   | Gen => apply step_user_inv_gen' in H *)
+    (*   | Send _ _ => apply step_user_inv_send in H *)
+    (*   | Recv _ => apply step_user_inv_recv in H *)
+    (*   | SignEncrypt _ _ _ => apply step_user_inv_enc in H *)
+    (*   | Decrypt _ => apply step_user_inv_dec in H *)
+    (*   | Sign _ _ => apply step_user_inv_sign in H *)
+    (*   | Verify _ _ => apply step_user_inv_verify in H *)
+    (*   | _ => idtac cmd; intuition idtac; subst; simpl in H *)
+    (*   end *)
 
     (* | GenerateSymKey  (usage : key_usage) : user_cmd key_permission *)
     (* | GenerateAsymKey (usage : key_usage) : user_cmd key_permission *)
@@ -1062,9 +1067,10 @@ Section FeebleSimulates.
 
   (* Timings:
    *
-   * 20190628 (laptop run: inversion lemmas, fails in safety case)
-   * Tactic call ran for 850.161 secs (849.752u,0.308s) (success)
-   * Tactic call ran for 64.133 secs (64.12u,0.011s) (success)
+   * 20190628 (laptop run: inversion lemmas)
+   * Tactic call ran for 870.78 secs (870.427u,0.272s) (success)
+   * Tactic call ran for 64.791 secs (64.786u,0.004s) (success)
+   * Tactic call ran for 38.868 secs (38.868u,0.s) (success)
    *
    * 20190624 (laptop run: block inversion of rstepSilent if don't know start univ -- saving restepping through protocol for adversary)
    * Tactic call ran for 1272.565 secs (1271.919u,0.596s) (success)
