@@ -831,22 +831,27 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> step_user Silent u_id
                 (usrs, adv, cs, gks, ks, qmsgs, mycs, Verify k_id (Signature msg k_id c_id))
                 (usrs, adv, cs, gks, ks, qmsgs, mycs, Return true)
+| StepGenerateSymKey: forall {A B} (usrs : honest_users A) (adv : user_data B)
+                        cs u_id gks gks' ks ks' qmsgs mycs
+                        (k_id : key_identifier) k usage,
+    gks $? k_id = None
+    -> k = MkCryptoKey k_id usage SymKey
+    -> gks' = gks $+ (k_id, k)
+    -> ks' = add_key_perm k_id true ks
+    -> step_user Silent u_id
+                (usrs, adv, cs, gks, ks, qmsgs, mycs, GenerateSymKey usage)
+                (usrs, adv, cs, gks', ks', qmsgs, mycs, Return (k_id, true))
+| StepGenerateAsymKey: forall {A B} (usrs : honest_users A) (adv : user_data B)
+                         cs u_id gks gks' ks ks' qmsgs mycs
+                         (k_id : key_identifier) k usage,
+    gks $? k_id = None
+    -> k = MkCryptoKey k_id usage AsymKey
+    -> gks' = gks $+ (k_id, k)
+    -> ks' = add_key_perm k_id true ks
+    -> step_user Silent u_id
+                (usrs, adv, cs, gks, ks, qmsgs, mycs, GenerateAsymKey usage)
+                (usrs, adv, cs, gks', ks', qmsgs, mycs, Return (k_id, true))
 .
-
-(* Key creation *)
-(* | StepGenerateSymKey: forall A cs ks qmsgs (usrDat : user_data A) usage k kid, *)
-(*     ~(kid \in (dom ks)) *)
-(*     -> k = SymKey (MkCryptoKey kid usage) *)
-(*     -> step_user (cs, ks, qmsgs, usrDat, GenerateSymKey usage) *)
-(*                 (cs, ks $+ (kid, k), qmsgs, updateUserKeyHeap [k] usrDat, Return k) *)
-(* | StepGenerateAsymKey: forall {a : Set} cs ks qmsgs (usrDat : user_data a) usage k kid, *)
-(*     ~(kid \in (dom ks)) *)
-(*     -> k = AsymKey (MkCryptoKey kid usage) true *)
-(*     -> step_user (cs, ks, qmsgs, usrDat, GenerateAsymKey usage) *)
-(*                 (cs, ks $+ (kid, k), qmsgs, updateUserKeyHeap [k] usrDat, Return k) *)
-
-(* | Barrier {result : Set} : user_cmd result. *)
-
 
 Inductive step_universe {A B} : universe A B -> rlabel -> universe A B -> Prop :=
 | StepUser : forall U U' (u_id : user_id) userData usrs adv cs gks ks qmsgs mycs lbl (cmd : user_cmd A),
