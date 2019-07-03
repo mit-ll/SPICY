@@ -458,5 +458,31 @@ Section KeyMergeTheorems.
       rewrite IHks3; trivial.
   Qed.
 
+  Lemma merge_perms_repl_add : forall ks k v,
+      ks $k++ ($0 $+ (k, v)) = add_key_perm k v ks.
+  Proof.
+    intros; unfold merge_perms, add_key_perm, fold; simpl; reflexivity.
+  Qed.
+
+  Lemma merge_perms_distr_add : forall ks ks' k v,
+      add_key_perm k v ks $k++ ks' = add_key_perm k v (ks $k++ ks').
+  Proof.
+    intros
+    ; rewrite <- !merge_perms_repl_add, merge_perms_assoc
+    ; replace ($0 $+ (k, v) $k++ ks') with (ks' $k++ ($0 $+ (k, v)))
+    ; [rewrite <- merge_perms_assoc | rewrite merge_perms_sym]
+    ; reflexivity.
+  Qed.
+
+  Lemma add_true_lookup_yields_true : forall ks k,
+      add_key_perm k true ks $? k = Some true.
+  Proof.
+    intros
+    ; unfold add_key_perm
+    ; destruct (ks $? k)
+    ; simpl
+    ; clean_map_lookups
+    ; auto.
+  Qed.
 
 End KeyMergeTheorems.
