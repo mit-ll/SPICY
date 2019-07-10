@@ -190,75 +190,73 @@ Definition adv_universe_ok {A B} (U : RealWorld.universe A B) : Prop :=
     /\ adv_message_queue_ok honestk U.(RealWorld.adversary).(RealWorld.msg_heap)
     /\ adv_no_honest_keys honestk U.(RealWorld.adversary).(RealWorld.key_heap).
 
-Definition simulates_silent_step {A B} (R : RealWorld.universe A B -> IdealWorld.universe A -> Prop) :=
-  forall U__r U__i,
-    R U__r U__i
+Section Simulation.
+  Variable A : Type.
+  Variable R : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop.
+
+  Definition simulates_silent_step :=
+    forall B (b : B) (U__r : RealWorld.universe A B) U__i,
+    R (RealWorld.peel_adv U__r) U__i
     -> universe_ok U__r
     -> adv_universe_ok U__r
     -> forall U__r',
         rstepSilent U__r U__r'
         -> exists U__i',
-            istepSilent ^* U__i U__i'
-          /\ universe_ok U__r'
-          /\ R U__r' U__i'.
+          istepSilent ^* U__i U__i'
+        /\ universe_ok U__r'
+        /\ R (RealWorld.peel_adv U__r') U__i'.
 
-Definition simulates_labeled_step {A B} (R : RealWorld.universe A B -> IdealWorld.universe A -> Prop) :=
-  forall U__r U__i,
-    R U__r U__i
+  Definition simulates_labeled_step :=
+    forall B (b : B) (U__r : RealWorld.universe A B) U__i,
+    R (RealWorld.peel_adv U__r) U__i
     -> universe_ok U__r
     -> adv_universe_ok U__r
     -> forall a1 U__r',
         RealWorld.step_universe U__r (Action a1) U__r' (* excludes adversary steps *)
         -> exists a2 U__i' U__i'',
           istepSilent^* U__i U__i'
-          /\ IdealWorld.lstep_universe U__i' (Action a2) U__i''
-          /\ action_matches a1 a2
-          /\ R U__r' U__i''
-          /\ universe_ok U__r'.
+        /\ IdealWorld.lstep_universe U__i' (Action a2) U__i''
+        /\ action_matches a1 a2
+        /\ R (RealWorld.peel_adv U__r') U__i''
+        /\ universe_ok U__r'.
 
-Definition simulates_labeled_step_safe {A B} (R : RealWorld.universe A B -> IdealWorld.universe A -> Prop) :=
-  forall U__r U__i b,
-    R U__r U__i
-    -> forall a (U U' : RealWorld.universe A B),
-      RealWorld.step_universe U (Action a) U' (* excludes adversary steps *)
-      -> U__r = strip_adversary U b
-      (* -> RealWorld.findUserKeys U.(RealWorld.users) = RealWorld.findUserKeys U__r.(RealWorld.users) *)
+  Definition simulates_universe_ok :=
+    forall B (U__r : RealWorld.universe A B) U__i,
+      R (strip_adversary U__r) U__i
+      -> universe_ok U__r
+      -> forall U__r' lbl,
+        RealWorld.step_universe U__r lbl U__r'
+        -> universe_ok U__r'.
+
+  Definition simulates_labeled_step_safe :=
+    forall B (U__r : RealWorld.universe A B) U__i,
+    R (strip_adversary U__r) U__i
+    -> forall U__r' a,
+      RealWorld.step_universe U__r (Action a) U__r' (* excludes adversary steps *)
       ->  RealWorld.action_adversary_safe
-           (RealWorld.findUserKeys U.(RealWorld.users))
-           U.(RealWorld.all_ciphers)
+           (RealWorld.findUserKeys U__r.(RealWorld.users))
+           U__r.(RealWorld.all_ciphers)
            a.
 
-(* Definition simulates_labeled_step_safe {A B} (R : RealWorld.universe A B -> IdealWorld.universe A -> Prop) := *)
-(*   forall U__r U__i, *)
-(*     R U__r U__i *)
-(*     -> forall a (U U__r' : RealWorld.universe A B), *)
-(*       RealWorld.step_universe U (Action a) U__r' (* excludes adversary steps *) *)
-(*       -> RealWorld.findUserKeys U.(RealWorld.users) = RealWorld.findUserKeys U__r.(RealWorld.users) *)
-(*       ->  RealWorld.action_adversary_safe *)
-(*            (RealWorld.findUserKeys U__r.(RealWorld.users)) *)
-(*            U__r.(RealWorld.all_ciphers) *)
-(*            a. *)
+  Definition simulates {B} (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A) :=
 
-Definition simulates {A B : Type}
-           (R : RealWorld.universe A B -> IdealWorld.universe A -> Prop)
-           (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A) :=
-
-  (* conditions for simulation steps *)
-  simulates_silent_step R
-/\ simulates_labeled_step R
-/\ simulates_labeled_step_safe R
+    (* conditions for simulation steps *)
+    simulates_silent_step
+  /\ simulates_labeled_step
+  /\ simulates_universe_ok
+  /\ simulates_labeled_step_safe
 
   (* conditions for start *)
-/\ R U__r U__i
-/\ universe_ok U__r
-/\ adv_universe_ok U__r
-.
+  /\ R (RealWorld.peel_adv U__r) U__i
+  /\ universe_ok U__r
+  /\ adv_universe_ok U__r.
+
+End Simulation.
 
 Definition refines {A B : Type} (U1 : RealWorld.universe A B)(U2 : IdealWorld.universe A) :=
   exists R, simulates R U1 U2.
 
 Infix "<|" := refines (no associativity, at level 70).
-
 
 Lemma msgCiphersSigned_addnl_cipher :
   forall cs msgs honestk c_id c,
@@ -299,4 +297,3 @@ Proof.
   intros.
   specialize (H _ _ H1); eauto using encrypted_cipher_ok_addnl_cipher.
 Qed.
-

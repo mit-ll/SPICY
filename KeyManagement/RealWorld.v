@@ -233,6 +233,13 @@ Record user_data (A : Type) :=
 
 Definition honest_users A := user_list (user_data A).
 
+Record simpl_universe (A : Type) :=
+  mkSimplUniverse {
+      s_users       : honest_users A
+    ; s_all_ciphers : ciphers
+    ; s_all_keys    : keys
+    }.
+
 Record universe (A B : Type) :=
   mkUniverse {
       users       : honest_users A
@@ -240,6 +247,11 @@ Record universe (A B : Type) :=
     ; all_ciphers : ciphers
     ; all_keys    : keys
     }.
+
+Definition peel_adv {A B} (U : universe A B) : simpl_universe A :=
+   {| s_users       := U.(users)
+    ; s_all_ciphers := U.(all_ciphers)
+    ; s_all_keys    := U.(all_keys) |}.
 
 Definition findUserKeys {A} (us : user_list (user_data A)) : key_perms :=
   fold (fun u_id u ks => ks $k++ u.(key_heap)) us $0.
@@ -765,6 +777,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
                cs u_id gks ks qmsgs mycs rec_u_id rec_u newkeys (msg : message t),
     findKeys msg = newkeys
     -> keys_mine ks newkeys
+    -> incl (findCiphers msg) mycs
     -> adv' = addUserKeys newkeys adv (* TODO: also add ciphers to adv??? *)
     -> usrs $? rec_u_id = Some rec_u
     -> rec_u_id <> u_id

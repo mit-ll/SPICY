@@ -51,7 +51,7 @@ Section CleanCiphers.
   Lemma honest_cipher_filter_fn_proper :
     Proper (eq  ==>  eq  ==>  eq) honest_cipher_filter_fn.
   Proof.
-    unfold Proper, Morphisms.respectful; intros; subst; reflexivity.
+    solve_proper.
   Qed.
 
   Lemma honest_cipher_filter_fn_filter_proper :
@@ -80,7 +80,7 @@ Section CleanCiphers.
       ( eq  ==>  eq  ==>  eq  ==>  eq)
       (fun (k : NatMap.key) (e : cipher) (m : t cipher) => if honest_cipher_filter_fn k e then m $+ (k, e) else m).
   Proof.
-    unfold Proper, respectful; intros; subst; trivial.
+    solve_proper.
   Qed.
 
   Lemma honest_cipher_filter_fn_filter_transpose_eq :
@@ -533,17 +533,153 @@ Section CleanUsers.
 
 End CleanUsers.
 
+(******************** KEYS CLEANING ***********************
+ **********************************************************
+ *
+ * Function to clean keys and lemmas about it.
+ *)
+
+Section CleanKeys.
+  Import RealWorld.
+
+  Variable honestk : key_perms.
+
+  Definition honest_key_filter_fn (k_id : key_identifier) (k : key) :=
+    match honestk $? k_id with
+    | Some true => true
+    | _ => false
+    end.
+
+  Definition clean_keys :=
+    filter honest_key_filter_fn.
+
+  Lemma honest_key_filter_fn_proper :
+    Proper (eq  ==>  eq  ==>  eq) honest_key_filter_fn.
+  Proof.
+    solve_proper.
+  Qed.
+
+  Hint Resolve honest_key_filter_fn_proper.
+
+  Lemma honest_key_filter_fn_filter_proper :
+    Proper (eq  ==>  eq  ==>  eq  ==>  eq) (fun k v m => if honest_key_filter_fn k v then m $+ (k,v) else m).
+  Proof.
+    solve_proper.
+  Qed.
+
+  Lemma honest_key_filter_fn_filter_transpose :
+    transpose_neqkey eq (fun k v m => if honest_key_filter_fn k v then m $+ (k,v) else m).
+  Proof.
+    unfold transpose_neqkey; intros.
+    unfold honest_key_filter_fn.
+    cases (honestk $? k); cases (honestk $? k'); eauto.
+    destruct b; destruct b0; eauto.
+    rewrite map_ne_swap; auto.
+  Qed.
+
+  Lemma honest_key_filter_fn_filter_proper_Equal :
+    Proper (eq  ==>  eq  ==>  Equal  ==>  Equal) (fun k v m => if honest_key_filter_fn k v then m $+ (k,v) else m).
+  Proof.
+    unfold Equal, Proper, respectful; intros; subst.
+    destruct (honest_key_filter_fn y y0); eauto.
+    destruct (y ==n y2); subst; clean_map_lookups; auto.
+  Qed.
+
+  Lemma honest_key_filter_fn_filter_transpose_Equal :
+    transpose_neqkey Equal (fun k v m => if honest_key_filter_fn k v then m $+ (k,v) else m).
+  Proof.
+    unfold transpose_neqkey, Equal; intros.
+    unfold honest_key_filter_fn.
+    cases (honestk $? k); cases (honestk $? k'); eauto.
+    destruct b; destruct b0; eauto.
+    rewrite map_ne_swap; auto.
+  Qed.
+
+  Hint Resolve honest_key_filter_fn_filter_proper_Equal honest_key_filter_fn_filter_transpose_Equal.
+
+  Lemma clean_keys_inv :
+    forall k_id k ks,
+      clean_keys ks $? k_id = Some k
+      -> ks $? k_id = Some k
+      /\ honest_key_filter_fn k_id k = true.
+  Proof.
+    unfold clean_keys; intros until ks.
+    rewrite <- !find_mapsto_iff.
+    apply filter_iff; eauto.
+  Qed.
+
+  Lemma clean_keys_keeps_honest_key :
+    forall k_id k ks,
+        ks $? k_id = Some k
+      -> honest_key_filter_fn k_id k = true
+      -> clean_keys ks $? k_id = Some k.
+  Proof.
+    unfold clean_keys; intros.
+    rewrite <- !find_mapsto_iff.
+    apply filter_iff; eauto.
+    rewrite find_mapsto_iff; eauto.
+  Qed.
+
+  Lemma clean_keys_adds_no_keys :
+    forall k_id ks,
+        ks $? k_id = None
+      -> clean_keys ks $? k_id = None.
+  Proof.
+    induction ks using P.map_induction_bis; intros; Equal_eq; eauto.
+    unfold clean_keys, filter; rewrite fold_add; eauto.
+    destruct (x ==n k_id); subst; clean_map_lookups.
+    destruct (honest_key_filter_fn x e); eauto.
+    clean_map_lookups; eauto.
+  Qed.
+
+  Lemma clean_keys_idempotent :
+    forall ks,
+      clean_keys (clean_keys ks) = clean_keys ks.
+  Proof.
+    intros.
+    apply map_eq_Equal; unfold Equal; intros.
+    cases (clean_keys ks $? y); eauto using clean_keys_adds_no_keys.
+    eapply clean_keys_keeps_honest_key; auto.
+    apply clean_keys_inv in Heq; split_ands; auto.
+  Qed.
+
+End CleanKeys.
+
+
 Section StripAdv.
   Import RealWorld.
 
-  Definition strip_adversary {A B} (U__r : universe A B) (b : B) : universe A B :=
+  Definition strip_adversary_univ {A B} (U__r : universe A B) (b : B) : universe A B :=
     let honestk := findUserKeys U__r.(users)
     in {| users       := clean_users honestk U__r.(users)
-        ; adversary   := {| key_heap := U__r.(adversary).(key_heap)
-                          ; msg_heap := U__r.(adversary).(msg_heap)
-                          ; protocol := Return b
-                          ; c_heap   := U__r.(adversary).(c_heap) |}
+          ; adversary   := {| key_heap := U__r.(adversary).(key_heap)
+                            ; protocol := Return b
+                            ; msg_heap := U__r.(adversary).(msg_heap)
+                            ; c_heap   := U__r.(adversary).(c_heap) |}
         ; all_ciphers := clean_ciphers honestk U__r.(all_ciphers)
-        ; all_keys    := U__r.(all_keys)
+        ; all_keys    := clean_keys honestk U__r.(all_keys)
        |}.
+
+  Definition strip_adversary {A B} (U__r : universe A B) : simpl_universe A :=
+    let honestk := findUserKeys U__r.(users)
+    in {| s_users       := clean_users honestk U__r.(users)
+        ; s_all_ciphers := clean_ciphers honestk U__r.(all_ciphers)
+        ; s_all_keys    := clean_keys honestk U__r.(all_keys)
+       |}.
+
+  Definition strip_adversary_simpl {A} (U__r : simpl_universe A) : simpl_universe A :=
+    let honestk := findUserKeys U__r.(s_users)
+    in {| s_users       := clean_users honestk U__r.(s_users)
+        ; s_all_ciphers := clean_ciphers honestk U__r.(s_all_ciphers)
+        ; s_all_keys    := clean_keys honestk U__r.(s_all_keys)
+       |}.
+
+
+  Lemma peel_strip_univ_eq_strip_adv :
+    forall A B (U : universe A B) b,
+      peel_adv (strip_adversary_univ U b) = strip_adversary U.
+  Proof.
+    unfold peel_adv, strip_adversary, strip_adversary_univ; trivial.
+  Qed.
+
 End StripAdv.
