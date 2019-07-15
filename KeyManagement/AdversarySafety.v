@@ -2307,8 +2307,9 @@ Section SingleAdversarySimulates.
   Hint Extern 1 (_ = RealWorld.adversary _) => solve [ symmetry ; assumption ].
 
   Lemma simulates_with_adversary_silent :
-    forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A) (R : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop) (b : B),
-      simulates_silent_step R
+    forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A)
+            (R : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop) (b : B),
+      simulates_silent_step (lameAdv b) R
       -> simulates_universe_ok R
       -> universe_ok U__ra
       -> adv_universe_ok U__ra
@@ -2316,7 +2317,7 @@ Section SingleAdversarySimulates.
       -> forall U__ra',
           rstepSilent U__ra U__ra'
           -> exists U__i', istepSilent ^* U__i U__i'
-                 /\ universe_ok U__ra'
+                 (* /\ universe_ok U__ra' *)
                  /\ R (strip_adversary U__ra') U__i'.
   Proof.
     intros.
@@ -2344,9 +2345,12 @@ Section SingleAdversarySimulates.
                                         {| RealWorld.key_heap := ks ; RealWorld.msg_heap := qmsgs ; RealWorld.protocol := cmd |})
                as U__ra'.
 
+      (* pose proof (silent_honest_step_advuniv_implies_stripped_univ_step_or_none b H0 H5 H9 H10 HeqU__ra'). *)
       pose proof (silent_honest_step_advuniv_implies_stripped_univ_step_or_none b H1 H6 H11 H12 HeqU__ra' H10); split_ors.
 
-      + specialize (H _ b _ _ H3 STRIP_UNIV_OK STRIP_ADV_UNIV_OK _ H4).
+      + assert (lameAdv b (RealWorld.adversary (strip_adversary_univ U__ra b)))
+          as LAME by (unfold lameAdv, strip_adversary_univ; simpl; trivial).
+        specialize (H _ _ H3 STRIP_UNIV_OK STRIP_ADV_UNIV_OK LAME _ H4).
         repeat match goal with
                | [ H : exists _, _ |- _ ] => destruct H
                | [ H : _ /\ _ |- _ ] => destruct H
@@ -2371,7 +2375,7 @@ Section SingleAdversarySimulates.
   Lemma simulates_with_adversary_labeled :
     forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A)
             (R : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop) (b : B),
-      simulates_labeled_step R
+      simulates_labeled_step (lameAdv b) R
       -> simulates_labeled_step_safe R
       -> R (RealWorld.peel_adv (strip_adversary_univ U__ra b)) U__i
       -> universe_ok U__ra
@@ -2382,8 +2386,7 @@ Section SingleAdversarySimulates.
             (istepSilent) ^* U__i U__i'
             /\ IdealWorld.lstep_universe U__i' (Action a__i) U__i''
             /\ action_matches a__r a__i
-            /\ R (strip_adversary U__ra') U__i''
-            /\ universe_ok U__ra'.
+            /\ R (strip_adversary U__ra') U__i''.
   Proof.
     intros.
 
@@ -2400,14 +2403,15 @@ Section SingleAdversarySimulates.
       as UNIV_STEP.
     eapply labeled_honest_step_advuniv_implies_stripped_univ_step; eauto.
 
-    specialize (H _ b _ _ H1 STRIP_UNIV_OK STRIP_ADV_UNIV_OK _ _ UNIV_STEP).
+    assert (lameAdv b (RealWorld.adversary (strip_adversary_univ U__ra b)))
+      as LAME by (unfold lameAdv, strip_adversary_univ; simpl; trivial).
+
+    specialize (H _ _ H1 STRIP_UNIV_OK STRIP_ADV_UNIV_OK LAME _ _ UNIV_STEP).
     repeat match goal with
            | [ H : exists _, _ |- _ ] => destruct H
            | [ H : _ /\ _ |- _ ] => destruct H
            end.
     do 3 eexists; intuition idtac; eauto.
-
-    eapply honest_labeled_step_univ_ok with (U:=U__ra); eauto.
   Qed.
 
   Definition universe_starts_ok {A B} (U : RealWorld.universe A B) :=
@@ -2528,15 +2532,15 @@ Section SingleAdversarySimulates.
 
   Theorem simulates_ok_with_adversary :
     forall {A B} (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A) (b : B),
-      U__r <| U__i
+      (* U__r <| U__i / ladv *)
+        refines (lameAdv b) U__r U__i
       -> is_powerless (RealWorld.findUserKeys U__r.(RealWorld.users)) U__r.(RealWorld.adversary) b
       -> universe_starts_ok U__r
       -> universe_ok U__r
       -> adv_universe_ok U__r
       -> forall U__ra advcode,
           U__ra = add_adversary U__r advcode
-          -> U__ra <| U__i.
-  Proof.
+          -> refines (@awesomeAdv B) U__ra U__i.
     intros.
     inversion H as [R SIM].
     inversion SIM as [H__silent H__l].
@@ -2560,7 +2564,7 @@ Section SingleAdversarySimulates.
 
     intuition idtac.
     - rewrite strip_adv_simpl_peel_same_as_strip_adv in *.
-      eapply simulates_with_adversary_silent; eauto.
+      eapply simulates_with_adversary_silent with (b0 := b); eauto.
 
     - eapply simulates_with_adversary_labeled; eauto.
       rewrite strip_adv_simpl_peel_same_as_strip_adv in H9.
@@ -2571,10 +2575,6 @@ Section SingleAdversarySimulates.
 
     - eapply  H__advsafe; eauto.
       rewrite <- strip_adv_simpl_strip_adv_idempotent; eassumption.
-
-      Unshelve.
-      assumption.
-      assumption.
   Qed.
 
   Print Assumptions simulates_ok_with_adversary.

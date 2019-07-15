@@ -34,6 +34,13 @@ Qed.
 
 Hint Resolve accepted_safe_msg_pattern_honestly_signed.
 
+(* TODO tbraje: this is terrible and needs to be redone.  Check out EncPingProtocol *)
+Hint Rewrite @RealWorld.findUserKeys_readd_user_same_keys_idempotent'
+     using (trivial || unfold RealWorld.user_keys; context_map_rewrites; f_equal; trivial) : find_user_keys.
+Hint Rewrite @RealWorld.findUserKeys_readd_user_addnl_keys
+     using (trivial || unfold RealWorld.user_keys; context_map_rewrites; f_equal; trivial) : find_user_keys.
+
+
 (******************** CIPHER CLEANING *********************
  **********************************************************
  *
@@ -105,11 +112,6 @@ Section CleanCiphers.
        honest_cipher_filter_fn_filter_transpose
        honest_cipher_filter_fn_filter_proper_eq
        honest_cipher_filter_fn_filter_transpose_eq.
-
-  Hint Rewrite @findUserKeys_readd_user_same_keys_idempotent'
-       using (trivial || unfold user_keys; context_map_rewrites; f_equal; trivial) : find_user_keys.
-  Hint Rewrite @findUserKeys_readd_user_addnl_keys
-       using (trivial || unfold user_keys; context_map_rewrites; f_equal; trivial) : find_user_keys.
 
   Lemma findUserKeys_multi_add_same_keys_idempotent :
     forall {A} (usrs : honest_users A) u_id1 u_id2 ks1 ks2 cmd1 cmd2 qmsgs1 qmsgs2 mycs1 mycs2,
@@ -644,7 +646,6 @@ Section CleanKeys.
   Qed.
 
 End CleanKeys.
-
 
 Section StripAdv.
   Import RealWorld.

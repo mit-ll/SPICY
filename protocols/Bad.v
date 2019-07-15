@@ -18,85 +18,22 @@ Set Implicit Arguments.
 
 (* User ids *)
 Definition A : user_id   := 0.
-Definition B : user_id   := 1.
-
-Transparent A B.
 
 Section IdealProtocol.
   Import IdealWorld.
 
-  Definition CH__A2B : channel_id := 0.
-  Definition CH__B2A : channel_id := 1.
+  Definition CH__B2A : channel_id := 0.
 
-  Definition PERMS__a := $0 $+ (CH__A2B, {| read := false; write := true |}) $+ (CH__B2A, {| read := true; write := false |}).
-  Definition PERMS__b := $0 $+ (CH__B2A, {| read := false; write := true |}) $+ (CH__A2B, {| read := true; write := false |}).
-
-  Definition mkiU (cv : channels) (p__a p__b : cmd bool): universe bool :=
-    {| channel_vector := cv
-     ; users := $0
-         $+ (A,   {| perms    := PERMS__a ; protocol := p__a |})
-         $+ (B,   {| perms    := PERMS__b ; protocol := p__b |})
+  Definition idealU1 :=
+    {| channel_vector := $0 $+ (CH__B2A, {Exm (Content 2)})
+       ; users := $0 $+ (A,  {| perms := $0  ; protocol :=
+                                                 m <- @Recv Nat CH__B2A ; Return true |})
     |}.
 
-  Definition ideal_univ_start :=
-    mkiU ($0 $+ (CH__A2B, { }) $+ (CH__B2A, { }))
-         ( n <- Gen
-         ; _ <- Send (Content n) CH__A2B
-         ; m <- @Recv Nat CH__B2A
-         ; Return match extractContent m with
-                  | None =>    false
-                  | Some n' => if n ==n n' then true else false
-                  end)
-         ( m <- @Recv Nat CH__A2B
-         ; _ <- Send m CH__B2A
-         ; Return true).
-
-  Definition ideal_univ_sent1 n :=
-    mkiU ($0 $+ (CH__A2B, {Exm (Content n)}) $+ (CH__B2A, { }))
-         ( _ <- Return tt
-         ; m <- @Recv Nat CH__B2A
-         ; Return match extractContent m with
-                  | None =>    false
-                  | Some n' => if n ==n n' then true else false
-                  end)
-         ( m <- @Recv Nat CH__A2B
-         ; _ <- Send m CH__B2A
-         ; Return true).
-
-  Definition ideal_univ_recd1 n :=
-    mkiU ($0 $+ (CH__A2B, {Exm (Content n)}) $+ (CH__B2A, { }))
-         ( m <- @Recv Nat CH__B2A
-         ; Return match extractContent m with
-                  | None =>    false
-                  | Some n' => if n ==n n' then true else false
-                  end)
-         ( m <- Return (Content n)
-         ; _ <- Send m CH__B2A
-         ; Return true).
-
-  Definition ideal_univ_sent2 n :=
-    mkiU ($0 $+ (CH__A2B, {Exm (Content n)}) $+ (CH__B2A, {Exm (Content n)}))
-         ( m <- @Recv Nat CH__B2A
-         ; Return match extractContent m with
-                  | None =>    false
-                  | Some n' => if n ==n n' then true else false
-                  end)
-         ( _ <- Return tt
-         ; Return true).
-
-  Definition ideal_univ_recd2 n :=
-    mkiU ($0 $+ (CH__A2B, {Exm (Content n)}) $+ (CH__B2A, {Exm (Content n)}))
-         ( m <- Return (Content n)
-         ; Return match extractContent m with
-                  | None =>    false
-                  | Some n' => if n ==n n' then true else false
-                  end)
-         (Return true).
-
-  Definition ideal_univ_done n :=
-    mkiU ($0 $+ (CH__A2B, {Exm (Content n)}) $+ (CH__B2A, {Exm (Content n)}))
-         (Return true)
-         (Return true).
+  Definition idealU2 :=
+    {| channel_vector := $0 $+ (CH__B2A, { Exm (Content 2) })
+       ; users := $0 $+ (A,  {| perms := $0  ; protocol := Return true |})
+    |}.
 
 End IdealProtocol.
 
@@ -104,144 +41,105 @@ Section RealProtocolParams.
   Import RealWorld.
 
   Definition KID1 : key_identifier := 0.
-  Definition KID2 : key_identifier := 1.
 
   Definition KEY1  := MkCryptoKey KID1 Signing AsymKey.
-  Definition KEY2  := MkCryptoKey KID2 Signing AsymKey.
-  Definition KEYS  := $0 $+ (KID1, KEY1) $+ (KID2, KEY2).
+  Definition KEYS  := $0 $+ (KID1, KEY1).
+  Definition A__keys := $0 $+ (KID1, true).
 
-  Definition A__keys := $0 $+ (KID1, true) $+ (KID2, false).
-  Definition B__keys := $0 $+ (KID1, false) $+ (KID2, true).
 End RealProtocolParams.
 
 Section RealProtocol.
   Import RealWorld.
 
-  Definition mkrU (mycs1 mycs2 : my_ciphers) (msgs1 msgs2 : queued_messages)
-                  (cs : ciphers) (p__a p__b : user_cmd bool) (adv : user_data unit) : universe bool unit :=
-    {| users            := $0
-         $+ (A, {| key_heap := A__keys ; protocol := p__a ; msg_heap := msgs1 ; c_heap := mycs1 |})
-         $+ (B, {| key_heap := B__keys ; protocol := p__b ; msg_heap := msgs2 ; c_heap := mycs2 |})
+  Definition mkrU (mycs : my_ciphers) (msgs : queued_messages)
+             (cs : ciphers) (adv : user_data unit) (p__a : user_cmd bool) : universe bool unit :=
+    {| users            := $0 $+ (A, {| key_heap := A__keys ; protocol := p__a ; msg_heap := msgs ; c_heap := mycs |})
      ; adversary        := adv
      ; all_ciphers      := cs
      ; all_keys         := KEYS
      |}.
 
-  Definition real_univ_start cs mycs1 mycs2 :=
-    mkrU  mycs1 mycs2 [] [] cs
-         ( n  <- Gen
-         ; m  <- Sign KID1 (Plaintext n)
-         ; _  <- Send B m
-         ; m' <- @Recv Nat (Signed KID2)
-         ; Return match unSig m' with
-                  | Some (Plaintext n') => if n ==n n' then true else false (* also do verify? *)
-                  | _       => false
-                  end)
+  Definition ru1 adv :=
+    mkrU [] [existT _ _ (Signature (Plaintext 2) KID1 5)] ($0 $+ (5, SigCipher KID1 (Plaintext 2))) adv
+         ( c1 <- Sign KID1 (Plaintext 0)
+         ; c2 <- Sign KID1 (Plaintext 1)
+         ; m <- @Recv Nat (Signed KID1)
+         ; Verify KID1 c1
+         ).
 
-         ( m  <- @Recv Nat (Signed KID1)
-         ; v  <- Verify KID1 m
-         ; m' <- match unSig m with
-                | Some p => Sign KID2 p
-                | _      => Sign KID2 (Plaintext 1)
-                end
-         ; _  <- Send A m'
-         ; Return v).
+  Definition ru2 cid1 adv :=
+    mkrU [cid1] [existT _ _ (Signature (Plaintext 2) KID1 5)] ($0 $+ (5, SigCipher KID1 (Plaintext 2)) $+ (cid1, SigCipher KID1 (Plaintext 0))) adv
+         ( c1 <- Return (Signature (Plaintext 0) KID1 cid1)
+         ; c2 <- Sign KID1 (Plaintext 1)
+         ; m <- @Recv Nat (Signed KID1)
+         ; Verify KID1 c1
+         ).
 
-  Definition real_univ_sent1 n cs mycs1 mycs2 cid1 :=
-    mkrU  mycs1 mycs2 [] [existT _ _ (Signature (Plaintext n) KID1 cid1)]
-         (cs $+ (cid1, SigCipher KID1 (Plaintext n)))
-         ( _  <- Return tt
-         ; m' <- @Recv Nat (Signed KID2)
-         ; Return match unSig m' with
-                  | Some (Plaintext n') => if n ==n n' then true else false (* also do verify? *)
-                  | _       => false
-                  end)
-         ( m  <- @Recv Nat (Signed KID1)
-         ; v  <- Verify KID1 m
-         ; m' <- match unSig m with
-                | Some p => Sign KID2 p
-                | _      => Sign KID2 (Plaintext 1)
-                end
-         ; _  <- Send A m'
-         ; Return v).
+  Definition ru3 cid1 adv :=
+    mkrU [cid1] [existT _ _ (Signature (Plaintext 2) KID1 5)] ($0 $+ (5, SigCipher KID1 (Plaintext 2)) $+ (cid1, SigCipher KID1 (Plaintext 0))) adv
+         ( c2 <- Sign KID1 (Plaintext 1)
+         ; m <- @Recv Nat (Signed KID1)
+         ; Verify KID1 (Signature (Plaintext 0) KID1 cid1)
+         ).
 
-  Definition real_univ_recd1 n cs mycs1 mycs2 cid1 :=
-    mkrU mycs1 mycs2 [] []
-         (cs $+ (cid1, SigCipher KID1 (Plaintext n)))
-         ( _  <- Return tt
-         ; m' <- @Recv Nat (Signed KID2)
-         ; Return match unSig m' with
-                  | Some (Plaintext n') => if n ==n n' then true else false (* also do verify? *)
-                  | _       => false
-                  end)
+  Definition ru4 cid1 cid2 adv :=
+    mkrU [cid2;cid1] [existT _ _ (Signature (Plaintext 2) KID1 5)]
+         ($0 $+ (5, SigCipher KID1 (Plaintext 2)) $+ (cid1, SigCipher KID1 (Plaintext 0)) $+ (cid2, SigCipher KID1 (Plaintext 1))) adv
+         ( c2 <- Return (Signature (Plaintext 1) KID1 cid2)
+         ; m <- @Recv Nat (Signed KID1)
+         ; Verify KID1 (Signature (Plaintext 0) KID1 cid1)
+         ).
 
-         ( m  <- Return (Signature (Plaintext n) KID1 cid1)
-         ; v  <- Verify KID1 m
-         ; m' <- match unSig m with
-                | Some p => Sign KID2 p
-                | _      => Sign KID2 (Plaintext 1)
-                end
-         ; _  <- Send A m'
-         ; Return v).
+  Definition ru5 cid1 cid2 adv :=
+    mkrU [cid2;cid1] [existT _ _ (Signature (Plaintext 2) KID1 5)]
+         ($0 $+ (5, SigCipher KID1 (Plaintext 2)) $+ (cid1, SigCipher KID1 (Plaintext 0)) $+ (cid2, SigCipher KID1 (Plaintext 1))) adv
+         ( m <- @Recv Nat (Signed KID1)
+         ; Verify KID1 (Signature (Plaintext 0) KID1 cid1)
+         ).
 
-  Definition real_univ_sent2 n cs mycs1 mycs2 cid1 cid2 :=
-    mkrU mycs1 mycs2 [existT _ _ (Signature (Plaintext n) KID2 cid2)] []
-         (cs $+ (cid1, SigCipher KID1 (Plaintext n)) $+ (cid2, SigCipher KID2 (Plaintext n)))
-         ( _  <- Return tt
-         ; m' <- @Recv Nat (Signed KID2)
-         ; Return match unSig m' with
-                  | Some (Plaintext n') => if n ==n n' then true else false (* also do verify? *)
-                  | _       => false
-                  end)
+  Definition ru6 cid1 cid2 adv :=
+    mkrU [5;cid2;cid1] [] ($0 $+ (5, SigCipher KID1 (Plaintext 2)) $+ (cid1, SigCipher KID1 (Plaintext 0)) $+ (cid2, SigCipher KID1 (Plaintext 1))) adv
+         ( m <- Return (Signature (Plaintext 2) KID1 5)
+         ; Verify KID1 (Signature (Plaintext 0) KID1 cid1)
+         ).
 
-         ( _  <- Return tt ; Return true).
+  Definition ru7 cid1 adv :=
+    mkrU [5;cid1] [] ($0 $+ (5, SigCipher KID1 (Plaintext 2)) $+ (cid1, SigCipher KID1 (Plaintext 0))) adv
+         (Verify KID1 (Signature (Plaintext 0) KID1 cid1)).
 
-  Definition real_univ_recd2 n cs mycs1 mycs2 cid1 cid2 :=
-    mkrU mycs1 mycs2 [] [] (cs $+ (cid1, SigCipher KID1 (Plaintext n)) $+ (cid2, SigCipher KID2 (Plaintext n)))
-         ( m' <- Return (Signature (Plaintext n) KID2 cid2)
-         ; Return match unSig m' with
-                  | Some (Plaintext n') => if n ==n n' then true else false (* also do verify? *)
-                  | _       => false
-                  end)
+  Definition ru8 cid1 adv :=
+    mkrU [5;cid1] [] ($0 $+ (5, SigCipher KID1 (Plaintext 2)) $+ (cid1, SigCipher KID1 (Plaintext 0))) adv
+         (Return true).
 
-         ( _  <- Return tt ; Return true).
-
-  Definition real_univ_done mycs1 mycs2 cs :=
-    mkrU mycs1 mycs2 [] [] cs (Return true) (Return true).
-
-  Inductive RPingPongBase: RealWorld.simpl_universe bool -> IdealWorld.universe bool -> Prop :=
-  | Start : forall U__r cs mycs1 mycs2 adv,
-        rstepSilent^* (real_univ_start mycs1 mycs2 cs adv) U__r
-      -> lameAdv tt adv
-      -> RPingPongBase (peel_adv U__r) ideal_univ_start
-
-  | Sent1 : forall U__r cs mycs1 mycs2 cid1 n adv,
-        rstepSilent^* (real_univ_sent1 n cs mycs1 mycs2 cid1 adv) U__r
-      -> lameAdv tt adv
-      -> RPingPongBase (peel_adv U__r) (ideal_univ_sent1 n)
-
-  | Recd1 : forall U__r cs mycs1 mycs2 cid1 n adv,
-        rstepSilent^* (real_univ_recd1 n cs mycs1 mycs2 cid1 adv) U__r
-      -> lameAdv tt adv
-      -> RPingPongBase (peel_adv U__r) (ideal_univ_recd1 n)
-
-  | Sent2 : forall U__r cs mycs1 mycs2 cid1 cid2 n adv,
-        rstepSilent^* (real_univ_sent2 n cs mycs1 mycs2 cid1 cid2 adv) U__r
-      -> lameAdv tt adv
-      -> RPingPongBase (peel_adv U__r) (ideal_univ_sent2 n)
-
-  | Recd2 : forall U__r cs mycs1 mycs2 cid1 cid2 n adv,
-        rstepSilent^* (real_univ_recd2 n cs mycs1 mycs2 cid1 cid2 adv) U__r
-      -> lameAdv tt adv
-      -> RPingPongBase (peel_adv U__r) (ideal_univ_recd2 n)
-
-  | Done : forall U__r cs mycs1 mycs2 n adv,
+  Inductive R : RealWorld.simpl_universe bool -> IdealWorld.universe bool -> Prop :=
+  | R1 : forall adv,
       lameAdv tt adv
-      -> U__r = real_univ_done cs mycs1 mycs2 adv
-      -> RPingPongBase (peel_adv U__r) (ideal_univ_done n)
+      -> R (peel_adv (ru1 adv)) idealU1
+  | R2 : forall cid1 adv,
+      lameAdv tt adv
+      -> R (peel_adv (ru2 cid1 adv)) idealU1
+  | R3 : forall cid1 adv,
+      lameAdv tt adv
+      -> R (peel_adv (ru3 cid1 adv)) idealU1
+  | R4 : forall cid1 cid2 adv,
+      lameAdv tt adv
+      -> R (peel_adv (ru4 cid1 cid2 adv)) idealU1
+  | R5 : forall cid1 cid2 adv,
+      lameAdv tt adv
+      -> R (peel_adv (ru5 cid1 cid2 adv)) idealU1
+  | R6 : forall cid1 cid2 adv,
+      lameAdv tt adv
+      -> R (peel_adv (ru6 cid1 cid2 adv)) idealU2
+  | R7 : forall cid1 adv,
+      lameAdv tt adv
+      -> R (peel_adv (ru7 cid1 adv)) idealU2
+  | R8 : forall cid1 adv,
+      lameAdv tt adv
+      -> R (peel_adv (ru8 cid1 adv)) idealU2
   .
 
 End RealProtocol.
+
 
 Section RealWorldLemmas.
   Import RealWorld.
@@ -635,7 +533,6 @@ Module SimulationAutomation.
 
     (* Only take a user step if we have chosen a user *)
 
-    | [ H : RealWorld.step_user _ (Some ?u) _ _ |- _ ] => progress simpl in H
     | [ H : RealWorld.step_user _ (Some ?u) (_,_,_,_,_,_,_,?cmd) _ |- _ ] =>
       is_not_var u;
         match cmd with
@@ -666,21 +563,26 @@ Module SimulationAutomation.
       unfold RealWorld.buildUniverse in H; autorewrite with simpl_univ in H
     | [ |- context [RealWorld.buildUniverse _ _ _ _ _ _] ] =>
       unfold RealWorld.buildUniverse
-
-    (* | [ S: rstepSilent ^* ?U _ |- _ ] =>  *)
-    (*   match goal with *)
-    (*   | [U1 : U |- _] => fail 1 *)
-    (*   | [ |- _ ] => *)
-    (*     eapply multiStepSilentInv in S; split_ors; split_ex; intuition idtac; subst *)
-    (*   end *)
-
+      (* (rewrite simplify_build_univ1 in H by auto) || (rewrite simplify_build_univ2 in H by auto) *)
     | [ S: rstepSilent ^* ?U _ |- _ ] => 
       (* Don't actually multiStep unless we know the state of the starting universe
        * meaning it is not some unknown hypothesis in the context...
        *)
-      is_not_var U; eapply multiStepSilentInv in S; split_ors; split_ex; intuition idtac; subst
+      match goal with
+      | [U1 : U |- _] => fail 1
+      (* | [U1 : RealWorld.step_user _ _ _ _ |- _ ] => idtac "nope1"; fail 1 *)
+      (* | [U1 : RealWorld.step_universe _ _ _ |- _ ] => idtac "nope2"; fail 1 *)
+      (* | [U1 : rstepSilent _ _ |- _ ] => idtac "nope3"; fail 1 *)
+      | [ |- _ ] =>
+        (* invert S *)
+        eapply multiStepSilentInv in S; split_ors; split_ex; intuition idtac; subst
+      end
 
     | [ H: rstepSilent ?U _ |- _ ] => is_not_var U; invert H
+      (* match goal with *)
+      (* | [ U1 : U |- _ ] => fail 1 *)
+      (* | [ |- _ ] => invert H *)
+      (* end *)
     | [ H: RealWorld.step_universe _ _ _ |- _ ] => invert H
 
     end.
@@ -765,7 +667,7 @@ Module SimulationAutomation.
   Remove Hints eq_sym (* includes_lookup *).
   Remove Hints trans_eq_bool mult_n_O plus_n_O eq_add_S f_equal_nat.
 
-  Hint Constructors RPingPongBase action_matches msg_eq.
+  Hint Constructors R action_matches msg_eq.
   Hint Resolve IdealWorld.LStepSend' IdealWorld.LStepRecv'.
 
   Lemma TrcRefl' :
@@ -779,16 +681,10 @@ Module SimulationAutomation.
   Hint Extern 0 (rstepSilent ^* _ _) => solve [eapply TrcRefl || eapply TrcRefl'; simpl; smash_universe].
   Hint Extern 1 (rstepSilent ^* _ _) => real_silent_step0.
   Hint Extern 1 (rstepSilent ^* _ _) => real_silent_step1.
-  Hint Extern 1 (rstepSilent ^* _ _) =>
-        progress(unfold real_univ_start, real_univ_sent1, real_univ_recd1,
-                        real_univ_sent2, real_univ_recd2, real_univ_done, mkrU; simpl).
-  Hint Extern 1 (RPingPongBase (RealWorld.buildUniverse _ _ _ _ _) _) => unfold RealWorld.buildUniverse; simpl.
+  Hint Extern 1 (R (RealWorld.buildUniverse _ _ _ _ _) _) => unfold RealWorld.buildUniverse; simpl.
 
   Hint Extern 2 (IdealWorld.lstep_universe _ _ _) => istep_univ0.
   Hint Extern 2 (IdealWorld.lstep_universe _ _ _) => istep_univ1.
-  Hint Extern 1 (IdealWorld.lstep_universe _ _ _) =>
-      progress(unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1,
-                      ideal_univ_sent2, ideal_univ_recd2, ideal_univ_done, mkiU; simpl).
   Hint Extern 1 (IdealWorld.lstep_user _ (_, IdealWorld.Bind _ _, _) _) => eapply IdealWorld.LStepBindRecur.
   Hint Extern 1 (istepSilent ^* _ _) => ideal_silent_steps || apply TrcRefl.
 
@@ -799,10 +695,7 @@ Module SimulationAutomation.
   Hint Extern 1 (RealWorld.action_adversary_safe _ _ _ = _) => unfold RealWorld.action_adversary_safe; simplify.
   Hint Extern 1 (IdealWorld.msg_permissions_valid _ _) => progress simpl.
 
-  Hint Extern 1 (A__keys $? _ = _) => unfold A__keys, B__keys, KEY1, KEY2, KID1, KID2.
-  Hint Extern 1 (B__keys $? _ = _) => unfold A__keys, B__keys, KEY1, KEY2, KID1, KID2.
-  Hint Extern 1 (PERMS__a $? _ = _) => unfold PERMS__a.
-  Hint Extern 1 (PERMS__b $? _ = _) => unfold PERMS__b.
+  Hint Extern 1 (A__keys $? _ = _) => unfold A__keys, KEY1, KID1.
   Hint Extern 1 (_ = RealWorld.addUserKeys _ _) => unfold RealWorld.addUserKeys, map; simpl.
   Hint Extern 1 (add _ _ _ = _) => m_equal.
   Hint Extern 1 (find _ _ = _) => m_equal.
@@ -818,280 +711,67 @@ Section FeebleSimulates.
   Hint Rewrite @add_univ_simpl2 using (trivial || discriminate) : simpl_univ.
   Hint Rewrite @add_univ_simpl3 using (trivial || discriminate) : simpl_univ.
 
+  Ltac simplUniv :=
+    repeat match goal with
+           | [ |- context[ _ $+ (?A,_) $+ (?A,_) ] ] => rewrite add_univ_simpl1 by trivial
+           | [ |- context[ _ $+ (?A,_) $+ (?B,_) $+ (?A,_) ] ] => rewrite add_univ_simpl2 by auto
+           | [ |- context[ _ $+ (?A,_) $+ (?A,_) $+ (?B,_) ] ] => rewrite add_univ_simpl3 by auto
+           end.
+
   Hint Resolve encrypted_ciphers_ok_addnl_cipher.
 
-  Lemma rpingbase_silent_simulates :
-    simulates_silent_step (lameAdv tt) RPingPongBase.
-  Proof.
-
-    unfold simulates_silent_step.
-
-    Import T.
-
-    time (
-        intros;
-        invert H;
-        try destruct U__r0; try destruct U__r; simpl in *; subst;
-        churn; autorewrite with simpl_univ;
-        [> eexists; split; swap 1 2; eauto 9 ..]
-      ).
-
-  Qed.
-
-  Lemma rpingbase_loud_simulates :
-    simulates_labeled_step (lameAdv tt) RPingPongBase.
-  Proof.
-    unfold simulates_labeled_step.
-
-    Import T.
-
-    time
-      (intros;
-       invert H;
-       try destruct U__r0; try destruct U__r; simpl in *; subst;
-       churn;
-       autorewrite with simpl_univ;
-       simpl;
-       (do 3 eexists;
-        repeat
-          match goal with
-          | [ |- _ /\ _ ] => split
-          end; swap 3 4; swap 1 3; [ .. | admit (* action matches predicate *)];
-        eauto; eauto 12)).
-
-  Admitted.
-
-  Section UniverseStep.
-    Import RealWorld.
-
-    Definition rewrite_messages {A} (usr : user_data A) (qmsgs : queued_messages) :=
-      {| key_heap := usr.(key_heap)
-       ; protocol := usr.(protocol)
-       ; msg_heap := qmsgs
-       ; c_heap   := usr.(c_heap)
-      |}.
-
-    Lemma invert_users :
-      forall {A} (usrs__ra usrs__r : honest_users A) u_id u,
-          usrs__r = clean_users (findUserKeys usrs__ra) usrs__ra
-        -> usrs__ra $? u_id = Some u
-        -> exists msgs u', usrs__r $? u_id = Some u'
-                   /\ u = rewrite_messages u' msgs
-                   /\ Forall (fun m => msg_filter (findUserKeys usrs__ra) m = false \/ List.In m u'.(msg_heap)) msgs.
-    Proof.
-      intros.
-      subst; destruct u; simpl in *.
-      repeat eexists.
-      eapply clean_users_cleans_user; eauto.
-      unfold rewrite_messages; simpl; reflexivity.
-      rewrite Forall_forall; intros.
-      cases (msg_filter (findUserKeys usrs__ra) x); auto.
-      right; simpl.
-      unfold clean_messages; rewrite filter_In; auto.
-    Qed.
-
-    (* Lemma might_as_well_step_til_done : *)
-    (*   forall {A B} (U__ra U__ra' U__r U__r' : universe A B) act b, *)
-    (*     (rstepSilent U__r U__r' -> False) *)
-    (*     -> U__r = strip_adversary_univ U__ra b *)
-    (*     -> step_universe U__ra (Action act) U__ra' *)
-    (*     -> action_adversary_safe (findUserKeys U__ra.(users)) U__ra.(all_ciphers) act *)
-    (*     -> forall U__ra0 U__r0, *)
-    (*         rstepSilent ^* U__r0 U__r *)
-    (*         -> U__r0 = strip_adversary_univ U__ra0 b *)
-    (*         -> action_adversary_safe (findUserKeys U__ra0.(users)) U__ra0.(all_ciphers) act. *)
-    (* Proof. *)
-    (*   intros. *)
-
-    (* Admitted. *)
-
-  End UniverseStep.
-
-  Hint Resolve
-       RealWorld.findUserKeys_foldfn_proper
-       RealWorld.findUserKeys_foldfn_transpose
-       RealWorld.findUserKeys_foldfn_proper_Equal
-       RealWorld.findUserKeys_foldfn_transpose_Equal.
-
-  Ltac solve_adv_safe :=
+  Ltac solve_universe_ok :=
     repeat
       match goal with
-      | [ |- RealWorld.action_adversary_safe _ _ _] => unfold RealWorld.action_adversary_safe
-      | [ |- RealWorld.msg_pattern_safe _ _ ] => econstructor
-      | [ |- RealWorld.honest_key _ _ ] => econstructor
-      | [ |- RealWorld.honest_keyb _ _ = true ] => rewrite <- RealWorld.honest_key_honest_keyb
-      | [ H : RealWorld.findUserKeys ?usrs = _ |- RealWorld.findUserKeys ?usrs $? _ = Some _ ] => rewrite H
-      | [ H : _ = clean_users ?honestk ?usrs |- context [ clean_users ?honestk ?usrs ] ] => rewrite <- H
-      | [ |- RealWorld.msg_contains_only_honest_public_keys _ _ ] => econstructor
-      | [ |- RealWorld.msgCiphersSigned _ _ _ ] => econstructor
-      | [ |- RealWorld.msgCipherOk _ _ _ ] => unfold RealWorld.msgCipherOk
-      | [ |- RealWorld.msg_honestly_signed _ _ = true] => unfold RealWorld.msg_honestly_signed
-      | [ |- _ /\ _ ] => split
-      | [ H : _ = clean_ciphers ?honk ?cs |- ?cs $? ?cid = Some ?c ] =>
-        assert (clean_ciphers honk cs $? cid = Some c) by (rewrite <- H; clean_map_lookups; trivial); clear H
-      | [ H : clean_ciphers _ ?cs $? ?cid = Some ?c |- ?cs $? ?cid = Some ?c ] =>
-        rewrite <- find_mapsto_iff in H; rewrite clean_ciphers_mapsto_iff in H; split_ands;
-        rewrite <- find_mapsto_iff; assumption
-      end.
-
-  Ltac users_inversion :=
-    match goal with
-    | [ H : ?usrs $? _ = Some ?u
-      , E : _ = clean_users _ _
-        |- _ ] =>
-      generalize (invert_users _ E H); intros
-    end; split_ex; split_ands; subst; simpl in *.
-
-  Ltac solve_findUserKeys_rewrites :=
-    repeat
-      match goal with
-      | [ |- context [RealWorld.user_keys] ] => unfold RealWorld.user_keys
-      | [ |- context [ _ $? _] ] => progress clean_map_lookups
-      | [ |- context [match _ $? _ with _ => _ end]] => context_map_rewrites
-      end; simpl; trivial.
-
-  Hint Rewrite @RealWorld.findUserKeys_readd_user_same_keys_idempotent' using solve [ solve_findUserKeys_rewrites ] : find_uks.
-  Hint Rewrite @RealWorld.findUserKeys_readd_user_addnl_keys using solve [ solve_findUserKeys_rewrites ] : find_uks.
-
-  Ltac solve_uok :=
-    try match goal with
-        | [ |- universe_ok (RealWorld.buildUniverseAdv _ _ _ _ ) ] => solve [ eapply universe_ok_adv_step; eauto ]
-        end;
-    users_inversion; churn; repeat equality1;
-    unfold universe_ok in *;
-    simpl;
-    autorewrite with find_uks;
-    try assumption; simpl in *;
-    repeat
-      match goal with
-      | [ H : Forall _ (existT _ _ _ :: _) |- encrypted_ciphers_ok _ _ ] =>
-        invert H; split_ors; try contradiction
-      | [ H : RealWorld.msg_accepted_by_pattern (RealWorld.Signed _) _ |- _ ] => invert H; simpl in *
-      | [ H : RealWorld.honest_keyb ?findUsers _ = false |- _ ] => unfold RealWorld.honest_keyb in H
-      | [ H : ?cusrs = clean_users (RealWorld.findUserKeys ?usrs) ?usrs |- _ ] =>
-        assert (RealWorld.findUserKeys usrs = RealWorld.findUserKeys (clean_users (RealWorld.findUserKeys usrs) usrs))
-          as UKS by (symmetry; eapply clean_users_no_change_findUserKeys);
-        rewrite <- H in UKS;
-        clear H
-      | [ M : match RealWorld.findUserKeys ?usrs $? _ with _ => _ end = _
-        , H : RealWorld.findUserKeys ?usrs = _ |- _ ] => rewrite H in M; clear H; simpl in M; try discriminate
-      | [ H : RealWorld.Signature _ _ _ = RealWorld.Signature _ _ _ |- _ ] => invert H
+      | [ H : universe_ok _ |- universe_ok _ ] =>
+        unfold universe_ok, RealWorld.buildUniverse in H;
+        unfold universe_ok, RealWorld.buildUniverse;
+        simpl in H; simpl
       | [ |- encrypted_ciphers_ok _ _ ] => econstructor
       | [ |- encrypted_cipher_ok _ _ _ ] => econstructor
       | [ |- RealWorld.msgCiphersSigned _ _ _ ] => econstructor
       | [ |- forall k, RealWorld.findKeys _ $? _ = Some true -> False ] => intros
       | [ H : RealWorld.findKeys _ $? _ = Some true |- False ] => progress simpl in H; invert H
-      | [ |- RealWorld.findUserKeys _ $? _ = Some true ] => eapply RealWorld.findUserKeys_has_private_key_of_user
       end.
 
-  Lemma rpingbase_univere_ok :
-    simulates_universe_ok RPingPongBase.
+
+  Lemma rpingbase_silent_simulates :
+    simulates_silent_step (lameAdv tt) R.
   Proof.
-    unfold simulates_universe_ok; intros.
+    unfold simulates_silent_step; intros.
 
-    Import T.
+    intros; invert H;
+      try destruct U__r0; try destruct U__r; simpl in *; subst.
 
-    time (
-        inversion H; clear H; churn; solve_uok; eauto
-      ).
+    - churn.
+      * eexists; split; swap 1 2; eauto 9.
+        rewrite map_add_eq; auto.
+        eapply R2; eauto.
+    - churn.
+      * eexists; split; swap 1 2; eauto 9.
+        rewrite map_add_eq; auto.
+        eapply R3; eauto.
+    - churn.
+      * eexists; split; swap 1 2; eauto 9.
+        rewrite map_add_eq; auto.
+        simpl.
+        eapply R4; eauto.
 
-  Qed.
-
-  Lemma rpingbase_labeled_simulates_safe :
-    simulates_labeled_step_safe RPingPongBase.
-  Proof.
-    unfold simulates_labeled_step_safe.
-    intros.
-
-    Import T.
-
-    assert (RealWorld.findUserKeys U__r.(RealWorld.users) =
-            RealWorld.findUserKeys (clean_users (RealWorld.findUserKeys U__r.(RealWorld.users)) U__r.(RealWorld.users)))
-      by (symmetry; eapply clean_users_no_change_findUserKeys).
-    remember (RealWorld.findUserKeys U__r.(RealWorld.users)) as honestk.
-
-    time(
-        inversion H; clear H;
-        churn;
-        [> users_inversion; churn; repeat equality1; solve_adv_safe; eauto .. ]
-      ).
-
-  Qed.
+    - churn.
+      * eexists; split; swap 1 2; eauto 9.
+        rewrite map_add_eq; auto.
+        eapply R5; eauto.
+    - churn. admit.
+    - churn.
+      * eexists; split; swap 1 2; eauto 9.
+        rewrite map_add_eq; auto.
+        eapply R7; eauto.
+    - churn.
+      * eexists; split; swap 1 2; eauto 9.
+        rewrite map_add_eq; auto.
+        eapply R8; eauto.
 
 
-  (* Timings:
-   *
-   * 20190628 (laptop run: inversion lemmas)
-   * Tactic call ran for 870.78 secs (870.427u,0.272s) (success)
-   * Tactic call ran for 64.791 secs (64.786u,0.004s) (success)
-   * Tactic call ran for 38.868 secs (38.868u,0.s) (success)
-   *
-   * 20190624 (laptop run: block inversion of rstepSilent if don't know start univ -- saving restepping through protocol for adversary)
-   * Tactic call ran for 1272.565 secs (1271.919u,0.596s) (success)
-   * Tactic call ran for 314.031 secs (314.027u,0.004s) (success)
-   * Tactic call ran for 283.061 secs (282.885u,0.148s) (success)
-   * --------------------------------------------------------------
-   * (no date, desktop run (laptop more like 1700): starting point after refactor)
-   * Tactic call ran for 1468.475 secs (1467.238u,1.061s) (success)
-   * Tactic call ran for 257.673 secs (257.516u,0.091s) (success)
-   * --------------------------------------------------------------
-   *)
 
-  Hint Resolve
-       rpingbase_silent_simulates
-       rpingbase_loud_simulates
-       rpingbase_univere_ok
-       rpingbase_labeled_simulates_safe.
-
-  Lemma univ_ok_start :
-    forall adv,
-      lameAdv tt adv
-      -> universe_ok (real_univ_start $0 [] [] adv).
-  Proof.
-    unfold real_univ_start; econstructor; eauto.
-  Qed.
-
-  Lemma adv_univ_ok_start :
-    forall adv U__r honestk,
-        U__r = real_univ_start $0 [] [] adv
-      -> honestk = RealWorld.findUserKeys U__r.(RealWorld.users)
-      -> lameAdv tt adv
-      -> adv_message_queue_ok honestk adv.(RealWorld.msg_heap)
-      -> adv_no_honest_keys honestk adv.(RealWorld.key_heap)
-      -> adv_universe_ok (real_univ_start $0 [] [] adv).
-  Proof.
-    unfold real_univ_start, adv_universe_ok, adv_no_honest_keys;
-      simpl; intuition (subst; eauto).
-
-    - unfold keys_good, KEYS, KID1, KID2, KEY1, KEY2; intros.
-      cases (0 ==n k_id); cases (1 ==n k_id); subst; clean_map_lookups; eauto.
-
-    - unfold user_cipher_queues_ok.
-      rewrite Forall_natmap_forall; intros.
-      cases (A ==n k); cases (B ==n k); subst; clean_map_lookups; simpl in *; econstructor; eauto.
-
-    - unfold message_queues_ok.
-      rewrite Forall_natmap_forall; intros.
-      cases (A ==n k); cases (B ==n k); subst; clean_map_lookups; simpl in *; econstructor; eauto.
-
-  Qed.
-
-  Hint Resolve
-       univ_ok_start
-       adv_univ_ok_start.
-
-  Theorem base_pingpong_refines_ideal_pingpong :
-    forall adv U__r honestk,
-      U__r = real_univ_start $0 [] [] adv
-      -> honestk = RealWorld.findUserKeys U__r.(RealWorld.users)
-      -> lameAdv tt adv
-      -> adv_message_queue_ok honestk adv.(RealWorld.msg_heap)
-      -> adv_no_honest_keys honestk adv.(RealWorld.key_heap)
-      (* real_univ_start $0 [] [] adv <| ideal_univ_start / lameAdv tt. *)
-      -> refines (lameAdv tt) U__r ideal_univ_start.
-  Proof.
-    exists RPingPongBase; unfold simulates.
-    intuition (subst; eauto).
-  Qed.
 
 End FeebleSimulates.
