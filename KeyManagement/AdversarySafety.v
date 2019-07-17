@@ -31,47 +31,6 @@ Module Automation.
 
   Import RealWorld.
 
-  Ltac clean_context :=
-    try discriminate;
-    repeat
-      match goal with
-      | [ H : ?X = ?X |- _ ] => clear H
-      | [ H : Some _ = Some _ |- _ ] => invert H
-      | [ H : Action _ = Action _ |- _ ] => invert H; simpl in *; split_ands
-      end.
-
-  Ltac simplify_key_merges1 :=
-    match goal with
-    | [ H1 : ?ks1 $? ?kid = Some _
-      , H2 : ?ks2 $? ?kid = Some _ |- context [?ks1 $k++ ?ks2 $? ?kid]]
-      => rewrite (merge_perms_chooses_greatest _ _ H1 H2) by trivial; unfold greatest_permission; simpl
-    | [ H1 : ?ks1 $? ?kid = Some _
-      , H2 : ?ks2 $? ?kid = None |- context [?ks1 $k++ ?ks2 $? ?kid]]
-      => rewrite (merge_perms_adds_ks1 _ _ _ H1 H2) by trivial
-    | [ H1 : ?ks1 $? ?kid = None
-      , H2 : ?ks2 $? ?kid = Some _ |- context [?ks1 $k++ ?ks2 $? ?kid]]
-      => rewrite (merge_perms_adds_ks2 _ _ _ H1 H2) by trivial
-    | [ H1 : ?ks1 $? ?kid = None
-      , H2 : ?ks2 $? ?kid = None |- context [?ks1 $k++ ?ks2 $? ?kid]]
-      => rewrite (merge_perms_adds_no_new_perms _ _ _ H1 H2) by trivial
-    | [ H1 : ?ks1 $? ?kid = Some _
-      , H2 : ?ks2 $? ?kid = Some _
-      , H3 : ?ks1 $k++ ?ks2 $? ?kid = _ |- _ ]
-      => rewrite (merge_perms_chooses_greatest _ _ H1 H2) in H3 by trivial; unfold greatest_permission in H3; simpl in *
-    | [ H1 : ?ks1 $? ?kid = Some _
-      , H2 : ?ks2 $? ?kid = None
-      , H3 : ?ks1 $k++ ?ks2 $? ?kid = _ |- _ ]
-      => rewrite (merge_perms_adds_ks1 _ _ _ H1 H2) in H3 by trivial
-    | [ H1 : ?ks1 $? ?kid = None
-      , H2 : ?ks2 $? ?kid = Some _
-      , H3 : ?ks1 $k++ ?ks2 $? ?kid = _ |- _ ]
-      => rewrite (merge_perms_adds_ks2 _ _ _ H1 H2) in H3 by trivial
-    | [ H1 : ?ks1 $? ?kid = None
-      , H2 : ?ks2 $? ?kid = None
-      , H3 : ?ks1 $k++ ?ks2 $? ?kid = _ |- _ ]
-      => rewrite (merge_perms_adds_no_new_perms _ _ _ H1 H2) in H3 by trivial
-  end.
-
   Ltac msg_queue_prop :=
     match goal with
     | [ H1 : ?us $? _ = Some _, H2 : message_queues_ok _ _ ?us |- _ ] => generalize (Forall_natmap_in_prop _ H2 H1); simpl; intros
@@ -222,14 +181,11 @@ Section UniverseLemmas.
           (findUserKeys usrs)
           (usrs $+ (u_id, {| key_heap := ks'; protocol := cmd'; msg_heap := qmsgs'; c_heap := mycs |})).
   Proof.
-    unfold user_cipher_queues_ok; intros.
-
-    rewrite Forall_natmap_forall in *; intros.
-    cases (k ==n u_id); subst; clean_map_lookups; eauto.
-    rewrite <- Forall_natmap_forall in H0.
-    simpl.
-    eapply Forall_natmap_in_prop in H0; eauto.
-    simpl in *; auto.
+    intros.
+    unfold user_cipher_queues_ok;
+      rewrite Forall_natmap_forall; intros.
+    cases (k ==n u_id); subst; clean_map_lookups; simpl;
+      user_cipher_queues_prop; eauto.
   Qed.
 
   Lemma user_cipher_queue_ok_addnl_global_cipher :
@@ -821,10 +777,9 @@ Section UniverseLemmas.
       specialize (H18 k_id).
       assert (findKeys msg $? k_id <> Some true) by eauto.
       intuition idtac.
-      right; right.
-      split; eauto.
-      intros.
-      eapply merge_perms_split in H9; split_ors; eauto.
+      right; right; split; eauto; intros.
+
+      eapply merge_perms_split in H8; split_ors; eauto.
   Qed.
 
   Lemma honest_silent_step_adv_no_honest_keys :
