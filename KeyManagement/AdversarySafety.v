@@ -214,9 +214,6 @@ Section UniverseLemmas.
 
   (* Step user cipher queues ok *)
 
-  (* Hint Rewrite @findUserKeys_multi_add_same_keys_idempotent *)
-  (*      using (trivial || unfold user_keys; context_map_rewrites; f_equal; trivial) : find_user_keys. *)
-
   Lemma user_cipher_queues_ok_readd_user :
     forall {A} (usrs : honest_users A) u_id ks ks' cmd cmd' qmsgs qmsgs' cs mycs,
       usrs $? u_id = Some {| key_heap := ks; protocol := cmd; msg_heap := qmsgs; c_heap := mycs |}

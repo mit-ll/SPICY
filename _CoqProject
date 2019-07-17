@@ -15,4 +15,5 @@ KeyManagement/AdversaryUniverse.v
 KeyManagement/AdversarySafety.v
 KeyManagement/Tactics.v
 
+protocols/ProtocolAutomation.v
 protocols/EncPingProtocol.v

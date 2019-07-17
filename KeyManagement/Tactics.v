@@ -29,3 +29,7 @@ Ltac invert H :=
          (* | [ x : _ |- _ ] => subst x *)
          | [ H : existT _ _ _ = existT _ _ _ |- _ ] => apply inj_pair2 in H; try subst
          end.
+
+Ltac is_not_var V :=
+  first [ is_var V; fail 1
+        | idtac ].
