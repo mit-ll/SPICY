@@ -19,13 +19,6 @@ Module Messages (GA : GRANT_ACCESS).
   | Pair (t1 t2 : type)
   .
 
-  Fixpoint typeDenote (t : type) : Set :=
-    match t with
-    | Nat => nat
-    | Access => GA.access (* I would like to define this within the module *)
-    | Pair t1 t2 => typeDenote t1 * typeDenote t2
-    end.
-
   Inductive message : type -> Type :=
   | Permission (acc : GA.access) : message Access
   | Content (n : nat) : message Nat
