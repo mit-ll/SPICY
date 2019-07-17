@@ -11,6 +11,7 @@ Require Import
         Common
         MapLtac
         Keys
+        Automation
         Tactics.
 
 Require IdealWorld
@@ -33,13 +34,6 @@ Proof.
 Qed.
 
 Hint Resolve accepted_safe_msg_pattern_honestly_signed.
-
-(* TODO tbraje: this is terrible and needs to be redone.  Check out EncPingProtocol *)
-Hint Rewrite @RealWorld.findUserKeys_readd_user_same_keys_idempotent'
-     using (trivial || unfold RealWorld.user_keys; context_map_rewrites; f_equal; trivial) : find_user_keys.
-Hint Rewrite @RealWorld.findUserKeys_readd_user_addnl_keys
-     using (trivial || unfold RealWorld.user_keys; context_map_rewrites; f_equal; trivial) : find_user_keys.
-
 
 (******************** CIPHER CLEANING *********************
  **********************************************************
@@ -112,30 +106,6 @@ Section CleanCiphers.
        honest_cipher_filter_fn_filter_transpose
        honest_cipher_filter_fn_filter_proper_eq
        honest_cipher_filter_fn_filter_transpose_eq.
-
-  Lemma findUserKeys_multi_add_same_keys_idempotent :
-    forall {A} (usrs : honest_users A) u_id1 u_id2 ks1 ks2 cmd1 cmd2 qmsgs1 qmsgs2 mycs1 mycs2,
-      user_keys usrs u_id1 = Some ks1
-      -> user_keys usrs u_id2 = Some ks2
-      -> findUserKeys (usrs $+ (u_id1, {| key_heap := ks1; protocol := cmd1; msg_heap := qmsgs1; c_heap := mycs1 |})
-                           $+ (u_id2, {| key_heap := ks2; protocol := cmd2; msg_heap := qmsgs2; c_heap := mycs2 |})) = findUserKeys usrs.
-  Proof.
-    intros.
-
-    cases (u_id1 ==n u_id2); subst; clean_map_lookups.
-    - rewrite map_add_eq; eauto.
-      autorewrite with find_user_keys; trivial.
-
-    - remember (usrs $+ (u_id1,{| key_heap := ks1; protocol := cmd1; msg_heap := qmsgs1; c_heap := mycs1 |})) as usrs'.
-      (* unfold user_keys in H0. *)
-      (* destruct (usrs $? u_id2); try discriminate. *)
-      (* destruct H0. *)
-      autorewrite with find_user_keys; subst; autorewrite with find_user_keys; trivial.
-      rewrite add_neq_o; unfold user_keys in *; auto.
-  Qed.
-
-  Hint Rewrite @findUserKeys_multi_add_same_keys_idempotent
-       using (trivial || unfold user_keys; context_map_rewrites; f_equal; trivial) : find_user_keys.
 
   Lemma clean_ciphers_mapsto_iff : forall cs c_id c,
       MapsTo c_id c (clean_ciphers cs) <-> MapsTo c_id c cs /\ honest_cipher_filter_fn c_id c = true.

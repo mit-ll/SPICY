@@ -162,10 +162,6 @@ Section RealWorldUniverseProperties.
       \/ (honestk $? k_id = Some true /\ advk $? k_id <> Some true)
       ).
 
-  Definition is_powerless {B} (usr : user_data B) (b: B): Prop :=
-    adv_no_honest_keys usr.(key_heap)
-  /\ usr.(protocol) = Return b.
-
   Lemma adv_no_honest_keys_empty :
     adv_no_honest_keys $0.
     unfold adv_no_honest_keys; intros; simpl.
@@ -197,7 +193,7 @@ Section Simulation.
 
   Definition simulates_silent_step :=
     forall (U__r : RealWorld.universe A B) U__i,
-    R (RealWorld.peel_adv U__r) U__i
+      R (RealWorld.peel_adv U__r) U__i
     -> universe_ok U__r
     -> adv_universe_ok U__r
     -> advP U__r.(RealWorld.adversary)
@@ -209,7 +205,7 @@ Section Simulation.
 
   Definition simulates_labeled_step :=
     forall (U__r : RealWorld.universe A B) U__i,
-    R (RealWorld.peel_adv U__r) U__i
+      R (RealWorld.peel_adv U__r) U__i
     -> universe_ok U__r
     -> adv_universe_ok U__r
     -> advP U__r.(RealWorld.adversary)
@@ -223,7 +219,7 @@ Section Simulation.
 
   Definition simulates_universe_ok :=
     forall B (U__r : RealWorld.universe A B) U__i,
-      R (strip_adversary U__r) U__i
+        R (strip_adversary U__r) U__i
       -> universe_ok U__r
       -> adv_universe_ok U__r
       -> forall U__r' lbl,
@@ -232,13 +228,13 @@ Section Simulation.
 
   Definition simulates_labeled_step_safe :=
     forall B (U__r : RealWorld.universe A B) U__i,
-    R (strip_adversary U__r) U__i
-    -> forall U__r' a,
-      RealWorld.step_universe U__r (Action a) U__r' (* excludes adversary steps *)
-      ->  RealWorld.action_adversary_safe
-           (RealWorld.findUserKeys U__r.(RealWorld.users))
-           U__r.(RealWorld.all_ciphers)
-           a.
+      R (strip_adversary U__r) U__i
+      -> forall U__r' a,
+        RealWorld.step_universe U__r (Action a) U__r' (* excludes adversary steps *)
+        -> RealWorld.action_adversary_safe
+            (RealWorld.findUserKeys U__r.(RealWorld.users))
+            U__r.(RealWorld.all_ciphers)
+            a.
 
   Definition simulates (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A) :=
 
@@ -258,9 +254,7 @@ End Simulation.
 Definition refines {A B : Type} (advP : RealWorld.user_data B -> Prop) (U1 : RealWorld.universe A B) (U2 : IdealWorld.universe A) :=
   exists R, simulates advP R U1 U2.
 
-(* Notation "x <- c1 ; c2" := (Bind c1 (fun x => c2)) (right associativity, at level 75) : realworld_scope. *)
-
-Notation "u1 <| u2 / p " := (refines p u1 u2) (no associativity, at level 70).
+Notation "u1 <| u2 \ p " := (refines p u1 u2) (no associativity, at level 70).
 
 Definition lameAdv {B} (b : B) :=
   fun adv => adv.(RealWorld.protocol) = RealWorld.Return b.

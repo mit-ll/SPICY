@@ -7,7 +7,7 @@ Require Import MyPrelude.
 Module Foo <: EMPTY. End Foo.
 Module Import SN := SetNotations(Foo).
 
-Require Import Common Maps Keys Simulation MapLtac Tactics AdversaryUniverse.
+Require Import Common Maps Keys Simulation MapLtac Tactics Automation AdversaryUniverse.
 
 Require IdealWorld RealWorld.
 
@@ -942,17 +942,6 @@ Section FeebleSimulates.
       generalize (invert_users _ E H); intros
     end; split_ex; split_ands; subst; simpl in *.
 
-  Ltac solve_findUserKeys_rewrites :=
-    repeat
-      match goal with
-      | [ |- context [RealWorld.user_keys] ] => unfold RealWorld.user_keys
-      | [ |- context [ _ $? _] ] => progress clean_map_lookups
-      | [ |- context [match _ $? _ with _ => _ end]] => context_map_rewrites
-      end; simpl; trivial.
-
-  Hint Rewrite @RealWorld.findUserKeys_readd_user_same_keys_idempotent' using solve [ solve_findUserKeys_rewrites ] : find_uks.
-  Hint Rewrite @RealWorld.findUserKeys_readd_user_addnl_keys using solve [ solve_findUserKeys_rewrites ] : find_uks.
-
   Ltac solve_uok :=
     try match goal with
         | [ |- universe_ok (RealWorld.buildUniverseAdv _ _ _ _ ) ] => solve [ eapply universe_ok_adv_step; eauto ]
@@ -960,7 +949,7 @@ Section FeebleSimulates.
     users_inversion; churn; repeat equality1;
     unfold universe_ok in *;
     simpl;
-    autorewrite with find_uks;
+    autorewrite with find_user_keys;
     try assumption; simpl in *;
     repeat
       match goal with
@@ -1020,6 +1009,12 @@ Section FeebleSimulates.
 
 
   (* Timings:
+   *
+   * 20190715 (laptop run: update to simulation statement)
+   * Tactic call ran for 1003.739 secs (1003.249u,0.435s) (success)
+   * Tactic call ran for 67.14 secs (67.13u,0.008s) (success)
+   * Tactic call ran for 51.881 secs (51.877u,0.004s) (success)
+   * Tactic call ran for 38.373 secs (38.364u,0.008s) (success)
    *
    * 20190628 (laptop run: inversion lemmas)
    * Tactic call ran for 870.78 secs (870.427u,0.272s) (success)

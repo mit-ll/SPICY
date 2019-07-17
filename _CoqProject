@@ -6,6 +6,7 @@ KeyManagement/MyPrelude.v
 KeyManagement/Maps.v
 KeyManagement/MapLtac.v
 KeyManagement/Common.v
+KeyManagement/Automation.v
 KeyManagement/Keys.v
 KeyManagement/IdealWorld.v
 KeyManagement/RealWorld.v

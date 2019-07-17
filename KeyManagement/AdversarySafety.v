@@ -12,6 +12,7 @@ Require Import
         MapLtac
         Keys
         Tactics
+        Automation
         Simulation
         AdversaryUniverse.
 
@@ -211,15 +212,10 @@ Section UniverseLemmas.
     eapply clean_keys_inv in H0; split_ands; eauto.
   Qed.
 
-  Hint Rewrite @findUserKeys_readd_user_same_keys_idempotent'
-       using (trivial || unfold user_keys; context_map_rewrites; f_equal; trivial) : find_user_keys.
-  Hint Rewrite @findUserKeys_readd_user_addnl_keys
-       using (trivial || unfold user_keys; context_map_rewrites; f_equal; trivial) : find_user_keys.
-
   (* Step user cipher queues ok *)
 
-  Hint Rewrite @findUserKeys_multi_add_same_keys_idempotent
-       using (trivial || unfold user_keys; context_map_rewrites; f_equal; trivial) : find_user_keys.
+  (* Hint Rewrite @findUserKeys_multi_add_same_keys_idempotent *)
+  (*      using (trivial || unfold user_keys; context_map_rewrites; f_equal; trivial) : find_user_keys. *)
 
   Lemma user_cipher_queues_ok_readd_user :
     forall {A} (usrs : honest_users A) u_id ks ks' cmd cmd' qmsgs qmsgs' cs mycs,
@@ -403,8 +399,7 @@ Section UniverseLemmas.
                 -> user_cipher_queues_ok cs' honestk' usrs''.
   Proof.
     induction 1; inversion 2; inversion 4; intros; subst; try discriminate; eauto;
-      autorewrite with find_user_keys;
-      clean_context.
+      autorewrite with find_user_keys; clean_context.
 
     - assert (msg_honestly_signed (findUserKeys usrs') msg = true) by eauto.
       eapply Forall_natmap_in_prop in H17; eauto; simpl in *.
@@ -420,7 +415,7 @@ Section UniverseLemmas.
                              c_heap := c_heap rec_u |}))) as usrs'.
 
       assert (findUserKeys usrs = findUserKeys usrs') as RW
-        by (subst; autorewrite with find_user_keys; eauto).
+          by (subst; autorewrite with find_user_keys; eauto).
 
       rewrite RW; clear RW.
 
@@ -994,19 +989,6 @@ Section UniverseLemmas.
 
 End UniverseLemmas.
 
-
-(* Inductive couldGenerate : forall {A B}, RealWorld.universe A B -> list RealWorld.action -> Prop := *)
-(* | CgNothing : forall {A B} (u : RealWorld.universe A), *)
-(*     couldGenerate u [] *)
-(* | CgSilent : forall {A} {u u' : RealWorld.universe A} tr, *)
-(*     RealWorld.lstep_universe u Silent u' *)
-(*     -> couldGenerate u' tr *)
-(*     -> couldGenerate u tr *)
-(* | CgAction : forall {A} a (u u' : RealWorld.universe A) tr, *)
-(*     RealWorld.lstep_universe u (Action a) u' *)
-(*     -> couldGenerate u' tr *)
-(*     -> couldGenerate u (a :: tr). *)
-
 Section SingleAdversarySimulates.
 
   (* If we have a simulation proof, we know that:
@@ -1021,13 +1003,6 @@ Section SingleAdversarySimulates.
 
   Section RealWorldLemmas.
     Import RealWorld.
-
-    Hint Rewrite @findUserKeys_readd_user_same_keys_idempotent'
-         using (trivial || unfold user_keys; context_map_rewrites; f_equal; trivial) : find_user_keys.
-    Hint Rewrite @findUserKeys_readd_user_addnl_keys
-         using (trivial || unfold user_keys; context_map_rewrites; f_equal; trivial) : find_user_keys.
-    Hint Rewrite @findUserKeys_multi_add_same_keys_idempotent
-         using (trivial || unfold user_keys; context_map_rewrites; f_equal; trivial) : find_user_keys.
 
     Hint Extern 1 (_ $+ (?k, _) $? _ = Some _) => clean_map_lookups; trivial.
 
@@ -2084,18 +2059,23 @@ Section SingleAdversarySimulates.
       induction 1; inversion 1; inversion 4; intros; subst; eauto.
 
       (* Send *)
-      erewrite findUserKeys_readd_user_same_keys_idempotent'; eauto.
+      autorewrite with find_user_keys.
 
       rewrite clean_users_add_pull; simpl.
       apply map_eq_Equal; unfold Equal; intros.
       cases (y ==n rec_u_id); subst; clean_map_lookups; eauto.
       clear H6 H18.
 
-      (* This is just not true *)
-      assert (msg_honestly_signed (findUserKeys usrs) msg = false) by admit.
+      erewrite clean_users_cleans_user; eauto; f_equal.
+      cases (msg_honestly_signed (findUserKeys usrs) msg);
+        eauto using clean_messages_drops_not_honestly_signed.
 
-      rewrite clean_messages_drops_not_honestly_signed; auto.
-      erewrite clean_users_cleans_user; eauto.
+      exfalso.
+      unfold msg_honestly_signed in Heq; destruct msg; try discriminate;
+        simpl in *.
+
+
+      admit.
 
     Admitted.
 
@@ -2486,7 +2466,7 @@ Section SingleAdversarySimulates.
   Lemma simulates_start_ok_adding_adversary :
     forall {A B} (U__r U__ra: RealWorld.universe A B) (U__i : IdealWorld.universe A)
       (R : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop) b advcode,
-        is_powerless (RealWorld.findUserKeys U__r.(RealWorld.users)) U__r.(RealWorld.adversary) b
+        lameAdv b U__r.(RealWorld.adversary)
       -> U__ra = add_adversary U__r advcode
       -> R (RealWorld.peel_adv U__r) U__i
       -> universe_ok U__r
@@ -2497,7 +2477,7 @@ Section SingleAdversarySimulates.
       /\ adv_universe_ok U__ra.
   Proof.
     intros.
-    unfold universe_ok, adv_universe_ok, is_powerless, RealWorld.peel_adv in *; split_ands; subst; simpl in *.
+    unfold universe_ok, adv_universe_ok, lameAdv, RealWorld.peel_adv in *; split_ands; subst; simpl in *.
     destruct U__r; destruct adversary; simpl in *.
     intuition eauto.
 
@@ -2532,15 +2512,14 @@ Section SingleAdversarySimulates.
 
   Theorem simulates_ok_with_adversary :
     forall {A B} (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A) (b : B),
-      (* U__r <| U__i / ladv *)
-        refines (lameAdv b) U__r U__i
-      -> is_powerless (RealWorld.findUserKeys U__r.(RealWorld.users)) U__r.(RealWorld.adversary) b
+        U__r <| U__i \ lameAdv b
+      -> lameAdv b U__r.(RealWorld.adversary)
       -> universe_starts_ok U__r
       -> universe_ok U__r
       -> adv_universe_ok U__r
       -> forall U__ra advcode,
           U__ra = add_adversary U__r advcode
-          -> refines (@awesomeAdv B) U__ra U__i.
+          -> U__ra <| U__i \ @awesomeAdv B.
     intros.
     inversion H as [R SIM].
     inversion SIM as [H__silent H__l].
@@ -2580,3 +2559,90 @@ Section SingleAdversarySimulates.
   Print Assumptions simulates_ok_with_adversary.
 
 End SingleAdversarySimulates.
+
+
+Inductive rCouldGenerate : forall {A B},
+    RealWorld.universe A B -> list RealWorld.action -> Prop :=
+| RCgNothing : forall A B (U : RealWorld.universe A B),
+    rCouldGenerate U []
+| RCgSilent : forall A B (U U' : RealWorld.universe A B) acts,
+      rstepSilent U U'
+    -> rCouldGenerate U' acts
+    -> rCouldGenerate U acts
+| RCgLabeled : forall A B (U U' : RealWorld.universe A B) acts a,
+      RealWorld.step_universe U (Action a) U'
+    -> rCouldGenerate U' acts
+    -> rCouldGenerate U (a :: acts)
+.
+
+Inductive iCouldGenerate : forall {A},
+    IdealWorld.universe A -> list IdealWorld.action -> Prop :=
+| ICgNothing : forall A (U : IdealWorld.universe A),
+    iCouldGenerate U []
+| ICgSilent : forall A (U U' : IdealWorld.universe A) acts,
+      istepSilent U U'
+    -> iCouldGenerate U' acts
+    -> iCouldGenerate U acts
+| ICgLabeled : forall A (U U' : IdealWorld.universe A) acts a,
+      IdealWorld.lstep_universe U (Action a) U'
+    -> iCouldGenerate U' acts
+    -> iCouldGenerate U (a :: acts)
+.
+
+Inductive traceMatches : list RealWorld.action -> list IdealWorld.action -> Prop :=
+| TrMatchesNothing :
+    traceMatches [] []
+| TrMatchesLabel : forall {A B}(U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A) a__r acts__r a__i acts__i,
+      rCouldGenerate U__r (a__r :: acts__r)
+    -> iCouldGenerate U__i (a__i :: acts__i)
+    -> traceMatches acts__r acts__i
+    -> action_matches a__r a__i
+    -> traceMatches (a__r :: acts__r) (a__i :: acts__i)
+.
+
+Lemma simulates_could_generate :
+  forall A B (R : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop),
+      simulates_silent_step (awesomeAdv (B:=B)) R
+    -> simulates_labeled_step (awesomeAdv (B:=B)) R
+    -> simulates_universe_ok R
+    -> simulates_labeled_step_safe R
+    -> forall (U__r : RealWorld.universe A B) acts__r,
+        universe_ok U__r
+        -> adv_universe_ok U__r
+        -> rCouldGenerate U__r acts__r
+        -> forall U__i,
+            R (RealWorld.peel_adv U__r) U__i
+            -> exists acts__i,
+                iCouldGenerate U__i acts__i
+              /\ traceMatches acts__r acts__i.
+Proof.
+  induction 7; intros; eauto.
+
+  - eexists; split; swap 1 2; econstructor.
+  - assert (awesomeAdv (RealWorld.adversary U)) as AWE by (unfold awesomeAdv; trivial).
+    generalize (H _ _ H7 H3 H4 AWE _ H5); intro STEPPED;
+      destruct STEPPED as [U__i' STEPPED]; split_ands.
+
+    assert (exists acts__i : list IdealWorld.action, iCouldGenerate U__i' acts__i /\ traceMatches acts acts__i).
+    eapply IHrCouldGenerate; eauto.
+    eapply H1; eauto.
+    unfold simulates_universe_ok in *.
+    admit. admit.
+
+
+
+
+Admitted.
+
+Theorem refines_could_generate :
+  forall A B (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A),
+      U__r <| U__i \ @awesomeAdv B
+    -> forall acts__r acts__i,
+      rCouldGenerate U__r acts__r
+      -> iCouldGenerate U__i acts__i
+      /\ traceMatches acts__r acts__i.
+Proof.
+  unfold refines, simulates; intros.
+  destruct H as [R H]; split_ands.
+
+Admitted.
