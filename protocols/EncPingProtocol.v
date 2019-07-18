@@ -287,57 +287,25 @@ Section FeebleSimulates.
         eapply TrcRefl
       | eapply TrcRefl'; simpl; smash_universe ].
 
-  Hint Extern 1 (rstepSilent ^* _ _) =>
-      match goal with
-      | [ |- rstepSilent ^* ?U1 ?U2 ] =>
-        first [
-            progress (unfold RealWorld.buildUniverse; autorewrite with simpl_univ; simpl)
-          | solve_refl
-          | figure_out_user_step U1 U2]
-      end.
+  Ltac silent_step_real_universe1 :=
+    match goal with
+    | [ |- rstepSilent ^* ?U1 ?U2 ] =>
+      first [
+          progress (unfold RealWorld.buildUniverse; autorewrite with simpl_univ; simpl)
+        | solve_refl
+        | figure_out_user_step U1 U2 ]
+    end.
+
+  Ltac silent_step_real_universe :=
+    silent_step_real_universe1;
+    [ solve [ eauto ] .. | silent_step_real_universe1 ].
+
+  Hint Extern 1 (rstepSilent ^* _ _) => silent_step_real_universe.
 
   Lemma rpingbase_silent_simulates :
     simulates_silent_step (lameAdv tt) RPingPongBase.
   Proof.
     unfold simulates_silent_step.
-    intros;
-      invert H;
-      try destruct U__r0; try destruct U__r; simpl in *; subst.
-
-    - admit.
-
-    - churn; autorewrite with simpl_univ; clean_context.
-      * eexists; split; swap 1 2; eauto.
-
-    - churn; autorewrite with simpl_univ; clean_context.
-
-      * eexists; split; swap 1 2; eauto.
-      * eexists; split; swap 1 2; eauto.
-      * eexists; split; swap 1 2; eauto 9.
-      * eexists; split; swap 1 2; eauto 9.
-      * eexists; split; swap 1 2; eauto 9.
-      * eexists; split; swap 1 2; eauto 9.
-      * eexists; split; swap 1 2; eauto 9.
-      * eexists; split; swap 1 2; eauto 9.
-      * eexists; split; swap 1 2; eauto 9.
-      * eexists; split; swap 1 2; eauto 9.
-      * eexists; split; swap 1 2; eauto 9.
-      * eexists; split; swap 1 2; eauto 9.
-      * eexists; split; swap 1 2; eauto 9.
-      * eexists; split; swap 1 2; eauto 9.
-      * eexists; split; swap 1 2; eauto 9.
-      * eexists; split; swap 1 2; eauto 9.
-      * eexists; split; swap 1 2; eauto 9.
-      * eexists; split; swap 1 2; eauto 9.
-      * eexists; split; swap 1 2; eauto 9.
-      * eexists; split; swap 1 2; eauto 9.
-      * eexists; split; swap 1 2; eauto 9.
-      * eexists; split; swap 1 2; eauto 9.
-      * eexists; split; swap 1 2; eauto 9.
-      * eexists; split; swap 1 2; eauto 9.
-      * eexists; split; swap 1 2; eauto 9.
-      * eexists; split; swap 1 2; eauto 9.
-
     time (
         intros;
         invert H;
@@ -345,7 +313,6 @@ Section FeebleSimulates.
         churn; autorewrite with simpl_univ;
         [> eexists; split; swap 1 2; eauto 9 ..]
       ).
-
   Qed.
 
   Lemma rpingbase_loud_simulates :
