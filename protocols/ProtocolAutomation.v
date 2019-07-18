@@ -393,9 +393,12 @@ Module SimulationAutomation.
       match goal with
 
       | [ H : ~ RealWorld.msg_accepted_by_pattern ?pat ?msg |- _ ] =>
-        assert ( RealWorld.msg_accepted_by_pattern pat msg ) by eauto; contradiction
+        assert ( RealWorld.msg_accepted_by_pattern pat msg ) by constructor; contradiction
 
-    (* Only take a user step if we have chosen a user *)
+      | [ H : RealWorld.msg_accepted_by_pattern ?pat ?msg -> False |- _ ] =>
+        assert ( RealWorld.msg_accepted_by_pattern pat msg ) by constructor; contradiction
+
+      (* Only take a user step if we have chosen a user *)
       | [ H : RealWorld.step_user _ (Some ?u) _ _ |- _ ] => progress simpl in H
       | [ H : RealWorld.step_user _ (Some ?u) (_,_,_,_,_,_,_,?cmd) _ |- _ ] =>
         is_not_var u;
@@ -436,6 +439,7 @@ Module SimulationAutomation.
   End T.
 
   Import T.
+  Export T.
 
   Ltac churn2 :=
     (repeat equality1); subst; churn1; intuition idtac; split_ex; intuition idtac; subst; try discriminate.
@@ -519,18 +523,11 @@ Module SimulationAutomation.
   Qed.
 
   Hint Extern 0 (rstepSilent ^* _ _) => solve [eapply TrcRefl || eapply TrcRefl'; simpl; smash_universe].
-  Hint Extern 1 (rstepSilent ^* _ _) => real_silent_step0.
-  Hint Extern 1 (rstepSilent ^* _ _) => real_silent_step1.
-  (* Hint Extern 1 (rstepSilent ^* _ _) => *)
-  (*       progress(unfold real_univ_start, real_univ_sent1, real_univ_recd1, *)
-  (*                       real_univ_sent2, real_univ_recd2, real_univ_done, mkrU; simpl). *)
-  (* Hint Extern 1 (RPingPongBase (RealWorld.buildUniverse _ _ _ _ _) _) => unfold RealWorld.buildUniverse; simpl. *)
+  (* Hint Extern 1 (rstepSilent ^* _ _) => real_silent_step0. *)
+  (* Hint Extern 1 (rstepSilent ^* _ _) => real_silent_step1. *)
 
   Hint Extern 2 (IdealWorld.lstep_universe _ _ _) => istep_univ0.
   Hint Extern 2 (IdealWorld.lstep_universe _ _ _) => istep_univ1.
-  (* Hint Extern 1 (IdealWorld.lstep_universe _ _ _) => *)
-  (*     progress(unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, *)
-  (*                     ideal_univ_sent2, ideal_univ_recd2, ideal_univ_done, mkiU; simpl). *)
   Hint Extern 1 (IdealWorld.lstep_user _ (_, IdealWorld.Bind _ _, _) _) => eapply IdealWorld.LStepBindRecur.
   Hint Extern 1 (istepSilent ^* _ _) => ideal_silent_steps || apply TrcRefl.
 
@@ -539,10 +536,6 @@ Module SimulationAutomation.
   Hint Extern 1 (RealWorld.action_adversary_safe _ _ _ = _) => unfold RealWorld.action_adversary_safe; simplify.
   Hint Extern 1 (IdealWorld.msg_permissions_valid _ _) => progress simpl.
 
-  (* Hint Extern 1 (A__keys $? _ = _) => unfold A__keys, B__keys, KEY1, KEY2, KID1, KID2. *)
-  (* Hint Extern 1 (B__keys $? _ = _) => unfold A__keys, B__keys, KEY1, KEY2, KID1, KID2. *)
-  (* Hint Extern 1 (PERMS__a $? _ = _) => unfold PERMS__a. *)
-  (* Hint Extern 1 (PERMS__b $? _ = _) => unfold PERMS__b. *)
   Hint Extern 1 (_ = RealWorld.addUserKeys _ _) => unfold RealWorld.addUserKeys, map; simpl.
   Hint Extern 1 (add _ _ _ = _) => m_equal.
   Hint Extern 1 (find _ _ = _) => m_equal.
