@@ -264,53 +264,16 @@ Hint Extern 1 (PERMS__b $? _ = _) => unfold PERMS__b.
 
 Section FeebleSimulates.
 
-  Ltac does_not_unify term1 term2 :=
-    first [ unify term1 term2; fail 1
-          | idtac ].
-
-  Ltac figure_out_user_step U1 U2 :=
-    match U1 with
-    | context [ add ?u ?usr1 _ ] =>
-      match U2 with
-      | context [ add u ?usr2 _ ] =>
-        does_not_unify usr1 usr2;
-        match u with
-        | A => real_silent_step0
-        | B => real_silent_step1
-        | _ => fail 1
-        end
-      end
-    end.
-
-  Ltac solve_refl :=
-    solve [
-        eapply TrcRefl
-      | eapply TrcRefl'; simpl; smash_universe ].
-
-  Ltac silent_step_real_universe1 :=
-    match goal with
-    | [ |- rstepSilent ^* ?U1 ?U2 ] =>
-      first [
-          progress (unfold RealWorld.buildUniverse; autorewrite with simpl_univ; simpl)
-        | solve_refl
-        | figure_out_user_step U1 U2 ]
-    end.
-
-  Ltac silent_step_real_universe :=
-    silent_step_real_universe1;
-    [ solve [ eauto ] .. | silent_step_real_universe1 ].
-
-  Hint Extern 1 (rstepSilent ^* _ _) => silent_step_real_universe.
-
   Lemma rpingbase_silent_simulates :
     simulates_silent_step (lameAdv tt) RPingPongBase.
   Proof.
     unfold simulates_silent_step.
+
     time (
         intros;
         invert H;
         try destruct U__r0; try destruct U__r; simpl in *; subst;
-        churn; autorewrite with simpl_univ;
+        churn; simpl_real_users_context;
         [> eexists; split; swap 1 2; eauto 9 ..]
       ).
   Qed.
@@ -325,8 +288,9 @@ Section FeebleSimulates.
        invert H;
        try destruct U__r0; try destruct U__r; simpl in *; subst;
        churn;
-       autorewrite with simpl_univ;
-       simpl;
+       simpl_real_users_context;
+       (* autorewrite with simpl_univ; *)
+       (* simpl; *)
        (do 3 eexists;
         repeat
           match goal with

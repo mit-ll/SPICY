@@ -33,80 +33,6 @@ Section RealWorldLemmas.
       invert H.
   Qed.
 
-  Lemma add_univ_simpl1 :
-    forall {v} (m : NatMap.t v) k1 v1 k2 v2,
-      k1 = k2
-      -> m $+ (k1,v1) $+ (k2,v2) = m $+ (k2,v2).
-  Proof.
-    intros. simpl.
-    apply map_eq_Equal; unfold Equal; intros; subst.
-    case (k2 ==n y); intros; subst.
-    rewrite !add_eq_o; trivial.
-    rewrite !add_neq_o; trivial.
-  Qed.
-
-  Lemma add_univ_simpl2 :
-    forall {v} (m : NatMap.t v) k1 v1 k2 v2 k3 v3,
-      k1 = k3
-      -> k2 <> k3
-      -> m $+ (k1,v1) $+ (k2,v2) $+ (k3,v3) = m $+ (k3,v3) $+ (k2,v2).
-  Proof.
-    intros. simpl.
-    apply map_eq_Equal; unfold Equal; intros; subst.
-    case (y ==n k2); intros; subst.
-    rewrite add_neq_o by auto; rewrite !add_eq_o; trivial.
-    case (y ==n k3); intros; subst.
-    rewrite add_eq_o by trivial. rewrite add_neq_o by auto. rewrite add_eq_o; trivial.
-    rewrite !add_neq_o by auto; trivial.
-  Qed.
-
-  Lemma add_univ_simpl3 :
-    forall {v} (m : NatMap.t v) k1 v1 k2 v2 k3 v3,
-      k1 = k2
-      -> k2 <> k3
-      -> m $+ (k1,v1) $+ (k2,v2) $+ (k3,v3) = m $+ (k2,v2) $+ (k3,v3).
-  Proof.
-    intros. simpl.
-    apply map_eq_Equal; unfold Equal; intros; subst.
-    case (y ==n k3); intros; subst.
-    rewrite !add_eq_o; trivial.
-    case (y ==n k2); intros; subst.
-    do 2 (rewrite add_neq_o by auto; rewrite add_eq_o by auto); trivial.
-    rewrite !add_neq_o by auto; trivial.
-  Qed.
-
-  Lemma simplify_build_univ1 :
-    forall {A B} (U__r : universe A B) (usrs : honest_users A) uid__a uid__b ud__a ud__b uid ud (adv : user_data B) gks cs,
-        uid__a <> uid__b
-      -> uid = uid__a
-      -> buildUniverse (usrs $+ (uid__a,ud__a) $+ (uid__b,ud__b)) adv cs gks uid ud
-        = {| users       := usrs $+ (uid,ud) $+ (uid__b,ud__b)
-           ; adversary   := adv
-           ; all_ciphers := cs
-           ; all_keys    := gks
-          |}.
-  Proof.
-    intros. unfold buildUniverse; simpl.
-    f_equal; subst.
-    rewrite add_univ_simpl2 by auto; trivial.
-  Qed.
-
-  Lemma simplify_build_univ2 :
-    forall {A B} (U__r : universe A B) (usrs : honest_users A) uid__a uid__b ud__a ud__b uid ud (adv : user_data B) gks cs,
-        uid__a <> uid__b
-      -> uid = uid__b
-      -> buildUniverse (usrs $+ (uid__a,ud__a) $+ (uid__b,ud__b)) adv cs gks uid ud
-        = {| users       := usrs $+ (uid__a,ud__a) $+ (uid,ud)
-           ; adversary   := adv
-           ; all_ciphers := cs
-           ; all_keys    := gks
-          |}.
-  Proof.
-    intros. unfold buildUniverse; simpl.
-    f_equal.
-    rewrite add_univ_simpl1 by auto; trivial.
-  Qed.
-
 End RealWorldLemmas.
 
 Ltac equality1 :=
@@ -447,27 +373,6 @@ Module SimulationAutomation.
   Ltac churn :=
     repeat churn2.
 
-  Ltac usr_first :=
-    eapply find_mapsto_iff;
-      eapply elements_mapsto_iff;
-      eapply SetoidList.InA_alt;
-      eexists;
-      unfold eq_key_elt, Raw.PX.eqke; constructor; [intuition idtac | ..].
-
-  Ltac user0 := usr_first; left.
-  Ltac user1 := usr_first; right; left.
-
-  Ltac istep_univ pick :=
-    eapply IdealWorld.LStepUser'; simpl; swap 2 3; [ pick | ..];
-      (try eapply @eq_refl); (try f_equal); simpl.
-  Ltac rstep_univ pick :=
-    eapply  RealWorld.StepUser; simpl; swap 2 3; [ pick | ..]; (try eapply @eq_refl); simpl.
-
-  Ltac istep_univ0 := istep_univ user0.
-  Ltac istep_univ1 := istep_univ user1.
-  Ltac rstep_univ0 := rstep_univ user0.
-  Ltac rstep_univ1 := rstep_univ user1.
-
   Ltac i_single_silent_step :=
       eapply IdealWorld.LStepBindProceed
     || eapply IdealWorld.LStepGen
@@ -477,33 +382,44 @@ Module SimulationAutomation.
   Ltac r_single_silent_step :=
       eapply RealWorld.StepBindProceed
     || eapply RealWorld.StepGen
-    || eapply RealWorld.StepRecvDrop
+    (* || eapply RealWorld.StepRecvDrop *)
     || eapply RealWorld.StepEncrypt
     || eapply RealWorld.StepDecrypt
     || eapply RealWorld.StepSign
     || eapply RealWorld.StepVerify
   .
 
-  Ltac isilent_step_univ pick :=
-    eapply IdealWorld.LStepUser'; simpl; swap 2 3; [ pick | ..]; (try simple eapply @eq_refl);
+  Ltac pick_user uid :=
+    match goal with
+    | [ |- _ $? ?euid = Some _ ] => unify euid uid
+    end; clean_map_lookups; trivial.
+
+  Ltac istep_univ uid :=
+    eapply IdealWorld.LStepUser'; simpl; swap 2 3; [ pick_user uid | ..];
+      (try eapply @eq_refl); (try f_equal); simpl.
+  Ltac rstep_univ uid :=
+    eapply  RealWorld.StepUser; simpl; swap 2 3; [ pick_user uid | ..]; (try eapply @eq_refl); simpl.
+
+  Ltac isilent_step_univ uid :=
+    eapply IdealWorld.LStepUser'; simpl; swap 2 3; [ pick_user uid | ..]; (try simple eapply @eq_refl);
       ((eapply IdealWorld.LStepBindRecur; i_single_silent_step) || i_single_silent_step).
-  Ltac rsilent_step_univ pick :=
-    eapply  RealWorld.StepUser; simpl; swap 2 3; [ pick | ..]; (try simple eapply @eq_refl);
+  Ltac rsilent_step_univ uid :=
+    eapply  RealWorld.StepUser; simpl; swap 2 3; [ pick_user uid | ..]; (try simple eapply @eq_refl);
       ((eapply RealWorld.StepBindRecur; r_single_silent_step) || r_single_silent_step).
 
-  Ltac silent_step usr_step := eapply TrcFront; [usr_step |]; simpl.
+  Ltac single_silent_multistep usr_step := eapply TrcFront; [usr_step |]; simpl.
 
-  Ltac real_silent_step0 := silent_step ltac:(rsilent_step_univ user0).
-  Ltac real_silent_step1 := silent_step ltac:(rsilent_step_univ user1).
+  Ltac real_single_silent_multistep uid := single_silent_multistep ltac:(rsilent_step_univ uid).
+  Ltac ideal_single_silent_multistep uid := single_silent_multistep ltac:(isilent_step_univ uid).
 
-  Ltac ideal_silent_step0 := silent_step ltac:(isilent_step_univ user0).
-  Ltac ideal_silent_step1 := silent_step ltac:(isilent_step_univ user1).
-
-  Ltac ideal_silent_steps :=
-    (ideal_silent_step0 || ideal_silent_step1);
-      repeat ideal_silent_step0;
-      repeat ideal_silent_step1;
-      eapply TrcRefl.
+  Ltac figure_out_user_step step_tac U1 U2 :=
+    match U1 with
+    | context [ add ?u ?usr1 _ ] =>
+      match U2 with
+      | context [ add u ?usr2 _ ] =>
+        does_not_unify usr1 usr2; step_tac u
+      end
+    end.
 
   Remove Hints TrcRefl TrcFront.
   Hint Extern 1 (_ ^* ?U ?U) => apply TrcRefl.
@@ -522,14 +438,60 @@ Module SimulationAutomation.
     intros. subst. apply TrcRefl.
   Qed.
 
-  Hint Extern 0 (rstepSilent ^* _ _) => solve [eapply TrcRefl || eapply TrcRefl'; simpl; smash_universe].
-  (* Hint Extern 1 (rstepSilent ^* _ _) => real_silent_step0. *)
-  (* Hint Extern 1 (rstepSilent ^* _ _) => real_silent_step1. *)
+  Ltac solve_refl :=
+    solve [
+        eapply TrcRefl
+      | eapply TrcRefl'; simpl; smash_universe ].
 
-  Hint Extern 2 (IdealWorld.lstep_universe _ _ _) => istep_univ0.
-  Hint Extern 2 (IdealWorld.lstep_universe _ _ _) => istep_univ1.
-  Hint Extern 1 (IdealWorld.lstep_user _ (_, IdealWorld.Bind _ _, _) _) => eapply IdealWorld.LStepBindRecur.
-  Hint Extern 1 (istepSilent ^* _ _) => ideal_silent_steps || apply TrcRefl.
+  Ltac simpl_real_users_context :=
+    repeat
+      match goal with
+      | [ |- context [ RealWorld.buildUniverse ] ] => progress (unfold RealWorld.buildUniverse; simpl)
+      | [ |- context [ RealWorld.mkUniverse ?usrs _ _ _] ] => canonicalize_map usrs
+      end.
+
+  Ltac simpl_ideal_users_context :=
+    repeat
+      match goal with
+      | [ |- context [ IdealWorld.construct_universe _ ?usrs] ] => canonicalize_map usrs
+      end.
+
+  Ltac rss_clean uid := real_single_silent_multistep uid; [ solve [eauto 2] .. |].
+
+  Ltac real_silent_multistep :=
+    simpl_real_users_context;
+    match goal with
+    | [ |- rstepSilent ^* ?U1 ?U2 ] =>
+      first [
+          solve_refl
+        | figure_out_user_step rss_clean U1 U2 ]
+    end.
+
+  Ltac ideal_silent_multistep :=
+    simpl_ideal_users_context;
+    match goal with
+    | [ |- istepSilent ^* ?U1 ?U2 ] =>
+      first [
+          solve_refl
+        | figure_out_user_step ideal_single_silent_multistep U1 U2 ]
+    end.
+
+  Ltac single_step_ideal_universe :=
+    simpl_ideal_users_context;
+    match goal with
+    | [ |- IdealWorld.lstep_universe ?U1 _ ?U2] =>
+      match U1 with
+      | IdealWorld.construct_universe _ ?usrs1 =>
+        match U2 with
+        | IdealWorld.construct_universe _ ?usrs2 =>
+          figure_out_user_step istep_univ usrs1 usrs2
+        end
+      end
+    end.
+
+  Hint Extern 1 (rstepSilent ^* _ _) => real_silent_multistep.
+  Hint Extern 1 (istepSilent ^* _ _) => ideal_silent_multistep.
+  Hint Extern 1 (IdealWorld.lstep_universe _ _ _) => single_step_ideal_universe.
 
   Hint Extern 1 (List.In _ _) => progress simpl.
 
@@ -543,11 +505,7 @@ Module SimulationAutomation.
 
 End SimulationAutomation.
 
-Import SimulationAutomation SimulationAutomation.T.
-
-Hint Rewrite @add_univ_simpl1 using solve [trivial | discriminate] : simpl_univ.
-Hint Rewrite @add_univ_simpl2 using solve [trivial | discriminate] : simpl_univ.
-Hint Rewrite @add_univ_simpl3 using solve [trivial | discriminate] : simpl_univ.
+Import SimulationAutomation.
 
 Section UniverseStep.
   Import RealWorld.

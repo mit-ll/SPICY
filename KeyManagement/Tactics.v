@@ -33,3 +33,7 @@ Ltac invert H :=
 Ltac is_not_var V :=
   first [ is_var V; fail 1
         | idtac ].
+
+Ltac does_not_unify term1 term2 :=
+  first [ unify term1 term2; fail 1
+        | idtac ].
