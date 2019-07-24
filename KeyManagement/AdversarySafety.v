@@ -639,6 +639,44 @@ Section UniverseLemmas.
       rewrite merge_keys_mine; auto.
   Qed.
 
+  Lemma adv_step_message_queues_ok :
+    forall {A B C} cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
+              gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd',
+      step_user lbl None bd bd'
+      -> forall (cmd : user_cmd C) honestk,
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+        -> honestk = findUserKeys usrs
+        -> ks = adv.(key_heap)
+        -> qmsgs = adv.(msg_heap)
+        -> encrypted_ciphers_ok honestk cs
+        -> message_queues_ok honestk cs usrs
+        -> forall cmd' honestk',
+            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+            -> honestk' = findUserKeys usrs'
+            -> message_queues_ok honestk' cs' usrs'.
+  Proof.
+    induction 1; inversion 1; inversion 6; intros; subst;
+      eauto 2; try discriminate; eauto;
+        clean_context.
+
+    autorewrite with find_user_keys.
+    unfold message_queues_ok in *;
+      rewrite Forall_natmap_forall in *;
+      intros.
+
+    (* Will be handled by message replay *)
+    assert (msg_honestly_signed (findUserKeys usrs) msg = false) by admit.
+
+    destruct (rec_u_id ==n k); subst; clean_map_lookups; eauto; simpl.
+    unfold message_queue_ok in *; rewrite Forall_app_sym; constructor; eauto.
+    intros.
+    match goal with
+    | [ H1 : msg_honestly_signed ?honestk ?msg = true, H2 : msg_honestly_signed ?honestk ?msg = false |- _] =>
+      rewrite H1 in H2; discriminate
+    end.
+
+  Admitted.
+
   Lemma adv_message_queue_ok_addnl_pubk :
     forall honestk pubk msgs,
       adv_message_queue_ok honestk msgs
@@ -1682,30 +1720,30 @@ Section SingleAdversarySimulates.
                   , honest_labeled_step_adv_no_honest_keys.
     Qed.
 
-    (* Lemma silent_step_adv_univ_implies_adv_universe_ok : *)
-    (*   forall {A B} (U U' : universe A B), *)
-    (*     step_universe U Silent U' *)
-    (*     -> encrypted_ciphers_ok (findUserKeys U.(users)) U.(all_ciphers) *)
-    (*     -> adv_universe_ok U *)
-    (*     -> adv_universe_ok U'. *)
-    (* Proof. *)
-    (*   intros. *)
-    (*   invert H; *)
-    (*     unfold adv_universe_ok in *; *)
-    (*     destruct U; [destruct userData | destruct adversary]; *)
-    (*       unfold build_data_step in *; simpl in *; *)
-    (*         intuition *)
-    (*           eauto using honest_silent_step_keys_good *)
-    (*                     , honest_silent_step_user_cipher_queues_ok *)
-    (*                     , honest_silent_step_message_queues_ok *)
-    (*                     , honest_silent_step_adv_message_queue_ok *)
-    (*                     , honest_silent_step_adv_no_honest_keys *)
-    (*                     , adv_step_keys_good *)
-    (*                     , adv_step_user_cipher_queues_ok *)
-    (*                     , adv_step_message_queues_ok *)
-    (*                     , adv_step_adv_message_queue_ok *)
-    (*                     , adv_step_adv_no_honest_keys. *)
-    (* Qed. *)
+    Lemma silent_step_adv_univ_implies_adv_universe_ok :
+      forall {A B} (U U' : universe A B),
+        step_universe U Silent U'
+        -> encrypted_ciphers_ok (findUserKeys U.(users)) U.(all_ciphers)
+        -> adv_universe_ok U
+        -> adv_universe_ok U'.
+    Proof.
+      intros.
+      invert H;
+        unfold adv_universe_ok in *;
+        destruct U; [destruct userData | destruct adversary];
+          unfold build_data_step in *; simpl in *;
+            intuition
+              eauto using honest_silent_step_keys_good
+                        , honest_silent_step_user_cipher_queues_ok
+                        , honest_silent_step_message_queues_ok
+                        , honest_silent_step_adv_message_queue_ok
+                        , honest_silent_step_adv_no_honest_keys
+                        , adv_step_keys_good
+                        , adv_step_user_cipher_queues_ok
+                        , adv_step_message_queues_ok
+                        , adv_step_adv_message_queue_ok
+                        , adv_step_adv_no_honest_keys.
+    Qed.
 
     Lemma honest_silent_step_nochange_adversaries :
       forall {A B C} cs cs' lbl u_id (usrs usrs' : honest_users A) (adv adv' : user_data B)
@@ -2512,7 +2550,6 @@ Section SingleAdversarySimulates.
 
 End SingleAdversarySimulates.
 
-
 Inductive rCouldGenerate : forall {A B},
     RealWorld.universe A B -> list RealWorld.action -> Prop :=
 | RCgNothing : forall A B (U : RealWorld.universe A B),
@@ -2541,6 +2578,20 @@ Inductive iCouldGenerate : forall {A},
     -> iCouldGenerate U (a :: acts)
 .
 
+Hint Constructors rCouldGenerate iCouldGenerate.
+
+Lemma ideal_multi_silent_stays_could_generate :
+  forall {A} (U__i U__i' : IdealWorld.universe A),
+      istepSilent ^* U__i U__i'
+      -> forall acts__i,
+        iCouldGenerate U__i' acts__i
+      -> iCouldGenerate U__i acts__i.
+Proof.
+  induction 1; intros; eauto.
+Qed.
+
+Hint Resolve ideal_multi_silent_stays_could_generate.
+
 Inductive traceMatches : list RealWorld.action -> list IdealWorld.action -> Prop :=
 | TrMatchesNothing :
     traceMatches [] []
@@ -2551,6 +2602,11 @@ Inductive traceMatches : list RealWorld.action -> list IdealWorld.action -> Prop
     -> action_matches a__r a__i
     -> traceMatches (a__r :: acts__r) (a__i :: acts__i)
 .
+
+Hint Constructors traceMatches.
+Hint Resolve
+     silent_step_adv_univ_implies_adv_universe_ok
+     labeled_step_adv_univ_implies_adv_universe_ok.
 
 Lemma simulates_could_generate :
   forall A B (R : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop),
@@ -2568,33 +2624,53 @@ Lemma simulates_could_generate :
                 iCouldGenerate U__i acts__i
               /\ traceMatches acts__r acts__i.
 Proof.
-  induction 7; intros; eauto.
+  induction 7; intros; intuition eauto.
 
-  - eexists; split; swap 1 2; econstructor.
   - assert (awesomeAdv (RealWorld.adversary U)) as AWE by (unfold awesomeAdv; trivial).
+
     generalize (H _ _ H7 H3 H4 AWE _ H5); intro STEPPED;
       destruct STEPPED as [U__i' STEPPED]; split_ands.
 
-    assert (exists acts__i : list IdealWorld.action, iCouldGenerate U__i' acts__i /\ traceMatches acts acts__i).
-    eapply IHrCouldGenerate; eauto.
+    eapply IHrCouldGenerate in H9; eauto.
+    split_ex; split_ands; eexists; eauto.
     eapply H1; eauto.
-    unfold simulates_universe_ok in *.
-    admit. admit.
+    admit.
 
+  - assert (awesomeAdv (RealWorld.adversary U)) as AWE by (unfold awesomeAdv; trivial).
 
+    generalize (H0 _ _ H7 H3 H4 AWE _ _ H5); intro STEPPED;
+      split_ex; split_ands.
 
+    eapply IHrCouldGenerate in H11; eauto.
+    split_ex; split_ands.
+    exists (x :: x2); intuition eauto.
+    eapply H1; eauto.
+    admit.
+
+    eapply labeled_step_adv_univ_implies_adv_universe_ok; eauto.
+    eapply H2; eauto.
+    admit.
 
 Admitted.
 
 Theorem refines_could_generate :
-  forall A B (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A),
-      U__r <| U__i \ @awesomeAdv B
-    -> forall acts__r acts__i,
-      rCouldGenerate U__r acts__r
-      -> iCouldGenerate U__i acts__i
-      /\ traceMatches acts__r acts__i.
+  forall A B (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A) (b : B),
+    U__r <| U__i \ lameAdv b
+    -> lameAdv b U__r.(RealWorld.adversary)
+    -> universe_starts_ok U__r
+    -> forall U__ra advcode acts__r,
+      U__ra = add_adversary U__r advcode
+      -> rCouldGenerate U__ra acts__r
+      -> exists acts__i,
+          iCouldGenerate U__i acts__i
+        /\ traceMatches acts__r acts__i.
 Proof.
-  unfold refines, simulates; intros.
-  destruct H as [R H]; split_ands.
+  intros.
+  assert (U__ra <| U__i \ @awesomeAdv B) by 
+      (unfold refines, simulates in *;
+       split_ex; split_ands; eapply simulates_ok_with_adversary; eauto;
+       unfold refines, simulates; eexists; intuition eauto).
 
-Admitted.
+  unfold refines, simulates in *; split_ex; split_ands.
+  eapply simulates_could_generate; eauto.
+Qed.
