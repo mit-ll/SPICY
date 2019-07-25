@@ -6,7 +6,9 @@ From Coq Require Import
   Program.Equality
 .
 
-Require Import MyPrelude.
+Require Import
+        MyPrelude
+        Tactics.
 
 Module Import NatMap := FMapList.Make(Nat_as_OT).
 Module P := WProperties_fun Nat_as_OT NatMap.
@@ -66,15 +68,15 @@ Ltac clean_map_lookups :=
   try discriminate;
   try contra_map_lookup.
 
-Ltac split_ands :=
-  repeat match goal with
-         | [ H : _ /\ _ |- _ ] => destruct H
-         end.
-
-Ltac split_ors :=
-  repeat match goal with
-         | [ H : _ \/ _ |- _ ] => destruct H
-         end.
+Ltac context_map_rewrites :=
+  repeat
+    match goal with
+    | [ H : ?m $? ?k = _ |- context[?m $? ?k] ] => rewrite H
+    | [ H : match ?matchee with _ => _ end $? _ = _
+     ,  H1 : ?matchee = _ |- _] => rewrite H1 in H
+    | [ H : match ?matchee with _ => _ end = _
+     ,  H1 : ?matchee = _ |- _] => rewrite H1 in H
+    end.
 
 Section MapLemmas.
 
@@ -396,29 +398,6 @@ Section MapLemmas.
 
 End MapLemmas.
 
-Section MapPredicates.
-  Variable V : Type.
-  Variable P : V -> Prop.
-
-  Inductive Forall_natmap : NatMap.t V -> Prop :=
-  | Empty_Natmap : Forall_natmap $0
-  | Add_Natmap k v (m : NatMap.t V) :
-      P v
-      -> Forall_natmap m
-      -> Forall_natmap ( m $+ (k,v)).
-
-  Lemma Forall_natmap_in_prop :
-    forall k v m,
-      Forall_natmap m
-      -> m $? k = Some v
-      -> P v.
-  Proof.
-    induction 1; contra_map_lookup.
-    cases (k ==n k0); intros; subst; clean_map_lookups; auto.
-  Qed.
-
-End MapPredicates.
-
 Ltac Equal_eq :=
   repeat
     match goal with
@@ -441,3 +420,59 @@ Ltac m_equal :=
          | [ H : Empty ?m |- ?m = $0 ] => symmetry
          | [ |- empty _ = _ ] => unfold empty, Raw.empty, remove, Raw.remove; simpl
          end.
+
+Section MapPredicates.
+  Variable V : Type.
+  Variable P : V -> Prop.
+
+  Inductive Forall_natmap : NatMap.t V -> Prop :=
+  | Empty_Natmap : Forall_natmap $0
+  | Add_Natmap k v (m : NatMap.t V) :
+      P v
+      -> Forall_natmap m
+      -> Forall_natmap ( m $+ (k,v)).
+
+  Lemma Forall_natmap_forall :
+    forall m,
+      Forall_natmap m <-> (forall k v, m $? k = Some v -> P v).
+  Proof.
+    split.
+    - induction 1; contra_map_lookup; intros.
+      cases (k ==n k0); intros; subst; clean_map_lookups; eauto.
+    - induction m using P.map_induction_bis; intros; Equal_eq; eauto.
+      + econstructor.
+      + assert (Forall_natmap m).
+        eapply IHm; intros.
+        apply H0 with (k:=k); eauto.
+        cases (x ==n k); subst; clean_map_lookups; eauto.
+
+        econstructor; eauto.
+        eapply H0 with (k := x); clean_map_lookups; auto.
+  Qed.
+
+  Lemma Forall_natmap_in_prop :
+    forall k v m,
+      Forall_natmap m
+      -> m $? k = Some v
+      -> P v.
+  Proof.
+    intros.
+    rewrite Forall_natmap_forall in H; eauto.
+  Qed.
+
+  Lemma Forall_natmap_split :
+    forall k v m,
+      Forall_natmap (m $+ (k,v))
+      -> ~ In k m
+      -> Forall_natmap m
+      /\ P v.
+  Proof.
+    intros.
+    rewrite Forall_natmap_forall in *; intros.
+    assert (P v) by (eapply H with (k0:=k); clean_map_lookups; trivial).
+    split; auto; intros.
+    cases (k ==n k0); subst; clean_map_lookups.
+    eapply H with (k0:=k0); clean_map_lookups; trivial.
+  Qed.
+
+End MapPredicates.

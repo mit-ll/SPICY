@@ -4,12 +4,13 @@
 KeyManagement/MyPrelude.v
 KeyManagement/Maps.v
 KeyManagement/MapLtac.v
+KeyManagement/MessageEq.v
 KeyManagement/Common.v
+KeyManagement/Keys.v
 KeyManagement/IdealWorld.v
 KeyManagement/RealWorld.v
- KeyManagement/Simulation.v
-# KeyManagement/EncPingProtocol.v
-KeyManagement/MessageEq.v
-# KeyManagement/PingProtocol.v
-# KeyManagement/SimpleAuth.v
-# KeyManagement/SimpleEnc.v
+#KeyManagement/Simulation.v
+#KeyManagement/AdversarySafety.v
+KeyManagement/Tactics.v
+KeyManagement/Messages.v
+#KeyManagement/EncPingProtocol.v
