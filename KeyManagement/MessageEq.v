@@ -21,13 +21,13 @@ Fixpoint content_eq  {t__rw t__iw} (m__rw : RealWorld.message.message t__rw) (m_
   end.
 
 Inductive message_eq : forall {A B} {t__rw : RealWorld.message.type} {t__iw : IdealWorld.message.type},
-    RealWorld.crypto t__rw -> IdealWorld.message.message t__iw ->
-    RealWorld.universe A B -> IdealWorld.universe A -> IdealWorld.channel_id ->
+    RealWorld.crypto t__rw -> RealWorld.universe A B ->
+    IdealWorld.message.message t__iw -> IdealWorld.universe A -> IdealWorld.message.message t__iw -> IdealWorld.channel_id ->
     set Keys.key_identifier -> set Keys.key_identifier -> Prop :=
 | ContentCase : forall {A B t__rw t__iw}
                        (c : RealWorld.message.message t__rw)
                        (U__rw : RealWorld.universe A B) (U__iw : IdealWorld.universe A)
-                       (readers writers : set Keys.key_identifier) (m : IdealWorld.message.message t__iw)
+                       (readers writers : set Keys.key_identifier) (m__iw m__expected : IdealWorld.message.message t__iw)
                        (ms : list (sigT (IdealWorld.message.message)))
                        (u : Common.user_id)
                        (data__rw : RealWorld.user_data A)
@@ -35,8 +35,7 @@ Inductive message_eq : forall {A B} {t__rw : RealWorld.message.type} {t__iw : Id
                        (k__enc k__sig : Keys.key_identifier)
                        (ch__id : IdealWorld.channel_id)
                        (b : bool),
-    U__iw.(IdealWorld.channel_vector) $? ch__id = Some ((existT _ _ m) :: ms)
-    -> U__rw.(RealWorld.users) $? u = Some data__rw
+    U__rw.(RealWorld.users) $? u = Some data__rw
     -> U__iw.(IdealWorld.users) $? u = Some data__iw
     -> k__enc \in writers
                   -> (data__rw.(RealWorld.key_heap) $? k__enc = Some true
@@ -44,28 +43,28 @@ Inductive message_eq : forall {A B} {t__rw : RealWorld.message.type} {t__iw : Id
                   -> k__sig \in readers
                                 -> (data__rw.(RealWorld.key_heap) $? k__enc = Some true
                                     <-> data__iw.(IdealWorld.perms) $? ch__id = Some (IdealWorld.construct_permission true b))
-                                -> message_eq (RealWorld.Content c) m U__rw U__iw ch__id readers writers
+                                -> message_eq (RealWorld.Content c) U__rw m__iw U__iw m__expected ch__id readers writers
 | SignEncCase : forall {A B t__rw t__iw}
                        (c__id : RealWorld.cipher_id)
-                       (c : RealWorld.crypto t__rw) (m : IdealWorld.message.message t__iw)
+                       (c : RealWorld.crypto t__rw) (m__iw m__expected : IdealWorld.message.message t__iw)
                        (U__rw : RealWorld.universe A B) (U__iw : IdealWorld.universe A)
                        (readers writers : set Keys.key_identifier)
                        (k__enc k__sig : Keys.key_identifier)
                        (ch__id : IdealWorld.channel_id),
     U__rw.(RealWorld.all_ciphers) $? c__id = Some (RealWorld.SigEncCipher k__sig k__enc c) ->
-    message_eq c m U__rw U__iw ch__id ({k__enc} \cup readers) ({k__sig} \cup writers) ->
+    message_eq c U__rw m__iw U__iw m__expected ch__id ({k__enc} \cup readers) ({k__sig} \cup writers) ->
     (* switch to set of all users that people get removed from *)
-    @message_eq A B t__rw t__iw (RealWorld.SignedCiphertext k__enc k__sig c__id) m U__rw U__iw ch__id readers writers
+    @message_eq A B t__rw t__iw (RealWorld.SignedCiphertext k__enc k__sig c__id) U__rw m__iw U__iw m__expected ch__id readers writers
 | SignatureCase : forall {A B t__rw t__iw}
                          (c__id : RealWorld.cipher_id)
-                         (m : RealWorld.crypto t__rw) (m__iw : IdealWorld.message.message t__iw)
+                         (m : RealWorld.crypto t__rw) (m__iw m__expected : IdealWorld.message.message t__iw)
                          (U__rw : RealWorld.universe A B) (U__iw : IdealWorld.universe A)
                          (readers writers : set Keys.key_identifier)
                          (k__sig : Keys.key_identifier)
                          (ch__id : IdealWorld.channel_id),
     U__rw.(RealWorld.all_ciphers) $? c__id = Some (RealWorld.SigCipher k__sig m) ->
-    message_eq m m__iw U__rw U__iw ch__id readers ({k__sig} \cup writers) ->
-    message_eq (RealWorld.Signature m k__sig c__id) m__iw U__rw U__iw ch__id readers writers.
+    message_eq m U__rw m__iw U__iw m__expected ch__id readers ({k__sig} \cup writers) ->
+    message_eq (RealWorld.Signature m k__sig c__id) U__rw m__iw U__iw m__expected ch__id readers writers.
 
 
 (* Definition garbage : option (list RealWorld.key_identifier) * exmsg := *)
