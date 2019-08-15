@@ -425,7 +425,7 @@ Proof.
   intros.
   match goal with
   | [ |- ?m = _ ] => canonicalize_map m
-  end; trivial.
+  end; maps_equal.
 Qed.
 
 Lemma canonicalize_map_test2 :
@@ -455,6 +455,21 @@ Proof.
   | [ |- ?m = _ ] => canonicalize_map m
   end; maps_equal.
 Qed.
+
+(* Use if the keys are concrete. Faster and it sorts by key so order is consistent *)
+Definition canonicalize_concrete_map {v} (m : NatMap.t v) : NatMap.t v.
+  destruct m.
+  unfold Raw.t in this0.
+  let f := constr:(fun (acc : NatMap.t v) (cur : nat * v) =>
+                     let (k, v) := cur
+                     in acc $+ (k, v))
+  in let m' := (eval simpl in (fold_left f this0 $0))
+  in apply m'.
+Defined.
+
+Ltac canonicalize_concrete_map m :=
+  let m' := (eval simpl in (canonicalize_concrete_map m))
+  in replace m with m' in * by maps_equal.
 
 Section MapPredicates.
   Variable V : Type.
