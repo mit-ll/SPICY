@@ -330,8 +330,13 @@ Section FeebleSimulates.
 
   Qed.
 
-
   (* Timings:
+   *
+   * 20190718 (laptop run: directed proof search for rstepSilent ^* goals)
+   * Tactic call ran for 50.758 secs (50.693u,0.064s) (success)
+   * Tactic call ran for 45.01 secs (44.965u,0.043s) (success)
+   * Tactic call ran for 39.41 secs (39.398u,0.012s) (success)
+   * Tactic call ran for 29.111 secs (29.076u,0.031s) (success)
    *
    * 20190715 (laptop run: update to simulation statement)
    * Tactic call ran for 1003.739 secs (1003.249u,0.435s) (success)
