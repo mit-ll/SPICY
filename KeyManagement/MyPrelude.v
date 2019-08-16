@@ -428,3 +428,5 @@ Ltac sets := propositional;
 
 (* Module Foo <: EMPTY. End Foo. *)
 (* Module Export SN := SetNotations(Foo). *)
+
+Remove Hints absurd_eq_true trans_eq_bool.

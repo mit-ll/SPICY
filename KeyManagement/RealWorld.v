@@ -144,9 +144,10 @@ Section SafeMessages.
 
   Definition msg_honestly_signed {t} (msg : message t) : bool :=
     match msg with
-    (* | MsgPair msg1 msg2 => msg_honestly_signed msg1 && msg_honestly_signed msg2 *)
-    | SignedCiphertext k__signid _ _ => honest_keyb k__signid
-    | Signature _ k _ => honest_keyb k
+    | SignedCiphertext k__signid _ c_id =>
+       honest_keyb k__signid
+    | Signature _ k c_id => 
+       honest_keyb k
     | _ => false
     end.
 
@@ -473,6 +474,41 @@ Section RealWorldLemmas.
       rewrite not_find_in_iff; clean_map_lookups; auto.
   Qed.
 
+  Lemma findUserKeys_readd_user_private_key :
+    forall {A} (usrs : honest_users A) u_id proto msgs k_id ks mycs,
+      user_keys usrs u_id = Some ks
+      -> findUserKeys (usrs $+ (u_id, {| key_heap := add_key_perm k_id true ks
+                                      ; protocol := proto
+                                      ; msg_heap := msgs
+                                      ; c_heap   := mycs |})) = findUserKeys usrs $+ (k_id,true).
+  Proof.
+    intros.
+    induction usrs using P.map_induction_bis; intros; Equal_eq; contra_map_lookup; auto.
+    cases (x ==n u_id); subst; clean_map_lookups.
+    - unfold user_keys in H; rewrite add_eq_o in H; clean_map_lookups; trivial.
+      rewrite map_add_eq; eauto.
+      unfold findUserKeys; rewrite !fold_add; simpl; eauto.
+      unfold add_key_perm, greatest_permission; cases (key_heap e $? k_id); subst; simpl;
+        apply map_eq_Equal; unfold Equal; intros;
+          cases (fold (fun (_ : NatMap.key) (u : user_data A) (ks : key_perms) => ks $k++ key_heap u) usrs $0 $? y);
+          cases (key_heap e $? y);
+          destruct (y ==n k_id); subst;
+            clean_map_lookups;
+            simplify_key_merges;
+            eauto.
+
+    - assert (user_keys usrs u_id = Some ks) by (unfold user_keys in *; clean_map_lookups; auto).
+      rewrite map_ne_swap by trivial.
+      unfold findUserKeys; rewrite !fold_add with (k:=x) by (rewrite ?not_find_in_iff; clean_map_lookups; eauto).
+      rewrite !findUserKeys_notation, IHusrs; auto.
+
+      apply map_eq_Equal; unfold Equal; intros.
+      cases (findUserKeys usrs $? y); cases (key_heap e $? y); destruct (k_id ==n y); subst;
+        clean_map_lookups;
+        simplify_key_merges;
+        eauto.
+  Qed.
+
   Lemma findUserKeys_has_key_of_user :
     forall {A} (usrs : honest_users A) u_id u_d ks k kp,
       usrs $? u_id = Some u_d
@@ -564,28 +600,21 @@ Section RealWorldLemmas.
 
   Hint Resolve honest_keyb_after_new_keys.
 
-  Lemma not_honest_key_after_new_msg_keys :
-    forall {t} (msg : message t) honestk k,
+  Lemma not_honest_key_after_new_pub_keys :
+    forall pubk honestk k,
       ~ honest_key honestk k
-      -> (forall (k_id : NatMap.key) (kp : bool), findKeys msg $? k_id = Some kp -> kp = false)
-      -> ~ honest_key (honestk $k++ findKeys msg) k.
+      -> (forall (k_id : NatMap.key) (kp : bool), pubk $? k_id = Some kp -> kp = false)
+      -> ~ honest_key (honestk $k++ pubk) k.
   Proof.
     unfold not; invert 3; intros.
-    cases (honestk $? k); cases (findKeys msg $? k); subst; eauto.
-    - cases b; eauto.
-      erewrite merge_perms_chooses_greatest in H2; unfold greatest_permission in *; eauto.
-      rewrite orb_false_l in H2; invert H2.
+    cases (honestk $? k); cases (pubk $? k); subst;
+      simplify_key_merges1; clean_map_lookups; eauto.
+    - cases b; cases b0; simpl in *; eauto; try discriminate.
       specialize (H0 _ _ Heq0); discriminate.
-    - cases b; eauto.
-      erewrite merge_perms_adds_ks1 in H2; eauto.
-      discriminate.
-    - erewrite merge_perms_adds_ks2 in H2; eauto.
-      invert H2.
-      specialize (H0 _ _ Heq0); discriminate.
-    - rewrite merge_perms_adds_no_new_perms in H2; eauto; discriminate.
+    - specialize (H0 _ _ Heq0); discriminate.
   Qed.
 
-  Hint Resolve not_honest_key_after_new_msg_keys.
+  Hint Resolve not_honest_key_after_new_pub_keys.
 
   Lemma message_honestly_signed_after_add_keys :
     forall {t} (msg : message t) honestk ks,
@@ -646,26 +675,20 @@ Section RealWorldLemmas.
 
 End RealWorldLemmas.
 
-
 Lemma safe_messages_have_only_honest_public_keys :
   forall {t} (msg : message t) honestk,
     msg_contains_only_honest_public_keys honestk msg
     -> forall k_id,
       findKeys msg $? k_id = None
-      \/ (honestk $? k_id <> None /\ findKeys msg $? k_id = Some false).
+      \/ (honestk $? k_id = Some true /\ findKeys msg $? k_id = Some false).
 Proof.
   induction 1; eauto; intros; subst.
   - destruct kp; simpl in *; subst.
     cases (k ==n k_id); subst; clean_map_lookups; auto.
-    right; split; unfold not; intros; clean_map_lookups; auto.
   - specialize (IHmsg_contains_only_honest_public_keys1 k_id);
       specialize( IHmsg_contains_only_honest_public_keys2 k_id);
-      simpl; split_ors; split_ands; eauto.
-
-    + rewrite merge_perms_adds_no_new_perms; eauto.
-    + erewrite merge_perms_adds_ks1; eauto.
-    + erewrite merge_perms_adds_ks2; eauto.
-    + erewrite merge_perms_chooses_greatest; eauto; simpl; auto.
+      simpl; split_ors; split_ands;
+        intuition (simplify_key_merges; eauto).
 Qed.
 
 Lemma safe_messages_perm_merge_honestk_idempotent :
@@ -675,12 +698,8 @@ Lemma safe_messages_perm_merge_honestk_idempotent :
 Proof.
     intros.
     apply map_eq_Equal; unfold Equal; intros.
-    apply safe_messages_have_only_honest_public_keys with (k_id := y) in H; split_ors; split_ands.
-    - cases (honestk $? y); eauto.
-      + erewrite merge_perms_adds_ks1; eauto.
-      + rewrite merge_perms_adds_no_new_perms; auto.
-    - cases (honestk $? y); try contradiction.
-      erewrite merge_perms_chooses_greatest; eauto; unfold greatest_permission; rewrite orb_false_r; auto.
+    apply safe_messages_have_only_honest_public_keys with (k_id := y) in H; split_ors; split_ands;
+      cases (honestk $? y); simplify_key_merges; clean_map_lookups; eauto.
 Qed.
 
 Definition buildUniverse {A B}
@@ -844,22 +863,27 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> step_user Silent u_id
                 (usrs, adv, cs, gks, ks, qmsgs, mycs, Verify k_id (Signature msg k_id c_id))
                 (usrs, adv, cs, gks, ks, qmsgs, mycs, Return true)
+| StepGenerateSymKey: forall {A B} (usrs : honest_users A) (adv : user_data B)
+                        cs u_id gks gks' ks ks' qmsgs mycs
+                        (k_id : key_identifier) k usage,
+    gks $? k_id = None
+    -> k = MkCryptoKey k_id usage SymKey
+    -> gks' = gks $+ (k_id, k)
+    -> ks' = add_key_perm k_id true ks
+    -> step_user Silent u_id
+                (usrs, adv, cs, gks, ks, qmsgs, mycs, GenerateSymKey usage)
+                (usrs, adv, cs, gks', ks', qmsgs, mycs, Return (k_id, true))
+| StepGenerateAsymKey: forall {A B} (usrs : honest_users A) (adv : user_data B)
+                         cs u_id gks gks' ks ks' qmsgs mycs
+                         (k_id : key_identifier) k usage,
+    gks $? k_id = None
+    -> k = MkCryptoKey k_id usage AsymKey
+    -> gks' = gks $+ (k_id, k)
+    -> ks' = add_key_perm k_id true ks
+    -> step_user Silent u_id
+                (usrs, adv, cs, gks, ks, qmsgs, mycs, GenerateAsymKey usage)
+                (usrs, adv, cs, gks', ks', qmsgs, mycs, Return (k_id, true))
 .
-
-(* Key creation *)
-(* | StepGenerateSymKey: forall A cs ks qmsgs (usrDat : user_data A) usage k kid, *)
-(*     ~(kid \in (dom ks)) *)
-(*     -> k = SymKey (MkCryptoKey kid usage) *)
-(*     -> step_user (cs, ks, qmsgs, usrDat, GenerateSymKey usage) *)
-(*                 (cs, ks $+ (kid, k), qmsgs, updateUserKeyHeap [k] usrDat, Return k) *)
-(* | StepGenerateAsymKey: forall {a : Set} cs ks qmsgs (usrDat : user_data a) usage k kid, *)
-(*     ~(kid \in (dom ks)) *)
-(*     -> k = AsymKey (MkCryptoKey kid usage) true *)
-(*     -> step_user (cs, ks, qmsgs, usrDat, GenerateAsymKey usage) *)
-(*                 (cs, ks $+ (kid, k), qmsgs, updateUserKeyHeap [k] usrDat, Return k) *)
-
-(* | Barrier {result : Set} : user_cmd result. *)
-
 
 Inductive step_universe {A B} : universe A B -> rlabel -> universe A B -> Prop :=
 | StepUser : forall U U' (u_id : user_id) userData usrs adv cs gks ks qmsgs mycs lbl (cmd : user_cmd A),

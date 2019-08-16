@@ -43,7 +43,9 @@ Ltac clean_map_lookups1 :=
   | [ H : Some _ = Some _ |- _ ] => invert H
   | [ H : $0 $? _ = Some _ |- _ ] => invert H
   | [ H : _ $+ (?k,_) $? ?k = _ |- _ ] => rewrite add_eq_o in H by trivial
-  | [ H : _ $+ (?k1,_) $? ?k2 = _ |- _ ] => rewrite add_neq_o in H by auto
+  | [ H : _ $+ (?k1,_) $? ?k2 = _ |- _ ] => rewrite add_neq_o in H by auto 2
+  | [ H : match _ $+ (?k,_) $? ?k with _ => _ end = _ |- _ ] => rewrite add_eq_o in H by trivial
+  | [ H : match _ $+ (?k1,_) $? ?k2 with _ => _ end = _ |- _ ] => rewrite add_neq_o in H by auto 2
   | [ |- context[_ $+ (?k,_) $? ?k] ] => rewrite add_eq_o by trivial
   | [ |- context[_ $+ (?k1,_) $? ?k2] ] => rewrite add_neq_o by auto
   | [ |- context[_ $- ?k $? ?k] ] => rewrite remove_eq_o by trivial
@@ -534,6 +536,15 @@ Section MapPredicates.
   Proof.
     intros.
     rewrite Forall_natmap_forall in H; eauto.
+  Qed.
+
+  Lemma Forall_natmap_in_prop_add :
+    forall k v m,
+      Forall_natmap (m $+ (k,v))
+      -> P v.
+  Proof.
+    intros.
+    eapply Forall_natmap_in_prop with (k:=k); eauto; clean_map_lookups; trivial.
   Qed.
 
   Lemma Forall_natmap_split :
