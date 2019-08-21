@@ -321,21 +321,40 @@ Fixpoint findMsgCiphers {t} (msg : message t) : queued_messages :=
   | Signature m k c        => (existT _ _ msg) :: findMsgCiphers m
   end.
 
-Definition msgCipherOk (honestk : key_perms) (cs : ciphers) (sigm : sigT message):=
-  match sigm with
-  | (existT _ _ m) =>
-    msg_honestly_signed honestk m = true
-  /\ match m with
-    | SignedCiphertext k__sign k__enc msg_id
-      => exists t (m' : message t), cs $? msg_id = Some (SigEncCipher k__sign k__enc m')
-    | Signature m' k sig
-      => cs $? sig = Some (SigCipher k m')
-    | _ => False
-    end
+Definition msgCipherOk {t} (cs : ciphers) (msg : message t) :=
+  match msg with
+  | SignedCiphertext k__sign k__enc msg_id
+    => exists t (m' : message t), cs $? msg_id = Some (SigEncCipher k__sign k__enc m')
+  | Signature m' k sig
+    => cs $? sig = Some (SigCipher k m')
+  | _ => False
   end.
 
-Definition msgCiphersSigned {t} (honestk : key_perms) (cs : ciphers) (msg : message t) :=
-  Forall (msgCipherOk honestk cs) (findMsgCiphers msg).
+(* Definition msgCipherOk (honestk : key_perms) (cs : ciphers) (sigm : sigT message):= *)
+(*   match sigm with *)
+(*   | (existT _ _ m) => *)
+(*     msg_honestly_signed honestk m = true *)
+(*   /\ match m with *)
+(*     | SignedCiphertext k__sign k__enc msg_id *)
+(*       => exists t (m' : message t), cs $? msg_id = Some (SigEncCipher k__sign k__enc m') *)
+(*     | Signature m' k sig *)
+(*       => cs $? sig = Some (SigCipher k m') *)
+(*     | _ => False *)
+(*     end *)
+(*   end. *)
+
+Definition msgCiphersSignedOk {t} (honestk : key_perms) (cs : ciphers) (msg : message t) :=
+  Forall (fun sigm => match sigm with
+                     (existT _ _ m) => msgCipherOk cs m /\ msg_honestly_signed honestk m = true
+                   end) (findMsgCiphers msg).
+
+Definition msgCiphersOk {t} (cs : ciphers) (msg : message t) :=
+  Forall (fun sigm => match sigm with
+                     (existT _ _ m) => msgCipherOk cs m
+                   end) (findMsgCiphers msg).
+
+(* Definition msgCiphersSigned {t} (honestk : key_perms) (cs : ciphers) (msg : message t) := *)
+(*   Forall (msgCipherOk honestk cs) (findMsgCiphers msg). *)
 
 Definition user_keys {A} (usrs : honest_users A) (u_id : user_id) : option key_perms :=
   match usrs $? u_id with
@@ -744,7 +763,7 @@ Definition action_adversary_safe (honestk : key_perms) (cs : ciphers) (a : actio
   | Input  msg pat _ => msg_pattern_safe honestk pat
   | Output msg       => msg_contains_only_honest_public_keys honestk msg
                      /\ msg_honestly_signed honestk msg = true
-                     /\ msgCiphersSigned honestk cs msg
+                     /\ msgCiphersSignedOk honestk cs msg
   end.
 
 Definition data_step0 (A B C : Type) : Type :=

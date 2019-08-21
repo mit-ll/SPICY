@@ -655,6 +655,7 @@ Ltac solve_greatest :=
     | [ |- context [ greatest_permission ] ] => unfold greatest_permission
     | [ |- context [ _ || true ] ] => rewrite orb_true_r
     | [ |- context [ true || _ ] ] => rewrite orb_true_l
+    | [ |- context [ ?b || ?b ] ] => rewrite orb_diag
     end; trivial.
 
 Hint Extern 1 (_ = greatest_permission _ _) => solve_greatest.
@@ -667,3 +668,21 @@ Ltac simplify_key_merges :=
     | [ |- _ $? ?y = _ $? ?y ] => eapply key_perm_lookups_equal1
     | [ |- context [ _ $? _ = _ ] ] => rewrite <- key_perm_find_map_lookup_iff
     end.
+
+Ltac case_perm_merge ks kid :=
+  match ks with
+  | context [ ?ks1 $k++ ?ks2 ] => idtac ks1 ks2; case_perm_merge ks1 kid; case_perm_merge ks2 kid
+  | _ =>
+    match goal with
+    | [ H : ks $? kid = Some _ |- _ ] => idtac
+    | [ H : ks $? kid = None |- _ ] => idtac
+    | _ => cases (ks $? kid)
+    end
+  end.
+
+Ltac simplify_perm_merges :=
+  match goal with
+  | [ |- context [ ?ks1 $k++ ?ks2 $? ?kid ] ] =>
+    case_perm_merge ks1 kid;
+    case_perm_merge ks2 kid
+  end.
