@@ -7,7 +7,7 @@ From Coq Require Import
 
 Require Import
         MyPrelude
-        (* AdversaryUniverse *)
+        AdversaryUniverse
         Maps
         MessageEq
         Common
@@ -103,7 +103,6 @@ Section RealWorldUniverseProperties.
                      match c with
                      | SigEncCipher k__sign k__enc m => msgCiphers_ok cs m
                      | SigCipher k m => msgCiphers_ok cs m
-                     | _ => False
                      end
                   ) cs.
 
@@ -118,29 +117,29 @@ Section RealWorldUniverseProperties.
   Inductive encrypted_cipher_ok (cs : ciphers) : cipher -> Prop :=
   | SigCipherHonestOk : forall {t} (msg : crypto t) k,
       honestk $? k = Some true
-      -> (forall k, findKeys msg $? k = Some true -> False)
+      -> (forall k, findKeysCrypto msg $? k = Some true -> False)
       -> msgCiphersSigned honestk cs msg
       -> encrypted_cipher_ok cs (SigCipher k msg)
-  | SigCipherNotHonestOk : forall {t} (msg : message t) k,
+  | SigCipherNotHonestOk : forall {t} (msg : crypto t) k,
       honestk $? k <> Some true
       -> encrypted_cipher_ok cs (SigCipher k msg)
-  | SigEncCipherAdvSignedOk :  forall {t} (msg : message t) k__e k__s,
+  | SigEncCipherAdvSignedOk :  forall {t} (msg : crypto t) k__e k__s,
       honestk $? k__s <> Some true
-      -> (forall k, findKeys msg $? k = Some true
+      -> (forall k, findKeysCrypto msg $? k = Some true
               -> honestk $? k <> Some true)
       -> encrypted_cipher_ok cs (SigEncCipher k__s k__e msg)
-  | SigEncCipherHonestSignedEncKeyHonestOk : forall {t} (msg : message t) k__e k__s,
+  | SigEncCipherHonestSignedEncKeyHonestOk : forall {t} (msg : crypto t) k__e k__s,
       honestk $? k__s = Some true
       -> honestk $? k__e = Some true
-      -> keys_mine honestk (findKeys msg)
+      -> keys_mine honestk (findKeysCrypto msg)
       -> msgCiphersSigned honestk cs msg
       -> encrypted_cipher_ok cs (SigEncCipher k__s k__e msg).
 
   Definition encrypted_ciphers_ok (cs : ciphers) :=
     Forall_natmap (encrypted_cipher_ok cs) cs.
 
-  Definition message_no_adv_private {t} (msg : message t) :=
-    forall k, findKeys msg $? k = Some true -> False.
+  Definition message_no_adv_private {t} (msg : crypto t) :=
+    forall k, findKeysCrypto msg $? k = Some true -> False.
   (* -> (honestk $? k = None \/ honestk $? k = Some false). *)
 
   Hint Unfold message_no_adv_private.
@@ -148,7 +147,7 @@ Section RealWorldUniverseProperties.
   Definition adv_message_queue_ok (honestk : key_perms) (msgs : queued_messages) :=
     Forall (fun sigm => match sigm with
                      | (existT _ _ m) =>
-                       forall k, findKeys m $? k = Some true -> honestk $? k <> Some true
+                       forall k, findKeysCrypto m $? k = Some true -> honestk $? k <> Some true
                      end
            ) msgs.
 
@@ -219,11 +218,11 @@ Section Simulation.
     -> adv_universe_ok U__r
     -> advP U__r.(RealWorld.adversary)
     -> forall a1 U__r',
-        RealWorld.step_universe U__r (Action a1) U__r' (* excludes adversary steps *)
+        RealWorld.step_universe U__r (Messages.Action a1) U__r' (* excludes adversary steps *)
         -> exists a2 U__i' U__i'',
           istepSilent^* U__i U__i'
-        /\ IdealWorld.lstep_universe U__i' (Action a2) U__i''
-        /\ action_matches a1 a2
+        /\ IdealWorld.lstep_universe U__i' (Messages.Action a2) U__i''
+        /\ action_matches a1 U__r a2 U__i''
         /\ R (RealWorld.peel_adv U__r') U__i''.
 
   Definition simulates_universe_ok :=
@@ -239,7 +238,7 @@ Section Simulation.
     forall B (U__r : RealWorld.universe A B) U__i,
       R (strip_adversary U__r) U__i
       -> forall U__r' a,
-        RealWorld.step_universe U__r (Action a) U__r' (* excludes adversary steps *)
+        RealWorld.step_universe U__r (Messages.Action a) U__r' (* excludes adversary steps *)
         -> RealWorld.action_adversary_safe
             (RealWorld.findUserKeys U__r.(RealWorld.users))
             U__r.(RealWorld.all_ciphers)
@@ -285,7 +284,7 @@ Section RealWorldLemmas.
     induction msgs; intros; econstructor; invert H; eauto; clean_map_lookups.
     unfold RealWorld.msgCipherOk in H3. unfold RealWorld.msgCipherOk.
     destruct a; intuition idtac.
-    destruct m; eauto.
+    destruct c0; eauto.
     - invert H1; invert H2; repeat eexists.
       destruct (c_id ==n msg_id); subst; clean_map_lookups; eauto.
     - destruct (c_id ==n sig); subst; clean_map_lookups; eauto.

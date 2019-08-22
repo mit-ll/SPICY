@@ -85,8 +85,10 @@ Notation "m1 $k++ m2" := (merge_perms m2 m1) (at level 50, left associativity).
 Lemma add_key_perm_proper :
   Proper (eq  ==>  eq  ==>  eq  ==>  eq ) add_key_perm.
 Proof.
-  unfold Proper, respectful; intros; subst; trivial.
+  solve_proper.
 Qed.
+
+Require Import Coq.Classes.RelationClasses.
 
 Lemma add_key_perm_proper_Equal :
   Proper (eq  ==>  eq  ==>  Equal  ==>  Equal ) add_key_perm.

@@ -33,16 +33,14 @@ Inductive msg_pat :=
 .
 
 Inductive cipher : Type :=
-| PtCipher {t} (m : message t)
 | SigCipher {t} (k_id : key_identifier) (c : crypto t) : cipher
 | SigEncCipher {t} (k__sign k__enc : key_identifier) (c : crypto t) : cipher
 .
 
 Definition cipher_signing_key (c : cipher) :=
   match c with
-  | SigCipher k _      => Some k
-  | SigEncCipher k _ _ => Some k
-  | _ => None
+  | SigCipher k _      => k
+  | SigEncCipher k _ _ => k
   end.
 
 Definition queued_messages := list (sigT crypto).
@@ -62,7 +60,6 @@ Hint Extern 1 (~ In _ _) => rewrite not_find_in_iff.
 Section SafeMessages.
   Variable all_keys : keys.
   Variable honestk advk : key_perms.
-  
 
   Inductive honest_key (k_id : key_identifier) : Prop :=
   | HonestKey :
@@ -117,7 +114,7 @@ Section SafeMessages.
       content_only_honest_public_keys m1
       -> content_only_honest_public_keys m2
       -> content_only_honest_public_keys (message.MsgPair m1 m2).
-  
+
   Inductive msg_contains_only_honest_public_keys :  forall {t}, crypto t -> Prop :=
   | PlaintextHPK : forall {t} (txt : message t),
       content_only_honest_public_keys txt
@@ -149,14 +146,10 @@ Section SafeMessages.
     match c with
     | SigCipher k_id _              => honest_keyb k_id
     | SigEncCipher k__signid k__encid _ => honest_keyb k__signid
-    | _ => false
     end.
 
   Definition ciphers_honestly_signed :=
     Forall_natmap (fun c => cipher_honestly_signed c = true).
-
-  (* Definition message_queue_safe : queued_messages -> Prop := *)
-  (*   Forall (fun m => match m with | existT _ _ msg => msg_honestly_signed msg = true end). *)
 
   Inductive msg_pattern_safe : msg_pat -> Prop :=
   | HonestlySignedSafe : forall k,
@@ -217,6 +210,14 @@ Record user_data (A : Type) :=
     }.
 
 Definition honest_users A := user_list (user_data A).
+
+Record simpl_universe (A : Type) :=
+  mkSimplUniverse {
+      s_users       : honest_users A
+    ; s_all_ciphers : ciphers
+    ; s_all_keys    : keys
+    }.
+
 Record universe (A B : Type) :=
   mkUniverse {
       users       : honest_users A
@@ -224,6 +225,11 @@ Record universe (A B : Type) :=
     ; all_ciphers : ciphers
     ; all_keys    : keys
     }.
+
+Definition peel_adv {A B} (U : universe A B) : simpl_universe A :=
+   {| s_users       := U.(users)
+    ; s_all_ciphers := U.(all_ciphers)
+    ; s_all_keys    := U.(all_keys) |}.
 
 Definition findUserKeys {A} (us : user_list (user_data A)) : key_perms :=
   fold (fun u_id u ks => ks $k++ u.(key_heap)) us $0.
@@ -267,7 +273,7 @@ Qed.
 
 Fixpoint findKeysMessage {t} (msg : message t) : key_perms :=
   match msg with
-  | message.Permission k => $0 $+ (fst k, snd k) (* whyyyy would that not be k?? *)
+  | message.Permission k => $0 $+ (fst k, snd k) 
   | message.Content _ => $0
   | message.MsgPair m1 m2 => findKeysMessage m1 $k++ findKeysMessage m2
   end.
@@ -292,6 +298,22 @@ Fixpoint findMsgCiphers {t} (msg : crypto t) : queued_messages :=
   | SignedCiphertext _ _ _ => [existT _ _ msg]
   | Signature m k c        => (existT _ _ msg) :: findMsgCiphers m
   end.
+
+Definition msgCipherOk (honestk : key_perms) (cs : ciphers) (sigm : sigT crypto):=
+  match sigm with
+  | (existT _ _ m) =>
+    msg_honestly_signed honestk m = true
+  /\ match m with
+    | SignedCiphertext k__sign k__enc msg_id
+      => exists t (m' : crypto t), cs $? msg_id = Some (SigEncCipher k__sign k__enc m')
+    | Signature m' k sig
+      => cs $? sig = Some (SigCipher k m')
+    | _ => False
+    end
+  end.
+
+Definition msgCiphersSigned {t} (honestk : key_perms) (cs : ciphers) (msg : crypto t) :=
+  Forall (msgCipherOk honestk cs) (findMsgCiphers msg).
 
 Definition user_keys {A} (usrs : honest_users A) (u_id : user_id) : option key_perms :=
   match usrs $? u_id with
@@ -679,13 +701,12 @@ Inductive action : Type :=
 
 Definition rlabel := @label action.
 
-Definition action_adversary_safe (honestk : key_perms) (a : action) : Prop :=
+Definition action_adversary_safe (honestk : key_perms) (cs : ciphers) (a : action) : Prop :=
   match a with
   | Input  msg pat _ => msg_pattern_safe honestk pat
-                     (* /\ (forall k_id kp, findKeys msg $? k_id = Some kp -> kp = false) *)
   | Output msg       => msg_contains_only_honest_public_keys honestk msg
                      /\ msg_honestly_signed honestk msg = true
-                       (* /\ (forall k_id kp, findKeys all_keys msg $? k_id = Some kp -> kp = false) *)
+                     /\ msgCiphersSigned honestk cs msg
   end.
 
 Definition data_step0 (A B C : Type) : Type :=
@@ -737,6 +758,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
                cs u_id gks ks qmsgs mycs rec_u_id rec_u newkeys (msg : crypto t),
     findKeysCrypto msg = newkeys
     -> keys_mine ks newkeys
+    -> incl (findCiphers msg) mycs
     -> adv' = addUserKeys newkeys adv (* TODO: also add ciphers to adv??? *)
     -> usrs $? rec_u_id = Some rec_u
     -> rec_u_id <> u_id
@@ -818,6 +840,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
 (*                 (cs, ks $+ (kid, k), qmsgs, updateUserKeyHeap [k] usrDat, Return k) *)
 
 (* | Barrier {result : Set} : user_cmd result. *)
+
 
 Inductive step_universe {A B} : universe A B -> rlabel -> universe A B -> Prop :=
 | StepUser : forall U U' (u_id : user_id) userData usrs adv cs gks ks qmsgs mycs lbl (cmd : user_cmd A),

@@ -46,6 +46,8 @@ Ltac clean_map_lookups1 :=
   | [ H : _ $+ (?k1,_) $? ?k2 = _ |- _ ] => rewrite add_neq_o in H by auto
   | [ |- context[_ $+ (?k,_) $? ?k] ] => rewrite add_eq_o by trivial
   | [ |- context[_ $+ (?k1,_) $? ?k2] ] => rewrite add_neq_o by auto
+  | [ |- context[_ $- ?k $? ?k] ] => rewrite remove_eq_o by trivial
+  | [ |- context[_ $- ?k1 $? ?k2] ] => rewrite remove_neq_o by auto
   | [ H : ~ In _ _ |- _ ] => rewrite not_find_in_iff in H
   | [ H1 : ?m $? ?k = _ , H2 : ?m $? ?k = _ |- _] => rewrite H1 in H2
   end.
@@ -421,6 +423,80 @@ Ltac m_equal :=
          | [ |- empty _ = _ ] => unfold empty, Raw.empty, remove, Raw.remove; simpl
          end.
 
+Lemma remove_not_in_map_idempotent :
+  forall V (m : NatMap.t V) k,
+    m $? k = None
+    -> m $- k = m.
+Proof.
+  intros; apply map_eq_Equal; unfold Equal; intros;
+    destruct (k ==n y); subst; context_map_rewrites; clean_map_lookups; trivial.
+Qed.
+
+Ltac maps_equal :=
+  apply map_eq_Equal; unfold Equal; intros;
+  repeat
+    match goal with
+    | [ |- context [ _ $+ (?k1,?v) $? ?k2 ]] => progress (clean_map_lookups) || destruct (k1 ==n k2); subst
+    end; trivial.
+
+Ltac canonicalize_map m :=
+  match m with
+  | context [ add ?k ?v ?m1 ] =>
+    match m1 with
+    | context [ add k _ _ ] =>
+      assert ( CANON : m = m $- k $+ (k,v) ); [ 
+        maps_equal
+      | repeat
+          (rewrite map_add_remove_eq in CANON by trivial)
+        || (rewrite map_add_remove_neq in CANON by eauto)
+        || (rewrite remove_not_in_map_idempotent in CANON by eauto)
+      ]; rewrite !CANON;
+      match type of CANON with
+      | _ = ?m' => clear CANON; try canonicalize_map m'
+      end
+    end
+  end.
+
+Lemma canonicalize_map_test1 :
+  forall V (m : NatMap.t V) k1 k2 (v1 v2 v3 : V),
+    k1 <> k2
+    -> m $? k1 = None
+    -> m $+ (k1,v1) $+ (k2,v2) $+ (k1,v3) = m $+ (k2,v2) $+ (k1,v3).
+Proof.
+  intros.
+  match goal with
+  | [ |- ?m = _ ] => canonicalize_map m
+  end; trivial.
+Qed.
+
+Lemma canonicalize_map_test2 :
+  forall V (m : NatMap.t V) k1 k2 k3 (v1 v2 v3 v4 : V),
+    k1 <> k2
+    -> k1 <> k3
+    -> k2 <> k3
+    -> m $? k1 = None
+    -> m $+ (k1,v1) $+ (k2,v2) $+ (k1,v3) $+ (k3,v4) = m $+ (k2,v2) $+ (k1,v3) $+ (k3,v4).
+Proof.
+  intros.
+  match goal with
+  | [ |- ?m = _ ] => canonicalize_map m
+  end; maps_equal.
+Qed.
+
+Lemma canonicalize_map_test3 :
+  forall V (m : NatMap.t V) k1 k2 k3 (v1 v2 v3 v4 : V),
+    k1 <> k2
+    -> k1 <> k3
+    -> k2 <> k3
+    -> m $? k1 = None
+    -> m $+ (k1,v1) $+ (k2,v2) $+ (k1,v3) $+ (k2,v4) $+ (k3,v4) = m $+ (k2,v4) $+ (k1,v3) $+ (k3,v4).
+Proof.
+  intros.
+  match goal with
+  | [ |- ?m = _ ] => canonicalize_map m
+  end; maps_equal.
+Qed.
+
 Section MapPredicates.
   Variable V : Type.
   Variable P : V -> Prop.
@@ -476,3 +552,4 @@ Section MapPredicates.
   Qed.
 
 End MapPredicates.
+
