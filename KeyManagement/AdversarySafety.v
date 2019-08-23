@@ -2395,8 +2395,7 @@ Section SingleAdversarySimulates.
            | [ H : _ /\ _ |- _ ] => destruct H
            end.
     do 3 eexists; intuition idtac; eauto.
-    
-  Admitted.
+  Qed.
 
   Definition universe_starts_ok {A B} (U : RealWorld.universe A B) :=
     let honestk := RealWorld.findUserKeys U.(RealWorld.users)
@@ -2551,7 +2550,7 @@ Section SingleAdversarySimulates.
 
     - eapply simulates_with_adversary_labeled; eauto.
       rewrite strip_adv_simpl_peel_same_as_strip_adv in H9.
-      rewrite peel_strip_univ_eq_strip_adv; assumption.
+      rewrite peel_strip_univ_eq_strip_adv; ass
 
     - eapply H__univok; eauto.
       rewrite <- strip_adv_simpl_strip_adv_idempotent; eassumption.

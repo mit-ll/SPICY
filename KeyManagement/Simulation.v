@@ -222,7 +222,7 @@ Section Simulation.
         -> exists a2 U__i' U__i'',
           istepSilent^* U__i U__i'
         /\ IdealWorld.lstep_universe U__i' (Messages.Action a2) U__i''
-        /\ action_matches a1 U__r a2 U__i''
+        /\ action_matches a1 U__r a2 U__i'
         /\ R (RealWorld.peel_adv U__r') U__i''.
 
   Definition simulates_universe_ok :=
