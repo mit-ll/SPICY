@@ -5,6 +5,7 @@
 KeyManagement/MyPrelude.v
 KeyManagement/Maps.v
 KeyManagement/MapLtac.v
+KeyManagement/MessageEq.v
 KeyManagement/Common.v
 KeyManagement/Automation.v
 KeyManagement/Keys.v
@@ -14,6 +15,5 @@ KeyManagement/Simulation.v
 KeyManagement/AdversaryUniverse.v
 KeyManagement/AdversarySafety.v
 KeyManagement/Tactics.v
-
-protocols/ProtocolAutomation.v
-protocols/EncPingProtocol.v
+KeyManagement/Messages.v
+#KeyManagement/EncPingProtocol.v

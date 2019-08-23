@@ -9,6 +9,7 @@ Require Import
         MyPrelude
         AdversaryUniverse
         Maps
+        MessageEq
         Common
         MapLtac
         Keys
@@ -25,11 +26,14 @@ Set Implicit Arguments.
 Hint Resolve in_eq in_cons.
 Remove Hints absurd_eq_true trans_eq_bool.
 
+Module Foo <: EMPTY. End Foo.
+Module Import SN := SetNotations(Foo).
+
 Definition rstepSilent {A B : Type} (U1 U2 : RealWorld.universe A B) :=
-  RealWorld.step_universe U1 Silent U2.
+  RealWorld.step_universe U1 Messages.Silent U2.
 
 Definition istepSilent {A : Type} (U1 U2 : IdealWorld.universe A) :=
-  IdealWorld.lstep_universe U1 Silent U2.
+  IdealWorld.lstep_universe U1 Messages.Silent U2.
 
 Inductive chan_key : Set :=
 | Public (ch_id : IdealWorld.channel_id)
@@ -43,28 +47,32 @@ Inductive chan_key : Set :=
     -> chan_key
 .
 
-Inductive msg_eq : forall t__r t__i,
-    RealWorld.message t__r
-    -> IdealWorld.message t__i * IdealWorld.channel_id * IdealWorld.channels * IdealWorld.permissions -> Prop :=
+(* Inductive msg_eq : forall t__r t__i, *)
+(*     RealWorld.crypto t__r *)
+(*     -> IdealWorld.message.message t__i * IdealWorld.channel_id * IdealWorld.channels * IdealWorld.permissions -> Prop := *)
 
-(* Still need to reason over visibility of channel -- plaintext really means everyone can see it *)
-| PlaintextMessage' : forall content ch_id cs ps,
-    ps $? ch_id = Some (IdealWorld.construct_permission true true) ->
-    msg_eq (RealWorld.Plaintext content) (IdealWorld.Content content, ch_id, cs, ps)
-.
+(* (* Still need to reason over visibility of channel -- plaintext really means everyone can see it *) *)
+(* | PlaintextMessage' : forall content ch_id cs ps, *)
+(*     ps $? ch_id = Some (IdealWorld.construct_permission true true) -> *)
+(*     msg_eq (RealWorld.Content content) (IdealWorld.message.Content content, ch_id, cs, ps) *)
+(* . *)
 
-Inductive action_matches :
-    RealWorld.action -> IdealWorld.action -> Prop :=
-| Inp : forall t__r t__i (msg1 : RealWorld.message t__r) (msg2 : IdealWorld.message t__i) rw iw ch_id cs ps p y,
-      rw = (RealWorld.Input msg1 p y)
-    -> iw = IdealWorld.Input msg2 ch_id cs ps
-    -> msg_eq msg1 (msg2, ch_id, cs, ps)
-    -> action_matches rw iw
-| Out : forall t__r t__i (msg1 : RealWorld.message t__r) (msg2 : IdealWorld.message t__i) rw iw ch_id cs ps,
-      rw = RealWorld.Output msg1
-    -> iw = IdealWorld.Output msg2 ch_id cs ps
-    -> msg_eq msg1 (msg2, ch_id, cs, ps)
-    -> action_matches rw iw
+Inductive action_matches : forall {A B : Type},
+                           RealWorld.action -> RealWorld.universe A B ->
+                           IdealWorld.action -> IdealWorld.universe A -> Prop :=
+| Inp : forall A B t__r t__i (m__rw : RealWorld.crypto t__r) (m__iw m__expected : IdealWorld.message.message t__i)
+               ms (U__rw : RealWorld.universe A B) (U__iw : IdealWorld.universe A) rw iw ch_id cs ps p y,
+      rw = (RealWorld.Input m__rw p y)
+      -> iw = IdealWorld.Input m__iw ch_id cs ps
+      -> U__iw.(IdealWorld.channel_vector) $? ch_id = Some ((existT _ _ m__expected) :: ms)
+      -> MessageEq.message_eq m__rw U__rw m__iw U__iw m__expected ch_id {} {}
+      -> action_matches rw U__rw iw U__iw
+| Out : forall A B t__r t__i (m__rw : RealWorld.crypto t__r) (m__iw m__expected : IdealWorld.message.message t__i) ms (U__rw : RealWorld.universe A B) (U__iw : IdealWorld.universe A) rw iw ch_id cs ps,
+    rw = RealWorld.Output m__rw
+    -> iw = IdealWorld.Output m__iw ch_id cs ps
+    -> U__iw.(IdealWorld.channel_vector) $? ch_id = Some (ms ++ [existT _ _ m__expected])
+    -> MessageEq.message_eq m__rw U__rw m__iw U__iw m__expected ch_id {} {}
+    -> action_matches rw U__rw iw U__iw
 .
 
 Section RealWorldUniverseProperties.
@@ -90,12 +98,12 @@ Section RealWorldUniverseProperties.
     /\ Forall_natmap (fun u => permission_heap_good ks u.(key_heap)) usrs
     /\ permission_heap_good ks adv_heap.
 
-  Definition msgCiphers_ok {t} (cs : ciphers) (msg : message t) :=
+  Definition msgCiphers_ok {t} (cs : ciphers) (msg : crypto t) :=
     Forall (fun sigm => match sigm with
                      | (existT _ _ m) =>
                        match m with
                        | SignedCiphertext k__sign k__enc msg_id
-                         => exists t (m' : message t), cs $? msg_id = Some (SigEncCipher k__sign k__enc m')
+                         => exists t (m' : crypto t), cs $? msg_id = Some (SigEncCipher k__sign k__enc m')
                        | Signature m' k sig
                          => cs $? sig = Some (SigCipher k m')
                        | _ => False
@@ -122,44 +130,65 @@ Section RealWorldUniverseProperties.
     Forall (fun cid => exists c, cs $? cid = Some c).
 
   Inductive encrypted_cipher_ok (cs : ciphers) (gks : keys): cipher -> Prop :=
-  | SigCipherHonestOk : forall {t} (msg : message t) k k_data,
+  | SigCipherHonestOk : forall {t} (msg : crypto t) k k_data,
       honestk $? k = Some true
       -> gks $? k = Some k_data
-      -> (forall k_id, findKeys msg $? k_id = Some true -> False)
-      -> (forall k_id, findKeys msg $? k_id = Some false -> honestk $? k_id = Some true)
+      -> (forall k_id, findKeysCrypto msg $? k_id = Some true -> False)
+      -> (forall k_id, findKeysCrypto msg $? k_id = Some false -> honestk $? k_id = Some true)
       -> msgCiphersSignedOk honestk cs msg
       -> encrypted_cipher_ok cs gks (SigCipher k msg)
-  | SigCipherNotHonestOk : forall {t} (msg : message t) k k_data,
+  | SigCipherNotHonestOk : forall {t} (msg : crypto t) k k_data,
       honestk $? k <> Some true
       -> gks $? k = Some k_data
       (* -> msgCiphersOk cs msg *)
       -> encrypted_cipher_ok cs gks (SigCipher k msg)
-  | SigEncCipherAdvSignedOk :  forall {t} (msg : message t) k__s k__e k_data__s k_data__e,
+  | SigEncCipherAdvSignedOk :  forall {t} (msg : crypto t) k__s k__e k_data__s k_data__e,
       honestk $? k__s <> Some true
       -> gks $? k__s = Some k_data__s
       -> gks $? k__e = Some k_data__e
-      -> (forall k kp, findKeys msg $? k = Some kp
+      -> (forall k kp, findKeysCrypto msg $? k = Some kp
                  -> exists v, gks $? k = Some v
                       /\ (kp = true -> honestk $? k <> Some true))
       -> (forall cid, List.In cid (findCiphers msg) -> exists c, cs $? cid = Some c)
       (* -> msgCiphersOk cs msg *)
       -> encrypted_cipher_ok cs gks (SigEncCipher k__s k__e msg)
-  | SigEncCipherHonestSignedEncKeyHonestOk : forall {t} (msg : message t) k__s k__e k_data__s k_data__e,
+  | SigEncCipherHonestSignedEncKeyHonestOk : forall {t} (msg : crypto t) k__s k__e k_data__s k_data__e,
       honestk $? k__s = Some true
       -> honestk $? k__e = Some true
       -> gks $? k__s = Some k_data__s
       -> gks $? k__e = Some k_data__e
-      -> (forall k_id kp, findKeys msg $? k_id = Some kp -> honestk $? k_id = Some true /\ kp = false)
+      -> (forall k_id kp, findKeysCrypto msg $? k_id = Some kp -> honestk $? k_id = Some true /\ kp = false)
       -> msgCiphersSignedOk honestk cs msg
       -> encrypted_cipher_ok cs gks (SigEncCipher k__s k__e msg).
+(* ======= *)
+(*   Inductive encrypted_cipher_ok (cs : ciphers) : cipher -> Prop := *)
+(*   | SigCipherHonestOk : forall {t} (msg : crypto t) k, *)
+(*       honestk $? k = Some true *)
+(*       -> (forall k, findKeysCrypto msg $? k = Some true -> False) *)
+(*       -> msgCiphersSigned honestk cs msg *)
+(*       -> encrypted_cipher_ok cs (SigCipher k msg) *)
+(*   | SigCipherNotHonestOk : forall {t} (msg : crypto t) k, *)
+(*       honestk $? k <> Some true *)
+(*       -> encrypted_cipher_ok cs (SigCipher k msg) *)
+(*   | SigEncCipherAdvSignedOk :  forall {t} (msg : crypto t) k__e k__s, *)
+(*       honestk $? k__s <> Some true *)
+(*       -> (forall k, findKeysCrypto msg $? k = Some true *)
+(*               -> honestk $? k <> Some true) *)
+(*       -> encrypted_cipher_ok cs (SigEncCipher k__s k__e msg) *)
+(*   | SigEncCipherHonestSignedEncKeyHonestOk : forall {t} (msg : crypto t) k__e k__s, *)
+(*       honestk $? k__s = Some true *)
+(*       -> honestk $? k__e = Some true *)
+(*       -> keys_mine honestk (findKeysCrypto msg) *)
+(*       -> msgCiphersSigned honestk cs msg *)
+(*       -> encrypted_cipher_ok cs (SigEncCipher k__s k__e msg). *)
+(* >>>>>>> 037-message_eq_prop *)
 
   Definition encrypted_ciphers_ok (cs : ciphers) (gks : keys) :=
     Forall_natmap (encrypted_cipher_ok cs gks) cs.
 
-  Definition message_no_adv_private {t} (msg : message t) :=
-    forall k p, findKeys msg $? k = Some p -> honestk $? k = Some true /\ p = false.
+  Definition message_no_adv_private {t} (msg : crypto t) :=
+    forall k p, findKeysCrypto msg $? k = Some p -> honestk $? k = Some true /\ p = false.
     (* forall k, findKeys msg $? k = Some true -> False. *)
-  (* -> (honestk $? k = None \/ honestk $? k = Some false). *)
 
   Hint Unfold message_no_adv_private.
 
@@ -167,7 +196,7 @@ Section RealWorldUniverseProperties.
     Forall (fun sigm => match sigm with
                      | (existT _ _ m) =>
                        (forall k kp,
-                         findKeys m $? k = Some kp
+                         findKeysCrypto m $? k = Some kp
                          -> gks $? k <> None /\ (kp = true /\ honestk $? k <> Some true))
                      /\ (forall c_id, List.In c_id (findCiphers m) -> exists c, cs $? c_id = Some c)
                      end
@@ -176,7 +205,7 @@ Section RealWorldUniverseProperties.
   Definition message_queue_ok (cs : ciphers) (msgs : queued_messages) (gks : keys) :=
     Forall (fun sigm => match sigm with
                      | (existT _ _ m) =>
-                       (forall k kp, findKeys m $? k = Some kp -> gks $? k <> None)
+                       (forall k kp, findKeysCrypto m $? k = Some kp -> gks $? k <> None)
                        /\ ( match m with
                            | SignedCiphertext k__sign _ _ =>
                                gks $? k__sign <> None
@@ -253,11 +282,11 @@ Section Simulation.
     -> adv_universe_ok U__r
     -> advP U__r.(RealWorld.adversary)
     -> forall a1 U__r',
-        RealWorld.step_universe U__r (Action a1) U__r' (* excludes adversary steps *)
+        RealWorld.step_universe U__r (Messages.Action a1) U__r' (* excludes adversary steps *)
         -> exists a2 U__i' U__i'',
           istepSilent^* U__i U__i'
-        /\ IdealWorld.lstep_universe U__i' (Action a2) U__i''
-        /\ action_matches a1 a2
+        /\ IdealWorld.lstep_universe U__i' (Messages.Action a2) U__i''
+        /\ action_matches a1 U__r a2 U__i'
         /\ R (RealWorld.peel_adv U__r') U__i''.
 
   Definition simulates_universe_ok :=
@@ -273,7 +302,7 @@ Section Simulation.
     forall B (U__r : RealWorld.universe A B) U__i,
       R (strip_adversary U__r) U__i
       -> forall U__r' a,
-        RealWorld.step_universe U__r (Action a) U__r' (* excludes adversary steps *)
+        RealWorld.step_universe U__r (Messages.Action a) U__r' (* excludes adversary steps *)
         -> RealWorld.action_adversary_safe
             (RealWorld.findUserKeys U__r.(RealWorld.users))
             U__r.(RealWorld.all_ciphers)
@@ -310,7 +339,7 @@ Section RealWorldLemmas.
   Import RealWorld.
 
   Lemma msgCipherOk_addnl_cipher :
-    forall {t} (msg : message t) cs c_id c,
+    forall {t} (msg : crypto t) cs c_id c,
       ~ In c_id cs
       -> msgCipherOk cs msg
       -> msgCipherOk (cs $+ (c_id,c)) msg.
@@ -324,7 +353,7 @@ Section RealWorldLemmas.
   Hint Resolve msgCipherOk_addnl_cipher.
 
   Lemma msgCiphersOk_addnl_cipher' :
-    forall cs (msgs : list (sigT message)) c_id c,
+    forall cs (msgs : list (sigT crypto)) c_id c,
       ~ In c_id cs
       -> Forall (fun sigm => match sigm with (existT _ _ m) => msgCipherOk cs m end) msgs
       -> Forall (fun sigm => match sigm with (existT _ _ m) => msgCipherOk (cs $+ (c_id,c)) m end) msgs.
@@ -348,14 +377,14 @@ Section RealWorldLemmas.
   Qed.
 
   Lemma msgCiphersOk_addnl_cipher :
-    forall {t} (msg : message t) cs c_id c,
+    forall {t} (msg : crypto t) cs c_id c,
       ~ In c_id cs
       -> msgCiphersOk cs msg
       -> msgCiphersOk (cs $+ (c_id,c)) msg.
   Proof. unfold msgCiphersOk; intros; eapply msgCiphersOk_addnl_cipher'; eauto. Qed.
 
   Lemma msgCiphersSignedOk_addnl_cipher :
-    forall {t} (msg : message t) honestk cs c_id c,
+    forall {t} (msg : crypto t) honestk cs c_id c,
       ~ In c_id cs
       -> msgCiphersSignedOk honestk cs msg
       -> msgCiphersSignedOk honestk (cs $+ (c_id,c)) msg.
@@ -373,14 +402,14 @@ Section RealWorldLemmas.
   Proof.
     induction msgCphrs; intros; econstructor; invert H0; eauto; clean_map_lookups.
     destruct a; intuition idtac.
-    destruct m; unfold msg_honestly_signed in *; try discriminate;
+    destruct c; unfold msg_honestly_signed in *; try discriminate;
       unfold honest_keyb in *.
     - destruct (keyId k ==n k__sign); subst; clean_map_lookups; eauto.
     - destruct (keyId k ==n k0); subst; clean_map_lookups; eauto.
   Qed.
 
   Lemma msgCiphersSigned_new_honest_key :
-    forall {t} (msg : message t) honestk cs k,
+    forall {t} (msg : crypto t) honestk cs k,
       msgCiphersSignedOk honestk cs msg
       -> honestk $? keyId k = None
       -> msgCiphersSignedOk (honestk $+ (keyId k, true)) cs msg.
@@ -397,7 +426,7 @@ Section RealWorldLemmas.
       -> Forall (fun sigm => match sigm with (existT _ _ m) => msgCipherOk (clean_ciphers honestk cs) m /\ msg_honestly_signed honestk' m = true end) msgCphrs.
   Proof.
     induction msgCphrs; intros; econstructor; invert H0; eauto; clean_map_lookups.
-    destruct a; destruct m; intuition eauto.
+    destruct a; destruct c; intuition eauto.
     - unfold msgCipherOk in *; split_ex; repeat eexists; apply clean_ciphers_keeps_honest_cipher; eauto.
     - unfold msg_honestly_signed, honest_keyb in *.
       cases (honestk $? k__sign); try discriminate;
@@ -417,7 +446,7 @@ Section RealWorldLemmas.
   Qed.
 
   Lemma msgCiphersSigned_cleaned_honestk :
-    forall {t} (msg : message t) honestk honestk' cs,
+    forall {t} (msg : crypto t) honestk honestk' cs,
       (forall k_id, honestk $? k_id = Some true -> honestk' $? k_id = Some true)
       -> msgCiphersSignedOk honestk cs msg
       -> msgCiphersSignedOk honestk' (clean_ciphers honestk cs) msg.
@@ -512,9 +541,9 @@ Section RealWorldLemmas.
             econstructor; try assumption;
             repeat
               match goal with
-              | [ H : (forall k kp, findKeys _ $? k = Some kp -> _) |- (forall k kp, findKeys _ $? k = Some kp -> _ ) ] => intros
-              | [ H : (forall k, findKeys _ $? k = _ -> _) |- (forall k, findKeys _ $? k = _ -> _ ) ] => intros
-              | [ H : (forall k, findKeys ?msg $? k = ?opt -> _), FK : findKeys ?msg $? _ = ?opt |- _ ] =>
+              | [ H : (forall k kp, findKeysCrypto _ $? k = Some kp -> _) |- (forall k kp, findKeysCrypto _ $? k = Some kp -> _ ) ] => intros
+              | [ H : (forall k, findKeysCrypto _ $? k = _ -> _) |- (forall k, findKeysCrypto _ $? k = _ -> _ ) ] => intros
+              | [ H : (forall k, findKeysCrypto ?msg $? k = ?opt -> _), FK : findKeysCrypto ?msg $? _ = ?opt |- _ ] =>
                 specialize (H _ FK); split_ex; split_ands
               | [ H : ?m $? _ = Some _, H1 : (forall k_id kp, ?m $? k_id = Some kp -> _) |- _ /\ _ ] => specialize (H1 _ _ H)
               | [ |- context [_ $+ (?kid1,_) $? ?kid2 = _] ] => cases (kid1 ==n kid2); subst; clean_map_lookups; eauto

@@ -2,7 +2,7 @@
 Makefile.coq
 Makefile.coq.conf
 .coqdeps.d
-
+*.swp
 .*.aux
 *.a
 *.cma
@@ -33,3 +33,4 @@ lia.cache
 nia.cache
 nlia.cache
 nra.cache
+frap/

@@ -8,6 +8,7 @@ From Coq Require Import
 Require Import
         MyPrelude
         Maps
+        Messages
         Common
         MapLtac
         Keys
@@ -20,7 +21,7 @@ Require IdealWorld
 Set Implicit Arguments.
 
 Lemma accepted_safe_msg_pattern_honestly_signed :
-  forall {t} (msg : RealWorld.message t) honestk pat,
+  forall {t} (msg : RealWorld.crypto t) honestk pat,
     RealWorld.msg_pattern_safe honestk pat
     -> RealWorld.msg_accepted_by_pattern pat msg
     -> RealWorld.msg_honestly_signed honestk msg = true.
@@ -126,8 +127,7 @@ Section CleanCiphers.
     apply clean_ciphers_mapsto_iff; intuition idtac.
   Qed.
 
-  Lemma honest_key_not_cleaned :
-    forall cs c_id c k,
+  Lemma honest_key_not_cleaned : forall cs c_id c k,
       cs $? c_id = Some c
       -> k = cipher_signing_key c
       -> honest_key honestk k
@@ -136,7 +136,9 @@ Section CleanCiphers.
     intros.
     eapply clean_ciphers_keeps_honest_cipher; auto.
     unfold honest_cipher_filter_fn, cipher_honestly_signed.
-    cases c; subst; rewrite <- honest_key_honest_keyb; eauto.
+    destruct c; subst.
+    + invert H. rewrite <- honest_key_honest_keyb; eauto.
+    + invert H. rewrite <- honest_key_honest_keyb; eauto.
   Qed.
 
   Hint Constructors
@@ -160,8 +162,7 @@ Section CleanCiphers.
     exfalso.
     rewrite find_mapsto_iff in H2; rewrite H2 in H; invert H.
     unfold honest_cipher_filter_fn, cipher_honestly_signed, cipher_signing_key in *.
-    cases c;
-      rewrite Heq in H0; invert H0.
+    cases c; rewrite H0 in Heq; invert Heq. 
   Qed.
 
   Hint Resolve clean_ciphers_eliminates_dishonest_cipher clean_ciphers_keeps_honest_cipher.
@@ -180,19 +181,20 @@ Section CleanCiphers.
   Qed.
 
   Lemma clean_ciphers_reduces_or_keeps_same_ciphers :
-    forall c_id c cs,
+    forall c_id c cs k,
       cs $? c_id = Some c
+      -> cipher_signing_key c = k
       -> ( clean_ciphers  cs $? c_id = Some c
-        /\ honest_keyb honestk (cipher_signing_key c) = true)
+        /\ honest_keyb honestk k = true)
       \/ ( clean_ciphers cs $? c_id = None
-        /\ honest_keyb honestk (cipher_signing_key c) = false).
+        /\ honest_keyb honestk k = false).
   Proof.
     intros.
-    case_eq (honest_keyb honestk (cipher_signing_key c)); intros; eauto.
+    case_eq (honest_keyb honestk k); intros; eauto.
     left; intuition idtac.
     eapply clean_ciphers_keeps_honest_cipher; eauto.
     unfold honest_cipher_filter_fn, cipher_signing_key in *.
-    cases c; eauto.
+    cases c; try invert H0; eauto.
   Qed.
 
   Lemma clean_ciphers_no_new_ciphers :
@@ -227,7 +229,7 @@ Section CleanCiphers.
     - unfold clean_ciphers at 2, filter.
       rewrite fold_add; auto. simpl.
       unfold honest_cipher_filter_fn at 1.
-      cases c; simpl in *; rewrite H0; trivial.
+      cases c; simpl in *; try invert H1; rewrite H0; trivial.
   Qed.
 
   Lemma not_in_ciphers_not_in_cleaned_ciphers :
@@ -243,38 +245,31 @@ Section CleanCiphers.
   Hint Resolve not_in_ciphers_not_in_cleaned_ciphers.
 
   Lemma dishonest_cipher_cleaned :
-    forall cs c_id cipherMsg,
-      honest_keyb honestk (cipher_signing_key cipherMsg) = false
+    forall cs c_id cipherMsg k,
+      cipher_signing_key cipherMsg = k
+      -> honest_keyb honestk k = false
       -> ~ In c_id cs
       -> clean_ciphers cs = clean_ciphers (cs $+ (c_id, cipherMsg)).
   Proof.
     intros.
     apply map_eq_Equal; unfold Equal; intros.
-
-    case_eq (cs $? y); intros.
-
-    - eapply clean_ciphers_reduces_or_keeps_same_ciphers in H1.
-      destruct H1; destruct H1;
-        rewrite H1;
-        unfold clean_ciphers, filter;
-        rewrite fold_add by auto;
-        symmetry;
-        unfold honest_cipher_filter_fn; cases cipherMsg; simpl in *;
-          rewrite H; simpl; auto.
-
-    - rewrite clean_ciphers_no_new_ciphers; auto.
-      eapply clean_ciphers_no_new_ciphers in H1.
+    case_eq (cs $? y); intros; simpl in *.
+    - eapply clean_ciphers_reduces_or_keeps_same_ciphers in H2; eauto.
+      split_ors; split_ands;
+        unfold clean_ciphers, filter; rewrite fold_add by auto;
+          unfold honest_cipher_filter_fn; cases cipherMsg; invert H; simpl in *; rewrite H0; reflexivity.
+    - rewrite clean_ciphers_no_new_ciphers; auto. eapply clean_ciphers_no_new_ciphers in H2.
       unfold clean_ciphers, filter. rewrite fold_add by auto.
-      unfold honest_cipher_filter_fn; cases cipherMsg; simpl in *; rewrite H; eauto.
+      unfold honest_cipher_filter_fn; cases cipherMsg; invert H; simpl in *; rewrite H0; eauto. 
   Qed.
 
   Hint Resolve dishonest_cipher_cleaned.
 
-  Hint Extern 1 (honest_cipher_filter_fn _ _ ?c = _) => unfold honest_cipher_filter_fn; cases c.
+  Hint Extern 1 (honest_cipher_filter_fn _ ?c = _) => unfold honest_cipher_filter_fn; cases c.
 
   Lemma clean_ciphers_added_honest_cipher_not_cleaned :
     forall cs c_id c k,
-      honest_key honestk k
+        honest_key honestk k
       -> k = cipher_signing_key c
       -> clean_ciphers (cs $+ (c_id,c)) = clean_ciphers cs $+ (c_id,c).
   Proof.
@@ -285,22 +280,18 @@ Section CleanCiphers.
     - erewrite clean_ciphers_keeps_honest_cipher; auto.
       invert H; unfold honest_cipher_filter_fn; eauto.
       unfold cipher_honestly_signed, honest_keyb;
-        cases c; simpl in *; context_map_rewrites; auto.
-    - case_eq (clean_ciphers cs $? y); intros; subst.
-      + cases (cs $? y); subst; eauto.
-        * assert (cs $? y = Some c1) by assumption;
-            eapply clean_ciphers_reduces_or_keeps_same_ciphers in Heq; split_ors;
-              split_ands; subst; contra_map_lookup.
-          eapply clean_ciphers_keeps_honest_cipher; auto.
-          unfold honest_cipher_filter_fn, cipher_honestly_signed;
-            cases c1; simpl in *; auto.
+        cases c; simpl in *; context_map_rewrites; auto; invert H0; rewrite H1; trivial.
+    - case_eq (clean_ciphers cs $? y); intros; subst;
+        cases (cs $? y); subst; eauto.
+        * assert (cs $? y = Some c1) as CSY by assumption;
+            eapply clean_ciphers_reduces_or_keeps_same_ciphers in CSY; eauto;
+              split_ors; split_ands;
+                clean_map_lookups.
+          eapply clean_ciphers_keeps_honest_cipher; eauto.
         * exfalso; eapply clean_ciphers_no_new_ciphers in Heq; contra_map_lookup.
-      + case_eq (cs $? y); intros; subst; eauto.
-        eapply clean_ciphers_eliminates_dishonest_cipher; eauto.
-        case_eq (honest_keyb honestk (cipher_signing_key c0)); intros; subst; auto.
-        exfalso; eapply clean_ciphers_keeps_honest_cipher in H1; contra_map_lookup; auto.
-        unfold honest_cipher_filter_fn, cipher_honestly_signed;
-          cases c0; simpl in *; auto.
+        * assert (cs $? y = Some c0) as CSY by assumption;
+            eapply clean_ciphers_reduces_or_keeps_same_ciphers in CSY; eauto;
+              split_ors; split_ands; contra_map_lookup; eauto.
   Qed.
 
   Lemma clean_ciphers_idempotent :
@@ -342,7 +333,7 @@ Section CleanMessages.
     Variable honestk : key_perms.
     Variable msgs : queued_messages.
 
-    Definition msg_filter (sigM : { t & message t } ) : bool :=
+    Definition msg_filter (sigM : { t & crypto t } ) : bool :=
       match sigM with
       | existT _ _ msg => msg_honestly_signed honestk msg
       end.
@@ -353,7 +344,7 @@ Section CleanMessages.
   End CleanMessagesImpl.
 
   Lemma clean_messages_keeps_honestly_signed :
-    forall {t} (msg : message t) honestk msgs,
+    forall {t} (msg : crypto t) honestk msgs,
       msg_honestly_signed honestk msg = true
       -> clean_messages honestk (msgs ++ [existT _ _ msg])
         = clean_messages honestk msgs ++ [existT _ _ msg].
@@ -366,7 +357,7 @@ Section CleanMessages.
   Qed.
 
   Lemma clean_messages_drops_not_honestly_signed :
-    forall {t} (msg : message t) msgs honestk,
+    forall {t} (msg : crypto t) msgs honestk,
       msg_honestly_signed honestk msg = false
       -> clean_messages honestk (msgs ++ [existT _ _ msg])
         = clean_messages honestk msgs.
@@ -379,7 +370,7 @@ Section CleanMessages.
   Qed.
 
   Lemma clean_message_keeps_safely_patterned_message :
-    forall {t} (msg : message t) honestk msgs pat,
+    forall {t} (msg : crypto t) honestk msgs pat,
       msg_pattern_safe honestk pat
       -> msg_accepted_by_pattern pat msg
       -> clean_messages honestk (existT _ _ msg :: msgs)
@@ -1036,7 +1027,7 @@ Section FindUserKeysCleanUsers.
     case_eq ( msg_filter (findUserKeys usrs) a ); intros.
     - assert (msg_filter (findUserKeys (clean_users (findUserKeys usrs) usrs)) a = true).
       unfold msg_filter, msg_honestly_signed, honest_keyb in *; destruct a;
-        destruct m; try discriminate.
+        destruct c; try discriminate.
       + cases (findUserKeys usrs $? k__sign); try discriminate; destruct b; try discriminate.
         assert (findUserKeys (clean_users (findUserKeys usrs) usrs) $? k__sign = Some true).
         pose proof (findUserKeys_clean_users_correct usrs k__sign).
