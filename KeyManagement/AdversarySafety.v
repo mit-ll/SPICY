@@ -2549,8 +2549,6 @@ Section SingleAdversarySimulates.
       eapply simulates_with_adversary_silent with (b0 := b); eauto.
 
     - eapply simulates_with_adversary_labeled; eauto.
-      rewrite strip_adv_simpl_peel_same_as_strip_adv in H9.
-      rewrite peel_strip_univ_eq_strip_adv; ass
 
     - eapply H__univok; eauto.
       rewrite <- strip_adv_simpl_strip_adv_idempotent; eassumption.
@@ -2612,7 +2610,7 @@ Inductive traceMatches : list RealWorld.action -> list IdealWorld.action -> Prop
       rCouldGenerate U__r (a__r :: acts__r)
     -> iCouldGenerate U__i (a__i :: acts__i)
     -> traceMatches acts__r acts__i
-    -> action_matches a__r a__i
+    -> action_matches a__r U__r a__i U__i
     -> traceMatches (a__r :: acts__r) (a__i :: acts__i)
 .
 
