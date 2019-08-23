@@ -1,12 +1,12 @@
-From Coq Require Import String Bool.Sumbool.
+From Coq Require Import String Bool.Sumbool Logic.
 
 Require Import MyPrelude.
 
 Module Foo <: EMPTY. End Foo.
 Module Import SN := SetNotations(Foo).
 
-Require Import Common Maps.
-
+Require Import Common Maps Messages.
+Require Messages.
 Set Implicit Arguments.
 
 Definition channel_id := nat.
@@ -19,30 +19,19 @@ Definition permissions := NatMap.t permission.
 
 Definition creator_permission := construct_permission true true.
 
-Inductive type :=
-| Nat
-| ChanId
-| Perm
-(* | Text *)
-| Pair (t1 t2 : type)
-.
+Record access := construct_access
+                   { ch_perm : permission ;
+                     ch_id : channel_id }.
 
-Fixpoint typeDenote (t : type) : Set :=
-  match t with
-  | Nat => nat
-  | ChanId => channel_id
-  | Perm => permission
-  | Pair t1 t2 => typeDenote t1 * typeDenote t2
-  end.
+Module IW_message <: GRANT_ACCESS.
+  Definition access := access.
+End IW_message.
 
-Inductive message : type -> Type :=
-| Permission (id : channel_id) (p : permission) : message (Pair ChanId Perm)
-| Content (n : nat) : message Nat
-| MsgPair {t1 t2} (m1 : message t1) (m2 : message t2) : message (Pair t1 t2)
-.
+Module message := Messages(IW_message).
+Import message.
 
 (* shouldn't this be just Permissions ? *)
-Definition channels := NatMap.t (set exmsg).
+Definition channels := NatMap.t (list (sigT message)).
 
 Inductive cmd : Type -> Type :=
 | Return {result : Type} (r : result) : cmd result
@@ -73,7 +62,7 @@ Record universe A :=
 (* write as inductive relation *)
 Fixpoint chs_search {A} (m : message A) : list (channel_id * permission) :=
   match m with
-  | Permission id p => [(id, p)]
+  | Permission (construct_access p id) => [(id, p)]
   | Content _ => []
   | MsgPair m1 m2 => chs_search m1 ++ chs_search m2        
   end.
@@ -128,7 +117,7 @@ Inductive lstep_user : forall A, ilabel -> channels * cmd A * permissions -> cha
     ~(In ch_id cv) ->
     lstep_user Silent
                (cv, CreateChannel, ps)
-               (cv $+ (ch_id, {}), Return ch_id, ps $+ (ch_id, creator_permission))
+               (cv $+ (ch_id, []), Return ch_id, ps $+ (ch_id, creator_permission))
 | LStepSend : forall t cv (m : message t) ch_id ps ch_d b,
     ps $? ch_id = Some {| read := b ; write := true |} ->
     cv $? ch_id = Some ch_d ->
@@ -136,36 +125,38 @@ Inductive lstep_user : forall A, ilabel -> channels * cmd A * permissions -> cha
     lstep_user
       (Action (Output m ch_id cv ps))
       (cv, Send m ch_id, ps)
-      (cv $+ (ch_id, {Exm m} \cup ch_d), Return tt, ps)
-| LStepRecv : forall t (cv : channels) ch_d ps (m : message t) ch_id b,
+      (cv $+ (ch_id, ch_d ++ [existT _ _ m]), Return tt, ps)
+| LStepRecv : forall t (cv cv' : channels) ch_d ch_d' ps (m : message t) ch_id b,
     cv $? ch_id = Some ch_d ->
     ps $? ch_id = Some {| read := true ; write := b |} ->
-    (Exm m) \in ch_d ->
+    ch_d = (existT _ _ m) :: ch_d' ->
+    cv' = cv $+ (ch_id, ch_d') ->
     lstep_user
       (Action (Input m ch_id cv ps))
       (cv, Recv ch_id, ps)
-      (cv, Return m, add_chs_to_set (chs_search m) ps)
+      (cv', Return m, add_chs_to_set (chs_search m) ps)
 .
 
 Lemma LStepSend' : forall t cv cv' (m : message t) ch_id ps ch_d b,
     ps $? ch_id = Some {| read := b ; write := true |}
     -> cv $? ch_id = Some ch_d
     -> msg_permissions_valid m ps
-    -> cv' = cv $+ (ch_id, {Exm m} \cup ch_d)
+    -> cv' = cv $+ (ch_id, ch_d ++ [existT _ _ m])
     -> lstep_user (Action (Output m ch_id cv ps)) (cv, Send m ch_id, ps) (cv', Return tt, ps).
 Proof.
   intros; subst; econstructor; eauto.
 Qed.
 
-Lemma LStepRecv' : forall t (cv : channels) ch_d ps ps' (m : message t) ch_id b,
+Lemma LStepRecv' : forall t (cv cv' : channels) ch_d ch_d' ps ps' (m : message t) ch_id b,
     cv $? ch_id = Some ch_d
     -> ps $? ch_id = Some {| read := true ; write := b |}
-    -> (Exm m) \in ch_d
+    -> ch_d = (existT _ _ m) :: ch_d'
     -> ps' = add_chs_to_set (chs_search m) ps
+    -> cv' = cv $+ (ch_id, ch_d')
     -> lstep_user
         (Action (Input m ch_id cv ps))
         (cv, Recv ch_id, ps)
-        (cv, Return m, ps').
+        (cv', Return m, ps').
 Proof.
   intros; subst; econstructor; eauto.
 Qed.
