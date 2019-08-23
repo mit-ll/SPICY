@@ -31,6 +31,13 @@ Inductive msg_pat :=
 | Signed (k : key_identifier)
 | SignedEncrypted (k__sign k__enc : key_identifier)
 .
+(* We also need to store the form of the message with each cipher in the cipher
+   heap to prove functions halt *)
+Inductive message_form :=
+| PtKeyForm : message_form
+| EncForm : message_form -> message_form
+| SigForm : message_form -> message_form                        
+| PairForm : message_form -> message_form -> message_form.
 
 Inductive cipher : Type :=
 | SigCipher {t} (k_id : key_identifier) (c : crypto t) : cipher

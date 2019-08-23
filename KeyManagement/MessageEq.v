@@ -67,8 +67,7 @@ Inductive message_eq : forall {A B} {t__rw : RealWorld.message.type} {t__iw : Id
     message_eq (RealWorld.Signature m k__sig c__id) U__rw m__iw U__iw m__expected ch__id readers writers.
 
 
-(* Definition garbage : option (list RealWorld.key_identifier) * exmsg := *)
-(*   (None, Exm (RealWorld.Plaintext 0)). *)
+(* Definition garbage : option (list RealWorld.key_identifier) * exmsg := *) (*   (None, Exm (RealWorld.Plaintext 0)). *)
 
 (* Fixpoint key_sets {t : RealWorld.type} (msg : RealWorld.message t) (cipher_heap : RealWorld.ciphers) (form : RealWorld.message_form) := *)
 (*   match form with *)
