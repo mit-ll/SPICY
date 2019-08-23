@@ -533,18 +533,24 @@ Section UniverseLemmas.
 
   Hint Resolve message_queues_ok_addnl_cipher.
 
+  Lemma content_only_honest_public_keys_findkeys_no_priv :
+    forall {t} (msg : message.message t) k honestk,
+      content_only_honest_public_keys honestk msg
+      -> findKeysMessage msg $? k <> Some true.
+  Proof.
+    induction 1; simpl; unfold not; intros; clean_map_lookups; eauto.
+    - destruct (fst kp ==n k); destruct kp; simpl in *; subst; clean_map_lookups.
+    - eapply merge_perms_split in H1; split_ors; contradiction.
+  Qed.
+
+  Hint Resolve content_only_honest_public_keys_findkeys_no_priv.
+
   Lemma message_contains_only_honest_public_keys_findkeys_no_priv :
     forall {t} (msg : crypto t) k honestk,
       msg_contains_only_honest_public_keys honestk msg
       -> findKeysCrypto msg $? k <> Some true.
   Proof.
-    induction 1; simpl; unfold not; intros; auto.
-    - invert H; simpl in *. invert H0. admit. admit. rewrite H5 in H0.
-    - destruct kp; simpl in *; subst.
-      cases (k ==n k0); subst; clean_map_lookups.
-    - cases (findKeys msg1 $? k); cases (findKeys msg2 $? k); simplify_key_merges1; clean_context; try contradiction.
-      cases b; cases b0; simpl in *; try contradiction; try discriminate.
-    - invert H0.
+    induction 1; simpl; intros; clean_map_lookups; eauto.
   Qed.
 
   Hint Resolve message_contains_only_honest_public_keys_findkeys_no_priv.
@@ -595,8 +601,7 @@ Section UniverseLemmas.
       intros; intuition idtac.
       unfold message_no_adv_private; intros.
       invert H; simpl in *; try discriminate.
-      assert (findKeys msg0 $? k <> Some true) by eauto; contradiction.
-
+      assert (findKeysCrypto msg0 $? k <> Some true) by eauto; contradiction.
   Qed.
 
   Lemma honest_silent_step_message_queues_ok :
@@ -614,6 +619,7 @@ Section UniverseLemmas.
             bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
             -> lbl = Silent
             -> forall cmdc cmdc' usrs'',
+                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs |}
                 -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' ; c_heap := mycs' |})
                 -> honestk' = findUserKeys usrs''
                 -> message_queues_ok honestk' cs' usrs''.
@@ -808,12 +814,12 @@ Section UniverseLemmas.
       unfold adv_no_honest_keys, message_no_adv_private in *.
       intros.
       specialize (H18 k_id); specialize (H0 k_id); subst;
-        intuition idtac; cases (findKeys msg $? k_id); simplify_key_merges1; auto;
+        intuition idtac; cases (findKeysCrypto msg $? k_id); simplify_key_merges1; auto;
           cases b; auto.
 
     - unfold adv_no_honest_keys in *; intros.
       specialize (H18 k_id).
-      assert (findKeys msg $? k_id <> Some true) by eauto.
+      assert (findKeysCrypto msg $? k_id <> Some true) by eauto.
       intuition idtac.
       right; right; split; eauto; intros.
 
@@ -1123,8 +1129,8 @@ Section SingleAdversarySimulates.
       induction 1; econstructor; eauto.
       unfold msgCipherOk in *.
       destruct x; intuition idtac.
-      destruct m; eauto.
-      - repeat match goal with [H : exists _, _ |- _] => destruct H end.
+      destruct c; eauto.
+      - split_ex.
         rewrite <- find_mapsto_iff in H; rewrite clean_ciphers_mapsto_iff in H;
           repeat eexists; split_ands;
             rewrite <- find_mapsto_iff; eauto.
@@ -1143,13 +1149,11 @@ Section SingleAdversarySimulates.
       induction 1; econstructor; eauto.
       unfold msgCipherOk in *.
       destruct x; intuition idtac.
-      destruct m; eauto.
-      repeat match goal with [H : exists _, _ |- _] => destruct H end.
-      repeat eexists; eauto.
+      destruct c; eauto; split_ex; eauto.
     Qed.
 
     Lemma msgCiphersSigned_after_clean_ciphers :
-      forall {t} (msg : message t) honestk cs,
+      forall {t} (msg : crypto t) honestk cs,
         msgCiphersSigned honestk cs msg
         -> msgCiphersSigned honestk (clean_ciphers honestk cs) msg.
     Proof.
@@ -1157,7 +1161,7 @@ Section SingleAdversarySimulates.
     Qed.
 
     Lemma msgCiphersSigned_before_clean_ciphers :
-      forall {t} (msg : message t) honestk cs,
+      forall {t} (msg : crypto t) honestk cs,
         msgCiphersSigned honestk (clean_ciphers honestk cs) msg
         -> msgCiphersSigned honestk cs msg.
     Proof.
@@ -1263,13 +1267,13 @@ Section SingleAdversarySimulates.
          not_in_ciphers_not_in_cleaned_ciphers.
 
     Lemma cipher_message_keys_already_in_honest :
-      forall {A t} (msg : message t) (usrs : honest_users A) honestk cs c_id k__s k__e,
+      forall {A t} (msg : crypto t) (usrs : honest_users A) honestk cs c_id k__s k__e,
         honestk = findUserKeys usrs
         -> cs $? c_id = Some (SigEncCipher k__s k__e msg)
         -> honest_key honestk k__s
         -> honest_key honestk k__e
         -> encrypted_ciphers_ok honestk cs
-        -> honestk $k++ findKeys msg = honestk.
+        -> honestk $k++ findKeysCrypto msg = honestk.
     Proof.
       intros.
       invert H1; invert H2.
@@ -1439,7 +1443,7 @@ Section SingleAdversarySimulates.
         -> msg_filter (honestk $k++ pubk) m = msg_filter honestk m.
     Proof.
       unfold msg_filter, msg_honestly_signed; destruct m; intros; 
-        cases m; unfold honest_keyb; simpl; auto.
+        cases c; unfold honest_keyb; simpl; auto.
       - cases (honestk $? k__sign); cases (pubk $? k__sign); simplify_key_merges1; auto;
           destruct b; auto.
         destruct b0; simpl; eauto; exfalso; eauto.
@@ -2138,7 +2142,7 @@ Section SingleAdversarySimulates.
           rewrite Forall_forall in *; intros.
           specialize (H18 _ H7).
           unfold msgCipherOk in *; destruct x; intuition idtac.
-          destruct m; eauto.
+          destruct c; eauto.
           * destruct H12. destruct H12.
             repeat eexists.
             cases (c_id ==n msg_id); subst; clean_map_lookups; eauto.
@@ -2163,7 +2167,7 @@ Section SingleAdversarySimulates.
           rewrite Forall_forall in *; intros.
           specialize (H12 _ H3).
           unfold msgCipherOk in *; destruct x; intuition idtac.
-          destruct m; eauto.
+          destruct c; eauto.
           * destruct H8. destruct H8.
             repeat eexists.
             cases (c_id ==n msg_id); subst; clean_map_lookups; eauto.
@@ -2342,6 +2346,15 @@ Section SingleAdversarySimulates.
 
   Qed.
 
+  Lemma action_matches_strip :
+    forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A) a__r a__i b,
+      action_matches a__r (strip_adversary_univ U__ra b) a__i U__i
+      -> action_matches a__r U__ra a__i U__i.
+  Proof.
+  Admitted.
+
+  Hint Resolve action_matches_strip.
+
   Lemma simulates_with_adversary_labeled :
     forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A)
             (R : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop) (b : B),
@@ -2355,7 +2368,7 @@ Section SingleAdversarySimulates.
           -> exists (a__i : IdealWorld.action) (U__i' U__i'' : IdealWorld.universe A),
             (istepSilent) ^* U__i U__i'
             /\ IdealWorld.lstep_universe U__i' (Action a__i) U__i''
-            /\ action_matches a__r a__i
+            /\ action_matches a__r U__ra a__i U__i'
             /\ R (strip_adversary U__ra') U__i''.
   Proof.
     intros.
@@ -2382,7 +2395,8 @@ Section SingleAdversarySimulates.
            | [ H : _ /\ _ |- _ ] => destruct H
            end.
     do 3 eexists; intuition idtac; eauto.
-  Qed.
+    
+  Admitted.
 
   Definition universe_starts_ok {A B} (U : RealWorld.universe A B) :=
     let honestk := RealWorld.findUserKeys U.(RealWorld.users)

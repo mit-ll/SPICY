@@ -253,30 +253,18 @@ Section CleanCiphers.
     intros.
     apply map_eq_Equal; unfold Equal; intros.
     case_eq (cs $? y); intros; simpl in *.
-    - eapply clean_ciphers_reduces_or_keeps_same_ciphers in H2. split_ors; split_ands;
+    - eapply clean_ciphers_reduces_or_keeps_same_ciphers in H2; eauto.
+      split_ors; split_ands;
         unfold clean_ciphers, filter; rewrite fold_add by auto;
-          unfold honest_cipher_filter_fn; cases cipherMsg; invert H; simpl in *; rewrite H0; reflexivity. admit.
+          unfold honest_cipher_filter_fn; cases cipherMsg; invert H; simpl in *; rewrite H0; reflexivity.
     - rewrite clean_ciphers_no_new_ciphers; auto. eapply clean_ciphers_no_new_ciphers in H2.
       unfold clean_ciphers, filter. rewrite fold_add by auto.
       unfold honest_cipher_filter_fn; cases cipherMsg; invert H; simpl in *; rewrite H0; eauto. 
-  Admitted.
-
-
-      (* prove: c_id is cleaned*)
-
-    (* - eapply clean_ciphers_reduces_or_keeps_same_ciphers in H. *)
-    (*   destruct H; destruct H; *)
-    (*     rewrite H; *)
-    (*     unfold clean_ciphers, filter; *)
-    (*     rewrite fold_add by auto; *)
-    (*     symmetry; *)
-    (*     unfold honest_cipher_filter_fn; destruct c; simpl in *. unfold cipher_honestly_signed. destruct cipherMsg. rewrite H0 in H3. invert H3.  *)
-       (*    invert H; rewrite H3 in H0; invert H0; rewrite H5; simpl; auto. *)
-       (* dVkkestruct H2. admit. admit. admit. admit. *)
+  Qed.
 
   Hint Resolve dishonest_cipher_cleaned.
 
-  Hint Extern 1 (honest_cipher_filter_fn _ _ ?c = _) => unfold honest_cipher_filter_fn; cases c.
+  Hint Extern 1 (honest_cipher_filter_fn _ ?c = _) => unfold honest_cipher_filter_fn; cases c.
 
   Lemma clean_ciphers_added_honest_cipher_not_cleaned :
     forall cs c_id c k,
@@ -292,21 +280,18 @@ Section CleanCiphers.
       invert H; unfold honest_cipher_filter_fn; eauto.
       unfold cipher_honestly_signed, honest_keyb;
         cases c; simpl in *; context_map_rewrites; auto; invert H0; rewrite H1; trivial.
-    - case_eq (clean_ciphers cs $? y); intros; subst.
-      + cases (cs $? y); subst; eauto.
-        * assert (cs $? y = Some c1) by assumption;
-            eapply clean_ciphers_reduces_or_keeps_same_ciphers in Heq; split_ors;
-              split_ands; subst; contra_map_lookup.
-          eapply clean_ciphers_keeps_honest_cipher; auto.
-          unfold honest_cipher_filter_fn, cipher_honestly_signed.
-          admit. admit. 
-      (*   * exfalso; eapply clean_ciphers_no_new_ciphers in Heq; contra_map_lookup. *)
-      (* + case_eq (cs $? y); intros; subst; eauto. *)
-      (*   eapply clean_ciphers_eliminates_dishonest_cipher; eauto. *)
-      (*   case_eq (honest_keyb honestk k); intros; subst; auto. *)
-      (*   exfalso; eapply clean_ciphers_keeps_honest_cipher in H2; contra_map_lookup; auto. *)
-      (*   unfold honest_cipher_filter_fn, cipher_honestly_signed; *)
-          (* cases c0; simpl in *; auto. admit. *) Admitted.
+    - case_eq (clean_ciphers cs $? y); intros; subst;
+        cases (cs $? y); subst; eauto.
+        * assert (cs $? y = Some c1) as CSY by assumption;
+            eapply clean_ciphers_reduces_or_keeps_same_ciphers in CSY; eauto;
+              split_ors; split_ands;
+                clean_map_lookups.
+          eapply clean_ciphers_keeps_honest_cipher; eauto.
+        * exfalso; eapply clean_ciphers_no_new_ciphers in Heq; contra_map_lookup.
+        * assert (cs $? y = Some c0) as CSY by assumption;
+            eapply clean_ciphers_reduces_or_keeps_same_ciphers in CSY; eauto;
+              split_ors; split_ands; contra_map_lookup; eauto.
+  Qed.
 
   Lemma clean_ciphers_idempotent :
     forall cs,

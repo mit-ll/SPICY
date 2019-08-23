@@ -13,7 +13,7 @@ KeyManagement/IdealWorld.v
 KeyManagement/RealWorld.v
 KeyManagement/Simulation.v
 KeyManagement/AdversaryUniverse.v
-#KeyManagement/AdversarySafety.v
+KeyManagement/AdversarySafety.v
 KeyManagement/Tactics.v
 KeyManagement/Messages.v
 #KeyManagement/EncPingProtocol.v
