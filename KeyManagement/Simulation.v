@@ -202,29 +202,62 @@ Section RealWorldUniverseProperties.
                      end
            ) msgs.
 
+  (* Definition message_queue_ok (cs : ciphers) (msgs : queued_messages) (gks : keys) := *)
+  (*   Forall (fun sigm => match sigm with *)
+  (*                    | (existT _ _ m) => *)
+  (*                      (forall k kp, findKeys m $? k = Some kp -> gks $? k <> None) *)
+  (*                      /\ ( match m with *)
+  (*                          | SignedCiphertext k__sign _ _ => *)
+  (*                              gks $? k__sign <> None *)
+  (*                            /\ if honest_keyb honestk k__sign *)
+  (*                              then message_no_adv_private m /\ msgCiphersSignedOk honestk cs m *)
+  (*                              else True *)
+  (*                          | Signature _ k__sign _ => *)
+  (*                              gks $? k__sign <> None *)
+  (*                            /\ if honest_keyb honestk k__sign *)
+  (*                              then message_no_adv_private m /\ msgCiphersSignedOk honestk cs m *)
+  (*                              else True *)
+  (*                          | _ => True *)
+  (*                          end *)
+  (*                        ) *)
+  (*                    end *)
+  (*          ) msgs. *)
+
+  (* Definition message_queues_ok {A} (cs : ciphers) (usrs : honest_users A) (gks : keys) := *)
+  (*   Forall_natmap (fun u => message_queue_ok cs u.(msg_heap) gks) usrs. *)
+
   Definition message_queue_ok (cs : ciphers) (msgs : queued_messages) (gks : keys) :=
     Forall (fun sigm => match sigm with
                      | (existT _ _ m) =>
                        (forall k kp, findKeysCrypto m $? k = Some kp -> gks $? k <> None)
-                       /\ ( match m with
-                           | SignedCiphertext k__sign _ _ =>
-                               gks $? k__sign <> None
-                             /\ if honest_keyb honestk k__sign
-                               then message_no_adv_private m /\ msgCiphersSignedOk honestk cs m
-                               else True
-                           | Signature _ k__sign _ =>
-                               gks $? k__sign <> None
-                             /\ if honest_keyb honestk k__sign
-                               then message_no_adv_private m /\ msgCiphersSignedOk honestk cs m
-                               else True
-                           | _ => True
-                           end
-                         )
-                     end
-           ) msgs.
+                     (* /\ (forall cid, msg_cipher_id m = Some cid -> cs $? cid <> None) *)
+                     /\ (forall k, msg_signing_key m = Some k
+                             -> gks $? k <> None
+                             /\ (honest_key honestk k
+                                -> message_no_adv_private m
+                                /\ msgCiphersSignedOk honestk cs m)
+                       (* -> msgCipherOk cs m  *)
+                       )
+                     end) msgs.
 
-  Definition message_queues_ok {A} (cs : ciphers) (usrs : honest_users A) (gks : keys) :=
-    Forall_natmap (fun u => message_queue_ok cs u.(msg_heap) gks) usrs.
+(* <<<<<<< Updated upstream *)
+(*                        (forall k kp, findKeysCrypto m $? k = Some kp -> gks $? k <> None) *)
+(*                        /\ ( match m with *)
+(*                            | SignedCiphertext k__sign _ _ => *)
+(*                                gks $? k__sign <> None *)
+(*                              /\ if honest_keyb honestk k__sign *)
+(*                                then message_no_adv_private m /\ msgCiphersSignedOk honestk cs m *)
+(*                                else True *)
+(*                            | Signature _ k__sign _ => *)
+(*                                gks $? k__sign <> None *)
+(*                              /\ if honest_keyb honestk k__sign *)
+(*                                then message_no_adv_private m /\ msgCiphersSignedOk honestk cs m *)
+(*                                else True *)
+(*                            | _ => True *)
+(*                            end *)
+(*                          ) *)
+(*                      end *)
+(*            ) msgs. *)
 
   Definition adv_no_honest_keys (advk : key_perms) : Prop :=
     forall k_id,
@@ -244,6 +277,9 @@ Section RealWorldUniverseProperties.
 
 End RealWorldUniverseProperties.
 
+Definition message_queues_ok {A} (cs : RealWorld.ciphers) (usrs : RealWorld.honest_users A) (gks : keys) :=
+  Forall_natmap (fun u => message_queue_ok (RealWorld.findUserKeys usrs) cs u.(RealWorld.msg_heap) gks) usrs.
+
 Definition universe_ok {A B} (U : RealWorld.universe A B) : Prop :=
   let honestk := RealWorld.findUserKeys U.(RealWorld.users)
   in  encrypted_ciphers_ok honestk U.(RealWorld.all_ciphers) U.(RealWorld.all_keys)
@@ -253,7 +289,7 @@ Definition adv_universe_ok {A B} (U : RealWorld.universe A B) : Prop :=
   let honestk := RealWorld.findUserKeys U.(RealWorld.users)
   in  keys_and_permissions_good U.(RealWorld.all_keys) U.(RealWorld.users) U.(RealWorld.adversary).(RealWorld.key_heap)
     /\ user_cipher_queues_ok U.(RealWorld.all_ciphers) honestk U.(RealWorld.users)
-    /\ message_queues_ok honestk U.(RealWorld.all_ciphers) U.(RealWorld.users) U.(RealWorld.all_keys)
+    /\ message_queues_ok U.(RealWorld.all_ciphers) U.(RealWorld.users) U.(RealWorld.all_keys)
     /\ adv_cipher_queue_ok U.(RealWorld.all_ciphers) U.(RealWorld.adversary).(RealWorld.c_heap)
     /\ adv_message_queue_ok honestk U.(RealWorld.all_ciphers) U.(RealWorld.all_keys) U.(RealWorld.adversary).(RealWorld.msg_heap)
     /\ adv_no_honest_keys honestk U.(RealWorld.adversary).(RealWorld.key_heap).

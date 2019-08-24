@@ -136,6 +136,20 @@ Section SafeMessages.
 
   Hint Constructors msg_contains_only_honest_public_keys.
 
+  Definition msg_signing_key {t} (msg : crypto t) : option key_identifier :=
+    match msg with
+    | SignedCiphertext k _ _ => Some k
+    | Signature _ k _ => Some k
+    | _ => None
+    end.
+
+  Definition msg_cipher_id {t} (msg : crypto t) : option cipher_id :=
+    match msg with
+    | SignedCiphertext _ _ c_id => Some c_id
+    | Signature _ _ c_id => Some c_id
+    | _ => None
+    end.
+
   Definition msg_honestly_signed {t} (msg : crypto t) : bool :=
     match msg with
     | SignedCiphertext k__signid _ c_id =>
@@ -316,6 +330,29 @@ Definition msgCipherOk {t} (cs : ciphers) (msg : crypto t) :=
     => cs $? sig = Some (SigCipher k m')
   | _ => False
   end.
+
+Lemma msgCipherOk_cipher_id :
+  forall {t} (msg : crypto t) cs,
+    msgCipherOk cs msg
+    -> exists cid, msg_cipher_id msg = Some cid.
+Proof.
+  unfold msgCipherOk, msg_cipher_id; destruct msg; intros; eauto; contradiction.
+Qed.
+
+Lemma msgCipherOk_split :
+  forall {t} (msg : crypto t) cs c_id c,
+    ~ In c_id cs
+    -> msgCipherOk (cs $+ (c_id,c)) msg
+    -> msg_cipher_id msg = Some c_id
+    \/ msgCipherOk cs msg.
+Proof.
+  unfold msgCipherOk; intros.
+  destruct msg; eauto; split_ex;
+    match goal with
+    | [ H : cs $+ (?cid1,_) $? ?cid2 = _ |- _] => destruct (cid1 ==n cid2); subst; clean_map_lookups
+    end; eauto.
+Qed.
+
 
 (* Definition msgCipherOk (honestk : key_perms) (cs : ciphers) (sigm : sigT message):= *)
 (*   match sigm with *)
