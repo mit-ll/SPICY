@@ -98,25 +98,25 @@ Section RealWorldUniverseProperties.
     /\ Forall_natmap (fun u => permission_heap_good ks u.(key_heap)) usrs
     /\ permission_heap_good ks adv_heap.
 
-  Definition msgCiphers_ok {t} (cs : ciphers) (msg : crypto t) :=
-    Forall (fun sigm => match sigm with
-                     | (existT _ _ m) =>
-                       match m with
-                       | SignedCiphertext k__sign k__enc msg_id
-                         => exists t (m' : crypto t), cs $? msg_id = Some (SigEncCipher k__sign k__enc m')
-                       | Signature m' k sig
-                         => cs $? sig = Some (SigCipher k m')
-                       | _ => False
-                       end
-                     end) (findMsgCiphers msg).
+  (* Definition msgCiphers_ok {t} (cs : ciphers) (msg : crypto t) := *)
+  (*   Forall (fun sigm => match sigm with *)
+  (*                    | (existT _ _ m) => *)
+  (*                      match m with *)
+  (*                      | SignedCiphertext k__sign k__enc msg_id *)
+  (*                        => exists t (m' : crypto t), cs $? msg_id = Some (SigEncCipher k__sign k__enc m') *)
+  (*                      | Signature m' k sig *)
+  (*                        => cs $? sig = Some (SigCipher k m') *)
+  (*                      | _ => False *)
+  (*                      end *)
+  (*                    end) (findMsgCiphers msg). *)
 
-  Definition ciphers_good (cs : ciphers) : Prop :=
-    Forall_natmap (fun c =>
-                     match c with
-                     | SigEncCipher k__sign k__enc m => msgCiphers_ok cs m
-                     | SigCipher k m => msgCiphers_ok cs m
-                     end
-                  ) cs.
+  (* Definition ciphers_good (cs : ciphers) : Prop := *)
+  (*   Forall_natmap (fun c => *)
+  (*                    match c with *)
+  (*                    | SigEncCipher k__sign k__enc m => msgCiphers_ok cs m *)
+  (*                    | SigCipher k m => msgCiphers_ok cs m *)
+  (*                    end *)
+  (*                 ) cs. *)
 
   Definition user_cipher_queue_ok (cs : ciphers) (honestk : key_perms) :=
     Forall (fun cid => exists c, cs $? cid = Some c
@@ -160,28 +160,6 @@ Section RealWorldUniverseProperties.
       -> (forall k_id kp, findKeysCrypto msg $? k_id = Some kp -> honestk $? k_id = Some true /\ kp = false)
       -> msgCiphersSignedOk honestk cs msg
       -> encrypted_cipher_ok cs gks (SigEncCipher k__s k__e msg).
-(* ======= *)
-(*   Inductive encrypted_cipher_ok (cs : ciphers) : cipher -> Prop := *)
-(*   | SigCipherHonestOk : forall {t} (msg : crypto t) k, *)
-(*       honestk $? k = Some true *)
-(*       -> (forall k, findKeysCrypto msg $? k = Some true -> False) *)
-(*       -> msgCiphersSigned honestk cs msg *)
-(*       -> encrypted_cipher_ok cs (SigCipher k msg) *)
-(*   | SigCipherNotHonestOk : forall {t} (msg : crypto t) k, *)
-(*       honestk $? k <> Some true *)
-(*       -> encrypted_cipher_ok cs (SigCipher k msg) *)
-(*   | SigEncCipherAdvSignedOk :  forall {t} (msg : crypto t) k__e k__s, *)
-(*       honestk $? k__s <> Some true *)
-(*       -> (forall k, findKeysCrypto msg $? k = Some true *)
-(*               -> honestk $? k <> Some true) *)
-(*       -> encrypted_cipher_ok cs (SigEncCipher k__s k__e msg) *)
-(*   | SigEncCipherHonestSignedEncKeyHonestOk : forall {t} (msg : crypto t) k__e k__s, *)
-(*       honestk $? k__s = Some true *)
-(*       -> honestk $? k__e = Some true *)
-(*       -> keys_mine honestk (findKeysCrypto msg) *)
-(*       -> msgCiphersSigned honestk cs msg *)
-(*       -> encrypted_cipher_ok cs (SigEncCipher k__s k__e msg). *)
-(* >>>>>>> 037-message_eq_prop *)
 
   Definition encrypted_ciphers_ok (cs : ciphers) (gks : keys) :=
     Forall_natmap (encrypted_cipher_ok cs gks) cs.
@@ -202,62 +180,39 @@ Section RealWorldUniverseProperties.
                      end
            ) msgs.
 
-  (* Definition message_queue_ok (cs : ciphers) (msgs : queued_messages) (gks : keys) := *)
-  (*   Forall (fun sigm => match sigm with *)
-  (*                    | (existT _ _ m) => *)
-  (*                      (forall k kp, findKeys m $? k = Some kp -> gks $? k <> None) *)
-  (*                      /\ ( match m with *)
-  (*                          | SignedCiphertext k__sign _ _ => *)
-  (*                              gks $? k__sign <> None *)
-  (*                            /\ if honest_keyb honestk k__sign *)
-  (*                              then message_no_adv_private m /\ msgCiphersSignedOk honestk cs m *)
-  (*                              else True *)
-  (*                          | Signature _ k__sign _ => *)
-  (*                              gks $? k__sign <> None *)
-  (*                            /\ if honest_keyb honestk k__sign *)
-  (*                              then message_no_adv_private m /\ msgCiphersSignedOk honestk cs m *)
-  (*                              else True *)
-  (*                          | _ => True *)
-  (*                          end *)
-  (*                        ) *)
-  (*                    end *)
-  (*          ) msgs. *)
-
-  (* Definition message_queues_ok {A} (cs : ciphers) (usrs : honest_users A) (gks : keys) := *)
-  (*   Forall_natmap (fun u => message_queue_ok cs u.(msg_heap) gks) usrs. *)
-
   Definition message_queue_ok (cs : ciphers) (msgs : queued_messages) (gks : keys) :=
     Forall (fun sigm => match sigm with
                      | (existT _ _ m) =>
                        (forall k kp, findKeysCrypto m $? k = Some kp -> gks $? k <> None)
                      (* /\ (forall cid, msg_cipher_id m = Some cid -> cs $? cid <> None) *)
-                     /\ (forall k, msg_signing_key m = Some k
-                             -> gks $? k <> None
-                             /\ (honest_key honestk k
-                                -> message_no_adv_private m
-                                /\ msgCiphersSignedOk honestk cs m)
+                     /\ (forall k cid,
+                           msg_signing_key cs m = Some k
+                           -> msg_cipher_id m = Some cid
+                           -> honest_key honestk k
+                           (* -> msgCipherOk cs m *)
+                           -> gks $? k <> None
+                           /\ message_no_adv_private m
+                           /\ msgCiphersSignedOk honestk cs m
+                           /\ cs $? cid <> None)
+                           (* /\ msgCipherOk cs m) *)
+                     (* /\ (forall cid, msg_cipher_id m = Some cid *)
+                     (*         -> cs $? cid <> None *)
+                     (*         /\ msgCipherOk cs m) *)
                        (* -> msgCipherOk cs m  *)
-                       )
                      end) msgs.
-
-(* <<<<<<< Updated upstream *)
-(*                        (forall k kp, findKeysCrypto m $? k = Some kp -> gks $? k <> None) *)
-(*                        /\ ( match m with *)
-(*                            | SignedCiphertext k__sign _ _ => *)
-(*                                gks $? k__sign <> None *)
-(*                              /\ if honest_keyb honestk k__sign *)
-(*                                then message_no_adv_private m /\ msgCiphersSignedOk honestk cs m *)
-(*                                else True *)
-(*                            | Signature _ k__sign _ => *)
-(*                                gks $? k__sign <> None *)
-(*                              /\ if honest_keyb honestk k__sign *)
-(*                                then message_no_adv_private m /\ msgCiphersSignedOk honestk cs m *)
-(*                                else True *)
-(*                            | _ => True *)
-(*                            end *)
-(*                          ) *)
-(*                      end *)
-(*            ) msgs. *)
+  (* Definition message_queue_ok (cs : ciphers) (msgs : queued_messages) (gks : keys) := *)
+  (*   Forall (fun sigm => match sigm with *)
+  (*                    | (existT _ _ m) => *)
+  (*                      (forall k kp, findKeysCrypto m $? k = Some kp -> gks $? k <> None) *)
+  (*                    /\ (forall k, msg_signing_key m = Some k *)
+  (*                            -> gks $? k <> None *)
+  (*                            /\ (honest_key honestk k *)
+  (*                               -> message_no_adv_private m *)
+  (*                               /\ msgCiphersSignedOk honestk cs m *)
+  (*                               /\ (forall cid, msg_cipher_id m = Some cid *)
+  (*                                         -> cs $? cid <> None *)
+  (*                                         /\ msgCipherOk cs m))) *)
+  (*                    end) msgs. *)
 
   Definition adv_no_honest_keys (advk : key_perms) : Prop :=
     forall k_id,
@@ -374,37 +329,80 @@ Section RealWorldLemmas.
 
   Import RealWorld.
 
-  Lemma msgCipherOk_addnl_cipher :
-    forall {t} (msg : crypto t) cs c_id c,
+  (* Lemma msgCipherOk_addnl_cipher : *)
+  (*   forall {t} (msg : crypto t) cs c_id c, *)
+  (*     ~ In c_id cs *)
+  (*     -> msgCipherOk cs msg *)
+  (*     -> msgCipherOk (cs $+ (c_id,c)) msg. *)
+  (* Proof. *)
+  (*   destruct msg; intros; eauto; *)
+  (*     unfold msgCipherOk in *; split_ex. *)
+  (*   - destruct (c_id ==n msg_id); subst; clean_map_lookups; eauto. *)
+  (*   - destruct (c_id ==n sig); subst; clean_map_lookups; eauto. *)
+  (* Qed. *)
+
+  (* Hint Resolve msgCipherOk_addnl_cipher. *)
+
+  (* Lemma msgCiphersOk_addnl_cipher' : *)
+  (*   forall cs (msgs : list (sigT crypto)) c_id c, *)
+  (*     ~ In c_id cs *)
+  (*     -> Forall (fun sigm => match sigm with (existT _ _ m) => msgCipherOk cs m end) msgs *)
+  (*     -> Forall (fun sigm => match sigm with (existT _ _ m) => msgCipherOk (cs $+ (c_id,c)) m end) msgs. *)
+  (* Proof. *)
+  (*   induction msgs; intros; eauto. *)
+  (*   invert H0; *)
+  (*     econstructor; eauto. *)
+  (*   destruct a; eauto. *)
+  (* Qed. *)
+
+  Lemma msg_honestly_signed_addnl_cipher :
+    forall {t} (msg : crypto t) honestk cs c_id c,
       ~ In c_id cs
-      -> msgCipherOk cs msg
-      -> msgCipherOk (cs $+ (c_id,c)) msg.
+      -> msg_honestly_signed honestk cs msg = true
+      -> msg_honestly_signed honestk (cs $+ (c_id,c)) msg = true.
   Proof.
     destruct msg; intros; eauto;
-      unfold msgCipherOk in *; split_ex.
-    - destruct (c_id ==n msg_id); subst; clean_map_lookups; eauto.
-    - destruct (c_id ==n sig); subst; clean_map_lookups; eauto.
+      unfold msg_honestly_signed, msg_signing_key in *;
+      repeat
+        match goal with
+        | [ |- context [ ?cs $+ (?cid1,_) $? ?cid2 ] ] => destruct (cid1 ==n cid2); subst; clean_map_lookups
+        | [ H1 : ?cs $? ?cid = _ |- _ ] =>
+          match goal with
+          | [ H2 : ?P |- _] =>
+            match P with
+            | context [ match cs $? cid with _ => _ end ] => rewrite H1 in H2
+            end
+          end
+        end; clean_map_lookups; eauto.
   Qed.
 
-  Hint Resolve msgCipherOk_addnl_cipher.
+  Hint Resolve msg_honestly_signed_addnl_cipher.
 
-  Lemma msgCiphersOk_addnl_cipher' :
-    forall cs (msgs : list (sigT crypto)) c_id c,
-      ~ In c_id cs
-      -> Forall (fun sigm => match sigm with (existT _ _ m) => msgCipherOk cs m end) msgs
-      -> Forall (fun sigm => match sigm with (existT _ _ m) => msgCipherOk (cs $+ (c_id,c)) m end) msgs.
+  Lemma msg_honestly_signed_addnl_honest_key :
+    forall {t} (msg : crypto t) honestk cs k_id,
+      ~ In k_id honestk
+      -> msg_honestly_signed honestk cs msg = true
+      -> msg_honestly_signed (honestk $+ (k_id,true)) cs msg = true.
   Proof.
-    induction msgs; intros; eauto.
-    invert H0;
-      econstructor; eauto.
-    destruct a; eauto.
+    destruct msg; intros; eauto;
+      unfold msg_honestly_signed, msg_signing_key in *;
+      repeat
+        match goal with
+        | [ |- context [ ?cs $? ?cid ] ] => cases (cs $? cid)
+        | [ |- context [ match ?c with _ => _ end ]] => is_var c; destruct c
+        | [ |- context [ honest_keyb _ _ = _ ] ] => unfold honest_keyb in *
+        | [ H : ?honk $+ (?kid1,_) $? ?kid2 = _ |- _ ] => destruct (kid1 ==n kid2); subst; clean_map_lookups
+        | [ H : ?honk $? ?kid = _, M : match ?honk $? ?kid with _ => _ end = _ |- _ ] => rewrite H in M
+        end; eauto.
   Qed.
+
+  Hint Resolve msg_honestly_signed_addnl_honest_key.
 
   Lemma msgCiphersSignedOk_addnl_cipher' :
     forall cs (msgs : queued_messages) honestk c_id c,
       ~ In c_id cs
-      -> Forall (fun sigm => match sigm with (existT _ _ m) => msgCipherOk cs m /\ msg_honestly_signed honestk m = true end) msgs
-      -> Forall (fun sigm => match sigm with (existT _ _ m) => msgCipherOk (cs $+ (c_id,c)) m /\ msg_honestly_signed honestk m = true end) msgs.
+      -> Forall (fun sigm => match sigm with (existT _ _ m) => msg_honestly_signed honestk cs m = true end) msgs
+      -> Forall (fun sigm => match sigm with (existT _ _ m) => msg_honestly_signed honestk (cs $+ (c_id,c)) m = true end) msgs.
   Proof.
     induction msgs; intros; eauto.
     invert H0;
@@ -412,12 +410,12 @@ Section RealWorldLemmas.
     destruct a; intuition eauto.
   Qed.
 
-  Lemma msgCiphersOk_addnl_cipher :
-    forall {t} (msg : crypto t) cs c_id c,
-      ~ In c_id cs
-      -> msgCiphersOk cs msg
-      -> msgCiphersOk (cs $+ (c_id,c)) msg.
-  Proof. unfold msgCiphersOk; intros; eapply msgCiphersOk_addnl_cipher'; eauto. Qed.
+  (* Lemma msgCiphersOk_addnl_cipher : *)
+  (*   forall {t} (msg : crypto t) cs c_id c, *)
+  (*     ~ In c_id cs *)
+  (*     -> msgCiphersOk cs msg *)
+  (*     -> msgCiphersOk (cs $+ (c_id,c)) msg. *)
+  (* Proof. unfold msgCiphersOk; intros; eapply msgCiphersOk_addnl_cipher'; eauto. Qed. *)
 
   Lemma msgCiphersSignedOk_addnl_cipher :
     forall {t} (msg : crypto t) honestk cs c_id c,
@@ -427,24 +425,19 @@ Section RealWorldLemmas.
   Proof. unfold msgCiphersSignedOk; intros; eapply msgCiphersSignedOk_addnl_cipher'; eauto. Qed.
 
   Hint Resolve
-       msgCiphersOk_addnl_cipher
        msgCiphersSignedOk_addnl_cipher.
   
   Lemma msgCiphersSignedOk_new_honest_key' :
     forall (msgCphrs : queued_messages) honestk cs k,
       honestk $? keyId k = None
-      -> Forall (fun sigm => match sigm with (existT _ _ m) => msgCipherOk cs m /\ msg_honestly_signed honestk m = true end) msgCphrs
-      -> Forall (fun sigm => match sigm with (existT _ _ m) => msgCipherOk cs m /\ msg_honestly_signed (honestk $+ (keyId k,true)) m = true end) msgCphrs.
+      -> Forall (fun sigm => match sigm with (existT _ _ m) => msg_honestly_signed honestk cs m = true end) msgCphrs
+      -> Forall (fun sigm => match sigm with (existT _ _ m) => msg_honestly_signed (honestk $+ (keyId k,true)) cs m = true end) msgCphrs.
   Proof.
     induction msgCphrs; intros; econstructor; invert H0; eauto; clean_map_lookups.
-    destruct a; intuition idtac.
-    destruct c; unfold msg_honestly_signed in *; try discriminate;
-      unfold honest_keyb in *.
-    - destruct (keyId k ==n k__sign); subst; clean_map_lookups; eauto.
-    - destruct (keyId k ==n k0); subst; clean_map_lookups; eauto.
+    destruct a; intuition eauto.
   Qed.
 
-  Lemma msgCiphersSigned_new_honest_key :
+  Lemma msgCiphersSignedOk_new_honest_key :
     forall {t} (msg : crypto t) honestk cs k,
       msgCiphersSignedOk honestk cs msg
       -> honestk $? keyId k = None
@@ -453,32 +446,47 @@ Section RealWorldLemmas.
     intros; eapply msgCiphersSignedOk_new_honest_key'; eauto.
   Qed.
 
-  Hint Resolve msgCiphersSigned_new_honest_key.
+  Hint Resolve msgCiphersSignedOk_new_honest_key.
+
+  Lemma msg_signing_key_in_ciphers :
+    forall {t} (c : crypto t) cs k,
+      msg_signing_key cs c = Some k
+      -> exists cid cphr,
+        msg_cipher_id c = Some cid
+      /\ cs  $? cid = Some cphr
+      /\ cipher_signing_key cphr = k.
+  Proof.
+    intros.
+    unfold msg_signing_key in *; destruct c; try discriminate;
+      unfold msg_cipher_id, cipher_signing_key.
+    - cases (cs $? msg_id); try discriminate; destruct c; try discriminate;
+        invert H; eauto.
+    - cases (cs $? sig); try discriminate; destruct c0; try discriminate;
+        invert H; eauto.
+  Qed.
 
   Lemma msgCiphersSignedOk_cleaned_honestk' :
     forall (msgCphrs : queued_messages) honestk honestk' cs,
       (forall k_id, honestk $? k_id = Some true -> honestk' $? k_id = Some true)
-      -> Forall (fun sigm => match sigm with (existT _ _ m) => msgCipherOk cs m /\ msg_honestly_signed honestk m = true end) msgCphrs
-      -> Forall (fun sigm => match sigm with (existT _ _ m) => msgCipherOk (clean_ciphers honestk cs) m /\ msg_honestly_signed honestk' m = true end) msgCphrs.
+      -> Forall (fun sigm => match sigm with (existT _ _ m) => msg_honestly_signed honestk cs m = true end) msgCphrs
+      -> Forall (fun sigm => match sigm with (existT _ _ m) => msg_honestly_signed honestk' (clean_ciphers honestk cs) m = true end) msgCphrs.
   Proof.
     induction msgCphrs; intros; econstructor; invert H0; eauto; clean_map_lookups.
-    destruct a; destruct c; intuition eauto.
-    - unfold msgCipherOk in *; split_ex; repeat eexists; apply clean_ciphers_keeps_honest_cipher; eauto.
-    - unfold msg_honestly_signed, honest_keyb in *.
-      cases (honestk $? k__sign); try discriminate;
-        destruct b;
-        try discriminate.
-        match goal with
-        | [ H : honestk $? k__sign = Some true, H2 : (forall k_id, honestk $? _ = _ -> _ ) |- _ ] => specialize (H2 _ H); rewrite H2
-        end; trivial.
-    - unfold msgCipherOk in *; split_ex; repeat eexists; apply clean_ciphers_keeps_honest_cipher; eauto.
-    - unfold msg_honestly_signed, honest_keyb in *.
-      cases (honestk $? k); try discriminate;
-        destruct b;
-        try discriminate.
-        match goal with
-        | [ H : honestk $? k = Some true, H2 : (forall k_id, honestk $? _ = _ -> _ ) |- _ ] => specialize (H2 _ H); rewrite H2
-        end; trivial.
+    destruct a; intuition eauto;
+      unfold msg_honestly_signed in *;
+      cases (msg_signing_key cs c); try discriminate.
+
+    assert (msg_signing_key (clean_ciphers honestk cs) c = Some k).
+    unfold msg_signing_key; unfold msg_signing_key in Heq;
+      destruct c; try discriminate.
+    cases (cs $? msg_id); try discriminate; destruct c; try discriminate; invert Heq;
+      erewrite clean_ciphers_keeps_honest_cipher; eauto; simpl; eauto.
+    cases (cs $? sig); try discriminate; destruct c0; try discriminate; invert Heq;
+      erewrite clean_ciphers_keeps_honest_cipher; eauto; simpl; eauto.
+    
+    rewrite H0; unfold honest_keyb in *.
+    cases (honestk $? k); try discriminate; destruct b; try discriminate.
+    assert (honestk' $? k = Some true) as RW by eauto; rewrite RW; eauto.
   Qed.
 
   Lemma msgCiphersSigned_cleaned_honestk :
@@ -656,49 +664,6 @@ Section RealWorldLemmas.
       eapply SigCipherNotHonestOk; unfold not; intros; split_ors; split_ands; contra_map_lookup; try contradiction; eauto.
   Qed.
 
-  (* Lemma adv_step_encrypted_ciphers_ok : *)
-  (*   forall {A B C} cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B) *)
-  (*             gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd', *)
-  (*     step_user lbl None bd bd' *)
-  (*     -> forall (cmd : user_cmd C) honestk, *)
-  (*       bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd) *)
-  (*       -> honestk = findUserKeys usrs *)
-  (*       -> ks = adv.(key_heap) *)
-  (*       -> mycs = adv.(c_heap) *)
-  (*       -> adv_no_honest_keys honestk ks *)
-  (*       -> permission_heap_good gks ks *)
-  (*       -> adv_cipher_queue_ok cs mycs *)
-  (*       -> encrypted_ciphers_ok honestk cs gks *)
-  (*       -> forall cmd' honestk', *)
-  (*           bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd') *)
-  (*           -> honestk' = findUserKeys usrs' *)
-  (*           -> encrypted_ciphers_ok honestk' cs' gks'. *)
-  (* Proof. *)
-  (*   induction 1; inversion 1; inversion 8; intros; subst; *)
-  (*     eauto 2; autorewrite with find_user_keys; eauto; clean_context. *)
-
-  (*   - econstructor; eauto. *)
-  (*     assert (adv_no_honest_keys (findUserKeys usrs') (key_heap adv')) as ADV by assumption. *)
-  (*     specialize (H21 k__signid). *)
-  (*     econstructor; eauto. *)
-  (*     + unfold not; intros; split_ors; split_ands; contra_map_lookup; contradiction. *)
-  (*     + intros. clear H21. *)
-  (*       specialize (H4 _ _ H6); split_ors; split_ands; try discriminate. *)
-  (*       specialize (H22 _ _ H4); split_ex; eexists. *)
-  (*       specialize (ADV k); intuition eauto; contra_map_lookup; subst; eauto. *)
-  (*       specialize (H22 _ _ H4); split_ex; eexists. *)
-  (*       specialize (ADV k); intuition eauto; contra_map_lookup; subst; eauto. *)
-  (*     + intros. *)
-  (*       destruct (c_id ==n cid); subst; clean_map_lookups; eauto. *)
-  (*       specialize (H5 _ H6). *)
-  (*       unfold adv_cipher_queue_ok in H23; rewrite Forall_forall in H23; eauto. *)
-  (*   - econstructor; eauto. *)
-  (*     specialize (H17 k_id). *)
-  (*     eapply SigCipherNotHonestOk; eauto. *)
-  (*     unfold not; intros; split_ors; split_ands; contra_map_lookup; contradiction. *)
-  (* Qed. *)
-
-  
   Lemma universe_ok_adv_step :
     forall {A B} (U__r : universe A B) lbl usrs adv cs gks ks qmsgs mycs cmd,
       universe_ok U__r

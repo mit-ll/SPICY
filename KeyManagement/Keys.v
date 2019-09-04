@@ -633,6 +633,42 @@ Ltac simplify_key_merges1 :=
     , H2 : ?ks2 $? ?kid = None
     , H3 : ?ks1 $k++ ?ks2 $? ?kid = _ |- _ ]
     => rewrite (merge_perms_adds_no_new_perms _ _ _ H1 H2) in H3 by trivial
+  | [ H1 : ?ks1 $? ?kid = Some _
+    , H2 : ?ks2 $? ?kid = Some _ |- _ ] =>
+    match goal with
+    | [ H : ?P |- _ ] =>
+      match P with
+      | context [ks1 $k++ ks2 $? kid]
+        => rewrite (merge_perms_chooses_greatest _ _ H1 H2) in H by trivial; unfold greatest_permission; simpl
+      end
+    end
+  | [ H1 : ?ks1 $? ?kid = Some _
+    , H2 : ?ks2 $? ?kid = None |- _ ] =>
+    match goal with
+    | [ H : ?P |- _ ] =>
+      match P with
+      | context [ks1 $k++ ks2 $? kid]
+        => rewrite (merge_perms_adds_ks1 _ _ _ H1 H2) in H by trivial
+      end
+    end
+  | [ H1 : ?ks1 $? ?kid = None
+    , H2 : ?ks2 $? ?kid = Some _ |- _ ] =>
+    match goal with
+    | [ H : ?P |- _ ] =>
+      match P with
+      | context [ks1 $k++ ks2 $? kid]
+        => rewrite (merge_perms_adds_ks2 _ _ _ H1 H2) in H by trivial
+      end
+    end
+  | [ H1 : ?ks1 $? ?kid = None
+    , H2 : ?ks2 $? ?kid = None |- _ ] =>
+    match goal with
+    | [ H : ?P |- _ ] =>
+      match P with
+      | context [ks1 $k++ ks2 $? kid]
+        => rewrite (merge_perms_adds_no_new_perms _ _ _ H1 H2) in H by trivial
+      end
+    end
   end.
 
 (* Hint Constructors KeyPermFind. *)
