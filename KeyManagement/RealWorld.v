@@ -16,13 +16,14 @@ End RW_message.
 
 Module message := Messages(RW_message).
 Import message.
+Export message.
 
 Definition cipher_id := nat.
 
 Inductive crypto : type -> Type :=
 | Content {t} (c : message t) : crypto t
-| SignedCiphertext {t} (msg_id : cipher_id) : crypto t
-| Signature {t} (msg : crypto t) (sig : cipher_id) : crypto t
+| SignedCiphertext {t} (c_id : cipher_id) : crypto t
+(* | Signature {t} (msg : crypto t) (sig : cipher_id) : crypto t *)
 .
 
 (* We need to handle non-deterministic message  -- external choice on ordering *)
@@ -33,15 +34,15 @@ Inductive msg_pat :=
 .
 (* We also need to store the form of the message with each cipher in the cipher
    heap to prove functions halt *)
-Inductive message_form :=
-| PtKeyForm : message_form
-| EncForm : message_form -> message_form
-| SigForm : message_form -> message_form                        
-| PairForm : message_form -> message_form -> message_form.
+(* Inductive message_form := *)
+(* | PtKeyForm : message_form *)
+(* | EncForm : message_form -> message_form *)
+(* | SigForm : message_form -> message_form                         *)
+(* | PairForm : message_form -> message_form -> message_form. *)
 
 Inductive cipher : Type :=
-| SigCipher {t} (k_id : key_identifier) (c : crypto t) : cipher
-| SigEncCipher {t} (k__sign k__enc : key_identifier) (c : crypto t) : cipher
+| SigCipher {t} (k__sign : key_identifier) (msg : message t) : cipher
+| SigEncCipher {t} (k__sign k__enc : key_identifier) (msg : message t) : cipher
 .
 
 Definition cipher_signing_key (c : cipher) :=
@@ -57,10 +58,10 @@ Definition my_ciphers      := list cipher_id.
 Inductive msg_accepted_by_pattern (cs : ciphers) : forall {t : type}, msg_pat -> crypto t -> Prop :=
 | MsgAccept : forall {t} (m : crypto t),
     msg_accepted_by_pattern cs Accept m
-| ProperlySigned : forall {t} c_id k (m : crypto t),
+| ProperlySigned : forall {t} c_id k (m : message t),
     cs $? c_id = Some (@SigCipher t k m)
-    -> msg_accepted_by_pattern cs (Signed k) (Signature m c_id)
-| ProperlyEncrypted : forall {t} c_id k__sign k__enc (m : crypto t),
+    -> msg_accepted_by_pattern cs (Signed k) (@SignedCiphertext t c_id)
+| ProperlyEncrypted : forall {t} c_id k__sign k__enc (m : message t),
     cs $? c_id = Some (SigEncCipher k__sign k__enc m)
     -> msg_accepted_by_pattern cs (SignedEncrypted k__sign k__enc) (@SignedCiphertext t c_id).
 
@@ -128,37 +129,32 @@ Section SafeMessages.
   | PlaintextHPK : forall {t} (txt : message t),
       content_only_honest_public_keys txt
       -> msg_contains_only_honest_public_keys cs (Content txt)
-  | HonestlyEncryptedHPK :
-      forall t (m : crypto t) c_id k__sign k__enc,
-        cs $? c_id = Some (SigEncCipher k__sign k__enc m)
-        -> honest_key k__enc
+  | HonestlyEncryptedHPK : forall t (m : message t) c_id k__sign k__enc,
+      cs $? c_id = Some (SigEncCipher k__sign k__enc m)
+      -> content_only_honest_public_keys m
+      -> honest_key k__enc
       -> msg_contains_only_honest_public_keys cs (@SignedCiphertext t c_id)
-  | SignedPayloadHPK : forall {t} (msg : crypto t) c_id,
-        msg_contains_only_honest_public_keys cs msg
-      -> msg_contains_only_honest_public_keys cs (Signature msg c_id).
+  | SignedPayloadHPK : forall {t} (m : message t) c_id k__sign,
+      cs $? c_id = Some (SigCipher k__sign m)
+      -> content_only_honest_public_keys m
+      -> msg_contains_only_honest_public_keys cs (@SignedCiphertext t c_id).
 
   Hint Constructors msg_contains_only_honest_public_keys.
 
   Definition msg_cipher_id {t} (msg : crypto t) : option cipher_id :=
     match msg with
     | SignedCiphertext c_id => Some c_id
-    | Signature _ c_id => Some c_id
     | _ => None
     end.
 
   Definition msg_signing_key {t} (cs : ciphers) (msg : crypto t) : option key_identifier :=
     match msg with
+    | Content _ => None
     | SignedCiphertext c_id =>
       match cs $? c_id with
-      | Some (SigEncCipher k__sign _ _) => Some k__sign
-      | _ => None
+      | Some c => Some (cipher_signing_key c)
+      | None   => None
       end
-    | Signature _ c_id => 
-      match cs $? c_id with
-      | Some (SigCipher k__sign _) => Some k__sign
-      | _ => None
-      end
-    | _ => None
     end.
 
   Definition msg_honestly_signed {t} (cs : ciphers) (msg : crypto t) : bool :=
@@ -215,11 +211,11 @@ Inductive user_cmd : Type -> Type :=
 | Recv {t} (pat : msg_pat) : user_cmd (crypto t)
 
 (* Crypto!! *)
-| SignEncrypt {t} (k__sign k__enc : key_identifier) (msg : crypto t) : user_cmd (crypto t)
-| Decrypt {t} (c : crypto t) : user_cmd (crypto t)
+| SignEncrypt {t} (k__sign k__enc : key_identifier) (msg : message t) : user_cmd (crypto t)
+| Decrypt {t} (c : crypto t) : user_cmd (message t)
 
-| Sign    {t} (k : key_identifier) (msg : crypto t) : user_cmd (crypto t)
-| Verify  {t} (k : key_identifier) (msg : crypto t) : user_cmd bool
+| Sign    {t} (k : key_identifier) (msg : message t) : user_cmd (crypto t)
+| Verify  {t} (k : key_identifier) (c : crypto t) : user_cmd (bool * message t)
 
 | GenerateSymKey  (usage : key_usage) : user_cmd key_permission
 | GenerateAsymKey (usage : key_usage) : user_cmd key_permission
@@ -309,25 +305,27 @@ Fixpoint findKeysMessage {t} (msg : message t) : key_perms :=
   | message.MsgPair m1 m2 => findKeysMessage m1 $k++ findKeysMessage m2
   end.
 
-Fixpoint findKeysCrypto {t} (msg : crypto t) : key_perms :=
+Definition findKeysCrypto {t} (cs : ciphers) (msg : crypto t) : key_perms :=
   match msg with
   | Content  m          => findKeysMessage m
-  | SignedCiphertext _  => $0
-  | Signature m _       => findKeysCrypto m
+  | SignedCiphertext c_id  =>
+    match cs $? c_id with
+    | Some (SigCipher _ m) => findKeysMessage m
+    | _ => $0
+    end
   end.
 
-Fixpoint findCiphers {t} (msg : crypto t) : my_ciphers :=
+Definition findCiphers {t} (msg : crypto t) : my_ciphers :=
   match msg with
   | Content _          => []
   | SignedCiphertext c => [c]
-  | Signature m c      => c :: findCiphers m
   end.
 
-Fixpoint findMsgCiphers {t} (msg : crypto t) : queued_messages :=
+Definition findMsgCiphers {t} (msg : crypto t) : queued_messages :=
   match msg with
   | Content _          => []
   | SignedCiphertext _ => [existT _ _ msg]
-  | Signature m c      => (existT _ _ msg) :: findMsgCiphers m
+  (* | Signature m c      => (existT _ _ msg) :: findMsgCiphers m *)
   end.
 
 (* Definition msgCipherOk {t} (cs : ciphers) (msg : crypto t) := *)
@@ -718,7 +716,7 @@ Section RealWorldLemmas.
 End RealWorldLemmas.
 
 Lemma safe_messages_have_only_honest_public_keys :
-  forall {t} (msg : message.message t) honestk,
+  forall {t} (msg : message t) honestk,
     content_only_honest_public_keys honestk msg
     -> forall k_id,
       findKeysMessage msg $? k_id = None
@@ -742,16 +740,18 @@ Lemma safe_cryptos_have_only_honest_public_keys :
   forall {t} (msg : crypto t) honestk cs,
     msg_contains_only_honest_public_keys honestk cs msg
     -> forall k_id,
-      findKeysCrypto msg $? k_id = None
-      \/ (honestk $? k_id = Some true /\ findKeysCrypto msg $? k_id = Some false).
+      findKeysCrypto cs msg $? k_id = None
+      \/ (honestk $? k_id = Some true /\ findKeysCrypto cs msg $? k_id = Some false).
 Proof.
-  induction 1; eauto; intros; simpl in *; eauto.
+  intros.
+  unfold findKeysCrypto; invert H; eauto;
+    context_map_rewrites; eauto.
 Qed.
 
 Lemma safe_messages_perm_merge_honestk_idempotent :
   forall {t} (msg : crypto t) honestk cs,
     msg_contains_only_honest_public_keys honestk cs msg
-    -> honestk $k++ findKeysCrypto msg = honestk.
+    -> honestk $k++ findKeysCrypto cs msg = honestk.
 Proof.
     intros.
     apply map_eq_Equal; unfold Equal; intros.
@@ -783,11 +783,15 @@ Definition extractPlainText {t} (msg : message t) : option nat :=
   | _           => None
   end.
 
-Definition unSig {t} (msg : crypto t) : option (crypto t) :=
-  match msg with
-  | Signature m _ => Some m
-  | _             => None
-  end.
+(* Definition unSig {t} (cs : ciphers) (msg : crypto t) : option (message.message t) := *)
+(*   match msg with *)
+(*   | SignedCiphertext c_id => *)
+(*     match cs $? c_id with *)
+(*     | Some (SigCipher _ m) => Some m *)
+(*     | _ => None *)
+(*     end *)
+(*   | _ => None *)
+(*   end. *)
 
 Inductive action : Type :=
 | Input  t (msg : crypto t) (pat : msg_pat) (uks : key_perms)
@@ -829,7 +833,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
                (msg : crypto t) msgs pat newkeys newcs,
       qmsgs = (existT _ _ msg) :: msgs (* we have a message waiting for us! *)
     -> qmsgs' = msgs
-    -> findKeysCrypto msg = newkeys
+    -> findKeysCrypto cs msg = newkeys
     -> newcs = findCiphers msg
     -> ks' = ks $k++ newkeys
     -> mycs' = newcs ++ mycs
@@ -851,7 +855,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
 (*  *)
 | StepSend : forall {A B} {t} (usrs usrs' : honest_users A) (adv adv' : user_data B)
                cs u_id gks ks qmsgs mycs rec_u_id rec_u newkeys (msg : crypto t),
-    findKeysCrypto msg = newkeys
+    findKeysCrypto cs msg = newkeys
     -> keys_mine ks newkeys
     -> incl (findCiphers msg) mycs
     -> adv' = addUserKeys newkeys adv (* TODO: also add ciphers to adv??? *)
@@ -867,14 +871,14 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
 
 (* Encryption / Decryption *)
 | StepEncrypt : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs cs' u_id gks ks qmsgs mycs mycs'
-                  (msg : crypto t) k__signid k__encid kp__enc kt__enc kt__sign c_id cipherMsg,
+                  (msg : message t) k__signid k__encid kp__enc kt__enc kt__sign c_id cipherMsg,
       gks $? k__encid  = Some (MkCryptoKey k__encid Encryption kt__enc)
     -> gks $? k__signid = Some (MkCryptoKey k__signid Signing kt__sign)
     -> ks $? k__encid   = Some kp__enc
     -> ks $? k__signid  = Some true
     -> ~ In c_id cs
-    -> keys_mine ks (findKeysCrypto msg)
-    -> incl (findCiphers msg) mycs
+    -> keys_mine ks (findKeysMessage msg)
+    (* -> incl (findCiphers msg) mycs *)
     -> cipherMsg = SigEncCipher k__signid k__encid msg
     -> cs' = cs $+ (c_id, cipherMsg)
     -> mycs' = c_id :: mycs
@@ -883,16 +887,16 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
                 (usrs, adv, cs', gks, ks, qmsgs, mycs', Return (SignedCiphertext c_id))
 
 | StepDecrypt : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks ks' qmsgs mycs mycs'
-                  (msg : crypto t) k__signid kp__sign k__encid c_id newkeys kt__sign kt__enc newcs,
+                  (msg : message t) k__signid kp__sign k__encid c_id newkeys kt__sign kt__enc,
       cs $? c_id     = Some (SigEncCipher k__signid k__encid msg)
     -> gks $? k__encid  = Some (MkCryptoKey k__encid Encryption kt__enc)
     -> gks $? k__signid = Some (MkCryptoKey k__signid Signing kt__sign)
     -> ks  $? k__encid  = Some true
     -> ks  $? k__signid = Some kp__sign
-    -> findKeysCrypto msg = newkeys
-    -> newcs = findCiphers msg
+    -> findKeysMessage msg = newkeys
+    (* -> newcs = findCiphers msg *)
     -> ks' = ks $k++ newkeys
-    -> mycs' = newcs ++ mycs
+    -> mycs' = (* newcs ++  *)mycs
     -> List.In c_id mycs
     -> step_user Silent u_id
                 (usrs, adv, cs, gks, ks , qmsgs, mycs,  Decrypt (SignedCiphertext c_id))
@@ -900,7 +904,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
 
 (* Signing / Verification *)
 | StepSign : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs cs' u_id gks ks qmsgs mycs mycs'
-               (msg : crypto t) k_id kt c_id cipherMsg,
+               (msg : message t) k_id kt c_id cipherMsg,
       gks $? k_id = Some (MkCryptoKey k_id Signing kt)
     -> ks  $? k_id = Some true
     -> ~ In c_id cs
@@ -909,17 +913,17 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> mycs' = c_id :: mycs
     -> step_user Silent u_id
                 (usrs, adv, cs , gks, ks, qmsgs, mycs,  Sign k_id msg)
-                (usrs, adv, cs', gks, ks, qmsgs, mycs', Return (Signature msg c_id))
+                (usrs, adv, cs', gks, ks, qmsgs, mycs', Return (SignedCiphertext c_id))
 
 | StepVerify : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks qmsgs mycs
-                 (msg : crypto t) k_id kp kt c_id,
+                 (msg : message t) k_id kp kt c_id,
       gks $? k_id = Some (MkCryptoKey k_id Signing kt)
     -> ks  $? k_id = Some kp
     -> cs $? c_id = Some (SigCipher k_id msg)
     -> List.In c_id mycs
     -> step_user Silent u_id
-                (usrs, adv, cs, gks, ks, qmsgs, mycs, Verify k_id (Signature msg c_id))
-                (usrs, adv, cs, gks, ks, qmsgs, mycs, Return true)
+                (usrs, adv, cs, gks, ks, qmsgs, mycs, Verify k_id (SignedCiphertext c_id))
+                (usrs, adv, cs, gks, ks, qmsgs, mycs, Return (true, msg))
 | StepGenerateSymKey: forall {A B} (usrs : honest_users A) (adv : user_data B)
                         cs u_id gks gks' ks ks' qmsgs mycs
                         (k_id : key_identifier) k usage,
