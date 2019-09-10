@@ -186,17 +186,15 @@ Section RealWorldUniverseProperties.
                      | (existT _ _ m) =>
                        (forall k kp, findKeysCrypto cs m $? k = Some kp -> gks $? k <> None)
                      (* /\ (forall cid, msg_cipher_id m = Some cid -> cs $? cid <> None) *)
-                     /\ (forall k cid,
+                     /\ (forall cid,
+                           msg_cipher_id m = Some cid
+                           -> cs $? cid <> None)
+                     /\ (forall k,
                            msg_signing_key cs m = Some k
-                           -> msg_cipher_id m = Some cid
                            -> gks $? k <> None
-                           /\ cs $? cid <> None
                            /\ ( honest_key honestk k
-                           (* -> msgCipherOk cs m *)
-                           (* -> gks $? k <> None *)
                              -> message_no_adv_private cs m
                              /\ msgCiphersSignedOk honestk cs m)
-                           (* /\ cs $? cid <> None *)
                        )
                            (* /\ msgCipherOk cs m) *)
                      (* /\ (forall cid, msg_cipher_id m = Some cid *)
