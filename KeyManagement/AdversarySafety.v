@@ -1667,6 +1667,22 @@ Section UniverseLemmas.
       specialize (H0 _ LIN); auto.
   Qed.
 
+  Lemma msgCiphersSignedOk_honest_key :
+    forall t cs honestk c_id c k_id,
+      cs $? c_id = Some c
+      -> cipher_signing_key c = k_id
+      -> honest_key honestk k_id
+      -> msgCiphersSignedOk honestk cs (@SignedCiphertext t c_id).
+  Proof.
+    intros.
+    unfold msgCiphersSignedOk; simpl; econstructor; eauto.
+    unfold msg_honestly_signed; simpl; context_map_rewrites.
+    unfold cipher_signing_key in *; rewrite <- honest_key_honest_keyb; auto.
+    destruct c; subst; eauto.
+  Qed.
+
+  Hint Resolve msgCiphersSignedOk_honest_key.
+
   Lemma adv_step_message_queues_ok :
     forall {A B C} cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
               gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd',
@@ -1702,39 +1718,33 @@ Section UniverseLemmas.
 
     unfold message_queue_ok; eapply Forall_app.
     unfold message_queue_ok in *; econstructor; eauto.
-    split; intros.
-    (* - specialize (H0 _ _ H); split_ors; split_ands; subst; eauto. *)
-    (*   specialize (H22 _ _ H0); unfold not; intros; split_ex; contra_map_lookup. *)
-    (*   specialize (H22 _ _ H0); unfold not; intros; split_ex; contra_map_lookup. *)
-    (* - assert (exists cid, msg_cipher_id msg = Some cid) by admit; split_ex. *)
-    (*   eapply adv_cipher_in_cipher_heap in H1; eauto; split_ex. *)
-    (*   assert (honest_key (findUserKeys usrs) k0) by admit. *)
-    (*   invert H5; specialize (H21 _ _ H6); split_ex. *)
-    (*   split; intros. *)
-    (*   + unfold not; intros; contra_map_lookup. *)
 
-    (*   + clear H20. *)
-    (*     assert (msgCipherOk cs' msg) by admit. *)
-    (*     unfold msgCipherOk, msg_cipher_id, msg_signing_key in H, H2, H8. *)
-    (*     destruct msg; try discriminate; split_ex; *)
-    (*       repeat match goal with *)
-    (*              | [ H : Some _ = Some _ |- _] => invert H *)
-    (*              end; clean_map_lookups; *)
-    (*         simpl in *; *)
-    (*         unfold message_no_adv_private, msgCiphersSignedOk; *)
-    (*         encrypted_ciphers_prop. *)
+    repeat (apply conj); intros; eauto.
+    - specialize (H0 _ _ H); split_ors; split_ands; subst; eauto.
+      specialize (H22 _ _ H0); unfold not; intros; split_ex; contra_map_lookup.
+      specialize (H22 _ _ H0); unfold not; intros; split_ex; contra_map_lookup.
+    - unfold not; intros.
+      unfold keys_mine in *.
+      destruct msg; simpl in *; try discriminate; clean_context.
+      unfold adv_cipher_queue_ok in H23; rewrite Forall_forall in H23.
+      assert (List.In cid (c_heap adv)) by eauto.
+      specialize (H23 _ H); split_ex; contra_map_lookup.
+    - unfold msg_signing_key in *; destruct msg; try discriminate;
+        cases (cs' $? c_id); try discriminate;
+          clean_context.
+      simpl in *; context_map_rewrites.
 
-    (*     * intuition (clean_map_lookups; eauto). *)
-    (*       econstructor; eauto. *)
-    (*       unfold msgCipherOk, msg_honestly_signed; eauto. *)
-          
-    (*     * intuition  (clean_map_lookups; eauto). *)
-    (*       ** destruct p; eauto; exfalso; eauto. *)
-    (*       ** destruct p; eauto; exfalso; eauto. *)
-    (*       ** econstructor; eauto. *)
-    (*          unfold msgCipherOk, msg_honestly_signed; eauto. *)
-    
-  Admitted.
+      encrypted_ciphers_prop; simpl in *; eauto;
+        clean_context; intuition clean_map_lookups; eauto;
+          unfold message_no_adv_private; intros; simpl in *; context_map_rewrites;
+            repeat
+              match goal with
+              | [ ARG : findKeysMessage ?msg $? _ = Some ?b |- _ ] => is_var b; destruct b
+              | [ H : (forall k, findKeysMessage ?msg $? k = Some ?b -> _), ARG : findKeysMessage ?msg $? _ = Some ?b |- _ ] =>
+                specialize (H _ ARG)
+              | [ H : honest_key ?honk ?k, H2 : ?honk $? ?k = Some true -> False |- _ ] => invert H; contradiction
+              end; try contradiction; clean_map_lookups; eauto.
+  Qed.
   
   Lemma adv_message_queue_ok_addnl_pubk :
     forall honestk pubk msgs cs gks,
