@@ -901,22 +901,6 @@ Section CleanUsers.
   Hint Resolve findUserKeys_foldfn_proper findUserKeys_foldfn_transpose
        findUserKeys_foldfn_proper_Equal findUserKeys_foldfn_transpose_Equal.
 
-  (* Lemma clean_users_idempotent : *)
-  (*   forall {A} (cs : ciphers) (usrs : honest_users A), *)
-  (*     clean_users (clean_ciphers (findUserKeys usrs) cs) (clean_users cs usrs) = clean_users cs usrs. *)
-  (* Proof. *)
-  (*   intros; apply map_eq_Equal; unfold Equal; intros. *)
-  (*   case_eq (clean_users cs usrs $? y); intros. *)
-  (*   - destruct u; simpl in *; eapply clean_users_cleans_user; eauto; simpl. *)
-  (*     apply clean_users_cleans_user_inv in H; split_ex; split_ands. *)
-  (*     destruct H; split_ands; simpl in *; eauto. *)
-  (*     f_equal; subst; eauto using clean_messages_idempotent, clean_key_permissions_idempotent. *)
-  (*   - unfold clean_users in *. *)
-  (*     rewrite map_o in H; unfold option_map in H; cases (usrs $? y); try discriminate. *)
-
-  (*     rewrite !map_o, Heq; trivial. *)
-  (* Qed. *)
-
 End CleanUsers.
 
 Section FindUserKeysCleanUsers.
@@ -1185,22 +1169,6 @@ Section FindUserKeysCleanUsers.
     - apply clean_ciphers_no_new_ciphers; eauto.
   Qed.
 
-  (* Lemma clean_users_no_change_findUserKeys : *)
-  (*   forall {A} (usrs : honest_users A), *)
-  (*     findUserKeys (clean_users usrs) = findUserKeys usrs. *)
-  (* Proof. *)
-  (*   induction usrs using P.map_induction_bis; intros; Equal_eq; contra_map_lookup; auto. *)
-  (*   unfold findUserKeys. *)
-  (*   rewrite fold_add; auto. *)
-  (*   rewrite clean_users_add_pull; auto. simpl. *)
-  (*   apply map_eq_Equal; unfold Equal; intros. *)
-  (*   rewrite !fold_add; auto. simpl. *)
-  (*   rewrite !findUserKeys_notation, IHusrs; trivial. *)
-
-  (*   unfold not; intros. *)
-  (*   admit. *)
-  (*   apply map_in_iff in H0; contradiction. *)
-  (* Qed. *)
 End FindUserKeysCleanUsers.
 
 Section StripAdv.
@@ -1216,10 +1184,6 @@ Section StripAdv.
     let honestk := findUserKeys U__r.(users)
     in {| users       := clean_users honestk U__r.(all_ciphers) U__r.(users)
         ; adversary   := clean_adv U__r.(adversary) honestk b
-        (* ; adversary   := {| key_heap := U__r.(adversary).(key_heap) *)
-        (*                   ; protocol := Return b *)
-        (*                   ; msg_heap := U__r.(adversary).(msg_heap) *)
-        (*                   ; c_heap   := U__r.(adversary).(c_heap) |} *)
         ; all_ciphers := clean_ciphers honestk U__r.(all_ciphers)
         ; all_keys    := clean_keys honestk U__r.(all_keys)
        |}.

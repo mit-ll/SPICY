@@ -23,7 +23,6 @@ Definition cipher_id := nat.
 Inductive crypto : type -> Type :=
 | Content {t} (c : message t) : crypto t
 | SignedCiphertext {t} (c_id : cipher_id) : crypto t
-(* | Signature {t} (msg : crypto t) (sig : cipher_id) : crypto t *)
 .
 
 (* We need to handle non-deterministic message  -- external choice on ordering *)
@@ -32,13 +31,6 @@ Inductive msg_pat :=
 | Signed (k : key_identifier)
 | SignedEncrypted (k__sign k__enc : key_identifier)
 .
-(* We also need to store the form of the message with each cipher in the cipher
-   heap to prove functions halt *)
-(* Inductive message_form := *)
-(* | PtKeyForm : message_form *)
-(* | EncForm : message_form -> message_form *)
-(* | SigForm : message_form -> message_form                         *)
-(* | PairForm : message_form -> message_form -> message_form. *)
 
 Inductive cipher : Type :=
 | SigCipher {t} (k__sign : key_identifier) (msg : message t) : cipher
@@ -328,51 +320,10 @@ Definition findMsgCiphers {t} (msg : crypto t) : queued_messages :=
   (* | Signature m c      => (existT _ _ msg) :: findMsgCiphers m *)
   end.
 
-(* Definition msgCipherOk {t} (cs : ciphers) (msg : crypto t) := *)
-(*   match msg with *)
-(*   | SignedCiphertext k__sign k__enc msg_id *)
-(*     => exists t (m' : crypto t), cs $? msg_id = Some (SigEncCipher k__sign k__enc m') *)
-(*   | Signature m' k sig *)
-(*     => cs $? sig = Some (SigCipher k m') *)
-(*   | _ => False *)
-(*   end. *)
-
-(* Lemma msgCipherOk_cipher_id : *)
-(*   forall {t} (msg : crypto t) cs, *)
-(*     msgCipherOk cs msg *)
-(*     -> exists cid, msg_cipher_id msg = Some cid. *)
-(* Proof. *)
-(*   unfold msgCipherOk, msg_cipher_id; destruct msg; intros; eauto; contradiction. *)
-(* Qed. *)
-
-(* Lemma msgCipherOk_split : *)
-(*   forall {t} (msg : crypto t) cs c_id c, *)
-(*     ~ In c_id cs *)
-(*     -> msgCipherOk (cs $+ (c_id,c)) msg *)
-(*     -> msg_cipher_id msg = Some c_id *)
-(*     \/ msgCipherOk cs msg. *)
-(* Proof. *)
-(*   unfold msgCipherOk; intros. *)
-(*   destruct msg; eauto; split_ex; *)
-(*     match goal with *)
-(*     | [ H : cs $+ (?cid1,_) $? ?cid2 = _ |- _] => destruct (cid1 ==n cid2); subst; clean_map_lookups *)
-(*     end; eauto. *)
-(* Qed. *)
-
 Definition msgCiphersSignedOk {t} (honestk : key_perms) (cs : ciphers) (msg : crypto t) :=
   Forall (fun sigm => match sigm with
                      (existT _ _ m) => msg_honestly_signed honestk cs m = true
                    end) (findMsgCiphers msg).
-
-(* Definition msgCiphersSignedOk {t} (honestk : key_perms) (cs : ciphers) (msg : crypto t) := *)
-(*   Forall (fun sigm => match sigm with *)
-(*                      (existT _ _ m) => msgCipherOk cs m /\ msg_honestly_signed honestk m = true *)
-(*                    end) (findMsgCiphers msg). *)
-
-(* Definition msgCiphersOk {t} (cs : ciphers) (msg : crypto t) := *)
-(*   Forall (fun sigm => match sigm with *)
-(*                      (existT _ _ m) => msgCipherOk cs m *)
-(*                    end) (findMsgCiphers msg). *)
 
 Definition user_keys {A} (usrs : honest_users A) (u_id : user_id) : option key_perms :=
   match usrs $? u_id with
@@ -782,16 +733,6 @@ Definition extractPlainText {t} (msg : message t) : option nat :=
   | message.Content t => Some t
   | _           => None
   end.
-
-(* Definition unSig {t} (cs : ciphers) (msg : crypto t) : option (message.message t) := *)
-(*   match msg with *)
-(*   | SignedCiphertext c_id => *)
-(*     match cs $? c_id with *)
-(*     | Some (SigCipher _ m) => Some m *)
-(*     | _ => None *)
-(*     end *)
-(*   | _ => None *)
-(*   end. *)
 
 Inductive action : Type :=
 | Input  t (msg : crypto t) (pat : msg_pat) (uks : key_perms)
