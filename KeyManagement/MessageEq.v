@@ -44,28 +44,32 @@ Inductive message_eq : forall {A B} {t__rw : RealWorld.message.type} {t__iw : Id
                                 -> (data__rw.(RealWorld.key_heap) $? k__enc = Some true
                                     <-> data__iw.(IdealWorld.perms) $? ch__id = Some (IdealWorld.construct_permission true b))
                                 -> message_eq (RealWorld.Content c) U__rw m__iw U__iw m__expected ch__id readers writers
-| SignEncCase : forall {A B t__rw t__iw}
-                       (c__id : RealWorld.cipher_id)
-                       (c : RealWorld.crypto t__rw) (m__iw m__expected : IdealWorld.message.message t__iw)
-                       (U__rw : RealWorld.universe A B) (U__iw : IdealWorld.universe A)
-                       (readers writers : set Keys.key_identifier)
-                       (k__enc k__sig : Keys.key_identifier)
-                       (ch__id : IdealWorld.channel_id),
-    U__rw.(RealWorld.all_ciphers) $? c__id = Some (RealWorld.SigEncCipher k__sig k__enc c) ->
-    message_eq c U__rw m__iw U__iw m__expected ch__id ({k__enc} \cup readers) ({k__sig} \cup writers) ->
-    (* switch to set of all users that people get removed from *)
-    @message_eq A B t__rw t__iw (RealWorld.SignedCiphertext k__enc k__sig c__id) U__rw m__iw U__iw m__expected ch__id readers writers
-| SignatureCase : forall {A B t__rw t__iw}
-                         (c__id : RealWorld.cipher_id)
-                         (m : RealWorld.crypto t__rw) (m__iw m__expected : IdealWorld.message.message t__iw)
-                         (U__rw : RealWorld.universe A B) (U__iw : IdealWorld.universe A)
-                         (readers writers : set Keys.key_identifier)
-                         (k__sig : Keys.key_identifier)
-                         (ch__id : IdealWorld.channel_id),
-    U__rw.(RealWorld.all_ciphers) $? c__id = Some (RealWorld.SigCipher k__sig m) ->
-    message_eq m U__rw m__iw U__iw m__expected ch__id readers ({k__sig} \cup writers) ->
-    message_eq (RealWorld.Signature m k__sig c__id) U__rw m__iw U__iw m__expected ch__id readers writers.
+(* | SignEncCase : forall {A B t__rw t__iw} *)
+(*                        (c__id : RealWorld.cipher_id) *)
+(*                        (c : RealWorld.crypto t__rw) (m__iw m__expected : IdealWorld.message.message t__iw) *)
+(*                        (U__rw : RealWorld.universe A B) (U__iw : IdealWorld.universe A) *)
+(*                        (readers writers : set Keys.key_identifier) *)
+(*                        (k__enc k__sig : Keys.key_identifier) *)
+(*                        (ch__id : IdealWorld.channel_id), *)
+(*     U__rw.(RealWorld.all_ciphers) $? c__id = Some (RealWorld.SigEncCipher k__sig k__enc c) -> *)
+(*     message_eq c U__rw m__iw U__iw m__expected ch__id ({k__enc} \cup readers) ({k__sig} \cup writers) -> *)
+(*     (* switch to set of all users that people get removed from *) *)
+(*     @message_eq A B t__rw t__iw (RealWorld.SignedCiphertext c__id) U__rw m__iw U__iw m__expected ch__id readers writers *)
+(* | SignatureCase : forall {A B t__rw t__iw} *)
+(*                          (c__id : RealWorld.cipher_id) *)
+(*                          (m : RealWorld.crypto t__rw) (m__iw m__expected : IdealWorld.message.message t__iw) *)
+(*                          (U__rw : RealWorld.universe A B) (U__iw : IdealWorld.universe A) *)
+(*                          (readers writers : set Keys.key_identifier) *)
+(*                          (k__sig : Keys.key_identifier) *)
+(*                          (ch__id : IdealWorld.channel_id), *)
+(*     U__rw.(RealWorld.all_ciphers) $? c__id = Some (RealWorld.SigCipher k__sig m) -> *)
+(*     message_eq m U__rw m__iw U__iw m__expected ch__id readers ({k__sig} \cup writers) -> *)
+(*     message_eq (RealWorld.Signature m c__id) U__rw m__iw U__iw m__expected ch__id readers writers. *)
+.
 
+
+
+                                             
 
 (* Definition garbage : option (list RealWorld.key_identifier) * exmsg := *) (*   (None, Exm (RealWorld.Plaintext 0)). *)
 

@@ -37,3 +37,22 @@ Ltac is_not_var V :=
 Ltac does_not_unify term1 term2 :=
   first [ unify term1 term2; fail 1
         | idtac ].
+
+Ltac prop_not_exists P :=
+  match goal with
+  | [ H : P |- _ ] => fail 1
+  | _ => idtac
+  end.
+
+Ltac prop_not_unifies P :=
+  match goal with
+  (* | [ H : P |- _ ] => fail 1 *)
+  | [ H : ?Q |- _ ] => unify P Q; fail 1
+  | _ => idtac
+  end.
+
+Ltac assert_if_new P tac :=
+  match goal with
+  | [ H : P |- _ ] => fail 1
+  | _ => assert P by tac
+  end.

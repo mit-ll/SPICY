@@ -44,8 +44,8 @@ Ltac clean_map_lookups1 :=
   | [ H : $0 $? _ = Some _ |- _ ] => invert H
   | [ H : _ $+ (?k,_) $? ?k = _ |- _ ] => rewrite add_eq_o in H by trivial
   | [ H : _ $+ (?k1,_) $? ?k2 = _ |- _ ] => rewrite add_neq_o in H by auto 2
-  | [ H : match _ $+ (?k,_) $? ?k with _ => _ end = _ |- _ ] => rewrite add_eq_o in H by trivial
-  | [ H : match _ $+ (?k1,_) $? ?k2 with _ => _ end = _ |- _ ] => rewrite add_neq_o in H by auto 2
+  | [ H : context [ match _ $+ (?k,_) $? ?k with _ => _ end ] |- _ ] => rewrite add_eq_o in H by trivial
+  | [ H : context [ match _ $+ (?k1,_) $? ?k2 with _ => _ end ] |- _ ] => rewrite add_neq_o in H by auto 2
   | [ |- context[_ $+ (?k,_) $? ?k] ] => rewrite add_eq_o by trivial
   | [ |- context[_ $+ (?k1,_) $? ?k2] ] => rewrite add_neq_o by auto
   | [ |- context[_ $- ?k $? ?k] ] => rewrite remove_eq_o by trivial
@@ -54,17 +54,13 @@ Ltac clean_map_lookups1 :=
   | [ H1 : ?m $? ?k = _ , H2 : ?m $? ?k = _ |- _] => rewrite H1 in H2
   end.
 
-(* Ltac contra_map_lookup := *)
-(*   match goal with *)
-(*   | [ H1 : ?ks $? ?k = Some _, H2 : ?ks $? ?k = None |- _ ] => rewrite H1 in H2; invert H2 *)
-(*   | [ H : ?v1 <> ?v2, H1 : ?ks $? ?k = Some ?v1, H2 : ?ks $? ?k = Some ?v2 |- _ ] => rewrite H1 in H2; invert H2; contradiction *)
-(*   end. *)
-
 Ltac contra_map_lookup :=
   repeat
     match goal with
-    | [ H1 : ?ks1 $? ?k = _, H2 : ?ks2 $? ?k = _ |- _ ] => rewrite H1 in H2; invert H2
-    | [ H : ?v1 <> ?v2, H1 : ?ks $? ?k = Some ?v1, H2 : ?ks $? ?k = Some ?v2 |- _ ] => rewrite H1 in H2; invert H2; contradiction
+    (* | [ H1 : ?ks1 $? ?k = _, H2 : ?ks2 $? ?k = _ |- _ ] => rewrite H1 in H2; invert H2 *)
+    | [ H : ?ks $? ?k = ?v -> _, ARG : ?ks $? ?k = ?v |- _ ] => specialize (H ARG)
+    | [ H1 : ?ks $? ?k = _, H2 : ?ks $? ?k = _ |- _ ] => rewrite H1 in H2; invert H2
+    | [ H : ?ks $? ?k = _ |- context [ ?ks $? ?k <> _] ] => unfold not; intros
     end; try discriminate.
 
 Ltac clean_map_lookups :=
@@ -76,10 +72,10 @@ Ltac context_map_rewrites :=
   repeat
     match goal with
     | [ H : ?m $? ?k = _ |- context[?m $? ?k] ] => rewrite H
-    | [ H : match ?matchee with _ => _ end $? _ = _
+    | [ H : context [ match ?matchee with _ => _ end ]
      ,  H1 : ?matchee = _ |- _] => rewrite H1 in H
-    | [ H : match ?matchee with _ => _ end = _
-     ,  H1 : ?matchee = _ |- _] => rewrite H1 in H
+    (* | [ H : match ?matchee with _ => _ end = _ *)
+    (*  ,  H1 : ?matchee = _ |- _] => rewrite H1 in H *)
     end.
 
 Section MapLemmas.
