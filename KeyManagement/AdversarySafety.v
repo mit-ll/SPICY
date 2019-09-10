@@ -4102,6 +4102,9 @@ Section SingleAdversarySimulates.
             bd = (usrs, adv, cs, gks, adv.(key_heap), adv.(msg_heap), adv.(c_heap), cmd)
           -> honestk = findUserKeys usrs
           -> adv_no_honest_keys (findUserKeys usrs) adv.(key_heap)
+          -> message_queues_ok cs usrs gks
+          -> encrypted_ciphers_ok honestk cs gks
+          -> adv_cipher_queue_ok cs adv.(c_heap)
           -> usrs__s = clean_users honestk cs usrs
           -> forall cmd' honestk' usrs__s',
                 bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
@@ -4109,26 +4112,35 @@ Section SingleAdversarySimulates.
               -> usrs__s' = clean_users honestk' cs' usrs'
               -> usrs__s = usrs__s'.
     Proof.
-      induction 1; inversion 1; inversion 4; intros; subst; eauto.
+      induction 1; inversion 1; inversion 7; intros; subst; eauto;
+        autorewrite with find_user_keys;
+        clean_context.
 
       (* Send *)
-      autorewrite with find_user_keys.
+      - rewrite clean_users_add_pull; simpl.
+        apply map_eq_Equal; unfold Equal; intros.
+        cases (y ==n rec_u_id); subst; clean_map_lookups; eauto.
 
-      rewrite clean_users_add_pull; simpl.
-      apply map_eq_Equal; unfold Equal; intros.
-      cases (y ==n rec_u_id); subst; clean_map_lookups; eauto.
-      clear H6 H18.
+        erewrite clean_users_cleans_user; eauto; f_equal.
+        cases (msg_honestly_signed (findUserKeys usrs) cs' msg);
+          eauto using clean_messages_drops_not_honestly_signed.
 
-      erewrite clean_users_cleans_user; eauto; f_equal.
-      cases (msg_honestly_signed (findUserKeys usrs) cs' msg);
-        eauto using clean_messages_drops_not_honestly_signed.
+        exfalso.
+        unfold msg_honestly_signed in Heq; destruct msg; try discriminate;
+          simpl in *.
 
-      exfalso.
-      unfold msg_honestly_signed in Heq; destruct msg; try discriminate;
-        simpl in *.
+        unfold adv_cipher_queue_ok in H19; rewrite Forall_forall in H19;
+          assert (exists c : cipher, cs' $? c_id = Some c) by eauto;
+          split_ex;
+          context_map_rewrites.
 
-
-      admit.
+        encrypted_ciphers_prop; simpl in *.
+        (* both of these cases are the adversary sending honestly signed messages *) 
+        + admit.
+        + admit.
+        
+      - erewrite clean_users_addnl_cipher_idempotent; eauto.
+      - erewrite clean_users_addnl_cipher_idempotent; eauto.
 
     Admitted.
 
@@ -4142,6 +4154,12 @@ Section SingleAdversarySimulates.
         (* -> universe_ok U__r *)
         -> keys_and_permissions_good U__r.(all_keys) U__r.(users) U__r.(adversary).(key_heap)
         -> adv_no_honest_keys (findUserKeys (users U__r)) (key_heap (adversary U__r))
+
+        -> message_queues_ok U__r.(all_ciphers) U__r.(users) U__r.(all_keys)
+        -> encrypted_ciphers_ok (findUserKeys (users U__r)) U__r.(all_ciphers) U__r.(all_keys)
+        -> adv_cipher_queue_ok U__r.(all_ciphers) U__r.(adversary).(c_heap)
+
+                             
         -> R (strip_adversary (buildUniverseAdv usrs cs gks {| key_heap := ks
                                                             ; protocol := cmd
                                                             ; msg_heap := qmsgs
