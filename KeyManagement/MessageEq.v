@@ -1,10 +1,9 @@
 Require Import Maps.
-Require RealWorld IdealWorld Common Keys MyPrelude.
+Require RealWorld IdealWorld Common Keys MyPrelude Messages.
 From Coq Require Import List.
 
 Module Foo <: EMPTY. End Foo.
 Module Import SN := SetNotations(Foo).
-
 
 Import RealWorld.RealWorldNotations.
 Import IdealWorld.IdealNotations.
@@ -20,7 +19,7 @@ Fixpoint content_eq  {t__rw t__iw} (m__rw : RealWorld.message.message t__rw) (m_
   | _ => False
   end.
 
-Inductive message_eq : forall {A B} {t__rw : RealWorld.message.type} {t__iw : IdealWorld.message.type},
+Inductive message_eq : forall {A B} {t__rw : Messages.type} {t__iw : Messages.type},
     RealWorld.crypto t__rw -> RealWorld.universe A B ->
     IdealWorld.message.message t__iw -> IdealWorld.universe A -> IdealWorld.message.message t__iw -> IdealWorld.channel_id ->
     set Keys.key_identifier -> set Keys.key_identifier -> Prop :=

@@ -7,7 +7,7 @@ Require Import MyPrelude.
 Module Foo <: EMPTY. End Foo.
 Module Import SN := SetNotations(Foo).
 
-Require Import Common Maps Keys Simulation MapLtac Tactics Automation AdversaryUniverse ProtocolAutomation.
+Require Import Common Maps Keys Messages Simulation MapLtac Tactics Automation AdversaryUniverse ProtocolAutomation.
 
 Require IdealWorld RealWorld.
 
@@ -39,7 +39,7 @@ Section IdealProtocol.
     |}.
 
   Definition ideal_univ_start :=
-    mkiU ($0 $+ (CH__A2B, { }) $+ (CH__B2A, { }))
+    mkiU ($0 $+ (CH__A2B, []) $+ (CH__B2A, []))
          ( n <- Gen
          ; _ <- Send (Content n) CH__A2B
          ; m <- @Recv Nat CH__B2A
@@ -52,7 +52,7 @@ Section IdealProtocol.
          ; Return true).
 
   Definition ideal_univ_sent1 n :=
-    mkiU ($0 $+ (CH__A2B, {Exm (Content n)}) $+ (CH__B2A, { }))
+    mkiU ($0 $+ (CH__A2B, [existT _ _ (Content n)]) $+ (CH__B2A, []))
          ( _ <- Return tt
          ; m <- @Recv Nat CH__B2A
          ; Return match extractContent m with
@@ -64,7 +64,7 @@ Section IdealProtocol.
          ; Return true).
 
   Definition ideal_univ_recd1 n :=
-    mkiU ($0 $+ (CH__A2B, {Exm (Content n)}) $+ (CH__B2A, { }))
+    mkiU ($0 $+ (CH__A2B, []) $+ (CH__B2A, []))
          ( m <- @Recv Nat CH__B2A
          ; Return match extractContent m with
                   | None =>    false
@@ -75,7 +75,7 @@ Section IdealProtocol.
          ; Return true).
 
   Definition ideal_univ_sent2 n :=
-    mkiU ($0 $+ (CH__A2B, {Exm (Content n)}) $+ (CH__B2A, {Exm (Content n)}))
+    mkiU ($0 $+ (CH__A2B, []) $+ (CH__B2A, [existT _ _ (Content n)]))
          ( m <- @Recv Nat CH__B2A
          ; Return match extractContent m with
                   | None =>    false
@@ -85,7 +85,7 @@ Section IdealProtocol.
          ; Return true).
 
   Definition ideal_univ_recd2 n :=
-    mkiU ($0 $+ (CH__A2B, {Exm (Content n)}) $+ (CH__B2A, {Exm (Content n)}))
+    mkiU ($0 $+ (CH__A2B, []) $+ (CH__B2A, []))
          ( m <- Return (Content n)
          ; Return match extractContent m with
                   | None =>    false
@@ -93,8 +93,8 @@ Section IdealProtocol.
                   end)
          (Return true).
 
-  Definition ideal_univ_done n :=
-    mkiU ($0 $+ (CH__A2B, {Exm (Content n)}) $+ (CH__B2A, {Exm (Content n)}))
+  Definition ideal_univ_done :=
+    mkiU ($0 $+ (CH__A2B, []) $+ (CH__B2A, []))
          (Return true)
          (Return true).
 
@@ -130,26 +130,46 @@ Section RealProtocol.
   Definition real_univ_start cs mycs1 mycs2 :=
     mkrU  mycs1 mycs2 [] [] cs
          ( n  <- Gen
-         ; m  <- Sign KID1 (Plaintext n)
-         ; _  <- Send B m
-         ; m' <- @Recv Nat (Signed KID2)
-         ; Return match unSig m' with
-                  | Some (Plaintext n') => if n ==n n' then true else false (* also do verify? *)
+         ; c  <- Sign KID1 (message.Content n)
+         ; _  <- Send B c
+         ; c' <- @Recv Nat (Signed KID2)
+         ; v <- Verify KID2 c'
+         ; Return match snd v with
+                  | message.Content n' => if n ==n n' then fst v else false
                   | _       => false
                   end)
 
-         ( m  <- @Recv Nat (Signed KID1)
-         ; v  <- Verify KID1 m
-         ; m' <- match unSig m with
-                | Some p => Sign KID2 p
-                | _      => Sign KID2 (Plaintext 1)
+         ( c  <- @Recv Nat (Signed KID1)
+         ; v  <- Verify KID1 c
+         ; c' <- match snd v with
+                | message.Content p => Sign KID2 (message.Content p)
+                | _                 => Sign KID2 (message.Content 1)
                 end
-         ; _  <- Send A m'
-         ; Return v).
+         ; _  <- Send A c'
+         ; Return (fst v)).
 
   Definition real_univ_sent1 n cs mycs1 mycs2 cid1 :=
     mkrU  mycs1 mycs2 [] [existT _ _ (Signature (Plaintext n) KID1 cid1)]
          (cs $+ (cid1, SigCipher KID1 (Plaintext n)))
+         ( n  <- Gen
+         ; c  <- Sign KID1 (message.Content n)
+         ; _  <- Send B c
+         ; c' <- @Recv Nat (Signed KID2)
+         ; v <- Verify KID2 c'
+         ; Return match snd v with
+                  | message.Content n' => if n ==n n' then fst v else false
+                  | _       => false
+                  end)
+
+         ( c  <- @Recv Nat (Signed KID1)
+         ; v  <- Verify KID1 c
+         ; c' <- match snd v with
+                | message.Content p => Sign KID2 (message.Content p)
+                | _                 => Sign KID2 (message.Content 1)
+                end
+         ; _  <- Send A c'
+         ; Return (fst v)).
+
          ( _  <- Return tt
          ; m' <- @Recv Nat (Signed KID2)
          ; Return match unSig m' with

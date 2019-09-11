@@ -4,7 +4,7 @@ From Coq Require Import
 
 Require Import MyPrelude.
 
-Require Import Common Maps Keys Simulation MapLtac Tactics Automation AdversaryUniverse.
+Require Import Common Maps Keys Messages Simulation MapLtac Tactics Automation AdversaryUniverse.
 
 Require IdealWorld RealWorld.
 
@@ -144,21 +144,21 @@ Module SimulationAutomation.
 
     Lemma step_user_inv_recv :
       forall {A B t} (usrs usrs' : honest_users A) (adv adv' : user_data B)
-        lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' (cmd : user_cmd (message t)) pat,
+        lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' (cmd : user_cmd (crypto t)) pat,
           step_user lbl u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, Recv pat) (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd)
         -> usrs = usrs'
         /\ adv = adv'
         /\ cs = cs'
         /\ gks = gks'
         /\ exists msg msgs,
-            qmsgs = (existT message t msg) :: msgs
+            qmsgs = (existT crypto t msg) :: msgs
           /\ qmsgs' = msgs
-          /\ ( ( msg_accepted_by_pattern pat msg
-              /\ ks' = ks $k++ findKeys msg
+          /\ ( ( msg_accepted_by_pattern cs pat msg
+              /\ ks' = ks $k++ findKeysCrypto cs msg
               /\ mycs' = findCiphers msg ++ mycs
               /\ lbl = Action (Input msg pat ks)
               /\ cmd = Return msg)
-            \/ ( ~ msg_accepted_by_pattern pat msg
+            \/ ( ~ msg_accepted_by_pattern cs pat msg
               /\ ks = ks'
               /\ mycs = mycs'
               /\ lbl = Silent
@@ -170,7 +170,7 @@ Module SimulationAutomation.
     Qed.
 
     Lemma step_user_inv_send :
-      forall {A B t} (usrs usrs' : honest_users A) (adv adv' : user_data B) (msg : message t)
+      forall {A B t} (usrs usrs' : honest_users A) (adv adv' : user_data B) (msg : crypto t)
         lbl u_id rec_u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' cmd,
         step_user lbl (Some u_id) (usrs, adv, cs, gks, ks, qmsgs, mycs, Send rec_u_id msg) (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd)
         -> cs = cs'
@@ -178,7 +178,7 @@ Module SimulationAutomation.
         /\ ks = ks'
         /\ qmsgs = qmsgs'
         /\ mycs = mycs'
-        /\ adv' = addUserKeys (findKeys msg) adv
+        /\ adv' = addUserKeys (findKeysCrypto cs msg) adv
         /\ rec_u_id <> u_id
         /\ lbl = Action (Output msg)
         /\ cmd = Return tt
@@ -204,8 +204,8 @@ Module SimulationAutomation.
         /\ ks = ks'
         /\ qmsgs = qmsgs'
         /\ lbl = Silent
-        /\ keys_mine ks (findKeys msg)
-        /\ incl (findCiphers msg) mycs
+        /\ keys_mine ks (findKeysMessage msg)
+        (* /\ incl (findCiphers msg) mycs *)
         /\ (exists kt__enc kt__sign kp__enc,
                 gks $? k__enc  = Some (MkCryptoKey k__enc Encryption kt__enc)
               /\ gks $? k__sign = Some (MkCryptoKey k__sign Signing kt__sign)
@@ -215,16 +215,16 @@ Module SimulationAutomation.
               ~ In c_id cs
               /\ cs' = cs $+ (c_id, SigEncCipher k__sign k__enc msg)
               /\ mycs' = c_id :: mycs
-              /\ cmd = Return (SignedCiphertext k__sign k__enc c_id)).
+              /\ cmd = Return (SignedCiphertext c_id)).
     Proof.
       intros.
       invert H; intuition idtac; repeat eexists; eauto.
     Qed.
 
     Lemma step_user_inv_dec :
-      forall {A B t} (usrs usrs' : honest_users A) (adv adv' : user_data B) k__sign k__enc c_id
+      forall {A B t} (usrs usrs' : honest_users A) (adv adv' : user_data B) c_id
         lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' (cmd : user_cmd (message t)),
-        step_user lbl u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, Decrypt (SignedCiphertext k__sign k__enc c_id))
+        step_user lbl u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, Decrypt (SignedCiphertext c_id))
                   (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd)
         -> usrs = usrs'
         /\ adv = adv'
@@ -233,18 +233,19 @@ Module SimulationAutomation.
         /\ qmsgs = qmsgs'
         /\ lbl = Silent
         /\ List.In c_id mycs
-        /\ exists (msg : message t) kt__enc kt__sign kp__sign,
+        /\ exists (msg : message t) k__sign k__enc kt__enc kt__sign kp__sign,
             cs $? c_id     = Some (SigEncCipher k__sign k__enc msg)
           /\ gks $? k__enc  = Some (MkCryptoKey k__enc Encryption kt__enc)
           /\ gks $? k__sign = Some (MkCryptoKey k__sign Signing kt__sign)
           /\ ks  $? k__enc  = Some true
           /\ ks  $? k__sign = Some kp__sign
-          /\ ks' = ks $k++ findKeys msg
-          /\ mycs' = findCiphers msg ++ mycs
+          /\ ks' = ks $k++ findKeysMessage msg
+          /\ mycs' = (* findCiphers msg ++ *) mycs
           /\ cmd = Return msg.
     Proof.
       intros.
-      invert H; intuition idtac; repeat eexists; eauto.
+      invert H; intuition idtac;
+        repeat eexists; eauto.
     Qed.
 
     Lemma step_user_inv_sign :
@@ -265,7 +266,7 @@ Module SimulationAutomation.
               ~ In c_id cs
               /\ cs' = cs $+ (c_id, SigCipher k__sign msg)
               /\ mycs' = c_id :: mycs
-              /\ cmd = Return (Signature msg k__sign c_id)).
+              /\ cmd = Return (SignedCiphertext c_id)).
     Proof.
       intros.
       invert H; intuition idtac; repeat eexists; eauto.
@@ -274,7 +275,7 @@ Module SimulationAutomation.
     Lemma step_user_inv_verify :
       forall {A B t} (usrs usrs' : honest_users A) (adv adv' : user_data B) k__sign c_id (msg : message t)
         lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' cmd,
-        step_user lbl u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, Verify k__sign (Signature msg k__sign c_id))
+        step_user lbl u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, Verify k__sign (SignedCiphertext c_id))
                   (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd)
         -> usrs = usrs'
         /\ adv = adv'
@@ -284,10 +285,10 @@ Module SimulationAutomation.
         /\ qmsgs = qmsgs'
         /\ mycs = mycs'
         /\ lbl = Silent
-        /\ cmd = Return true
         /\ List.In c_id mycs
         /\ exists (msg : message t) kt__sign kp__sign,
             cs $? c_id     = Some (SigCipher k__sign msg)
+          /\ cmd = Return (true,msg)
           /\ gks $? k__sign = Some (MkCryptoKey k__sign Signing kt__sign)
           /\ ks  $? k__sign = Some kp__sign.
     Proof.
@@ -427,7 +428,7 @@ Module SimulationAutomation.
   Remove Hints eq_sym (* includes_lookup *).
   Remove Hints trans_eq_bool mult_n_O plus_n_O eq_add_S f_equal_nat.
 
-  Hint Constructors action_matches msg_eq.
+  Hint Constructors action_matches.
   Hint Resolve IdealWorld.LStepSend' IdealWorld.LStepRecv'.
 
   Lemma TrcRefl' :
@@ -518,23 +519,24 @@ Section UniverseStep.
     |}.
 
   Lemma invert_users :
-    forall {A} (usrs__ra usrs__r : honest_users A) u_id u,
-        usrs__r = clean_users (findUserKeys usrs__ra) usrs__ra
+    forall {A} (usrs__ra usrs__r : honest_users A) u_id u cs,
+        usrs__r = clean_users (findUserKeys usrs__ra) cs usrs__ra
       -> usrs__ra $? u_id = Some u
       -> exists msgs u', usrs__r $? u_id = Some u'
                  /\ u = rewrite_messages u' msgs
-                 /\ Forall (fun m => msg_filter (findUserKeys usrs__ra) m = false \/ List.In m u'.(msg_heap)) msgs.
+                 /\ Forall (fun m => msg_filter (findUserKeys usrs__ra) cs m = false \/ List.In m u'.(msg_heap)) msgs.
   Proof.
     intros.
     subst; destruct u; simpl in *.
     repeat eexists.
-    eapply clean_users_cleans_user; eauto.
-    unfold rewrite_messages; simpl; reflexivity.
-    rewrite Forall_forall; intros.
-    cases (msg_filter (findUserKeys usrs__ra) x); auto.
-    right; simpl.
-    unfold clean_messages; rewrite filter_In; auto.
-  Qed.
+
+    (* eapply clean_users_cleans_user; eauto. *)
+    (* unfold rewrite_messages; simpl; reflexivity. *)
+    (* rewrite Forall_forall; intros. *)
+    (* cases (msg_filter (findUserKeys usrs__ra) x); auto. *)
+    (* right; simpl. *)
+    (* unfold clean_messages; rewrite filter_In; auto. *)
+  Admitted.
 
   (* Lemma might_as_well_step_til_done : *)
   (*   forall {A B} (U__ra U__ra' U__r U__r' : universe A B) act b, *)
@@ -563,8 +565,8 @@ Ltac solve_adv_safe :=
     | [ H : RealWorld.findUserKeys ?usrs = _ |- RealWorld.findUserKeys ?usrs $? _ = Some _ ] => rewrite H
     | [ H : _ = clean_users ?honestk ?usrs |- context [ clean_users ?honestk ?usrs ] ] => rewrite <- H
     | [ |- RealWorld.msg_contains_only_honest_public_keys _ _ ] => econstructor
-    | [ |- RealWorld.msgCiphersSigned _ _ _ ] => econstructor
-    | [ |- RealWorld.msgCipherOk _ _ _ ] => unfold RealWorld.msgCipherOk
+    | [ |- RealWorld.msgCiphersSignedOk _ _ _ ] => econstructor
+    (* | [ |- RealWorld.msgCipherOk _ _ _ ] => unfold RealWorld.msgCipherOk *)
     | [ |- RealWorld.msg_honestly_signed _ _ = true] => unfold RealWorld.msg_honestly_signed
     | [ |- _ /\ _ ] => split
     | [ H : _ = clean_ciphers ?honk ?cs |- ?cs $? ?cid = Some ?c ] =>
@@ -597,19 +599,20 @@ Ltac solve_uok :=
       invert H; split_ors; try contradiction
     | [ H : RealWorld.msg_accepted_by_pattern (RealWorld.Signed _) _ |- _ ] => invert H; simpl in *
     | [ H : RealWorld.honest_keyb ?findUsers _ = false |- _ ] => unfold RealWorld.honest_keyb in H
-    | [ H : ?cusrs = clean_users (RealWorld.findUserKeys ?usrs) ?usrs |- _ ] =>
-      assert (RealWorld.findUserKeys usrs = RealWorld.findUserKeys (clean_users (RealWorld.findUserKeys usrs) usrs))
-        as UKS by (symmetry; eapply clean_users_no_change_findUserKeys);
-      rewrite <- H in UKS;
-      clear H
+    (* | [ H : ?cusrs = clean_users (RealWorld.findUserKeys ?usrs) ?usrs |- _ ] => *)
+    (*   assert (RealWorld.findUserKeys usrs = RealWorld.findUserKeys (clean_users (RealWorld.findUserKeys usrs) usrs)) *)
+    (*     as UKS by (symmetry; eapply clean_users_no_change_findUserKeys); *)
+    (*   rewrite <- H in UKS; *)
+    (*   clear H *)
     | [ M : match RealWorld.findUserKeys ?usrs $? _ with _ => _ end = _
             , H : RealWorld.findUserKeys ?usrs = _ |- _ ] => rewrite H in M; clear H; simpl in M; try discriminate
-    | [ H : RealWorld.Signature _ _ _ = RealWorld.Signature _ _ _ |- _ ] => invert H
+    (* | [ H : RealWorld.Signature _ _ _ = RealWorld.Signature _ _ _ |- _ ] => invert H *)
+    | [ H : RealWorld.SignedCiphertext _ = RealWorld.SignedCiphertext _ |- _ ] => invert H
     | [ |- encrypted_ciphers_ok _ _ ] => econstructor
     | [ |- encrypted_cipher_ok _ _ _ ] => econstructor
-    | [ |- RealWorld.msgCiphersSigned _ _ _ ] => econstructor
-    | [ |- forall k, RealWorld.findKeys _ $? _ = Some true -> False ] => intros
-    | [ H : RealWorld.findKeys _ $? _ = Some true |- False ] => progress simpl in H; invert H
+    | [ |- RealWorld.msgCiphersSignedOk _ _ _ ] => econstructor
+    | [ |- forall k, RealWorld.findKeysMessage _ $? _ = Some true -> False ] => intros
+    | [ H : RealWorld.findKeysMessage _ $? _ = Some true |- False ] => progress simpl in H; invert H
     | [ |- RealWorld.findUserKeys _ $? _ = Some true ] => eapply RealWorld.findUserKeys_has_private_key_of_user
     end.
 
