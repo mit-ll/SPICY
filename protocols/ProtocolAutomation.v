@@ -39,6 +39,7 @@ Ltac equality1 :=
   match goal with
   | [ H : List.In _ _ |- _ ] => progress (simpl in H); intuition idtac
 
+  | [ H : _ $+ (_,_) $? _ = _ |- _ ] => progress clean_map_lookups
   | [ H : $0 $? _ = Some _ |- _ ] => apply find_mapsto_iff in H; apply empty_mapsto_iff in H; contradiction
   | [ H : _  $? _ = Some _ |- _ ] => progress (simpl in H)
 
@@ -273,7 +274,7 @@ Module SimulationAutomation.
     Qed.
 
     Lemma step_user_inv_verify :
-      forall {A B t} (usrs usrs' : honest_users A) (adv adv' : user_data B) k__sign c_id (msg : message t)
+      forall {A B t} (usrs usrs' : honest_users A) (adv adv' : user_data B) k__sign c_id
         lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' cmd,
         step_user lbl u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, Verify k__sign (SignedCiphertext c_id))
                   (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd)
@@ -319,11 +320,11 @@ Module SimulationAutomation.
     Ltac churn1 :=
       match goal with
 
-      | [ H : ~ RealWorld.msg_accepted_by_pattern ?pat ?msg |- _ ] =>
-        assert ( RealWorld.msg_accepted_by_pattern pat msg ) by constructor; contradiction
+      | [ H : ~ RealWorld.msg_accepted_by_pattern ?cs ?pat ?msg |- _ ] =>
+        assert ( RealWorld.msg_accepted_by_pattern cs pat msg ) by (econstructor; eauto); contradiction
 
-      | [ H : RealWorld.msg_accepted_by_pattern ?pat ?msg -> False |- _ ] =>
-        assert ( RealWorld.msg_accepted_by_pattern pat msg ) by constructor; contradiction
+      | [ H : RealWorld.msg_accepted_by_pattern ?cs ?pat ?msg -> False |- _ ] =>
+        assert ( RealWorld.msg_accepted_by_pattern cs pat msg ) by (econstructor; eauto); contradiction
 
       (* Only take a user step if we have chosen a user *)
       | [ H : RealWorld.step_user _ (Some ?u) _ _ |- _ ] => progress simpl in H
@@ -369,7 +370,7 @@ Module SimulationAutomation.
   Export T.
 
   Ltac churn2 :=
-    (repeat equality1); subst; churn1; intuition idtac; split_ex; intuition idtac; subst; try discriminate.
+    (repeat equality1); subst; churn1; intuition idtac; split_ex; intuition idtac; subst; try discriminate; clean_map_lookups.
 
   Ltac churn :=
     repeat churn2.
@@ -457,7 +458,7 @@ Module SimulationAutomation.
       | [ |- context [ IdealWorld.construct_universe _ ?usrs] ] => canonicalize_map usrs
       end.
 
-  Ltac rss_clean uid := real_single_silent_multistep uid; [ solve [eauto 2] .. |].
+  Ltac rss_clean uid := real_single_silent_multistep uid; [ solve [eauto 3] .. |].
 
   Ltac real_silent_multistep :=
     simpl_real_users_context;
@@ -472,6 +473,7 @@ Module SimulationAutomation.
     simpl_ideal_users_context;
     match goal with
     | [ |- istepSilent ^* ?U1 ?U2 ] =>
+      is_not_evar U1; is_not_evar U2;
       first [
           solve_refl
         | figure_out_user_step ideal_single_silent_multistep U1 U2 ]
@@ -564,10 +566,10 @@ Ltac solve_adv_safe :=
     | [ |- RealWorld.honest_keyb _ _ = true ] => rewrite <- RealWorld.honest_key_honest_keyb
     | [ H : RealWorld.findUserKeys ?usrs = _ |- RealWorld.findUserKeys ?usrs $? _ = Some _ ] => rewrite H
     | [ H : _ = clean_users ?honestk ?usrs |- context [ clean_users ?honestk ?usrs ] ] => rewrite <- H
-    | [ |- RealWorld.msg_contains_only_honest_public_keys _ _ ] => econstructor
+    | [ |- RealWorld.msg_contains_only_honest_public_keys _ _ _ ] => econstructor
     | [ |- RealWorld.msgCiphersSignedOk _ _ _ ] => econstructor
     (* | [ |- RealWorld.msgCipherOk _ _ _ ] => unfold RealWorld.msgCipherOk *)
-    | [ |- RealWorld.msg_honestly_signed _ _ = true] => unfold RealWorld.msg_honestly_signed
+    | [ |- RealWorld.msg_honestly_signed _ _ _ = true] => unfold RealWorld.msg_honestly_signed
     | [ |- _ /\ _ ] => split
     | [ H : _ = clean_ciphers ?honk ?cs |- ?cs $? ?cid = Some ?c ] =>
       assert (clean_ciphers honk cs $? cid = Some c) by (rewrite <- H; clean_map_lookups; trivial); clear H
@@ -597,7 +599,7 @@ Ltac solve_uok :=
     match goal with
     | [ H : Forall _ (existT _ _ _ :: _) |- encrypted_ciphers_ok _ _ ] =>
       invert H; split_ors; try contradiction
-    | [ H : RealWorld.msg_accepted_by_pattern (RealWorld.Signed _) _ |- _ ] => invert H; simpl in *
+    | [ H : RealWorld.msg_accepted_by_pattern _ (RealWorld.Signed _) _ |- _ ] => invert H; simpl in *
     | [ H : RealWorld.honest_keyb ?findUsers _ = false |- _ ] => unfold RealWorld.honest_keyb in H
     (* | [ H : ?cusrs = clean_users (RealWorld.findUserKeys ?usrs) ?usrs |- _ ] => *)
     (*   assert (RealWorld.findUserKeys usrs = RealWorld.findUserKeys (clean_users (RealWorld.findUserKeys usrs) usrs)) *)

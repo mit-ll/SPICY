@@ -3829,7 +3829,11 @@ Section SingleAdversarySimulates.
           context_map_rewrites.
 
         encrypted_ciphers_prop; simpl in *.
-        (* both of these cases are the adversary sending honestly signed messages *) 
+        (* both of these cases are the adversary sending honestly signed messages 
+         * 
+         * messages have intended recipient
+         * increasing identifier for each of those pairs
+         *) 
         + admit.
         + admit.
         
