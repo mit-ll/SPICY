@@ -169,7 +169,7 @@ Section RealProtocol.
          ; Return (fst v)).
 
   Definition real_univ_recd1 n cs mycs1 mycs2 cid1 :=
-    mkrU mycs1 (cid1 :: mycs2) [] []
+    mkrU mycs1 mycs2 [] []
          (cs $+ (cid1, SigCipher KID1 (message.Content n)))
          ( _  <- Return tt
          ; c' <- @Recv Nat (Signed KID2)
@@ -283,106 +283,20 @@ Section FeebleSimulates.
   Proof.
     unfold simulates_silent_step.
 
-    (* intros; invert H;  *)
-    (*   try destruct U__r0; try destruct U__r; simpl in *; subst. *)
+    time (
+        intros;
+        invert H;
+        try destruct U__r0; try destruct U__r; simpl in *; subst;
+        churn; simpl_real_users_context;
+        [> eexists; split; swap 1 2; eauto 9 ..]
+      ).
 
-    (* - churn; simpl_real_users_context. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (* - churn; simpl_real_users_context. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-
-    (* - churn; simpl_real_users_context. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2. *)
-    (*     eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-    (*   + eexists; split; swap 1 2; eauto 9. *)
-        
-
-    (* time ( *)
-    (*     intros; *)
-    (*     invert H; *)
-    (*     try destruct U__r0; try destruct U__r; simpl in *; subst; *)
-    (*     churn; simpl_real_users_context; *)
-    (*     [> eexists; split; swap 1 2; eauto 9 ..] *)
-    (*   ). *)
-    (* -  *)
-    
-  Admitted.
+  Qed.
 
   Lemma rpingbase_loud_simulates :
     simulates_labeled_step (lameAdv tt) RPingPongBase.
   Proof.
     unfold simulates_labeled_step.
-
-    (* intros; *)
-    (*   invert H; *)
-    (*   try destruct U__r0; try destruct U__r; simpl in *; subst; *)
-    (*     churn. *)
-    (* - simpl_real_users_context; do 3 eexists; repeat (apply conj); swap 3 4; swap 2 3; swap 1 2; [ .. | admit]; simpl; clean_map_lookups; eauto; eauto 12. *)
-    (* - simpl_real_users_context; do 3 eexists; repeat (apply conj); swap 3 4; swap 2 3; swap 1 2; [ .. | admit]; simpl; clean_map_lookups; eauto; eauto 12. *)
-    (* - simpl_real_users_context; do 3 eexists; repeat (apply conj); swap 3 4; swap 2 3; swap 1 2; [ .. | admit]; simpl; clean_map_lookups; eauto; eauto 12. *)
-    (* - simpl_real_users_context; do 3 eexists; repeat (apply conj); swap 3 4; swap 2 3; swap 1 2; [ .. | admit]; simpl; clean_map_lookups; eauto; eauto 12. *)
-    (* - simpl_real_users_context; do 3 eexists; repeat (apply conj); swap 3 4; swap 2 3; swap 1 2; [ .. | admit]; simpl; clean_map_lookups; eauto; eauto 12. *)
-    (* - simpl_real_users_context; do 3 eexists; repeat (apply conj); swap 3 4; swap 2 3; swap 1 2; [ .. | admit]; simpl; clean_map_lookups; eauto; eauto 12. *)
-    (* - simpl_real_users_context; do 3 eexists; repeat (apply conj); swap 3 4; swap 2 3; swap 1 2; [ .. | admit]; simpl; clean_map_lookups; eauto; eauto 12. *)
-    (* - simpl_real_users_context; do 3 eexists; repeat (apply conj); swap 3 4; swap 2 3; swap 1 2; [ .. | admit]; simpl; clean_map_lookups; eauto; eauto 12. *)
-    (* - simpl_real_users_context; do 3 eexists; repeat (apply conj); swap 3 4; swap 2 3; swap 1 2; [ .. | admit]; simpl; clean_map_lookups; eauto; eauto 12. *)
-    (* - simpl_real_users_context; do 3 eexists; repeat (apply conj); swap 3 4; swap 2 3; swap 1 2; [ .. | admit]; simpl; clean_map_lookups; eauto; eauto 12. *)
-    (* - simpl_real_users_context; do 3 eexists; repeat (apply conj); swap 3 4; swap 2 3; swap 1 2; [ .. | admit]; simpl; clean_map_lookups; eauto; eauto 12. *)
-    (* - simpl_real_users_context; do 3 eexists; repeat (apply conj); swap 3 4; swap 2 3; swap 1 2; [ .. | admit]; simpl; clean_map_lookups; eauto; eauto 12. *)
-    (* - simpl_real_users_context; do 3 eexists; repeat (apply conj); swap 3 4; swap 2 3; swap 1 2; [ .. | admit]; simpl; clean_map_lookups; eauto; eauto 12. *)
-    (* - simpl_real_users_context; do 3 eexists; repeat (apply conj); swap 3 4; swap 2 3; swap 1 2; [ .. | admit]; simpl; clean_map_lookups; eauto; eauto 12. *)
-    (* - simpl_real_users_context; do 3 eexists; repeat (apply conj); swap 3 4; swap 2 3; swap 1 2; [ .. | admit]; simpl; clean_map_lookups; eauto; eauto 12. *)
-    (* - simpl_real_users_context; do 3 eexists; repeat (apply conj); swap 3 4; swap 2 3; swap 1 2; [ .. | admit]; simpl; clean_map_lookups; eauto; eauto 12. *)
-    (* - simpl_real_users_context; do 3 eexists; repeat (apply conj); swap 3 4; swap 2 3; swap 1 2; [ .. | admit]; simpl; clean_map_lookups; eauto; eauto 12. *)
-    (* - simpl_real_users_context; do 3 eexists; repeat (apply conj); swap 3 4; swap 2 3; swap 1 2; [ .. | admit]; simpl; clean_map_lookups; eauto; eauto 12. *)
-    (* - simpl_real_users_context; do 3 eexists; repeat (apply conj); swap 3 4; swap 2 3; swap 1 2; [ .. | admit]; simpl; clean_map_lookups; eauto; eauto 12. *)
-    (* - simpl_real_users_context; do 3 eexists; repeat (apply conj); swap 3 4; swap 2 3; swap 1 2; [ .. | admit]; simpl; clean_map_lookups; eauto; eauto 12. *)
-
  
     time
       (intros;
