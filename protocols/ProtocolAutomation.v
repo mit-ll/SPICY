@@ -179,7 +179,11 @@ Module SimulationAutomation.
         /\ ks = ks'
         /\ qmsgs = qmsgs'
         /\ mycs = mycs'
-        /\ adv' = addUserKeys (findKeysCrypto cs msg) adv
+        /\ adv' = 
+          {| key_heap := adv.(key_heap) $k++ findKeysCrypto cs msg
+           ; protocol := adv.(protocol)
+           ; msg_heap := adv.(msg_heap) ++ [existT _ _ msg]
+           ; c_heap   := adv.(c_heap) |}
         /\ rec_u_id <> u_id
         /\ lbl = Action (Output msg)
         /\ cmd = Return tt

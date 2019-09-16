@@ -140,7 +140,10 @@ Section RealWorldUniverseProperties.
                        (forall cid, msg_cipher_id m = Some cid -> cs $? cid <> None)
                      /\ (forall k kp,
                            findKeysCrypto cs m $? k = Some kp
-                           -> gks $? k <> None /\ (kp = true /\ honestk $? k <> Some true))
+                           -> gks $? k <> None /\ (kp = true -> honestk $? k <> Some true))
+                     /\ (forall k,
+                           msg_signing_key cs m = Some k
+                           -> gks $? k <> None)
                      /\ (forall c_id, List.In c_id (findCiphers m) -> exists c, cs $? c_id = Some c)
                      end
            ) msgs.

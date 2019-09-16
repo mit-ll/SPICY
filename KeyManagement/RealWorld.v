@@ -799,13 +799,18 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     findKeysCrypto cs msg = newkeys
     -> keys_mine ks newkeys
     -> incl (findCiphers msg) mycs
-    -> adv' = addUserKeys newkeys adv (* TODO: also add ciphers to adv??? *)
     -> usrs $? rec_u_id = Some rec_u
     -> rec_u_id <> u_id
     -> usrs' = usrs $+ (rec_u_id, {| key_heap := rec_u.(key_heap)
                                   ; protocol := rec_u.(protocol)
                                   ; msg_heap := rec_u.(msg_heap) ++ [existT _ _ msg]
                                   ; c_heap   := rec_u.(c_heap) |})
+    (* -> adv' = addUserKeys newkeys adv (* TODO: also add ciphers to adv??? *) *)
+    -> adv' = 
+      {| key_heap := adv.(key_heap) $k++ newkeys
+       ; protocol := adv.(protocol)
+       ; msg_heap := adv.(msg_heap) ++ [existT _ _ msg]
+       ; c_heap   := adv.(c_heap) |}
     -> step_user (Action (Output msg)) (Some u_id)
                 (usrs , adv , cs, gks, ks, qmsgs, mycs, Send rec_u_id msg)
                 (usrs', adv', cs, gks, ks, qmsgs, mycs, Return tt)

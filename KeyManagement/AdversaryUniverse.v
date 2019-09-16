@@ -1174,16 +1174,16 @@ End FindUserKeysCleanUsers.
 Section StripAdv.
   Import RealWorld.
 
-  Definition clean_adv {B} (adv : user_data B) (honestk : key_perms) (b : B) :=
+  Definition clean_adv {B} (adv : user_data B) (honestk : key_perms) (cs : ciphers) (b : B) :=
     {| key_heap := clean_key_permissions honestk adv.(key_heap)
      ; protocol := Return b
-     ; msg_heap := []
+     ; msg_heap := clean_messages honestk cs adv.(msg_heap)
      ; c_heap   := [] |}.
 
   Definition strip_adversary_univ {A B} (U__r : universe A B) (b : B) : universe A B :=
     let honestk := findUserKeys U__r.(users)
     in {| users       := clean_users honestk U__r.(all_ciphers) U__r.(users)
-        ; adversary   := clean_adv U__r.(adversary) honestk b
+        ; adversary   := clean_adv U__r.(adversary) honestk U__r.(all_ciphers) b
         ; all_ciphers := clean_ciphers honestk U__r.(all_ciphers)
         ; all_keys    := clean_keys honestk U__r.(all_keys)
        |}.
