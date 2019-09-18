@@ -3453,87 +3453,6 @@ Section SingleAdversarySimulates.
       induction 1; simpl; intros; subst; context_map_rewrites; clean_map_lookups; eauto.
     Qed.
 
-    (* Lemma honest_labeled_step_advuniv_implies_honest_step_origuniv' : *)
-    (*   forall {A B C} cs cs' lbl u_id suid (usrs usrs' : honest_users A) (adv adv' : user_data B) *)
-    (*             gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd' a a' (b : B), *)
-    (*     step_user lbl suid bd bd' *)
-    (*     -> suid = Some u_id *)
-    (*     -> action_adversary_safe (findUserKeys usrs) cs a *)
-    (*     -> message_queues_ok cs usrs gks *)
-    (*     -> forall (cmd : user_cmd C) cs__s usrs__s honestk, *)
-    (*       honestk = findUserKeys usrs *)
-    (*       -> cs__s = clean_ciphers honestk cs *)
-    (*       -> usrs__s = clean_users honestk cs usrs *)
-    (*       -> bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd) *)
-    (*       -> forall cmd' cs__s' usrs__s' honestk', *)
-    (*           honestk' = findUserKeys usrs' *)
-    (*           -> cs__s' = clean_ciphers honestk' cs' *)
-    (*           -> usrs__s' = clean_users honestk' cs' usrs' *)
-    (*           -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd') *)
-    (*           -> lbl = Action a *)
-    (*           -> user_queue usrs u_id = Some qmsgs *)
-    (*               -> a' = strip_action (findUserKeys usrs) a *)
-    (*               -> step_user (Action a') suid *)
-    (*                           (usrs__s, clean_adv adv (findUserKeys usrs) cs__s b, cs__s, clean_keys honestk gks, *)
-    (*                            clean_key_permissions honestk ks, clean_messages honestk cs qmsgs, mycs, cmd) *)
-    (*                           (usrs__s', clean_adv adv' (findUserKeys usrs) cs__s' b, cs__s', clean_keys honestk' gks', *)
-    (*                            clean_key_permissions honestk' ks', clean_messages honestk' cs' qmsgs', mycs', cmd'). *)
-    (* Proof. *)
-    (*   induction 1; inversion 7; inversion 4; intros; *)
-    (*     subst; try discriminate; *)
-    (*       try solve [ econstructor; eauto ]; *)
-    (*       clean_context; *)
-    (*       autorewrite with find_user_keys. *)
-
-    (*   - assert ( msg_honestly_signed (findUserKeys usrs') cs' msg = true ) by eauto. *)
-    (*     rewrite H. *)
-    (*     econstructor; eauto. *)
-
-    (*     msg_queue_prop. specialize_msg_ok. *)
-    (*     erewrite <- honest_message_findKeysCrypto_same_after_cleaning by solve [ eauto ]. *)
-    (*     rewrite clean_key_permissions_distributes_merge_key_permissions. *)
-        
-    (*     assert (clean_key_permissions (findUserKeys usrs') (findKeysCrypto cs' msg) = findKeysCrypto cs' msg). *)
-    (*     + apply map_eq_Equal; unfold Equal; intros. *)
-    (*       cases (findKeysCrypto cs' msg $? y). *)
-    (*       * apply clean_key_permissions_keeps_honest_permission; eauto. *)
-    (*         specialize (H9 _ _ Heq); split_ands; subst; eauto. *)
-    (*       * apply clean_key_permissions_adds_no_permissions; eauto. *)
-    (*     + rewrite H12; trivial. *)
-
-    (*   - econstructor; eauto. *)
-    (*     + unfold keys_mine in *; intros. *)
-
-    (*       erewrite <- honest_message_findKeysCrypto_same_after_cleaning in H6 by solve [ eauto ]. *)
-    (*       pose proof (message_contains_only_honest_public_keys_keys_honest _ H H6). *)
-    (*       specialize (H0 _ _ H6); split_ors; split_ands; subst. *)
-    (*       * left; eapply clean_key_permissions_keeps_honest_permission; eauto. *)
-    (*       * right; intuition idtac. *)
-    (*         eapply clean_key_permissions_keeps_honest_permission; eauto. *)
-
-    (*     + eapply clean_users_cleans_user; eauto. *)
-    (*     + simpl. *)
-    (*       rewrite clean_users_add_pull; simpl; eauto. *)
-    (*       rewrite clean_messages_keeps_honestly_signed; eauto. *)
-          
-    (*     + unfold clean_adv, addUserKeys; simpl. *)
-    (*       erewrite <- honest_message_findKeysCrypto_same_after_cleaning by solve [ eauto ]. *)
-    (*       destruct H; simpl in *; try discriminate; context_map_rewrites; eauto; *)
-    (*         rewrite clean_messages_keeps_honestly_signed; eauto. *)
-    (*       f_equal; eauto. *)
-    (*       rewrite clean_key_permissions_distributes_merge_key_permissions. *)
-    (*       apply map_eq_Equal; unfold Equal; intros. *)
-    (*       cases (findKeysMessage m $? y). *)
-    (*       * pose proof (content_contains_only_honest_public_keys_keys_honest _ H6 Heq). *)
-    (*         assert (clean_key_permissions (findUserKeys usrs) (findKeysMessage m) $? y = Some b0). *)
-    (*         apply clean_key_permissions_keeps_honest_permission; eauto. *)
-    (*         unfold honest_perm_filter_fn; context_map_rewrites; trivial. *)
-    (*         cases (clean_key_permissions (findUserKeys usrs) (key_heap adv) $? y); simplify_key_merges; eauto. *)
-    (*       * assert (clean_key_permissions (findUserKeys usrs) (findKeysMessage m) $? y = None). *)
-    (*         apply clean_key_permissions_adds_no_permissions; eauto. *)
-    (*         cases (clean_key_permissions (findUserKeys usrs) (key_heap adv) $? y); simplify_key_merges; eauto. *)
-    (* Qed. *)
-
     Lemma honest_labeled_step_advuniv_implies_honest_step_origuniv' :
       forall {A B C} cs cs' lbl u_id suid (usrs usrs' : honest_users A) (adv adv' : user_data B)
                 gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd' a a' (b : B),
@@ -3614,7 +3533,7 @@ Section SingleAdversarySimulates.
             apply clean_key_permissions_adds_no_permissions; eauto.
             cases (clean_key_permissions (findUserKeys usrs) (key_heap adv) $? y); simplify_key_merges; eauto.
     Qed.
-    
+
     Lemma labeled_step_adv_univ_implies_adv_universe_ok :
       forall {A B} (U U' : universe A B) lbl a,
         step_universe U lbl U'
@@ -4294,7 +4213,7 @@ Section SingleAdversarySimulates.
     Qed.
 
     Lemma silent_step_advuniv_implies_univ_ok :
-      forall {A B} (U U' : universe A B) (U__i : IdealWorld.universe A) (R : simpl_universe A -> IdealWorld.universe A -> Prop) lbl b,
+      forall {A B} (U U' : universe A B) (U__i : IdealWorld.universe A) (R : simpl_universe A -> IdealWorld.universe A -> Prop) lbl (b:B),
         step_universe U lbl U'
         -> lbl = Silent
         -> adv_universe_ok U
@@ -4600,6 +4519,54 @@ Section SingleAdversarySimulates.
   Qed.
 
   Theorem simulates_ok_with_adversary :
+    forall {A B} (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A)
+      (R : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop) (b : B),
+      simulates (lameAdv b) R U__r U__i
+      -> lameAdv b U__r.(RealWorld.adversary)
+      -> universe_starts_ok U__r
+      -> universe_ok U__r
+      -> adv_universe_ok U__r
+      -> forall U__ra advcode R',
+          U__ra = add_adversary U__r advcode
+          -> R' = (fun ur ui => R (strip_adversary_simpl ur) ui)
+          -> simulates (@awesomeAdv B) R' U__ra U__i.
+    intros.
+    (* inversion H as [R SIM]. *)
+    inversion H as [H__silent H__l].
+    inversion H__l as [H__loud H__s]; clear H__l.
+    inversion H__s as [H__univok H__o]; clear H__s.
+    inversion H__o as [H__advsafe H__o']; clear H__o.
+    inversion H__o' as [R__start OK__start]; clear H__o'.
+
+    (* unfold refines. *)
+    
+    (* exists (fun ur ui => R (strip_adversary_simpl ur) ui); unfold simulates. *)
+
+    unfold simulates; rewrite H5.
+
+    Hint Resolve
+         simulates_with_adversary_silent
+         simulates_with_adversary_labeled
+         simulates_start_ok_adding_adversary
+    .
+
+    unfold simulates_silent_step, simulates_labeled_step, simulates_universe_ok, simulates_labeled_step_safe.
+    assert (R (strip_adversary U__ra) U__i /\ universe_ok U__ra /\ adv_universe_ok U__ra) by eauto.
+
+    intuition idtac.
+    - rewrite strip_adv_simpl_peel_same_as_strip_adv in *.
+      eapply simulates_with_adversary_silent with (b0 := b); eauto.
+
+    - eapply simulates_with_adversary_labeled; eauto.
+
+    - eapply H__univok; eauto.
+      rewrite <- strip_adv_simpl_strip_adv_idempotent; eassumption.
+
+    - eapply  H__advsafe; eauto.
+      rewrite <- strip_adv_simpl_strip_adv_idempotent; eassumption.
+  Qed.
+
+  Theorem simulates_ok_with_adversary' :
     forall {A B} (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A) (b : B),
         U__r <| U__i \ lameAdv b
       -> lameAdv b U__r.(RealWorld.adversary)
@@ -4618,6 +4585,7 @@ Section SingleAdversarySimulates.
     inversion H__o' as [R__start OK__start]; clear H__o'.
 
     unfold refines.
+    
     exists (fun ur ui => R (strip_adversary_simpl ur) ui); unfold simulates.
 
     Hint Resolve
@@ -4702,52 +4670,98 @@ Inductive traceMatches : list RealWorld.action -> list IdealWorld.action -> Prop
 Hint Constructors traceMatches.
 Hint Resolve
      silent_step_adv_univ_implies_adv_universe_ok
+     silent_step_advuniv_implies_univ_ok
+     honest_labeled_step_univ_ok
      labeled_step_adv_univ_implies_adv_universe_ok.
 
+
+Lemma strip_adversary_same_as_peel_strip_simpl :
+  forall {A B} (U : RealWorld.universe A B) b,
+    strip_adversary U = RealWorld.peel_adv (strip_adversary_univ U b).
+Proof.
+  unfold strip_adversary, strip_adversary_simpl, RealWorld.peel_adv; intros.
+  trivial.
+Qed.
+
+Lemma simulation_relation_multi_stripped :
+  forall {A B} (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A)
+          (R : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop) R',
+
+    R' = (fun (ur : RealWorld.simpl_universe A) (ui : IdealWorld.universe A) => R (strip_adversary_simpl ur) ui)
+    -> R (strip_adversary_simpl (RealWorld.peel_adv U__r)) U__i
+    -> R' (strip_adversary U__r) U__i.
+Proof.
+  intros; subst.
+  rewrite strip_adv_simpl_strip_adv_idempotent.
+  rewrite strip_adv_simpl_peel_same_as_strip_adv in H0.
+  assumption.
+Qed.
+
 Lemma simulates_could_generate :
-  forall A B (R : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop),
-      simulates_silent_step (awesomeAdv (B:=B)) R
-    -> simulates_labeled_step (awesomeAdv (B:=B)) R
-    -> simulates_universe_ok R
-    -> simulates_labeled_step_safe R
+  forall A B (R R' : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop) (b:B),
+    R' = (fun ur ui => R (strip_adversary_simpl ur) ui)
+    -> simulates_silent_step (awesomeAdv (B:=B)) R'
+    -> simulates_labeled_step (awesomeAdv (B:=B)) R'
+    -> simulates_universe_ok R'
+    -> simulates_labeled_step_safe R'
     -> forall (U__r : RealWorld.universe A B) acts__r,
         universe_ok U__r
         -> adv_universe_ok U__r
         -> rCouldGenerate U__r acts__r
         -> forall U__i,
-            R (RealWorld.peel_adv U__r) U__i
+            R' (RealWorld.peel_adv U__r) U__i
             -> exists acts__i,
                 iCouldGenerate U__i acts__i
               /\ traceMatches acts__r acts__i.
 Proof.
-  induction 7; intros; intuition eauto.
+  induction 9; intros; subst; intuition eauto;
+    assert (awesomeAdv (RealWorld.adversary U)) as AWE by (unfold awesomeAdv; trivial).
 
-  - assert (awesomeAdv (RealWorld.adversary U)) as AWE by (unfold awesomeAdv; trivial).
-
-    generalize (H _ _ H7 H3 H4 AWE _ H5); intro STEPPED;
+  - generalize (H0 _ _ H8 H4 H5 AWE _ H6); intro STEPPED;
       destruct STEPPED as [U__i' STEPPED]; split_ands.
 
-    eapply IHrCouldGenerate in H9; eauto.
-    split_ex; split_ands; eexists; eauto.
-    eapply H1; eauto.
-    admit.
+    rewrite strip_adv_simpl_peel_same_as_strip_adv in H9.
+    rewrite strip_adversary_same_as_peel_strip_simpl with (b0:=b) in H9.
+    remember (fun (ur : RealWorld.simpl_universe A) (ui : IdealWorld.universe A) => R (strip_adversary_simpl ur) ui) as R'.
+    assert (R' (RealWorld.peel_adv U') U__i') as INR' by (subst; eauto).
+    assert (universe_ok U') as UOK.
+    eapply silent_step_advuniv_implies_univ_ok with (R0:=R') (b0:=b) (U__i0 := U__i); eauto.
+    subst.
+    rewrite strip_adv_simpl_peel_same_as_strip_adv in H8.
+    rewrite <- strip_adversary_same_as_peel_strip_simpl, strip_adv_simpl_strip_adv_idempotent; eauto.
+    
+    assert (adv_universe_ok U') as AUOK by eauto.
+    specialize (IHrCouldGenerate R _ b HeqR' H0 H1 H2 H3 UOK AUOK _ INR'); split_ex; split_ands.
 
-  - assert (awesomeAdv (RealWorld.adversary U)) as AWE by (unfold awesomeAdv; trivial).
+    eapply ideal_multi_silent_stays_could_generate with (acts__i:=x) in H; eauto.
 
-    generalize (H0 _ _ H7 H3 H4 AWE _ _ H5); intro STEPPED;
-      split_ex; split_ands.
+  - generalize (H1 _ _ H8 H4 H5 AWE _ _ H6); intro STEPPED;
+      destruct STEPPED as [a__i STEPPED];
+      destruct STEPPED as [U__i' STEPPED];
+      destruct STEPPED as [U__i'' STEPPPED]; split_ands.
 
-    eapply IHrCouldGenerate in H11; eauto.
-    split_ex; split_ands.
-    exists (x :: x2); intuition eauto.
-    eapply H1; eauto.
-    admit.
+    rewrite strip_adv_simpl_peel_same_as_strip_adv in H11.
+    rewrite strip_adversary_same_as_peel_strip_simpl with (b0:=b) in H11.
+    remember (fun (ur : RealWorld.simpl_universe A) (ui : IdealWorld.universe A) => R (strip_adversary_simpl ur) ui) as R'.
 
+    assert (R' (RealWorld.peel_adv U') U__i'') as INR' by (subst; eauto).
+
+    assert (universe_ok U') as UOK.
+    eapply honest_labeled_step_univ_ok; unfold adv_universe_ok, simulates_labeled_step_safe in *;
+      split_ands; eauto.
+
+    eapply H3 with (U__i := U__i); eauto.
+    eapply simulation_relation_multi_stripped; eauto.
+
+    assert (adv_universe_ok U') as AUOK.
     eapply labeled_step_adv_univ_implies_adv_universe_ok; eauto.
-    eapply H2; eauto.
-    admit.
+    eapply H3 with (U__i := U__i); eauto.
+    eapply simulation_relation_multi_stripped; eauto.
 
-Admitted.
+    specialize (IHrCouldGenerate R _ b HeqR' H0 H1 H2 H3 UOK AUOK _ INR'); split_ex; split_ands.
+
+    exists (a__i :: x); split; eauto using ideal_multi_silent_stays_could_generate.
+Qed.
 
 Theorem refines_could_generate :
   forall A B (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A) (b : B),
@@ -4762,11 +4776,18 @@ Theorem refines_could_generate :
         /\ traceMatches acts__r acts__i.
 Proof.
   intros.
-  assert (U__ra <| U__i \ @awesomeAdv B) by 
-      (unfold refines, simulates in *;
-       split_ex; split_ands; eapply simulates_ok_with_adversary; eauto;
-       unfold refines, simulates; eexists; intuition eauto).
+  unfold refines in H; destruct H as [R H].
 
-  unfold refines, simulates in *; split_ex; split_ands.
-  eapply simulates_could_generate; eauto.
-Qed.
+  assert (simulates (lameAdv b) R U__r U__i) as SIM by assumption;
+    unfold simulates in SIM; split_ands.
+  assert (simulates (lameAdv b) R U__r U__i) as SIM by assumption;
+    eapply simulates_ok_with_adversary in SIM; eauto.
+  2: reflexivity.
+
+  unfold simulates in SIM; split_ands.
+  eapply simulates_could_generate
+    with (R := R)
+         (B := B)
+         (U__r := U__ra)
+         (R' := (fun (ur : RealWorld.simpl_universe A) (ui : IdealWorld.universe A) => R (strip_adversary_simpl ur) ui)); auto.
+  Qed.
