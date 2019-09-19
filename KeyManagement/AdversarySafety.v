@@ -4141,11 +4141,30 @@ Section SingleAdversarySimulates.
 
   Hint Resolve stripped_action_matches_then_action_matches.
 
+  Lemma msg_matches_strip :
+    forall {A B t} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A)
+      (m__rw : RealWorld.crypto t) (m__iw : IdealWorld.message.message t)
+      ch_id b,
+      MessageEq.message_eq m__rw (strip_adversary_univ U__ra b) m__iw U__i ch_id
+      -> MessageEq.message_eq m__rw U__ra m__iw U__i ch_id.
+  Proof.
+    intros.
+    invert H.
+    - econstructor; eauto; intros.
+    - econstructor; eauto; intros.
+
+  
   Lemma action_matches_strip :
     forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A) a__r a__i b,
       action_matches a__r (strip_adversary_univ U__ra b) a__i U__i
       -> action_matches a__r U__ra a__i U__i.
   Proof.
+    intros.
+    invert H.
+    - econstructor; eauto.
+      admit.
+    - eapply Out; eauto.
+           
   Admitted.
 
   Hint Resolve action_matches_strip.
