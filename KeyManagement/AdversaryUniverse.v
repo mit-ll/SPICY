@@ -20,27 +20,51 @@ Require IdealWorld
 
 Set Implicit Arguments.
 
-Lemma accepted_safe_msg_pattern_honestly_signed :
-  forall {t} (msg : RealWorld.crypto t) honestk cs pat,
+Lemma accepted_safe_msg_pattern_msg_filter_true :
+  forall {t} (msg : RealWorld.crypto t) honestk cs msg_to pat,
     RealWorld.msg_pattern_safe honestk pat
-    -> RealWorld.msg_accepted_by_pattern cs pat msg
-    -> RealWorld.msg_honestly_signed honestk cs msg = true.
+    -> RealWorld.msg_accepted_by_pattern cs msg_to pat msg
+    -> RealWorld.msg_honestly_signed honestk cs msg = true
+    /\ RealWorld.msg_to_this_user cs msg_to msg = true.
 Proof.
   intros.
   destruct msg;
     repeat match goal with
            | [ H : RealWorld.msg_pattern_safe _ _ |- _] => invert H
-           | [ H : RealWorld.msg_accepted_by_pattern _ _ _ |- _] => invert H
+           | [ H : RealWorld.msg_accepted_by_pattern _ _ _ _ |- _] => invert H
            end;
-    unfold RealWorld.msg_honestly_signed;
-    simpl; context_map_rewrites;
+    unfold RealWorld.msg_honestly_signed, RealWorld.msg_to_this_user;
+    simpl; context_map_rewrites; unfold RealWorld.cipher_to_user;
+      destruct (msg_to0 ==n msg_to0); subst; try contradiction;
       rewrite <- RealWorld.honest_key_honest_keyb; auto.
 Qed.
 
-Hint Resolve accepted_safe_msg_pattern_honestly_signed.
+Lemma accepted_safe_msg_pattern_honestly_signed :
+  forall {t} (msg : RealWorld.crypto t) honestk cs msg_to pat,
+    RealWorld.msg_pattern_safe honestk pat
+    -> RealWorld.msg_accepted_by_pattern cs msg_to pat msg
+    -> RealWorld.msg_honestly_signed honestk cs msg = true.
+Proof.
+  intros;
+    pose proof (accepted_safe_msg_pattern_msg_filter_true H H0); split_ands; assumption.
+Qed.
+
+Lemma accepted_safe_msg_pattern_to_this_user :
+  forall {t} (msg : RealWorld.crypto t) honestk cs msg_to pat,
+    RealWorld.msg_pattern_safe honestk pat
+    -> RealWorld.msg_accepted_by_pattern cs msg_to pat msg
+    -> RealWorld.msg_to_this_user cs msg_to msg = true.
+Proof.
+  intros;
+    pose proof (accepted_safe_msg_pattern_msg_filter_true H H0); split_ands; assumption.
+Qed.
+
+Hint Resolve
+     accepted_safe_msg_pattern_honestly_signed
+     accepted_safe_msg_pattern_to_this_user.
 
 (******************** CIPHER CLEANING *********************
- **********************************************************
+vvv **********************************************************
  *
  * Function to clean ciphehrs and lemmas about it.
  *)
@@ -337,13 +361,27 @@ Section CleanMessages.
     Variable cs : ciphers.
     Variable msgs : queued_messages.
 
-    Definition msg_filter (sigM : { t & crypto t } ) : bool :=
-      match sigM with
-      | existT _ _ msg => msg_honestly_signed honestk cs msg
+    Definition list_contains (mycs : my_ciphers) (c_id : cipher_id) : bool :=
+      match count_occ eq_nat_dec mycs c_id with
+      | 0 => false
+      | _ => true
       end.
 
-    Definition clean_messages :=
-      List.filter msg_filter.
+    Definition msg_cipher_has_been_seen {t} (mycs : my_ciphers) (msg : crypto t) : bool :=
+      match msg_cipher_id msg with
+      | Some c_id => list_contains mycs c_id
+      | None      => false (* not filtering non-cipher messages *)
+      end.
+
+    Definition msg_filter (to_usr_id : option user_id) (mycs : my_ciphers) (sigM : { t & crypto t } ) : bool :=
+      match sigM with
+      | existT _ _ msg => msg_honestly_signed honestk cs msg
+                      && msg_to_this_user cs to_usr_id msg
+                      && msg_cipher_has_been_seen mycs msg
+      end.
+
+    Definition clean_messages (to_usr_id : option user_id) (mycs : my_ciphers) :=
+      List.filter (msg_filter to_usr_id mycs).
 
   End CleanMessagesImpl.
 
@@ -404,67 +442,110 @@ Section CleanMessages.
     specialize (H0 _ Heq0); context_map_rewrites; trivial.
   Qed.
 
+  Lemma msg_to_this_user_before_after_cleaning :
+    forall {t} (msg : crypto t) honestk cs msg_to,
+      msg_honestly_signed honestk cs msg = true
+      -> msg_to_this_user cs msg_to msg = true
+      -> msg_to_this_user (clean_ciphers honestk cs) msg_to msg = true.
+  Proof.
+    intros.
+    unfold msg_honestly_signed, msg_to_this_user in *.
+    cases (msg_signing_key cs msg); try discriminate.
+    cases (msg_destination_user cs msg); try discriminate.
+    destruct msg_to; [destruct (u ==n u0); try discriminate; subst |];
+      unfold msg_signing_key, msg_destination_user in *; destruct msg; try discriminate;
+        cases (cs $? c_id); try discriminate; clean_context;
+          erewrite clean_ciphers_keeps_honest_cipher; clean_context; eauto;
+      destruct (cipher_to_user c ==n cipher_to_user c); try contradiction; trivial;
+      unfold honest_cipher_filter_fn, cipher_honestly_signed; destruct c; eauto.
+  Qed.
+
   Hint Resolve
+       msg_to_this_user_before_after_cleaning
        msg_honestly_signed_after_without_cleaning
        msg_honestly_signed_before_after_cleaning
        msg_honestly_signed_before_after_cleaning'.
 
   Lemma clean_messages_keeps_honestly_signed :
-    forall {t} (msg : crypto t) honestk cs msgs,
+    forall {t} (msg : crypto t) honestk cs to_usr mycs msgs,
       msg_honestly_signed honestk cs msg = true
-      -> clean_messages honestk cs (msgs ++ [existT _ _ msg])
-        = clean_messages honestk cs msgs ++ [existT _ _ msg].
+      -> msg_to_this_user cs to_usr msg = true
+      -> msg_cipher_has_been_seen mycs msg = true
+      -> clean_messages honestk cs to_usr mycs (msgs ++ [existT _ _ msg])
+        = clean_messages honestk cs to_usr mycs msgs ++ [existT _ _ msg].
   Proof.
     intros; unfold clean_messages.
     induction msgs; simpl; eauto.
-    - rewrite H; trivial.
-    - cases (msg_filter honestk cs a); subst; eauto.
+    - unfold msg_filter; rewrite H , H0, H1; trivial.
+    - cases (msg_filter honestk cs to_usr mycs a); subst; eauto.
       rewrite IHmsgs; trivial.
   Qed.
 
-  Lemma clean_messages_drops_not_honestly_signed :
-    forall {t} (msg : crypto t) msgs honestk cs,
-      msg_honestly_signed honestk cs msg = false
-      -> clean_messages honestk cs (msgs ++ [existT _ _ msg])
-        = clean_messages honestk cs msgs.
+  Lemma clean_messages_drops_msg_filter_false :
+    forall (msg : { type & crypto type }) msgs honestk to_usr mycs cs,
+      msg_filter honestk cs to_usr mycs msg = false
+      -> clean_messages honestk cs to_usr mycs (msgs ++ [msg])
+        = clean_messages honestk cs to_usr mycs msgs.
   Proof.
     intros; unfold clean_messages. (*  *)
     induction msgs; simpl; eauto.
     - rewrite H; trivial.
-    - cases (msg_filter honestk cs a); subst; eauto.
+    - cases (msg_filter honestk cs to_usr mycs a); subst; eauto.
       rewrite IHmsgs; trivial.
   Qed.
+  
+  (* Lemma clean_messages_drops_not_honestly_signed : *)
+  (*   forall {t} (msg : crypto t) msgs honestk to_usr cs, *)
+  (*     msg_honestly_signed honestk cs msg = false *)
+  (*     -> clean_messages honestk cs to_usr (msgs ++ [existT _ _ msg]) *)
+  (*       = clean_messages honestk cs to_usr msgs. *)
+  (* Proof. *)
+  (*   intros; unfold clean_messages. (*  *) *)
+  (*   induction msgs; simpl; eauto. *)
+  (*   - rewrite H; trivial. *)
+  (*   - cases (msg_filter honestk cs to_usr a); subst; eauto. *)
+  (*     rewrite IHmsgs; trivial. *)
+  (* Qed. *)
 
-  Lemma clean_message_keeps_safely_patterned_message :
-    forall {t} (msg : crypto t) honestk cs msgs pat,
-      msg_pattern_safe honestk pat
-      -> msg_accepted_by_pattern cs pat msg
-      -> clean_messages honestk cs (existT _ _ msg :: msgs)
-        = (existT _ _ msg) :: clean_messages honestk cs msgs.
-  Proof.
-    intros.
-    assert (msg_honestly_signed honestk cs msg = true) by eauto.
-    unfold clean_messages; simpl;
-      match goal with
-      | [ H : msg_honestly_signed _ _ _ = _ |- _ ] => rewrite H
-      end; trivial.
-  Qed.
+  (* Lemma clean_message_keeps_safely_patterned_message : *)
+  (*   forall {t} (msg : crypto t) honestk cs msg_to msgs pat, *)
+  (*     msg_pattern_safe honestk pat *)
+  (*     -> msg_accepted_by_pattern cs (Some msg_to) pat msg *)
+  (*     -> clean_messages honestk cs msg_to  (existT _ _ msg :: msgs) *)
+  (*       = (existT _ _ msg) :: clean_messages honestk cs msg_to msgs. *)
+  (* Proof. *)
+  (*   intros. *)
+  (*   assert (msg_honestly_signed honestk cs msg = true) by eauto. *)
+  (*   unfold clean_messages; simpl; *)
+  (*     match goal with *)
+  (*     | [ H : msg_honestly_signed _ _ _ = _ |- _ ] => rewrite H *)
+  (*     end; trivial. *)
+
+  (*   unfold msg_honestly_signed in *; cases (msg_signing_key cs msg); try discriminate. *)
+  (*   unfold msg_to_this_user. *)
+  (*   cases (msg_destination_user cs msg). *)
+  (*   - invert H0. *)
+  (*   - exfalso. *)
+  (*     unfold msg_destination_user, msg_signing_key in *; destruct msg; try discriminate. *)
+  (*     destruct (cs $? c_id ); try discriminate. *)
+  (* Qed. *)
 
   Lemma clean_messages_idempotent :
-    forall msgs honestk honestk' cs,
+    forall msgs honestk honestk' cs msg_to mycs,
       (forall k, honestk $? k = Some true -> honestk' $? k = Some true)
-      -> clean_messages honestk' (clean_ciphers honestk cs) (clean_messages honestk cs msgs) = clean_messages honestk cs msgs.
+      -> clean_messages honestk' (clean_ciphers honestk cs) msg_to mycs (clean_messages honestk cs msg_to mycs msgs)
+        = clean_messages honestk cs msg_to mycs msgs.
   Proof.
     induction msgs; intros; eauto.
     simpl.
-    case_eq (msg_filter honestk cs a); intros; eauto.
-    assert (msg_filter honestk' (clean_ciphers honestk cs) a = true)
+    case_eq (msg_filter honestk cs msg_to mycs a); intros; eauto.
+    assert (msg_filter honestk' (clean_ciphers honestk cs) msg_to mycs a = true)
       as MSG_FLTR.
-      (* by (unfold msg_filter in *; destruct a; eauto). *)
-    unfold msg_filter in *; destruct a; eauto.
-    
-    simpl; rewrite MSG_FLTR; auto.
-    rewrite IHmsgs; trivial.
+    (* by (unfold msg_filter in *; destruct a; eauto). *)
+    unfold msg_filter in *; destruct a; rewrite !andb_true_iff in H0; split_ands.
+    rewrite !andb_true_iff; eauto.
+    simpl.
+    rewrite MSG_FLTR, IHmsgs; eauto.
   Qed.
 
 End CleanMessages.
@@ -828,17 +909,17 @@ Section CleanUsers.
   Variable honestk : key_perms.
 
   Definition clean_users {A} (cs : ciphers) (usrs : honest_users A) :=
-    map (fun u_d => {| key_heap := clean_key_permissions honestk u_d.(key_heap)
-                  ; protocol := u_d.(protocol)
-                  ; msg_heap := clean_messages honestk cs u_d.(msg_heap)
-                  ; c_heap   := u_d.(c_heap) |}) usrs.
+    mapi (fun u_id u_d => {| key_heap := clean_key_permissions honestk u_d.(key_heap)
+                        ; protocol := u_d.(protocol)
+                        ; msg_heap := clean_messages honestk cs (Some u_id) u_d.(c_heap) u_d.(msg_heap)
+                        ; c_heap   := u_d.(c_heap) |}) usrs.
 
   Lemma clean_users_notation :
     forall {A} (cs : ciphers) (usrs : honest_users A),
-      map (fun u_d => {| key_heap := clean_key_permissions honestk u_d.(key_heap)
-                    ; protocol := u_d.(protocol)
-                    ; msg_heap := clean_messages honestk cs u_d.(msg_heap)
-                    ; c_heap   := u_d.(c_heap) |}) usrs = clean_users cs usrs.
+      mapi (fun u_id u_d => {| key_heap := clean_key_permissions honestk u_d.(key_heap)
+                          ; protocol := u_d.(protocol)
+                          ; msg_heap := clean_messages honestk cs (Some u_id) u_d.(c_heap) u_d.(msg_heap)
+                          ; c_heap   := u_d.(c_heap) |}) usrs = clean_users cs usrs.
   Proof. unfold clean_users; trivial. Qed.
 
   Lemma clean_users_cleans_user :
@@ -846,12 +927,12 @@ Section CleanUsers.
       usrs $? u_id = Some u_d
       -> u_d' = {| key_heap := clean_key_permissions honestk u_d.(key_heap)
                 ; protocol := u_d.(protocol)
-                ; msg_heap :=  clean_messages honestk cs u_d.(msg_heap)
+                ; msg_heap :=  clean_messages honestk cs (Some u_id) u_d.(c_heap) u_d.(msg_heap)
                 ; c_heap   := u_d.(c_heap) |}
       -> clean_users cs usrs $? u_id = Some u_d'.
   Proof.
     intros.
-    unfold clean_users; rewrite map_o; unfold option_map;
+    unfold clean_users; rewrite mapi_o; intros; subst; unfold option_map;
       context_map_rewrites; subst; auto.
   Qed.
 
@@ -864,10 +945,10 @@ Section CleanUsers.
                              ; msg_heap := msgs
                              ; c_heap   := u_d.(c_heap) |}
         /\ u_d.(key_heap) = clean_key_permissions honestk perms
-        /\ u_d.(msg_heap) = clean_messages honestk cs msgs.
+        /\ u_d.(msg_heap) = clean_messages honestk cs (Some u_id) u_d.(c_heap) msgs.
   Proof.
     intros.
-    unfold clean_users in *. rewrite map_o in H. unfold option_map in *.
+    unfold clean_users in *. rewrite mapi_o in H; intros; subst; auto; unfold option_map in *.
     cases (usrs $? u_id); try discriminate; eauto.
     destruct u; destruct u_d; simpl in *.
     invert H.
@@ -879,13 +960,13 @@ Section CleanUsers.
       clean_users cs (usrs $+ (u_id,u))
       = clean_users cs usrs $+ (u_id, {| key_heap := clean_key_permissions honestk u.(key_heap)
                                        ; protocol := u.(protocol)
-                                       ; msg_heap := clean_messages honestk cs u.(msg_heap)
+                                       ; msg_heap := clean_messages honestk cs (Some u_id) u.(c_heap) u.(msg_heap)
                                        ; c_heap   := u.(c_heap) |}).
   Proof.
     intros.
     apply map_eq_Equal; unfold Equal; intros.
     cases (y ==n u_id); subst; clean_map_lookups; eauto;
-      unfold clean_users; rewrite !map_o; unfold option_map; clean_map_lookups; auto.
+      unfold clean_users; rewrite !mapi_o; intros; subst; unfold option_map; clean_map_lookups; auto.
   Qed.
 
   Lemma clean_users_adds_no_users :
@@ -894,7 +975,7 @@ Section CleanUsers.
       -> clean_users cs usrs $? u_id = None.
   Proof.
     unfold clean_users; intros.
-    rewrite map_o; simpl.
+    rewrite mapi_o; intros; subst; eauto.
     unfold option_map; context_map_rewrites; trivial.
   Qed.
 
@@ -1074,18 +1155,22 @@ Section FindUserKeysCleanUsers.
   Qed.
 
   Lemma clean_messages_ok_extra_user_cleaning :
-    forall {A} (usrs : honest_users A) cs msgs,
-      clean_messages (findUserKeys usrs) cs msgs =
-      clean_messages (findUserKeys (clean_users (findUserKeys usrs) cs usrs)) cs (clean_messages (findUserKeys usrs) cs msgs).
+    forall {A} (usrs : honest_users A) cs msgs mycs u_id,
+      clean_messages (findUserKeys usrs) cs u_id mycs msgs =
+      clean_messages (findUserKeys (clean_users (findUserKeys usrs) cs usrs)) cs u_id mycs (clean_messages (findUserKeys usrs) cs u_id mycs msgs).
   Proof.
-    induction msgs; eauto; simpl;
+    induction msgs; eauto; intros; simpl;
       rewrite IHmsgs.
-    case_eq ( msg_filter (findUserKeys usrs) cs a ); intros.
-    - assert (msg_filter (findUserKeys (clean_users (findUserKeys usrs) cs usrs)) cs a = true).
-      unfold msg_filter, msg_honestly_signed, honest_keyb in *; destruct a;
-        destruct c; try discriminate;
+    case_eq ( msg_filter (findUserKeys usrs) cs u_id mycs a ); intros.
+    - assert (msg_filter (findUserKeys (clean_users (findUserKeys usrs) cs usrs)) cs u_id mycs a = true).
+      unfold msg_filter, msg_honestly_signed, msg_to_this_user, honest_keyb in *; destruct a;
+        destruct c; try discriminate.
           repeat match goal with
+                 | [ H : context [_ && _ = true] |- _ ] => rewrite andb_true_iff in H; split_ands
                  | [ |- context [msg_signing_key ?cs ?c]] => cases (msg_signing_key cs c); try discriminate
+                 | [ |- context [msg_destination_user ?cs ?c]] => cases (msg_destination_user cs c); try discriminate
+                 | [ |- context [ if ?uid1 ==n ?uid2 then _ else _] ] => destruct (uid1 ==n uid2); subst; try discriminate
+                 | [ H : ?stuff = true |- context [?stuff] ] => rewrite H; simpl
                  | [ H : match findUserKeys ?usrs $? ?k with _ => _ end = true |- _ ] => cases (findUserKeys usrs $? k); try discriminate
                  | [ H : (if ?b then _ else _) = _ |- _ ] => destruct b; subst; try discriminate
                  | [ H : findUserKeys ?usrs $? ?k = Some true |- context [ findUserKeys (clean_users (findUserKeys ?usrs) ?cs ?usrs) $? ?k ] ] =>
@@ -1122,7 +1207,7 @@ Section FindUserKeysCleanUsers.
       intros.
       pose proof (findUserKeys_clean_users_correct usrs cs k); context_map_rewrites; eauto.
 
-    - unfold clean_users in H; rewrite map_o in H; unfold option_map in H.
+    - unfold clean_users in H; rewrite mapi_o in H; intros; subst; auto; unfold option_map in H.
       cases (usrs $? y); try discriminate.
       apply clean_users_adds_no_users; eauto.
   Qed.
@@ -1177,7 +1262,7 @@ Section StripAdv.
   Definition clean_adv {B} (adv : user_data B) (honestk : key_perms) (cs : ciphers) (b : B) :=
     {| key_heap := clean_key_permissions honestk adv.(key_heap)
      ; protocol := Return b
-     ; msg_heap := clean_messages honestk cs adv.(msg_heap)
+     ; msg_heap := clean_messages honestk cs None adv.(c_heap) adv.(msg_heap)
      ; c_heap   := [] |}.
 
   Definition strip_adversary_univ {A B} (U__r : universe A B) (b : B) : universe A B :=
@@ -1203,10 +1288,11 @@ Section StripAdv.
        |}.
 
   Definition strip_action (honestk : key_perms) (act : action) :=
-    match act with
-    | Input msg pat perms => Input msg pat (clean_key_permissions honestk perms)
-    | output              => output
-    end.
+    act.
+    (* match act with *)
+    (* | Input msg pat msg_to => Input msg pat msg_to *)
+    (* | output              => output *)
+    (* end. *)
 
   Definition strip_label (honestk : key_perms) (lbl : label) :=
     match lbl with

@@ -51,14 +51,14 @@ Inductive action_matches : forall {A B : Type},
                            RealWorld.action -> RealWorld.universe A B ->
                            IdealWorld.action -> IdealWorld.universe A -> Prop :=
 | Inp : forall A B t__r t__i (m__rw : RealWorld.crypto t__r) (m__iw m__expected : IdealWorld.message.message t__i)
-               ms (U__rw : RealWorld.universe A B) (U__iw : IdealWorld.universe A) rw iw ch_id cs ps p y,
-      rw = (RealWorld.Input m__rw p y)
+               ms (U__rw : RealWorld.universe A B) (U__iw : IdealWorld.universe A) rw iw ch_id cs ps p,
+      rw = (RealWorld.Input m__rw p)
       -> iw = IdealWorld.Input m__iw ch_id cs ps
       -> U__iw.(IdealWorld.channel_vector) $? ch_id = Some ((existT _ _ m__expected) :: ms)
       -> MessageEq.message_eq m__rw U__rw m__iw U__iw m__expected ch_id {} {}
       -> action_matches rw U__rw iw U__iw
-| Out : forall A B t__r t__i (m__rw : RealWorld.crypto t__r) (m__iw m__expected : IdealWorld.message.message t__i) ms (U__rw : RealWorld.universe A B) (U__iw : IdealWorld.universe A) rw iw ch_id cs ps,
-    rw = RealWorld.Output m__rw
+| Out : forall A B t__r t__i (m__rw : RealWorld.crypto t__r) (m__iw m__expected : IdealWorld.message.message t__i) ms (U__rw : RealWorld.universe A B) (U__iw : IdealWorld.universe A) rw iw ch_id cs ps suid,
+    rw = RealWorld.Output m__rw suid
     -> iw = IdealWorld.Output m__iw ch_id cs ps
     -> U__iw.(IdealWorld.channel_vector) $? ch_id = Some (ms ++ [existT _ _ m__expected])
     -> MessageEq.message_eq m__rw U__rw m__iw U__iw m__expected ch_id {} {}
@@ -100,31 +100,31 @@ Section RealWorldUniverseProperties.
     Forall (fun cid => exists c, cs $? cid = Some c).
 
   Inductive encrypted_cipher_ok (cs : ciphers) (gks : keys): cipher -> Prop :=
-  | SigCipherHonestOk : forall {t} (msg : message t) k k_data,
+  | SigCipherHonestOk : forall {t} (msg : message t) msg_to k k_data,
       honestk $? k = Some true
       -> gks $? k = Some k_data
       -> (forall k_id, findKeysMessage msg $? k_id = Some true -> False)
       -> (forall k_id, findKeysMessage msg $? k_id = Some false -> honestk $? k_id = Some true)
-      -> encrypted_cipher_ok cs gks (SigCipher k msg)
-  | SigCipherNotHonestOk : forall {t} (msg : message t) k k_data,
+      -> encrypted_cipher_ok cs gks (SigCipher k msg_to msg)
+  | SigCipherNotHonestOk : forall {t} (msg : message t) msg_to k k_data,
       honestk $? k <> Some true
       -> gks $? k = Some k_data
-      -> encrypted_cipher_ok cs gks (SigCipher k msg)
-  | SigEncCipherAdvSignedOk :  forall {t} (msg : message t) k__s k__e k_data__s k_data__e,
+      -> encrypted_cipher_ok cs gks (SigCipher k msg_to msg)
+  | SigEncCipherAdvSignedOk :  forall {t} (msg : message t) msg_to k__s k__e k_data__s k_data__e,
       honestk $? k__s <> Some true
       -> gks $? k__s = Some k_data__s
       -> gks $? k__e = Some k_data__e
       -> (forall k kp, findKeysMessage msg $? k = Some kp
                  -> exists v, gks $? k = Some v
                       /\ (kp = true -> honestk $? k <> Some true))
-      -> encrypted_cipher_ok cs gks (SigEncCipher k__s k__e msg)
-  | SigEncCipherHonestSignedEncKeyHonestOk : forall {t} (msg : message t) k__s k__e k_data__s k_data__e,
+      -> encrypted_cipher_ok cs gks (SigEncCipher k__s k__e msg_to msg)
+  | SigEncCipherHonestSignedEncKeyHonestOk : forall {t} (msg : message t) msg_to k__s k__e k_data__s k_data__e,
       honestk $? k__s = Some true
       -> honestk $? k__e = Some true
       -> gks $? k__s = Some k_data__s
       -> gks $? k__e = Some k_data__e
       -> (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true /\ kp = false)
-      -> encrypted_cipher_ok cs gks (SigEncCipher k__s k__e msg).
+      -> encrypted_cipher_ok cs gks (SigEncCipher k__s k__e msg_to msg).
 
   Definition encrypted_ciphers_ok (cs : ciphers) (gks : keys) :=
     Forall_natmap (encrypted_cipher_ok cs gks) cs.
@@ -455,8 +455,8 @@ Section RealWorldLemmas.
       cases (keyId k ==n k__e); subst; clean_map_lookups; eauto.
       intros.
       cases (keyId k ==n k0); subst; clean_map_lookups; eauto.
-      exists k; eauto.
-      specialize (H12 _ _ H); split_ex; split_ands; auto.
+      eexists; intuition eauto; subst.
+      specialize (H13 _ _ H); split_ex; split_ands; auto.
   Qed.
 
   Lemma encrypted_ciphers_ok_addnl_key :
@@ -511,7 +511,7 @@ Section RealWorldLemmas.
     - destruct (keyId k ==n k__s); subst; clean_map_lookups; eauto.
     - destruct (keyId k ==n k__e); subst; clean_map_lookups; eauto.
     - intros.
-      specialize (H13 _ _ H); split_ex; split_ands.
+      specialize (H14 _ _ H); split_ex; split_ands.
       eexists; destruct (keyId k ==n k0); subst; clean_map_lookups; eauto.
   Qed.
 
