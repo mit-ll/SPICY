@@ -100,31 +100,31 @@ Section RealWorldUniverseProperties.
     Forall (fun cid => exists c, cs $? cid = Some c).
 
   Inductive encrypted_cipher_ok (cs : ciphers) (gks : keys): cipher -> Prop :=
-  | SigCipherHonestOk : forall {t} (msg : message t) msg_to k k_data,
+  | SigCipherHonestOk : forall {t} (msg : message t) msg_to nonce k k_data,
       honestk $? k = Some true
       -> gks $? k = Some k_data
       -> (forall k_id, findKeysMessage msg $? k_id = Some true -> False)
       -> (forall k_id, findKeysMessage msg $? k_id = Some false -> honestk $? k_id = Some true)
-      -> encrypted_cipher_ok cs gks (SigCipher k msg_to msg)
-  | SigCipherNotHonestOk : forall {t} (msg : message t) msg_to k k_data,
+      -> encrypted_cipher_ok cs gks (SigCipher k msg_to nonce msg)
+  | SigCipherNotHonestOk : forall {t} (msg : message t) msg_to nonce k k_data,
       honestk $? k <> Some true
       -> gks $? k = Some k_data
-      -> encrypted_cipher_ok cs gks (SigCipher k msg_to msg)
-  | SigEncCipherAdvSignedOk :  forall {t} (msg : message t) msg_to k__s k__e k_data__s k_data__e,
+      -> encrypted_cipher_ok cs gks (SigCipher k msg_to nonce msg)
+  | SigEncCipherAdvSignedOk :  forall {t} (msg : message t) msg_to nonce k__s k__e k_data__s k_data__e,
       honestk $? k__s <> Some true
       -> gks $? k__s = Some k_data__s
       -> gks $? k__e = Some k_data__e
       -> (forall k kp, findKeysMessage msg $? k = Some kp
                  -> exists v, gks $? k = Some v
                       /\ (kp = true -> honestk $? k <> Some true))
-      -> encrypted_cipher_ok cs gks (SigEncCipher k__s k__e msg_to msg)
-  | SigEncCipherHonestSignedEncKeyHonestOk : forall {t} (msg : message t) msg_to k__s k__e k_data__s k_data__e,
+      -> encrypted_cipher_ok cs gks (SigEncCipher k__s k__e msg_to nonce msg)
+  | SigEncCipherHonestSignedEncKeyHonestOk : forall {t} (msg : message t) msg_to nonce k__s k__e k_data__s k_data__e,
       honestk $? k__s = Some true
       -> honestk $? k__e = Some true
       -> gks $? k__s = Some k_data__s
       -> gks $? k__e = Some k_data__e
       -> (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true /\ kp = false)
-      -> encrypted_cipher_ok cs gks (SigEncCipher k__s k__e msg_to msg).
+      -> encrypted_cipher_ok cs gks (SigEncCipher k__s k__e msg_to nonce msg).
 
   Definition encrypted_ciphers_ok (cs : ciphers) (gks : keys) :=
     Forall_natmap (encrypted_cipher_ok cs gks) cs.
@@ -456,7 +456,7 @@ Section RealWorldLemmas.
       intros.
       cases (keyId k ==n k0); subst; clean_map_lookups; eauto.
       eexists; intuition eauto; subst.
-      specialize (H13 _ _ H); split_ex; split_ands; auto.
+      specialize (H14 _ _ H); split_ex; split_ands; auto.
   Qed.
 
   Lemma encrypted_ciphers_ok_addnl_key :
@@ -511,7 +511,7 @@ Section RealWorldLemmas.
     - destruct (keyId k ==n k__s); subst; clean_map_lookups; eauto.
     - destruct (keyId k ==n k__e); subst; clean_map_lookups; eauto.
     - intros.
-      specialize (H14 _ _ H); split_ex; split_ands.
+      specialize (H15 _ _ H); split_ex; split_ands.
       eexists; destruct (keyId k ==n k0); subst; clean_map_lookups; eauto.
   Qed.
 
@@ -534,10 +534,10 @@ Section RealWorldLemmas.
 
   Lemma adv_step_encrypted_ciphers_ok :
     forall {A B C} cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-              gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd',
+              gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd',
       step_user lbl None bd bd'
       -> forall (cmd : user_cmd C) honestk,
-        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
         -> honestk = findUserKeys usrs
         -> ks = adv.(key_heap)
         -> adv_no_honest_keys honestk ks
@@ -545,7 +545,7 @@ Section RealWorldLemmas.
         -> adv_cipher_queue_ok cs mycs
         -> encrypted_ciphers_ok honestk cs gks
         -> forall cmd' honestk',
-            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
             -> honestk' = findUserKeys usrs'
             -> encrypted_ciphers_ok honestk' cs' gks'.
   Proof.
@@ -554,7 +554,7 @@ Section RealWorldLemmas.
 
     - econstructor; auto.
       assert (adv_no_honest_keys (findUserKeys usrs') (key_heap adv')) as ADV by assumption.
-      specialize (H19 k__signid).
+      specialize (H23 k__signid).
       econstructor; eauto.
       + unfold not; intros; split_ors; split_ands; contra_map_lookup; contradiction.
       + intros.
@@ -565,22 +565,23 @@ Section RealWorldLemmas.
               intuition (intros; eauto); contra_map_lookup;
                 contradiction.
     - econstructor; eauto.
-      specialize (H16 k_id); eauto.
+      specialize (H20 k_id); eauto.
       eapply SigCipherNotHonestOk; unfold not; intros; split_ors; split_ands; contra_map_lookup; try contradiction; eauto.
   Qed.
 
   Lemma universe_ok_adv_step :
-    forall {A B} (U__r : universe A B) lbl usrs adv cs gks ks qmsgs mycs cmd,
+    forall {A B} (U__r : universe A B) lbl usrs adv cs gks ks qmsgs mycs froms tos cmd,
       universe_ok U__r
       -> adv_universe_ok U__r
       -> step_user lbl None
                   (users U__r, adversary U__r, all_ciphers U__r, all_keys U__r,
                    key_heap (adversary U__r), msg_heap (adversary U__r),
-                   c_heap (adversary U__r), protocol (adversary U__r)) (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+                   c_heap (adversary U__r), from_ids (adversary U__r),
+                   to_ids (adversary U__r), protocol (adversary U__r)) (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
       -> universe_ok
           (buildUniverseAdv
              usrs cs gks
-             {| key_heap := ks; protocol := cmd; msg_heap := qmsgs; c_heap := mycs |}).
+             {| key_heap := ks; protocol := cmd; msg_heap := qmsgs; c_heap := mycs; from_ids := froms; to_ids := tos |}).
   Proof.
     unfold universe_ok, adv_universe_ok; destruct U__r; simpl; intros; split_ands; eauto using adv_step_encrypted_ciphers_ok.
   Qed.

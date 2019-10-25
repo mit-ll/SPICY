@@ -1,4 +1,4 @@
-From Coq Require Import
+1From Coq Require Import
      List
      Morphisms
      Eqdep
@@ -109,33 +109,51 @@ Module Automation.
   Ltac user_queue_lkup TAG :=
     match goal with
     | [ H : user_queue ?usrs ?uid = Some ?qmsgs |- _ ] =>
-      assert (exists cmd mycs ks, usrs $? uid = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmd ; c_heap := mycs |})
+      assert (exists cmd mycs ks froms tos,
+                 usrs $? uid = Some {| key_heap := ks
+                                     ; msg_heap := qmsgs
+                                     ; protocol := cmd
+                                     ; c_heap := mycs
+                                     ; from_ids := froms
+                                     ; to_ids := tos |})
         as TAG by (unfold user_queue in H;
                    cases (usrs $? uid); try discriminate;
                    match goal with
-                   | [ H1 : Some _ = Some _ |- exists x y z, Some ?u = _ ] => invert H1; destruct u; eauto
+                   | [ H1 : Some _ = Some _ |- exists v w x y z, Some ?u = _ ] => invert H1; destruct u; repeat eexists; reflexivity
                    end)
     end.
 
   Ltac user_cipher_queue_lkup TAG :=
     match goal with
     | [ H : user_cipher_queue ?usrs ?uid = Some ?mycs |- _ ] =>
-      assert (exists cmd ks qmsgs, usrs $? uid = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmd ; c_heap := mycs |})
+      assert (exists cmd qmsgs ks froms tos,
+                 usrs $? uid = Some {| key_heap := ks
+                                     ; msg_heap := qmsgs
+                                     ; protocol := cmd
+                                     ; c_heap := mycs
+                                     ; from_ids := froms
+                                     ; to_ids := tos |})
         as TAG by (unfold user_cipher_queue in H;
                    cases (usrs $? uid); try discriminate;
                    match goal with
-                   | [ H1 : Some _ = Some _ |- exists x y z, Some ?u = _ ] => invert H1; destruct u; eauto
+                   | [ H1 : Some _ = Some _ |- exists v w x y z, Some ?u = _ ] => invert H1; destruct u; repeat eexists; reflexivity
                    end)
     end.
 
   Ltac user_keys_lkup TAG :=
     match goal with
     | [ H : user_keys ?usrs ?uid = Some ?ks |- _ ] =>
-      assert (exists cmd mycs qmsgs, usrs $? uid = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmd ; c_heap := mycs |})
+      assert (exists cmd mycs qmsgs froms tos,
+                 usrs $? uid = Some {| key_heap := ks
+                                     ; msg_heap := qmsgs
+                                     ; protocol := cmd
+                                     ; c_heap := mycs
+                                     ; from_ids := froms
+                                     ; to_ids := tos |})
         as TAG by (unfold user_keys in H;
                    cases (usrs $? uid); try discriminate;
                    match goal with
-                   | [ H1 : Some _ = Some _ |- exists x y z, Some ?u = _ ] => invert H1; destruct u; eauto
+                   | [ H1 : Some _ = Some _ |- exists v w x y z, Some ?u = _ ] => invert H1; destruct u; repeat eexists; reflexivity
                    end)
     end.
 
@@ -187,7 +205,7 @@ Module Automation.
         generalize (Forall_natmap_in_prop _ OK H); simpl; intros
       | _ => let USR := fresh "USR"
             in user_queue_lkup USR;
-               do 3 (destruct USR as [?x USR]);
+               do 5 (destruct USR as [?x USR]);
                generalize (Forall_natmap_in_prop _ OK USR); simpl; intros
       end
     end;
@@ -210,7 +228,7 @@ Module Automation.
         generalize (Forall_natmap_in_prop _ OK H); simpl; intros
       | _ => let USR := fresh "USR"
             in user_cipher_queue_lkup USR;
-            do 3 (destruct USR as [?x USR]);
+            do 5 (destruct USR as [?x USR]);
                generalize (Forall_natmap_in_prop _ OK USR); simpl; intros
       end
     end;
@@ -233,7 +251,7 @@ Module Automation.
         generalize (Forall_natmap_in_prop _ OK H); simpl; intros
       | _ => let USR := fresh "USR"
             in user_keys_lkup USR;
-               do 3 (destruct USR as [?x USR]);
+               do 5 (destruct USR as [?x USR]);
                generalize (Forall_natmap_in_prop _ OK USR); simpl; intros
       end
     end.
@@ -330,7 +348,9 @@ Section UniverseLemmas.
      ; adversary   := {| key_heap := U__r.(adversary).(key_heap)
                        ; msg_heap := U__r.(adversary).(msg_heap)
                        ; protocol := advcode
-                       ; c_heap   := U__r.(adversary).(c_heap) |}
+                       ; c_heap   := U__r.(adversary).(c_heap)
+                       ; from_ids := U__r.(adversary).(from_ids)
+                       ; to_ids   := U__r.(adversary).(to_ids) |}
      ; all_ciphers := U__r.(all_ciphers)
      ; all_keys    := U__r.(all_keys)
     |}.
@@ -385,20 +405,22 @@ Section UniverseLemmas.
   (* Step keys and permissions good *)
 
   Lemma keys_and_permissions_good_user_new_pubk :
-    forall {A t} (usrs : honest_users A) gks (msg : message t) u_id u_d ks cmd qmsgs mycs adv_heap,
+    forall {A t} (usrs : honest_users A) gks (msg : message t) u_id u_d ks cmd qmsgs mycs froms tos adv_heap,
       keys_and_permissions_good gks usrs adv_heap
       -> (forall (k : NatMap.key) (kp : bool), findKeysMessage msg $? k = Some kp -> gks $? k <> None)
       -> u_d = {| key_heap := ks $k++ findKeysMessage msg
                ; msg_heap := qmsgs
                ; protocol := cmd
-               ; c_heap := mycs |}
+               ; c_heap   := mycs
+               ; from_ids := froms
+               ; to_ids   := tos |}
       -> user_keys usrs u_id = Some ks
       -> keys_and_permissions_good gks (usrs $+ (u_id,u_d)) adv_heap.
   Proof.
     intros.
     unfold keys_and_permissions_good in *; intuition idtac.
     econstructor; eauto; subst; simpl.
-
+    
     permission_heaps_prop.
     unfold permission_heap_good; intros.
     cases (ks $? k_id); cases (findKeysMessage msg $? k_id); simplify_key_merges1; clean_map_lookups; eauto.
@@ -435,20 +457,22 @@ Section UniverseLemmas.
 
   Lemma honest_labeled_step_keys_and_permissions_good :
     forall {A B C} suid u_id cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-              gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd' a,
+              gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd' a,
       step_user lbl suid bd bd'
       -> suid = Some u_id
       -> forall (cmd : user_cmd C),
-        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
         -> keys_and_permissions_good gks usrs adv.(key_heap)
         -> forall cmd',
-            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
             -> lbl = Action a
             -> message_queues_ok cs usrs gks
             -> action_adversary_safe (findUserKeys usrs) cs a
             -> forall usrs'' cmdc cmdc',
-                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs |}
-                -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' ; c_heap := mycs' |}) 
+                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc
+                                     ; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
+                -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs'
+                                            ; protocol := cmdc' ; c_heap := mycs' ; from_ids := froms' ; to_ids := tos' |}) 
                 -> keys_and_permissions_good gks' usrs'' adv'.(key_heap).
   Proof.
     induction 1; inversion 2; inversion 2; intros; subst; try discriminate; eauto 2;
@@ -515,10 +539,10 @@ Section UniverseLemmas.
   Hint Resolve keys_and_permissions_good_addnl_key.
 
   Lemma keys_and_permissions_good_readd_user_same_perms :
-    forall {A} (usrs : honest_users A) adv_heap gks ks cmd cmd' qmsgs qmsgs' mycs mycs' u_id,
+    forall {A} (usrs : honest_users A) adv_heap gks ks cmd cmd' qmsgs qmsgs' mycs mycs' froms froms' tos tos' u_id,
       keys_and_permissions_good gks usrs adv_heap
-      -> usrs $? u_id = Some {| key_heap := ks; protocol := cmd; msg_heap := qmsgs; c_heap := mycs |}
-      -> keys_and_permissions_good gks (usrs $+ (u_id, {| key_heap := ks; protocol := cmd'; msg_heap := qmsgs'; c_heap := mycs' |})) adv_heap.
+      -> usrs $? u_id = Some {| key_heap := ks; protocol := cmd; msg_heap := qmsgs; c_heap := mycs; from_ids := froms; to_ids := tos |}
+      -> keys_and_permissions_good gks (usrs $+ (u_id, {| key_heap := ks; protocol := cmd'; msg_heap := qmsgs'; c_heap := mycs'; from_ids := froms'; to_ids := tos' |})) adv_heap.
   Proof.
     intros.
     unfold keys_and_permissions_good in *; intuition eauto.
@@ -531,17 +555,19 @@ Section UniverseLemmas.
   Hint Resolve keys_and_permissions_good_readd_user_same_perms.
 
   Lemma keys_and_permissions_good_new_honest_key :
-    forall {A} (usrs : honest_users A) gks k_id k ks u_id cmd cmd' qmsgs qmsgs' mycs mycs' adv_heap,
+    forall {A} (usrs : honest_users A) gks k_id k ks u_id cmd cmd' qmsgs qmsgs' mycs mycs' froms froms' tos tos' adv_heap,
       gks $? k_id = None
       -> keys_and_permissions_good gks usrs adv_heap
       -> k_id = keyId k
-      -> usrs $? u_id = Some {| key_heap := ks ; protocol := cmd ; msg_heap := qmsgs ; c_heap := mycs |}
+      -> usrs $? u_id = Some {| key_heap := ks ; protocol := cmd ; msg_heap := qmsgs ; c_heap := mycs; from_ids := froms; to_ids := tos |}
       -> keys_and_permissions_good (gks $+ (k_id,k))
                                   (usrs $+ (u_id,
                                             {| key_heap := add_key_perm k_id true ks
                                              ; protocol := cmd'
                                              ; msg_heap := qmsgs'
-                                             ; c_heap   := mycs' |}))
+                                             ; c_heap   := mycs'
+                                             ; from_ids := froms'
+                                             ; to_ids   := tos' |}))
                                   adv_heap.
   Proof.
     intros.
@@ -562,21 +588,21 @@ Section UniverseLemmas.
 
   Lemma honest_silent_step_keys_good :
     forall {A B C} u_id suid cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-              gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd',
+              gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd',
       step_user lbl suid bd bd'
       -> suid = Some u_id
       -> forall (cmd : user_cmd C),
-          bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+          bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
           -> user_cipher_queues_ok cs (findUserKeys usrs) usrs
           -> encrypted_ciphers_ok (findUserKeys usrs) cs gks
           -> keys_and_permissions_good gks usrs adv.(key_heap)
           -> forall cmd',
-              bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+              bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
               -> lbl = Silent
               -> forall cmdc cmdc',
-                  usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs |}
+                  usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
                   -> keys_and_permissions_good gks'
-                                              (usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' ; c_heap := mycs' |}))
+                                              (usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' ; c_heap := mycs' ; from_ids := froms' ; to_ids := tos' |}))
                                               adv'.(key_heap).
   Proof.
     induction 1; inversion 2; inversion 4; intros; subst;
@@ -593,17 +619,17 @@ Section UniverseLemmas.
 
   Lemma adv_step_keys_good :
     forall {A B C} cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-              gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd',
+              gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd',
       step_user lbl None bd bd'
       -> forall (cmd : user_cmd C),
-        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
         -> ks = adv.(key_heap)
         -> adv_message_queue_ok (findUserKeys usrs) cs gks qmsgs
         -> adv_cipher_queue_ok cs mycs
         -> encrypted_ciphers_ok (findUserKeys usrs) cs gks
         -> keys_and_permissions_good gks usrs ks
         -> forall cmd',
-            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
             -> keys_and_permissions_good gks' usrs' ks'.
   Proof.
     induction 1; inversion 1; inversion 6; intros; subst; try discriminate;
@@ -612,7 +638,7 @@ Section UniverseLemmas.
     - unfold keys_and_permissions_good in *; intuition eauto.
       unfold permission_heap_good in *; intros.
       cases (key_heap adv' $? k_id); eauto.
-      invert H16; split_ands.
+      invert H19; split_ands.
       cases (findKeysCrypto cs' msg $? k_id); simplify_key_merges1; try discriminate.
       specialize (H4 _ _ Heq0); split_ands; subst.
       cases (gks' $? k_id); try contradiction; eauto.
@@ -678,12 +704,12 @@ Section UniverseLemmas.
   (* Step user cipher queues ok *)
 
   Lemma user_cipher_queues_ok_readd_user :
-    forall {A} (usrs : honest_users A) u_id ks ks' cmd cmd' qmsgs qmsgs' cs mycs,
-      usrs $? u_id = Some {| key_heap := ks; protocol := cmd; msg_heap := qmsgs; c_heap := mycs |}
+    forall {A} (usrs : honest_users A) u_id ks ks' cmd cmd' qmsgs qmsgs' cs mycs froms froms' tos tos',
+      usrs $? u_id = Some {| key_heap := ks; protocol := cmd; msg_heap := qmsgs; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
       -> user_cipher_queues_ok cs (findUserKeys usrs) usrs
       -> user_cipher_queues_ok cs
           (findUserKeys usrs)
-          (usrs $+ (u_id, {| key_heap := ks'; protocol := cmd'; msg_heap := qmsgs'; c_heap := mycs |})).
+          (usrs $+ (u_id, {| key_heap := ks'; protocol := cmd'; msg_heap := qmsgs'; c_heap := mycs ; from_ids := froms' ; to_ids := tos' |})).
   Proof.
     intros.
     unfold user_cipher_queues_ok;
@@ -763,21 +789,17 @@ Section UniverseLemmas.
   Qed.
 
   Lemma user_cipher_queues_ok_addnl_generated_key :
-    forall {A} (usrs : honest_users A) ks cs k_id u_id cmd qmsgs mycs,
+    forall {A} (usrs : honest_users A) ks cs k_id u_id cmd qmsgs mycs froms tos,
         user_cipher_queue usrs u_id = Some mycs
       -> user_cipher_queues_ok cs (findUserKeys usrs) usrs
       -> user_cipher_queues_ok
           cs
           (add_key_perm k_id true (findUserKeys usrs))
-          (usrs $+ (u_id, {| key_heap := add_key_perm k_id true ks; protocol := cmd; msg_heap := qmsgs; c_heap := mycs |})).
+          (usrs $+ (u_id, {| key_heap := add_key_perm k_id true ks; protocol := cmd; msg_heap := qmsgs; c_heap := mycs ; from_ids := froms ; to_ids := tos |})).
   Proof.
     intros.
     unfold user_cipher_queues_ok; rewrite Forall_natmap_forall; intros.
-
-    assert (exists cmd' ks' qmsgs',
-               usrs $? u_id = Some {| key_heap := ks'; protocol := cmd'; msg_heap := qmsgs'; c_heap := mycs |}).
-    unfold user_cipher_queue in H; cases (usrs $? u_id); clean_map_lookups; destruct u; simpl in *;
-      do 3 eexists; eauto.
+    user_cipher_queue_lkup UCQ.
 
     split_ex; destruct (k ==n u_id); subst; clean_map_lookups; simpl.
     user_cipher_queues_prop; eauto using user_cipher_queue_ok_addnl_generated_key.
@@ -785,16 +807,16 @@ Section UniverseLemmas.
   Qed.
 
   Lemma user_cipher_queues_ok_addnl_generated_key' :
-    forall {A} (usrs : honest_users A) ks cs k_id u_id cmd qmsgs mycs,
+    forall {A} (usrs : honest_users A) ks cs k_id u_id cmd qmsgs mycs froms tos,
         user_cipher_queue usrs u_id = Some mycs
       -> user_cipher_queues_ok cs (findUserKeys usrs) usrs
       -> user_cipher_queues_ok
           cs
           (findUserKeys usrs $+ (k_id,true))
-          (usrs $+ (u_id, {| key_heap := add_key_perm k_id true ks; protocol := cmd; msg_heap := qmsgs; c_heap := mycs |})).
+          (usrs $+ (u_id, {| key_heap := add_key_perm k_id true ks; protocol := cmd; msg_heap := qmsgs; c_heap := mycs ; from_ids := froms ; to_ids := tos |})).
   Proof.
     intros.
-    pose proof (user_cipher_queues_ok_addnl_generated_key ks k_id _ cmd qmsgs H H0).
+    pose proof (user_cipher_queues_ok_addnl_generated_key ks k_id _ cmd qmsgs froms tos H H0).
     unfold add_key_perm in H1 at 1; unfold greatest_permission in H1;
       cases (findUserKeys usrs $? k_id); simpl in *; eapply H1.
   Qed.
@@ -848,11 +870,11 @@ Section UniverseLemmas.
        user_cipher_queue_ok_addnl_pubk.
 
   Lemma user_cipher_queues_ok_add_user :
-    forall {A t} (usrs usrs' : honest_users A) (msg : crypto t) honestk u_id ks cmd cmd' qmsgs qmsgs' mycs cs,
+    forall {A t} (usrs usrs' : honest_users A) (msg : crypto t) honestk u_id ks cmd cmd' qmsgs qmsgs' mycs froms froms' tos tos' cs,
       user_cipher_queues_ok cs (findUserKeys usrs) usrs
-      -> usrs $? u_id = Some {| key_heap := ks; protocol := cmd; msg_heap := qmsgs; c_heap := mycs |}
+      -> usrs $? u_id = Some {| key_heap := ks; protocol := cmd; msg_heap := qmsgs; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
       -> msgCiphersSignedOk (findUserKeys usrs) cs msg
-      -> usrs' = usrs $+ (u_id, {| key_heap := ks $k++ findKeysCrypto cs msg; protocol := cmd'; msg_heap := qmsgs'; c_heap := findCiphers msg ++ mycs |})
+      -> usrs' = usrs $+ (u_id, {| key_heap := ks $k++ findKeysCrypto cs msg; protocol := cmd'; msg_heap := qmsgs'; c_heap := findCiphers msg ++ mycs ; from_ids := froms';  to_ids := tos' |})
       -> honestk = findUserKeys usrs'
       -> user_cipher_queues_ok cs honestk usrs'.
   Proof.
@@ -873,9 +895,9 @@ Section UniverseLemmas.
   .
 
   Lemma findUserKeys_keys_mine_user :
-    forall {A} (usrs : honest_users A) msgk u_id ks qmsgs cmd mycs ,
+    forall {A} (usrs : honest_users A) msgk u_id ks qmsgs cmd mycs froms tos,
       keys_mine ks msgk
-      -> usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmd ; c_heap := mycs |}
+      -> usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmd ; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
       -> keys_mine (findUserKeys usrs) msgk.
   Proof.
     unfold keys_mine; intros.
@@ -904,21 +926,21 @@ Section UniverseLemmas.
 
   Lemma honest_labeled_step_user_cipher_queues_ok :
     forall {A B C} u_id cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-              gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd' a suid,
+              gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd' a suid,
       step_user lbl suid bd bd'
       -> suid = Some u_id
       -> forall (cmd : user_cmd C) honestk,
-        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
         -> honestk = findUserKeys usrs
         -> message_queues_ok cs usrs gks
         -> user_cipher_queues_ok cs honestk usrs
         -> forall cmd' honestk',
-            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
             -> lbl = Action a
             -> action_adversary_safe honestk cs a
             -> forall cmdc cmdc' usrs'',
-                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs |}
-                -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' ; c_heap := mycs' |})
+                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
+                -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' ; c_heap := mycs' ; from_ids := froms' ; to_ids := tos' |})
                 -> honestk' = findUserKeys usrs''
                 -> user_cipher_queues_ok cs' honestk' usrs''.
   Proof.
@@ -947,20 +969,20 @@ Section UniverseLemmas.
 
   Lemma honest_silent_step_user_cipher_queues_ok :
     forall {A B C} u_id suid cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-              gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd',
+              gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd',
       step_user lbl suid bd bd'
       -> suid = Some u_id
       -> forall (cmd : user_cmd C) honestk,
-        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
         -> honestk = findUserKeys usrs
         -> encrypted_ciphers_ok honestk cs gks
         -> user_cipher_queues_ok cs honestk usrs
         -> forall cmd' honestk',
-            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
             -> lbl = Silent
             -> forall cmdc cmdc' usrs'',
-                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs |}
-                -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' ; c_heap := mycs' |})
+                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
+                -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' ; c_heap := mycs' ; from_ids := froms' ; to_ids := tos' |})
                 -> honestk' = findUserKeys usrs''
                 -> user_cipher_queues_ok cs' honestk' usrs''.
   Proof.
@@ -987,15 +1009,15 @@ Section UniverseLemmas.
 
   Lemma adv_step_user_cipher_queues_ok :
     forall {A B C} cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-              gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd',
+              gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd',
       step_user lbl None bd bd'
       -> forall (cmd : user_cmd C) honestk,
-        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
         -> honestk = findUserKeys usrs
         -> ks = adv.(key_heap)
         -> user_cipher_queues_ok cs honestk usrs
         -> forall cmd' honestk',
-            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
             -> honestk' = findUserKeys usrs'
             -> user_cipher_queues_ok cs' honestk' usrs'.
   Proof.
@@ -1051,11 +1073,11 @@ Section UniverseLemmas.
   Hint Resolve message_queue_ok_adding_public_keys.
 
   Lemma message_queues_ok_user_adding_public_keys :
-    forall {A} (usrs usrs' : honest_users A) cs gks u_id pubk ks cmd cmd' msg msgs mycs mycs',
+    forall {A} (usrs usrs' : honest_users A) cs gks u_id pubk ks cmd cmd' msg msgs mycs mycs' froms froms' tos tos',
       message_queues_ok cs usrs gks
       -> (forall k p, pubk $? k = Some p -> (findUserKeys usrs) $? k = Some true /\ p = false)
-      -> usrs $? u_id = Some {| key_heap := ks; protocol := cmd; msg_heap := msg::msgs; c_heap := mycs |}
-      -> usrs' = usrs $+ (u_id, {| key_heap := ks $k++ pubk; protocol := cmd'; msg_heap := msgs; c_heap := mycs' |})
+      -> usrs $? u_id = Some {| key_heap := ks; protocol := cmd; msg_heap := msg::msgs; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
+      -> usrs' = usrs $+ (u_id, {| key_heap := ks $k++ pubk; protocol := cmd'; msg_heap := msgs; c_heap := mycs' ; from_ids := froms' ; to_ids := tos' |})
       -> message_queues_ok cs usrs' gks.
   Proof.
     intros; subst.
@@ -1068,10 +1090,10 @@ Section UniverseLemmas.
   Hint Resolve message_queues_ok_user_adding_public_keys.
 
   Lemma message_queues_ok_readd_user_same_queue :
-    forall {A} (usrs : honest_users A) cs u_id ks cmd cmd' qmsgs mycs mycs' gks,
+    forall {A} (usrs : honest_users A) cs u_id ks cmd cmd' qmsgs mycs mycs' froms froms' tos tos' gks,
       message_queues_ok cs usrs gks
-      -> usrs $? u_id = Some {| key_heap := ks; protocol := cmd; msg_heap := qmsgs; c_heap := mycs |}
-      -> message_queues_ok cs (usrs $+ (u_id, {| key_heap := ks; protocol := cmd'; msg_heap := qmsgs; c_heap := mycs' |})) gks.
+      -> usrs $? u_id = Some {| key_heap := ks; protocol := cmd; msg_heap := qmsgs; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
+      -> message_queues_ok cs (usrs $+ (u_id, {| key_heap := ks; protocol := cmd'; msg_heap := qmsgs; c_heap := mycs' ; from_ids := froms' ; to_ids := tos' |})) gks.
   Proof.
     intros; unfold message_queues_ok; intros.
     econstructor; autorewrite with find_user_keys; eauto; simpl.
@@ -1081,10 +1103,10 @@ Section UniverseLemmas.
   Hint Resolve message_queues_ok_readd_user_same_queue.
 
   Lemma message_queues_ok_readd_user_popped_queue :
-    forall {A} (usrs : honest_users A) cs u_id ks cmd cmd' qmsgs mycs mycs' gks qmsg,
+    forall {A} (usrs : honest_users A) cs u_id ks cmd cmd' qmsgs mycs mycs' froms froms' tos tos' gks qmsg,
       message_queues_ok cs usrs gks
-      -> usrs $? u_id = Some {| key_heap := ks; protocol := cmd; msg_heap := qmsg :: qmsgs; c_heap := mycs |}
-      -> message_queues_ok cs (usrs $+ (u_id, {| key_heap := ks; protocol := cmd'; msg_heap := qmsgs; c_heap := mycs' |})) gks.
+      -> usrs $? u_id = Some {| key_heap := ks; protocol := cmd; msg_heap := qmsg :: qmsgs; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
+      -> message_queues_ok cs (usrs $+ (u_id, {| key_heap := ks; protocol := cmd'; msg_heap := qmsgs; c_heap := mycs' ; from_ids := froms' ; to_ids := tos' |})) gks.
   Proof.
     intros; unfold message_queues_ok; intros.
     econstructor; autorewrite with find_user_keys; eauto; simpl.
@@ -1160,9 +1182,9 @@ Section UniverseLemmas.
       msg_signing_key cs c = Some k_id
       -> msg_cipher_id c = Some c_id
       -> exists c, cs $? c_id = Some c
-             /\ (exists {t} (m : message t) msg_to,
-                   c = SigCipher k_id msg_to m
-                 \/ exists k__enc, c = SigEncCipher k_id k__enc msg_to m).
+             /\ (exists {t} (m : message t) msg_to nonce,
+                   c = SigCipher k_id msg_to nonce m
+                 \/ exists k__enc, c = SigEncCipher k_id k__enc msg_to nonce m).
   Proof.
     intros.
     unfold msg_signing_key, msg_cipher_id in *.
@@ -1170,7 +1192,7 @@ Section UniverseLemmas.
       cases (cs $? c_id); try discriminate.
 
     destruct c; try discriminate; clean_context;
-      eexists; split; eauto 6.
+      eexists; split; eauto 8.
   Qed.
 
   Lemma message_queue_ok_addnl_honest_key :
@@ -1210,14 +1232,14 @@ Section UniverseLemmas.
   Qed.
 
   Lemma message_queues_ok_addnl_honest_key :
-    forall {A} (usrs : honest_users A) cs u_id k_id gks ks cmd cmd' qmsgs mycs usage kt,
+    forall {A} (usrs : honest_users A) cs u_id k_id gks ks cmd cmd' qmsgs mycs froms tos usage kt,
       message_queues_ok cs usrs gks
       -> ~ In k_id gks
       -> encrypted_ciphers_ok (findUserKeys usrs) cs gks
       -> permission_heap_good gks (findUserKeys usrs)
-      -> usrs $? u_id = Some {| key_heap := ks; protocol := cmd; msg_heap := qmsgs; c_heap := mycs |}
+      -> usrs $? u_id = Some {| key_heap := ks; protocol := cmd; msg_heap := qmsgs; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
       -> message_queues_ok cs
-                          (usrs $+ (u_id, {| key_heap := add_key_perm k_id true ks; protocol := cmd'; msg_heap := qmsgs; c_heap := mycs |}))
+                          (usrs $+ (u_id, {| key_heap := add_key_perm k_id true ks; protocol := cmd'; msg_heap := qmsgs; c_heap := mycs ; from_ids := froms ; to_ids := tos |}))
                           (gks $+ (k_id, {| keyId := k_id; keyUsage := usage; keyType := kt |})).
   Proof.
     intros.
@@ -1298,23 +1320,23 @@ Section UniverseLemmas.
 
   Lemma honest_labeled_step_message_queues_ok :
     forall {A B C} u_id suid cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-              gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd' a,
+              gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd' a,
       step_user lbl suid bd bd'
       -> suid = Some u_id
       -> forall (cmd : user_cmd C) honestk,
-        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
         -> honestk = findUserKeys usrs
         -> message_queues_ok cs usrs gks
         -> keys_and_permissions_good gks usrs adv.(key_heap)
         -> encrypted_ciphers_ok honestk cs gks
         -> user_cipher_queues_ok cs honestk usrs
         -> forall cmd' honestk',
-            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
             -> lbl = Action a
             -> action_adversary_safe honestk cs a
             -> forall cmdc cmdc' usrs'',
-                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs |}
-                -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' ; c_heap := mycs' |})
+                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
+                -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' ; c_heap := mycs' ; from_ids := froms' ; to_ids := tos' |})
                 -> honestk' = findUserKeys usrs''
                 -> message_queues_ok cs' usrs'' gks'.
   Proof.
@@ -1382,22 +1404,22 @@ Section UniverseLemmas.
 
   Lemma honest_silent_step_message_queues_ok :
     forall {A B C} u_id suid cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-              gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd',
+              gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd',
       step_user lbl suid bd bd'
       -> suid = Some u_id
       -> forall (cmd : user_cmd C) honestk,
-        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
         -> honestk = findUserKeys usrs
         -> encrypted_ciphers_ok honestk cs gks
         -> user_cipher_queues_ok cs honestk usrs
         -> permission_heap_good gks honestk
         -> message_queues_ok cs usrs gks
         -> forall cmd' honestk',
-            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
             -> lbl = Silent
             -> forall cmdc cmdc' usrs'',
-                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs |}
-                -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' ; c_heap := mycs' |})
+                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
+                -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' ; c_heap := mycs' ; from_ids := froms' ; to_ids := tos' |})
                 -> honestk' = findUserKeys usrs''
                 -> message_queues_ok cs' usrs'' gks'.
   Proof.
@@ -1415,10 +1437,10 @@ Section UniverseLemmas.
 
   Lemma adv_step_adv_cipher_queue_ok :
     forall {A B C} cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-              gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd',
+              gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd',
       step_user lbl None bd bd'
       -> forall (cmd : user_cmd C),
-        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
         -> ks = adv.(key_heap)
         -> qmsgs = adv.(msg_heap)
         -> mycs = adv.(c_heap)
@@ -1427,13 +1449,13 @@ Section UniverseLemmas.
         -> adv_no_honest_keys (findUserKeys usrs) ks
         -> adv_cipher_queue_ok cs mycs
         -> forall cmd',
-            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
             -> adv_cipher_queue_ok cs' mycs'.
   Proof.
    induction 1; inversion 1; inversion 8; intros; subst;
       eauto 2; try discriminate; eauto; clean_context;
         unfold adv_cipher_queue_ok in *; rewrite Forall_forall in *; intros.
-   - invert H18; split_ands.
+   - invert H21; split_ands.
      rewrite in_app_iff in H; split_ors; eauto.
    - destruct (c_id ==n x); subst; clean_map_lookups; eauto.
      invert H5; try contradiction; eauto.
@@ -1476,10 +1498,10 @@ Section UniverseLemmas.
 
   Lemma adv_step_message_queues_ok :
     forall {A B C} cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-              gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd',
+              gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd',
       step_user lbl None bd bd'
       -> forall (cmd : user_cmd C) honestk,
-        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
         -> honestk = findUserKeys usrs
         -> ks = adv.(key_heap)
         -> qmsgs = adv.(msg_heap)
@@ -1490,7 +1512,7 @@ Section UniverseLemmas.
         -> permission_heap_good gks ks
         -> adv_cipher_queue_ok cs mycs
         -> forall cmd' honestk',
-            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
             -> honestk' = findUserKeys usrs'
             -> message_queues_ok cs' usrs' gks'.
   Proof.
@@ -1512,14 +1534,14 @@ Section UniverseLemmas.
 
     repeat (apply conj); intros; eauto.
     - specialize (H0 _ _ H); split_ors; split_ands; subst; eauto.
-      specialize (H22 _ _ H0); unfold not; intros; split_ex; contra_map_lookup.
-      specialize (H22 _ _ H0); unfold not; intros; split_ex; contra_map_lookup.
+      specialize (H24 _ _ H0); unfold not; intros; split_ex; contra_map_lookup.
+      specialize (H24 _ _ H0); unfold not; intros; split_ex; contra_map_lookup.
     - unfold not; intros.
       unfold keys_mine in *.
       destruct msg; simpl in *; try discriminate; clean_context.
-      unfold adv_cipher_queue_ok in H23; rewrite Forall_forall in H23.
+      unfold adv_cipher_queue_ok in H25; rewrite Forall_forall in H25.
       assert (List.In cid (c_heap adv)) by eauto.
-      specialize (H23 _ H); split_ex; contra_map_lookup.
+      specialize (H25 _ H); split_ex; contra_map_lookup.
     - unfold msg_signing_key in *; destruct msg; try discriminate;
         cases (cs' $? c_id); try discriminate;
           clean_context.
@@ -1554,23 +1576,23 @@ Section UniverseLemmas.
 
   Lemma honest_labeled_step_adv_message_queue_ok :
     forall {A B C} u_id suid cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-              gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd' a,
+              gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd' a,
       step_user lbl suid bd bd'
       -> suid = Some u_id
       -> forall (cmd : user_cmd C) honestk,
-        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
         -> honestk = findUserKeys usrs
         -> message_queues_ok cs usrs gks
         -> keys_and_permissions_good gks usrs adv.(key_heap)
         -> encrypted_ciphers_ok (findUserKeys usrs) cs gks
         -> adv_message_queue_ok honestk cs gks adv.(msg_heap)
         -> forall cmd' honestk',
-            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
             -> lbl = Action a
             -> action_adversary_safe honestk cs a
             -> forall cmdc cmdc' usrs'',
-                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs |}
-                -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' ; c_heap := mycs' |})
+                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
+                -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' ; c_heap := mycs' ; from_ids := froms' ; to_ids := tos' |})
                 -> honestk' = findUserKeys usrs''
                 -> adv_message_queue_ok honestk' cs' gks' adv'.(msg_heap).
   Proof.
@@ -1592,30 +1614,30 @@ Section UniverseLemmas.
       + context_map_rewrites; destruct c; clean_map_lookups.
         encrypted_ciphers_prop; eauto.
         destruct kp.
-        * specialize (H15 _ H5); contradiction.
-        * specialize (H16 _ H5).
+        * specialize (H16 _ H5); contradiction.
+        * specialize (H17 _ H5).
           keys_and_permissions_prop.
-          specialize (H11 _ _ H16); split_ex; intuition contra_map_lookup.
-          rewrite <- H21 in H24; discriminate.
+          specialize (H11 _ _ H17); split_ex; intuition contra_map_lookup.
+          rewrite <- H14 in H24; discriminate.
       + encrypted_ciphers_prop; simpl; unfold not; intros; contra_map_lookup.
       + split_ors; subst; try contradiction; eauto.
   Qed.
 
   Lemma honest_labeled_step_adv_cipher_queue_ok :
     forall {A B C} u_id suid cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-              gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd' a,
+              gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd' a,
       step_user lbl suid bd bd'
       -> suid = Some u_id
       -> forall (cmd : user_cmd C) honestk,
-        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
         -> honestk = findUserKeys usrs
         -> adv_cipher_queue_ok cs adv.(c_heap)
         -> forall cmd',
-            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
             -> lbl = Action a
             -> action_adversary_safe honestk cs a
             -> forall cmdc,
-                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs |}
+                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
                 -> adv_cipher_queue_ok cs' adv'.(c_heap).
   Proof.
     induction 1; inversion 2; inversion 3; intros; subst; try discriminate;
@@ -1653,14 +1675,14 @@ Section UniverseLemmas.
 
   Lemma honest_silent_step_adv_cipher_queue_ok :
     forall {A B C} u_id suid cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-              gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd',
+              gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd',
       step_user lbl suid bd bd'
       -> suid = Some u_id
       -> forall (cmd : user_cmd C),
-        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
         -> adv_cipher_queue_ok cs adv.(c_heap)
         -> forall cmd',
-            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
             -> lbl = Silent
             -> adv_cipher_queue_ok cs' adv'.(c_heap).
   Proof.
@@ -1745,22 +1767,22 @@ Section UniverseLemmas.
 
   Lemma honest_silent_step_adv_message_queue_ok :
     forall {A B C} u_id suid cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-              gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd',
+              gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd',
       step_user lbl suid bd bd'
       -> suid = Some u_id
       -> forall (cmd : user_cmd C) honestk,
-        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
         -> honestk = findUserKeys usrs
         -> encrypted_ciphers_ok honestk cs gks
         -> user_cipher_queues_ok cs honestk usrs
         -> message_queues_ok cs usrs gks
         -> adv_message_queue_ok honestk cs gks adv.(msg_heap)
         -> forall cmd' honestk',
-            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
             -> lbl = Silent
             -> forall cmdc cmdc' usrs'',
-                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs |}
-                -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' ; c_heap := mycs' |})
+                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
+                -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' ; c_heap := mycs' ; from_ids := froms' ; to_ids := tos' |})
                 -> honestk' = findUserKeys usrs''
                 -> adv_message_queue_ok honestk' cs' gks' adv'.(msg_heap).
   Proof.
@@ -1774,17 +1796,17 @@ Section UniverseLemmas.
 
   Lemma adv_step_adv_message_queue_ok :
     forall {A B C} cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-              gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd',
+              gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd',
       step_user lbl None bd bd'
       -> forall (cmd : user_cmd C) honestk,
-        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
         -> honestk = findUserKeys usrs
         -> ks = adv.(key_heap)
         -> qmsgs = adv.(msg_heap)
         -> encrypted_ciphers_ok honestk cs gks
         -> adv_message_queue_ok honestk cs gks qmsgs
         -> forall cmd' honestk',
-            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
             -> honestk' = findUserKeys usrs'
             -> adv_message_queue_ok honestk' cs' gks' qmsgs'.
   Proof.
@@ -1801,21 +1823,21 @@ Section UniverseLemmas.
 
   Lemma honest_labeled_step_adv_no_honest_keys :
     forall {A B C} u_id suid cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-              gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd' a,
+              gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd' a,
       step_user lbl suid bd bd'
       -> suid = Some u_id
       -> forall (cmd : user_cmd C) honestk,
-        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
         -> honestk = findUserKeys usrs
         -> message_queues_ok cs usrs gks
         -> adv_no_honest_keys honestk adv.(key_heap)
         -> forall cmd' honestk',
-            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
             -> lbl = Action a
             -> action_adversary_safe honestk cs a
             -> forall cmdc cmdc' usrs'',
-                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs |}
-                -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' ; c_heap := mycs' |})
+                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
+                -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' ; c_heap := mycs' ; from_ids := froms' ; to_ids := tos' |})
                 -> honestk' = findUserKeys usrs''
                 -> adv_no_honest_keys honestk' adv'.(key_heap).
   Proof.
@@ -1845,8 +1867,8 @@ Section UniverseLemmas.
 
       split_ors; split_ands; contra_map_lookup; eauto.
 
-    -  unfold adv_no_honest_keys in *; intros.
-      specialize (H18 k_id).
+    - unfold adv_no_honest_keys in *; intros.
+      specialize (H20 k_id).
       assert (findKeysCrypto cs' msg $? k_id <> Some true) by eauto.
       intuition idtac.
       right; right; split; eauto; intros.
@@ -1891,22 +1913,22 @@ Section UniverseLemmas.
 
   Lemma honest_silent_step_adv_no_honest_keys :
     forall {A B C} u_id suid cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-              gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd',
+              gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd',
       step_user lbl suid bd bd'
       -> suid = Some u_id
       -> forall (cmd : user_cmd C) honestk,
-        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
         -> honestk = findUserKeys usrs
         -> encrypted_ciphers_ok honestk cs gks
         -> user_cipher_queues_ok cs honestk usrs
         -> keys_and_permissions_good gks usrs adv.(key_heap)
         -> adv_no_honest_keys honestk adv.(key_heap)
         -> forall cmd' honestk',
-            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
             -> lbl = Silent
             -> forall cmdc cmdc' usrs'',
-                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs |}
-                -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' ; c_heap := mycs' |})
+                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
+                -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' ; c_heap := mycs' ; from_ids := froms' ; to_ids := tos' |})
                 -> honestk' = findUserKeys usrs''
                 -> adv_no_honest_keys honestk' adv'.(key_heap).
   Proof.
@@ -1945,10 +1967,10 @@ Section UniverseLemmas.
 
   Lemma adv_step_adv_no_honest_keys :
     forall {A B C} cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-              gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd',
+              gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd',
       step_user lbl None bd bd'
       -> forall (cmd : user_cmd C) honestk,
-        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
         -> honestk = findUserKeys usrs
         -> ks = adv.(key_heap)
         -> encrypted_ciphers_ok honestk cs gks
@@ -1956,7 +1978,7 @@ Section UniverseLemmas.
         -> keys_and_permissions_good gks usrs ks
         -> adv_message_queue_ok honestk cs gks qmsgs
         -> forall cmd' honestk',
-            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
             -> honestk' = findUserKeys usrs'
             -> adv_no_honest_keys honestk' ks'.
   Proof.
@@ -1967,22 +1989,22 @@ Section UniverseLemmas.
           | [ H : keys_and_permissions_good _ _ _ |- _ ] => unfold keys_and_permissions_good in H; split_ands
           end.
 
-    - invert H20.
+    - invert H23; split_ands.
       unfold adv_no_honest_keys in *; intros.
-      specialize (H1 k_id); specialize (H18 k_id); split_ors; intuition idtac.
+      specialize (H21 k_id); intuition idtac.
       right; right; intuition eauto.
       eapply merge_perms_split in H9; split_ors; auto.
-      specialize (H4 _ _ H9); split_ands; eauto.
-
+      specialize (H3 _ _ H9); split_ands; eauto.
+      
     - assert (adv_no_honest_keys (findUserKeys usrs') (key_heap adv')) as ADV by assumption.
       specialize (ADV k__encid); split_ors; split_ands; try contradiction;
         encrypted_ciphers_prop; clean_map_lookups; intuition idtac;
         unfold adv_no_honest_keys; intros;
-          specialize (H20 k_id); clean_map_lookups; intuition idtac;
+          specialize (H22 k_id); clean_map_lookups; intuition idtac;
             right; right; split; eauto; intros;
               eapply merge_perms_split in H10; split_ors;
                 try contradiction;
-                specialize (H18 _ _ H10); split_ex; split_ands; eauto.
+                specialize (H19 _ _ H10); split_ex; split_ands; eauto.
 
     - eapply adv_no_honest_keys_after_new_adv_key; eauto.
     - eapply adv_no_honest_keys_after_new_adv_key; eauto.
@@ -2046,10 +2068,10 @@ Section UniverseLemmas.
 
   Lemma adv_step_encrypted_ciphers_ok :
     forall {A B C} cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-              gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd',
+              gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd',
       step_user lbl None bd bd'
       -> forall (cmd : user_cmd C) honestk,
-        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
         -> honestk = findUserKeys usrs
         -> ks = adv.(key_heap)
         -> mycs = adv.(c_heap)
@@ -2058,7 +2080,7 @@ Section UniverseLemmas.
         -> adv_cipher_queue_ok cs mycs
         -> encrypted_ciphers_ok honestk cs gks
         -> forall cmd' honestk',
-            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
             -> honestk' = findUserKeys usrs'
             -> encrypted_ciphers_ok honestk' cs' gks'.
   Proof.
@@ -2067,17 +2089,17 @@ Section UniverseLemmas.
 
     - econstructor; eauto.
       assert (adv_no_honest_keys (findUserKeys usrs') (key_heap adv')) as ADV by assumption.
-      specialize (H20 k__signid).
+      specialize (H24 k__signid).
       econstructor; eauto.
       + unfold not; intros; split_ors; split_ands; contra_map_lookup; contradiction.
-      + intros; clear H20.
+      + intros; clear H24.
         specialize (H4 _ _ H5); destruct H4; split_ands; subst; eauto.
-        specialize (H21 _ _ H4); split_ex; eexists.
+        specialize (H25 _ _ H4); split_ex; eexists.
         specialize (ADV k); intuition eauto; contra_map_lookup; subst; eauto.
-        specialize (H21 _ _ H4); split_ex; eexists.
+        specialize (H25 _ _ H4); split_ex; eexists.
         specialize (ADV k); intuition eauto; contra_map_lookup; subst; eauto.
     - econstructor; eauto.
-      specialize (H17 k_id).
+      specialize (H21 k_id).
       eapply SigCipherNotHonestOk; eauto.
       unfold not; intros; split_ors; split_ands; contra_map_lookup; contradiction.
   Qed.
@@ -2172,7 +2194,9 @@ Section SingleAdversarySimulates.
             {| key_heap := clean_key_permissions (findUserKeys U.(users)) user_data.(key_heap)
              ; protocol := user_data.(protocol)
              ; msg_heap := clean_messages (findUserKeys U.(users)) U.(all_ciphers) (Some u_id) user_data.(c_heap) user_data.(msg_heap)
-             ; c_heap   := user_data.(c_heap) |}
+             ; c_heap   := user_data.(c_heap)
+             ; from_ids := user_data.(from_ids)
+             ; to_ids   := user_data.(to_ids) |}
         -> (strip_adversary U).(s_users) $? u_id = Some user_data'.
     Proof.
       unfold strip_adversary, clean_users; destruct user_data; simpl; intros.
@@ -2300,7 +2324,7 @@ Section SingleAdversarySimulates.
 
       - econstructor; eauto using msgCiphersSigned_cleaned_honestk.
       - eapply SigEncCipherHonestSignedEncKeyHonestOk; eauto using msgCiphersSigned_cleaned_honestk.
-        intros KID KP FK; specialize (H13 _ _ FK); intuition eauto.
+        intros KID KP FK; specialize (H14 _ _ FK); intuition eauto.
     Qed.
 
     Hint Resolve clean_ciphers_encrypted_ciphers_ok.
@@ -2609,9 +2633,9 @@ Section SingleAdversarySimulates.
          not_in_ciphers_not_in_cleaned_ciphers.
 
     Lemma cipher_message_keys_already_in_honest :
-      forall {A t} (msg : message t) (usrs : honest_users A) honestk cs msg_to c_id k__s k__e gks,
+      forall {A t} (msg : message t) (usrs : honest_users A) honestk cs msg_to nonce c_id k__s k__e gks,
         honestk = findUserKeys usrs
-        -> cs $? c_id = Some (SigEncCipher k__s k__e msg_to msg) 
+        -> cs $? c_id = Some (SigEncCipher k__s k__e msg_to nonce msg) 
         -> honest_key honestk k__s
         -> honest_key honestk k__e
         -> encrypted_ciphers_ok honestk cs gks
@@ -2961,53 +2985,53 @@ Section SingleAdversarySimulates.
     
     Lemma honest_silent_step_advuniv_implies_honest_or_no_step_origuniv :
       forall {A B C} u_id suid cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-                gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd' (b: B),
+                gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd' (b: B),
         step_user lbl suid bd bd'
         -> suid = Some u_id
         -> forall (cmd : user_cmd C) cs__s usrs__s honestk,
           honestk = findUserKeys usrs
           -> cs__s = clean_ciphers honestk cs
           -> usrs__s = clean_users honestk cs usrs
-          -> bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+          -> bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
           -> encrypted_ciphers_ok honestk cs gks
           -> user_cipher_queues_ok cs honestk usrs
           -> message_queues_ok cs usrs gks
           -> keys_and_permissions_good gks usrs adv.(key_heap)
           -> adv_message_queue_ok honestk cs gks adv.(msg_heap)
           -> forall cmd' cs__s' usrs__s' honestk',
-                 bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+                 bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
               -> lbl = Silent
               -> forall cmdc cmdc' usrs'',
-                  usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs |}
-                  -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' ; c_heap := mycs' |})
+                  usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
+                  -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' ; c_heap := mycs' ; from_ids := froms' ; to_ids := tos' |})
                   -> honestk' = findUserKeys usrs''
                   -> cs__s' = clean_ciphers honestk' cs'
                   -> usrs__s' = clean_users honestk' cs' usrs'
                   -> encrypted_ciphers_ok honestk' cs' gks'
                   -> step_user lbl suid
                               (usrs__s, clean_adv adv honestk cs b, cs__s, clean_keys honestk gks,
-                               clean_key_permissions honestk ks, clean_messages honestk cs suid mycs qmsgs, mycs, cmd)
+                               clean_key_permissions honestk ks, clean_messages honestk cs suid mycs qmsgs, mycs, froms, tos, cmd)
                               (usrs__s', clean_adv adv' honestk' cs b, cs__s', clean_keys honestk' gks',
-                               clean_key_permissions honestk' ks', clean_messages honestk' cs' suid mycs qmsgs', mycs', cmd')
+                               clean_key_permissions honestk' ks', clean_messages honestk' cs' suid mycs qmsgs', mycs', froms', tos', cmd')
                   \/ (usrs__s, clean_adv adv honestk cs b, cs__s, clean_keys honestk gks,
-                     clean_key_permissions honestk ks, clean_messages honestk cs suid mycs qmsgs, mycs, cmd)
+                     clean_key_permissions honestk ks, clean_messages honestk cs suid mycs qmsgs, mycs, froms, tos, cmd)
                     = (clean_users honestk' cs' usrs', clean_adv adv' honestk' cs b, cs__s', clean_keys honestk' gks',
-                       clean_key_permissions honestk' ks', clean_messages honestk' cs' suid mycs' qmsgs', mycs', cmd').
+                       clean_key_permissions honestk' ks', clean_messages honestk' cs' suid mycs' qmsgs', mycs', froms', tos', cmd').
     Proof.
       induction 1; inversion 5; inversion 6; intros; subst; clean_context;
         autorewrite with find_user_keys in *;
         try solve [ left; econstructor; eauto; user_cipher_queues_prop; eauto; try solve_clean_keys_clean_key_permissions ].
 
       - remember (findUserKeys usrs) as honestk.
-        remember (usrs' $+ (u_id, {| key_heap := ks'; protocol := cmdc'; msg_heap := qmsgs'; c_heap := mycs' |})) as usrs''.
+        remember (usrs' $+ (u_id, {| key_heap := ks'; protocol := cmdc'; msg_heap := qmsgs'; c_heap := mycs' ; from_ids := froms' ; to_ids := tos' |})) as usrs''.
         remember (findUserKeys usrs'') as honestk'.
         remember (clean_ciphers honestk cs) as cs__s.
         remember (clean_ciphers honestk' cs') as cs__s'.
         remember (clean_users honestk cs usrs) as usrs__s.
         remember (clean_users honestk' cs' usrs') as usrs__s'.
         assert (@Silent action = Silent) as SIL by trivial.
-        assert ((usrs,adv,cs,gks,ks,qmsgs,mycs,cmd1)=(usrs,adv,cs,gks,ks,qmsgs,mycs,cmd1)) as bd1 by trivial.
-        assert ((usrs',adv',cs',gks',ks',qmsgs',mycs',cmd1')=(usrs',adv',cs',gks',ks',qmsgs',mycs',cmd1')) as bd1' by trivial.
+        assert ((usrs,adv,cs,gks,ks,qmsgs,mycs,froms,tos,cmd1)=(usrs,adv,cs,gks,ks,qmsgs,mycs,froms,tos,cmd1)) as bd1 by trivial.
+        assert ((usrs',adv',cs',gks',ks',qmsgs',mycs',froms',tos',cmd1')=(usrs',adv',cs',gks',ks',qmsgs',mycs',froms',tos',cmd1')) as bd1' by trivial.
         assert (Some u_id = Some u_id) by trivial.
 
         specialize (IHstep_user _ _ _ _ b H0 _ _ _ _
@@ -3016,20 +3040,20 @@ Section SingleAdversarySimulates.
                                 Hequsrs__s
                                 bd1
                                 H5
-                                H14
-                                H15
                                 H16
                                 H17
+                                H18
+                                H19
                                 _ _ _ _
                                 bd1'
                                 SIL
                                 _ _ _
-                                H28
+                                H32
                                 Hequsrs''
                                 Heqhonestk'
                                 Heqcs__s'
                                 Hequsrs__s'
-                                H33
+                                H37
                    ); split_ors; clean_context.
         + left; econstructor; eauto.
         + right; unfold clean_adv; simpl; inversion H1; subst. f_equal.
@@ -3051,7 +3075,7 @@ Section SingleAdversarySimulates.
         
         eapply StepEncrypt; eauto.
         unfold keys_mine in *; intros.
-        specialize (H17 _ _ H7); split_ands; subst.
+        specialize (H18 _ _ H7); split_ands; subst.
         specialize (H4 _ _ H7); split_ors; split_ands; subst; eauto.
 
       - assert (findUserKeys usrs' $? k__encid = Some true) by eauto.
@@ -3077,13 +3101,13 @@ Section SingleAdversarySimulates.
                cases (findKeysMessage msg $? y).
                *** eapply clean_key_permissions_keeps_honest_permission; eauto.
                    unfold honest_perm_filter_fn.
-                   specialize (H18 _ _ Heq); split_ands; subst.
+                   specialize (H19 _ _ Heq); split_ands; subst.
                    eapply merge_perms_split in H5; split_ors; contra_map_lookup; context_map_rewrites; eauto.
                *** eapply clean_key_permissions_adds_no_permissions; eauto.
                *** rewrite CKP; eauto.
                
           * intros.
-            specialize (H18 _ _ H5); split_ands; subst.
+            specialize (H19 _ _ H5); split_ands; subst.
             apply merge_perms_split in H8; split_ors; contra_map_lookup; eauto.
             
       - assert (findUserKeys usrs' $? k_id = Some true) by eauto.
@@ -3225,16 +3249,16 @@ Section SingleAdversarySimulates.
     Qed.
 
     Lemma clean_users_nochange_pubk_step :
-      forall {A} (usrs: honest_users A) honestk cs pubk u_id ks cmd qmsgs mycs u_d u_d',
+      forall {A} (usrs: honest_users A) honestk cs pubk u_id ks cmd qmsgs mycs froms tos u_d u_d',
         (forall k kp, pubk $? k = Some kp -> honestk $? k = Some true /\ kp = false)
         -> u_d = {| key_heap := ks $k++ pubk
                  ; protocol := cmd
                  ; msg_heap := qmsgs
-                 ; c_heap := mycs |}
+                 ; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
         -> u_d' = {| key_heap := clean_key_permissions honestk (ks $k++ pubk)
                   ; protocol := cmd
                   ; msg_heap := clean_messages honestk cs (Some u_id) mycs qmsgs
-                  ; c_heap := mycs |}
+                  ; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
         -> clean_users (honestk $k++ pubk) cs (usrs $+ (u_id,u_d)) =
           clean_users honestk cs usrs $+ (u_id,u_d').
     Proof.
@@ -3282,20 +3306,20 @@ Section SingleAdversarySimulates.
 
     Lemma honest_labeled_step_nochange_clean_ciphers_users_messages :
       forall {A B C} cs cs' u_id suid lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-                gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd' a b,
+                gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd' a b,
         step_user lbl suid bd bd'
         -> suid = Some u_id
         -> action_adversary_safe (findUserKeys usrs) cs a
         -> message_queues_ok cs usrs gks
         (* -> user_cipher_queues_ok (findUserKeys usrs) usrs cs *)
         -> forall (cmd : user_cmd C),
-          bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+          bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
           -> lbl = Action a
           -> forall cmd',
-              bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+              bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
               -> forall cmdc cmdc' usrs'' ud',
-                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs |}
-                -> ud' = {| key_heap := ks'; protocol := cmdc'; msg_heap := qmsgs' ; c_heap := mycs' |}
+                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
+                -> ud' = {| key_heap := ks'; protocol := cmdc'; msg_heap := qmsgs' ; c_heap := mycs' ; from_ids := froms' ; to_ids := tos' |}
                 -> usrs'' = usrs' $+ (u_id, ud')
                 -> clean_ciphers (findUserKeys usrs'') cs' = clean_ciphers (findUserKeys usrs') cs'
                 /\ clean_messages (findUserKeys usrs'') cs' suid mycs' qmsgs' = clean_messages (findUserKeys usrs') cs' suid mycs' qmsgs'
@@ -3303,7 +3327,7 @@ Section SingleAdversarySimulates.
                   clean_users (findUserKeys usrs') cs' usrs' $+ (u_id, {| key_heap := clean_key_permissions (findUserKeys usrs') ks'
                                                                     ; protocol := cmdc'
                                                                     ; msg_heap := clean_messages (findUserKeys usrs') cs' suid mycs' qmsgs'
-                                                                    ; c_heap := mycs' |})
+                                                                    ; c_heap := mycs' ; from_ids := froms' ; to_ids := tos' |})
                 /\ clean_adv adv' (findUserKeys usrs'') cs' b = clean_adv adv' (findUserKeys usrs) cs' b
                 /\ clean_keys (findUserKeys usrs'') gks' = clean_keys (findUserKeys usrs') gks'.
 
@@ -3314,7 +3338,7 @@ Section SingleAdversarySimulates.
         clean_context;
         simpl.
 
-      - eapply Forall_natmap_in_prop in H8; eauto; simpl in *; invert H8.
+      - msg_queue_prop.
         split_ands; specialize_msg_ok.
         intuition eauto using clean_ciphers_nochange_pubk
                             , clean_messages_nochange_pubk
@@ -3334,20 +3358,20 @@ Section SingleAdversarySimulates.
 
     Lemma honest_labeled_step_encrypted_ciphers_ok :
       forall {A B C} cs cs' u_id suid lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-                gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd' a,
+                gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd' a,
         step_user lbl suid bd bd'
         -> suid = Some u_id
         -> action_adversary_safe (findUserKeys usrs) cs a
         -> message_queues_ok cs usrs gks
         -> encrypted_ciphers_ok (findUserKeys usrs) cs gks
         -> forall (cmd : user_cmd C),
-          bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+          bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
           -> lbl = Action a
           -> forall cmd',
-              bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+              bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
               -> forall cmdc cmdc' usrs'' ud',
-                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs |}
-                -> ud' = {| key_heap := ks'; protocol := cmdc'; msg_heap := qmsgs' ; c_heap := mycs' |}
+                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
+                -> ud' = {| key_heap := ks'; protocol := cmdc'; msg_heap := qmsgs' ; c_heap := mycs' ; from_ids := froms' ; to_ids := tos' |}
                 -> usrs'' = usrs' $+ (u_id, ud')
                 -> encrypted_ciphers_ok (findUserKeys usrs'') cs' gks'.
     Proof.
@@ -3394,7 +3418,7 @@ Section SingleAdversarySimulates.
 
     Lemma honest_labeled_step_advuniv_implies_honest_step_origuniv :
       forall {A B C} cs cs' lbl u_id (usrs usrs' : honest_users A) (adv adv' : user_data B)
-                gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd' a (b : B) suid,
+                gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd' a (b : B) suid,
         step_user lbl suid bd bd'
         -> suid = Some u_id
         -> action_adversary_safe (findUserKeys usrs) cs a
@@ -3403,27 +3427,31 @@ Section SingleAdversarySimulates.
           honestk = findUserKeys usrs
           -> cs__s = clean_ciphers honestk cs
           -> usrs__s = clean_users honestk cs usrs
-          -> bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+          -> bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
           -> forall cmdc cmdc' usrs'' honestk',
-              usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs |}
-              -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' ; c_heap := mycs' |})
+              usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
+              -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' ; c_heap := mycs' ; from_ids := froms' ; to_ids := tos' |})
               -> honestk' = findUserKeys usrs''
               -> forall cmd' cs__s' usrs__s' pwless_adv pwless_adv',
                   cs__s' = clean_ciphers honestk' cs'
                   -> usrs__s' = clean_users honestk' cs' usrs'
-                  -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+                  -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
                   -> lbl = Action a
                   -> pwless_adv = {| key_heap := key_heap adv
                                   ; protocol := Return b
                                   ; msg_heap := adv.(msg_heap)
-                                  ; c_heap   := adv.(c_heap) |}
+                                  ; c_heap   := adv.(c_heap)
+                                  ; from_ids := adv.(from_ids)
+                                  ; to_ids   := adv.(to_ids) |}
                   -> pwless_adv' = {| key_heap := key_heap adv'
                                    ; protocol := Return b
                                    ; msg_heap := adv'.(msg_heap)
-                                   ; c_heap   := adv'.(c_heap) |}
+                                   ; c_heap   := adv'.(c_heap)
+                                   ; from_ids := adv'.(from_ids)
+                                   ; to_ids   := adv'.(to_ids) |}
                   -> step_user lbl suid
-                              (usrs__s, pwless_adv, cs__s, gks, ks, clean_messages honestk cs suid mycs qmsgs, mycs, cmd)
-                              (usrs__s', pwless_adv', cs__s', gks', ks', clean_messages honestk' cs' suid mycs' qmsgs', mycs', cmd').
+                              (usrs__s, pwless_adv, cs__s, gks, ks, clean_messages honestk cs suid mycs qmsgs, mycs, froms, tos, cmd)
+                              (usrs__s', pwless_adv', cs__s', gks', ks', clean_messages honestk' cs' suid mycs' qmsgs', mycs', froms', tos', cmd').
     Proof.
       induction 1; inversion 7; inversion 6; intros;
         subst; try discriminate;
@@ -3486,7 +3514,7 @@ Section SingleAdversarySimulates.
 
     Lemma honest_labeled_step_advuniv_implies_honest_step_origuniv' :
       forall {A B C} cs cs' lbl u_id suid (usrs usrs' : honest_users A) (adv adv' : user_data B)
-                gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd' a a' (b : B),
+                gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd' a a' (b : B),
         step_user lbl suid bd bd'
         -> suid = Some u_id
         -> action_adversary_safe (findUserKeys usrs) cs a
@@ -3495,20 +3523,20 @@ Section SingleAdversarySimulates.
           honestk = findUserKeys usrs
           -> cs__s = clean_ciphers honestk cs
           -> usrs__s = clean_users honestk cs usrs
-          -> bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+          -> bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
           -> forall cmd' cs__s' usrs__s' honestk',
               honestk' = findUserKeys usrs'
               -> cs__s' = clean_ciphers honestk' cs'
               -> usrs__s' = clean_users honestk' cs' usrs'
-              -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+              -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
               -> lbl = Action a
               -> user_queue usrs u_id = Some qmsgs
                   -> a' = strip_action (findUserKeys usrs) a
                   -> step_user (Action a') suid
                               (usrs__s, clean_adv adv (findUserKeys usrs) cs b, cs__s, clean_keys honestk gks,
-                               clean_key_permissions honestk ks, clean_messages honestk cs suid qmsgs, mycs, cmd)
+                               clean_key_permissions honestk ks, clean_messages honestk cs suid qmsgs, mycs, froms, tos, cmd)
                               (usrs__s', clean_adv adv' (findUserKeys usrs) cs' b, cs__s', clean_keys honestk' gks',
-                               clean_key_permissions honestk' ks', clean_messages honestk' cs' suid qmsgs', mycs', cmd').
+                               clean_key_permissions honestk' ks', clean_messages honestk' cs' suid qmsgs', mycs', froms', tos', cmd').
     Proof.
       induction 1; inversion 7; inversion 4; intros;
         subst; try discriminate;
@@ -3627,13 +3655,13 @@ Section SingleAdversarySimulates.
 
     Lemma honest_silent_step_nochange_adversaries :
       forall {A B C} cs cs' lbl u_id (usrs usrs' : honest_users A) (adv adv' : user_data B)
-                gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd',
+                gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd',
         step_user lbl u_id bd bd'
         -> forall (cmd : user_cmd C),
-          bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+          bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
           -> lbl = Silent
           -> forall cmd',
-              bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+              bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
             -> adv = adv'.
     Proof.
       induction 1; inversion 1; inversion 2; subst; eauto;
@@ -3642,13 +3670,13 @@ Section SingleAdversarySimulates.
 
     Lemma honest_labeled_step_nochange_adversary_protocol :
       forall {A B C} cs cs' lbl u_id (usrs usrs' : honest_users A) (adv adv' : user_data B)
-                gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd',
+                gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd',
         step_user lbl u_id bd bd'
         -> forall (cmd : user_cmd C) a,
-          bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+          bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
           -> lbl = Action a
           -> forall cmd',
-              bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+              bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
             -> adv.(protocol) = adv'.(protocol).
     Proof.
       induction 1; inversion 1; inversion 2; subst; eauto.
@@ -3656,12 +3684,12 @@ Section SingleAdversarySimulates.
 
     Lemma user_step_adds_no_users :
       forall {A B C} cs cs' lbl u_id (usrs usrs' : honest_users A) (adv adv' : user_data B)
-                gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd',
+                gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd',
         step_user lbl u_id bd bd'
         -> forall (cmd : user_cmd C),
-          bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+          bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
           -> forall cmd',
-            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
             -> forall u_id' u_d,
               usrs' $? u_id' = Some u_d
               -> usrs $? u_id' <> None.
@@ -3686,7 +3714,7 @@ Section SingleAdversarySimulates.
         -> exists (u_id : user_id) u_d u_d' usrs' adv' cs' gks' ks' qmsgs' mycs' cmd',
             usrs $? u_id = Some u_d
           /\ step_user (Action a) (Some u_id) (build_data_step U u_d)
-                      (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+                      (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
           /\ U' = {| users        := usrs' $+ (u_id, u_d')
                   ; adversary    := adv'
                   ; all_ciphers  := cs'
@@ -3708,21 +3736,21 @@ Section SingleAdversarySimulates.
 
     Lemma honest_silent_step_nochange_honestk_clean_ciphers_msgs_usrs :
       forall {A B C} cs cs' u_id suid lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-                gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd',
+                gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd',
         step_user lbl suid bd bd'
         -> suid = Some u_id
         -> forall (cmd : user_cmd C),
-          bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+          bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
           -> encrypted_ciphers_ok (findUserKeys usrs) cs gks
           -> user_cipher_queues_ok cs (findUserKeys usrs) usrs
           -> message_queues_ok cs usrs gks
           -> keys_and_permissions_good  gks usrs adv.(key_heap)
           -> lbl = Silent
           -> forall cmd' usrs'',
-              bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+              bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
               -> forall cmdc cmdc',
-                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs |}
-                -> usrs'' = usrs' $+ (u_id, {| key_heap := ks'; protocol := cmdc'; msg_heap := qmsgs' ; c_heap := mycs' |})
+                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
+                -> usrs'' = usrs' $+ (u_id, {| key_heap := ks'; protocol := cmdc'; msg_heap := qmsgs' ; c_heap := mycs' ; from_ids := froms' ; to_ids := tos' |})
                 ->  clean_ciphers (findUserKeys usrs'') cs' = clean_ciphers (findUserKeys usrs') cs'
                 /\ clean_messages (findUserKeys usrs'') cs' suid qmsgs' = clean_messages (findUserKeys usrs') cs' suid qmsgs'
                 /\ clean_users (findUserKeys usrs'') cs' usrs' = clean_users (findUserKeys usrs') cs' usrs'.
@@ -3744,11 +3772,11 @@ Section SingleAdversarySimulates.
 
     Lemma honest_silent_step_nochange_clean_adv_messages :
       forall {A B C} cs cs' u_id suid lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-                gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd',
+                gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd',
         step_user lbl suid bd bd'
         -> suid = Some u_id
         -> forall (cmd : user_cmd C),
-          bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+          bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
           -> encrypted_ciphers_ok (findUserKeys usrs) cs gks
           -> user_cipher_queues_ok cs (findUserKeys usrs) usrs
           -> message_queues_ok cs usrs gks
@@ -3756,10 +3784,10 @@ Section SingleAdversarySimulates.
           -> adv_message_queue_ok (findUserKeys usrs) cs gks adv.(msg_heap)
           -> lbl = Silent
           -> forall cmd' usrs'',
-              bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+              bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
               -> forall cmdc cmdc',
-                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs |}
-                -> usrs'' = usrs' $+ (u_id, {| key_heap := ks'; protocol := cmdc'; msg_heap := qmsgs' ; c_heap := mycs' |})
+                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
+                -> usrs'' = usrs' $+ (u_id, {| key_heap := ks'; protocol := cmdc'; msg_heap := qmsgs' ; c_heap := mycs' ; from_ids := froms' ; to_ids := tos' |})
                 -> clean_messages (findUserKeys usrs'') cs' None adv'.(msg_heap) = clean_messages (findUserKeys usrs'') cs None adv'.(msg_heap).
     Proof.
       induction 1; inversion 2; inversion 7; intros; try discriminate; subst;
@@ -3777,8 +3805,8 @@ Section SingleAdversarySimulates.
         -> U.(users) $? u_id = Some userData
         -> step_user Silent (Some u_id)
                     (build_data_step U userData)
-                    (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
-        -> U' = buildUniverse usrs adv cs gks u_id {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmd ; c_heap := mycs |}
+                    (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
+        -> U' = buildUniverse usrs adv cs gks u_id {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmd ; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
         -> universe_ok U'
         -> step_universe (strip_adversary_univ U b) Silent (strip_adversary_univ U' b)
         \/ strip_adversary_univ U b = strip_adversary_univ U' b.
@@ -3815,7 +3843,7 @@ Section SingleAdversarySimulates.
         unfold clean_adv; simpl; f_equal.
         + rewrite clean_users_add_pull; simpl.
           assert (clean_users (findUserKeys users) all_ciphers users =
-                  clean_users (findUserKeys (usrs $+ (u_id, {| key_heap := ks; protocol := cmd; msg_heap := qmsgs; c_heap := mycs |}))) cs usrs).
+                  clean_users (findUserKeys (usrs $+ (u_id, {| key_heap := ks; protocol := cmd; msg_heap := qmsgs; c_heap := mycs ; from_ids := froms ; to_ids := tos |}))) cs usrs).
           unfold clean_users, map; apply map_eq_elements_eq; simpl; auto.
           rewrite <- H11.
           apply map_eq_Equal; unfold Equal; intros.
@@ -3831,7 +3859,7 @@ Section SingleAdversarySimulates.
 
     Lemma stripped_labeled_step_implies_advuniv_step_action_stripped :
        forall {A B C} cs cs' u_id suid (usrs usrs' usrs__ra usrs__ra': honest_users A) (adv adv' adv__ra adv__ra': user_data B)
-         gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd' a (b : B)
+         gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd' a (b : B)
          cs__ra gks__ra ks__ra qmsgs__ra cs__ra' gks__ra' ks__ra' qmsgs__ra'
          lbl,
         step_user lbl suid bd bd'
@@ -3839,7 +3867,7 @@ Section SingleAdversarySimulates.
         -> lbl = Action a
         -> forall (cmd : user_cmd C) honestk,
             honestk = findUserKeys usrs
-            -> bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+            -> bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
             -> usrs = clean_users honestk cs usrs__ra
             -> adv = clean_adv adv__ra honestk cs b
             -> cs = clean_ciphers honestk cs__ra
@@ -3847,9 +3875,9 @@ Section SingleAdversarySimulates.
             -> ks = clean_key_permissions honestk ks__ra
             -> qmsgs = clean_messages honestk cs suid qmsgs__ra
             -> forall cmd' bd__ra' a__ra,
-                bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
-                -> bd__ra' = (usrs__ra', adv__ra', cs__ra', gks__ra', ks__ra', qmsgs__ra', mycs', cmd')
-                -> step_user (Action a__ra) suid (usrs__ra, adv__ra, cs__ra, gks__ra, ks__ra, qmsgs__ra, mycs, cmd) bd__ra'
+                bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
+                -> bd__ra' = (usrs__ra', adv__ra', cs__ra', gks__ra', ks__ra', qmsgs__ra', mycs', froms', tos', cmd')
+                -> step_user (Action a__ra) suid (usrs__ra, adv__ra, cs__ra, gks__ra, ks__ra, qmsgs__ra, mycs, froms, tos, cmd) bd__ra'
                 -> a = strip_action honestk a__ra.
     Proof.
       induction 1; inversion 4; inversion 7; intros; try discriminate; subst;
@@ -3922,7 +3950,7 @@ Section SingleAdversarySimulates.
           -> adv_no_honest_keys (findUserKeys usrs) adv.(key_heap)
           -> cs__s = clean_ciphers honestk cs
           -> forall cmd' honestk' cs__s',
-                bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+                bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
               -> honestk' = findUserKeys usrs'
               -> cs__s' = clean_ciphers honestk' cs'
               -> cs__s = cs__s'.
@@ -3942,7 +3970,7 @@ Section SingleAdversarySimulates.
 
           -> gks__s = clean_keys honestk gks
           -> forall cmd' honestk' gks__s',
-                bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+                bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
               -> honestk' = findUserKeys usrs'
               -> gks__s' = clean_keys honestk' gks'
               -> gks__s = gks__s'.
@@ -4012,7 +4040,7 @@ Section SingleAdversarySimulates.
           -> adv_cipher_queue_ok cs adv.(c_heap)
           -> usrs__s = clean_users honestk cs usrs
           -> forall cmd' honestk' usrs__s',
-                bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+                bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
               -> honestk' = findUserKeys usrs'
               -> usrs__s' = clean_users honestk' cs' usrs'
               -> usrs__s = usrs__s'.
@@ -4059,7 +4087,7 @@ Section SingleAdversarySimulates.
         (cmd : user_cmd B) lbl (usrs : honest_users A) (adv : user_data B) cs gks ks qmsgs mycs,
         step_user lbl None
                   (build_data_step U__r U__r.(adversary))
-                  (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+                  (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
         -> R (strip_adversary U__r) U__i
 
         -> keys_and_permissions_good U__r.(all_keys) U__r.(users) U__r.(adversary).(key_heap)
@@ -4135,20 +4163,20 @@ Section SingleAdversarySimulates.
 
     Lemma honest_silent_step_adv_univ_enc_ciphers_ok' :
       forall {A B C} cs cs' u_id suid lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-                gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd',
+                gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd',
         step_user lbl suid bd bd'
         -> suid = Some u_id
         -> forall (cmd : user_cmd C),
-          bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+          bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
           -> encrypted_ciphers_ok (findUserKeys usrs) cs gks
           -> user_cipher_queues_ok cs (findUserKeys usrs) usrs
           -> keys_and_permissions_good gks usrs adv.(key_heap)
           -> lbl = Silent
           -> forall cmd' usrs'',
-              bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+              bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
               -> forall cmdc cmdc' honestk',
-                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs |}
-                -> usrs'' = usrs' $+ (u_id, {| key_heap := ks'; protocol := cmdc'; msg_heap := qmsgs' ; c_heap := mycs' |})
+                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
+                -> usrs'' = usrs' $+ (u_id, {| key_heap := ks'; protocol := cmdc'; msg_heap := qmsgs' ; c_heap := mycs' ; from_ids := froms' ; to_ids := tos' |})
                 -> honestk' = findUserKeys usrs''
                 -> encrypted_ciphers_ok honestk' (clean_ciphers honestk' cs') gks'
                 -> encrypted_ciphers_ok honestk' cs' gks'.
@@ -4201,23 +4229,23 @@ Section SingleAdversarySimulates.
 
     Lemma honest_silent_step_adv_univ_enc_ciphers_ok'' :
       forall {A B C} cs cs' u_id suid lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-                b gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd',
+                b gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd',
         step_user lbl suid bd bd'
         -> suid = Some u_id
         -> forall (cmd : user_cmd C),
-          bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+          bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
           -> encrypted_ciphers_ok (findUserKeys usrs) cs gks
           -> user_cipher_queues_ok cs (findUserKeys usrs) usrs
           -> keys_and_permissions_good gks usrs adv.(key_heap)
           -> lbl = Silent
           -> forall cmd' usrs'',
-              bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+              bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
               -> forall cmdc cmdc' honestk' U__r U__r',
-                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs |}
-                -> usrs'' = usrs' $+ (u_id, {| key_heap := ks'; protocol := cmdc'; msg_heap := qmsgs' ; c_heap := mycs' |})
+                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
+                -> usrs'' = usrs' $+ (u_id, {| key_heap := ks'; protocol := cmdc'; msg_heap := qmsgs' ; c_heap := mycs' ; from_ids := froms' ; to_ids := tos' |})
                 -> honestk' = findUserKeys usrs''
-                -> U__r = buildUniverse usrs adv cs gks u_id {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs |}
-                -> U__r' = buildUniverse usrs' adv' cs' gks' u_id {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' ; c_heap := mycs' |}
+                -> U__r = buildUniverse usrs adv cs gks u_id {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
+                -> U__r' = buildUniverse usrs' adv' cs' gks' u_id {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' ; c_heap := mycs' ; from_ids := froms' ; to_ids := tos' |}
                 -> strip_adversary_univ U__r b = strip_adversary_univ U__r' b
                 -> encrypted_ciphers_ok honestk' cs' gks'.
     Proof.

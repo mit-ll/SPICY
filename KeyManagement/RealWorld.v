@@ -33,35 +33,43 @@ Inductive msg_pat :=
 .
 
 Inductive cipher : Type :=
-| SigCipher {t} (k__sign : key_identifier) (msg_to : user_id) (msg : message t) : cipher
-| SigEncCipher {t} (k__sign k__enc : key_identifier) (msg_to : user_id) (msg : message t) : cipher
+| SigCipher {t} (k__sign : key_identifier) (msg_to : user_id) (c_nonce : nat) (msg : message t) : cipher
+| SigEncCipher {t} (k__sign k__enc : key_identifier) (msg_to : user_id) (c_nonce : nat) (msg : message t) : cipher
 .
 
 Definition cipher_signing_key (c : cipher) :=
   match c with
-  | SigCipher k _ _      => k
-  | SigEncCipher k _ _ _ => k
+  | SigCipher k _ _ _      => k
+  | SigEncCipher k _ _ _ _ => k
   end.
 
 Definition cipher_to_user (c : cipher) :=
   match c with
-  | SigCipher _ to _      => to
-  | SigEncCipher _ _ to _ => to
+  | SigCipher _ to _ _      => to
+  | SigEncCipher _ _ to _ _ => to
+  end.
+
+Definition cipher_nonce (c : cipher) :=
+  match c with
+  | SigCipher _ _ n _      => n
+  | SigEncCipher _ _ _ n _ => n
   end.
 
 Definition queued_messages := list (sigT crypto).
 Definition ciphers         := NatMap.t cipher.
 Definition my_ciphers      := list cipher_id.
+Definition recv_nonces     := NatMap.t nat.
+Definition send_nonces     := NatMap.t (NatMap.t nat).
 
 Inductive msg_accepted_by_pattern (cs : ciphers) (opt_uid_to : option user_id) : forall {t : type}, msg_pat -> crypto t -> Prop :=
 | MsgAccept : forall {t} (m : crypto t),
     msg_accepted_by_pattern cs opt_uid_to Accept m
-| ProperlySigned : forall {t} c_id k (m : message t) msg_to,
-    cs $? c_id = Some (@SigCipher t k msg_to m)
+| ProperlySigned : forall {t} c_id k (m : message t) msg_to nonce,
+    cs $? c_id = Some (@SigCipher t k msg_to nonce m)
     -> opt_uid_to = Some msg_to
     -> msg_accepted_by_pattern cs opt_uid_to (Signed k) (@SignedCiphertext t c_id)
-| ProperlyEncrypted : forall {t} c_id k__sign k__enc (m : message t) msg_to,
-    cs $? c_id = Some (SigEncCipher k__sign k__enc msg_to m)
+| ProperlyEncrypted : forall {t} c_id k__sign k__enc (m : message t) msg_to nonce,
+    cs $? c_id = Some (SigEncCipher k__sign k__enc msg_to nonce m)
     -> opt_uid_to = Some msg_to
     -> msg_accepted_by_pattern cs opt_uid_to (SignedEncrypted k__sign k__enc) (@SignedCiphertext t c_id).
 
@@ -129,13 +137,13 @@ Section SafeMessages.
   | PlaintextHPK : forall {t} (txt : message t),
       content_only_honest_public_keys txt
       -> msg_contains_only_honest_public_keys cs (Content txt)
-  | HonestlyEncryptedHPK : forall t (m : message t) c_id msg_to k__sign k__enc,
-      cs $? c_id = Some (SigEncCipher k__sign k__enc msg_to m)
+  | HonestlyEncryptedHPK : forall t (m : message t) c_id msg_to nonce k__sign k__enc,
+      cs $? c_id = Some (SigEncCipher k__sign k__enc msg_to nonce m)
       -> content_only_honest_public_keys m
       -> honest_key k__enc
       -> msg_contains_only_honest_public_keys cs (@SignedCiphertext t c_id)
-  | SignedPayloadHPK : forall {t} (m : message t) c_id msg_to k__sign,
-      cs $? c_id = Some (SigCipher k__sign msg_to m)
+  | SignedPayloadHPK : forall {t} (m : message t) c_id msg_to nonce k__sign,
+      cs $? c_id = Some (SigCipher k__sign msg_to nonce m)
       -> content_only_honest_public_keys m
       -> msg_contains_only_honest_public_keys cs (@SignedCiphertext t c_id).
 
@@ -190,8 +198,8 @@ Section SafeMessages.
 
   Definition cipher_honestly_signed (c : cipher) : bool :=
     match c with
-    | SigCipher k_id _ _              => honest_keyb k_id
-    | SigEncCipher k__signid k__encid _ _ => honest_keyb k__signid
+    | SigCipher k_id _ _ _              => honest_keyb k_id
+    | SigEncCipher k__signid k__encid _ _ _ => honest_keyb k__signid
     end.
 
   Definition ciphers_honestly_signed :=
@@ -253,6 +261,8 @@ Record user_data (A : Type) :=
     ; protocol : user_cmd A
     ; msg_heap : queued_messages
     ; c_heap   : my_ciphers
+    ; from_ids : recv_nonces
+    ; to_ids   : send_nonces
     }.
 
 Definition honest_users A := user_list (user_data A).
@@ -284,7 +294,10 @@ Definition addUserKeys {A} (ks : key_perms) (u : user_data A) : user_data A :=
   {| key_heap := u.(key_heap) $k++ ks
    ; protocol := u.(protocol)
    ; msg_heap := u.(msg_heap)
-   ; c_heap   := u.(c_heap) |}.
+   ; c_heap   := u.(c_heap)
+   ; from_ids := u.(from_ids)
+   ; to_ids   := u.(to_ids)
+  |}.
 
 Definition addUsersKeys {A} (us : user_list (user_data A)) (ks : key_perms) : user_list (user_data A) :=
   map (addUserKeys ks) us.
@@ -329,7 +342,7 @@ Definition findKeysCrypto {t} (cs : ciphers) (msg : crypto t) : key_perms :=
   | Content  m          => findKeysMessage m
   | SignedCiphertext c_id  =>
     match cs $? c_id with
-    | Some (SigCipher _ _ m) => findKeysMessage m
+    | Some (SigCipher _ _ _ m) => findKeysMessage m
     | _ => $0
     end
   end.
@@ -413,12 +426,15 @@ Section RealWorldLemmas.
   Qed.
 
   Lemma findUserKeys_readd_user_same_keys_idempotent :
-    forall {A} (usrs : honest_users A) u_id u_d proto msgs mycs,
+    forall {A} (usrs : honest_users A) u_id u_d proto msgs mycs froms tos,
       usrs $? u_id = Some u_d
       -> findUserKeys usrs = findUserKeys (usrs $+ (u_id, {| key_heap := key_heap u_d
                                                           ; protocol := proto
                                                           ; msg_heap := msgs
-                                                          ; c_heap   := mycs |} )).
+                                                          ; c_heap   := mycs
+                                                          ; from_ids := froms
+                                                          ; to_ids   := tos
+                                                         |} )).
   Proof.
     intros.
     induction usrs using P.map_induction_bis; intros; Equal_eq; contra_map_lookup; auto.
@@ -437,12 +453,14 @@ Section RealWorldLemmas.
   Qed.
 
   Lemma findUserKeys_readd_user_same_keys_idempotent' :
-    forall {A} (usrs : honest_users A) u_id ks proto msgs mycs,
+    forall {A} (usrs : honest_users A) u_id ks proto msgs mycs froms tos,
       user_keys usrs u_id = Some ks
       -> findUserKeys (usrs $+ (u_id, {| key_heap := ks
                                       ; protocol := proto
                                       ; msg_heap := msgs
-                                      ; c_heap   := mycs |})) = findUserKeys usrs.
+                                      ; c_heap   := mycs
+                                      ; from_ids := froms
+                                      ; to_ids   := tos |})) = findUserKeys usrs.
   Proof.
     intros.
     induction usrs using P.map_induction_bis; intros; Equal_eq; contra_map_lookup; auto.
@@ -463,12 +481,14 @@ Section RealWorldLemmas.
   Qed.
 
   Lemma findUserKeys_readd_user_addnl_keys :
-    forall {A} (usrs : honest_users A) u_id proto msgs ks ks' mycs,
+    forall {A} (usrs : honest_users A) u_id proto msgs ks ks' mycs froms tos,
       user_keys usrs u_id = Some ks
       -> findUserKeys (usrs $+ (u_id, {| key_heap := ks $k++ ks'
                                       ; protocol := proto
                                       ; msg_heap := msgs
-                                      ; c_heap   := mycs |})) = findUserKeys usrs $k++ ks'.
+                                      ; c_heap   := mycs
+                                      ; from_ids := froms
+                                      ; to_ids   := tos |})) = findUserKeys usrs $k++ ks'.
   Proof.
     intros.
     induction usrs using P.map_induction_bis; intros; Equal_eq; contra_map_lookup; auto.
@@ -490,12 +510,14 @@ Section RealWorldLemmas.
   Qed.
 
   Lemma findUserKeys_readd_user_private_key :
-    forall {A} (usrs : honest_users A) u_id proto msgs k_id ks mycs,
+    forall {A} (usrs : honest_users A) u_id proto msgs k_id ks mycs froms tos,
       user_keys usrs u_id = Some ks
       -> findUserKeys (usrs $+ (u_id, {| key_heap := add_key_perm k_id true ks
                                       ; protocol := proto
                                       ; msg_heap := msgs
-                                      ; c_heap   := mycs |})) = findUserKeys usrs $+ (k_id,true).
+                                      ; c_heap   := mycs
+                                      ; from_ids := froms
+                                      ; to_ids   := tos  |})) = findUserKeys usrs $+ (k_id,true).
   Proof.
     intros.
     induction usrs using P.map_induction_bis; intros; Equal_eq; contra_map_lookup; auto.
@@ -761,6 +783,37 @@ Definition extractPlainText {t} (msg : message t) : option nat :=
   | _           => None
   end.
 
+Definition updateRecvNonce {t} (froms : recv_nonces) (cs : ciphers) (msg : crypto t) :=
+  match msg with
+  | Content _ => froms
+  | SignedCiphertext c_id =>
+    match cs $? c_id with
+    | None => froms
+    | Some c =>
+      let nonce := cipher_nonce c in
+      let kid   := cipher_signing_key c
+      in  match froms $? kid with
+          | None => froms $+ (kid, nonce)
+          | Some nonce' =>
+            match nonce ?= nonce' with
+            | Lt => froms $+ (kid, nonce')
+            | Gt => froms
+            | Eq => froms
+            end
+          end
+    end
+  end.
+
+Definition updateSendNonce (tos : send_nonces) (k_id : key_identifier) (u_id : user_id) :=
+  match tos $? k_id with
+  | None => (0, tos $+ (k_id, ($0 $+ (u_id, 0))))
+  | Some usrs =>
+    match usrs $? u_id with
+    | None => (0, tos $+ (k_id, usrs $+ (u_id, 0)))
+    | Some nonce => (nonce+1, tos $+ (k_id, usrs $+ (u_id, nonce+1)))
+    end
+  end.
+
 Inductive action : Type :=
 | Input  t (msg : crypto t) (pat : msg_pat)
 | Output t (msg : crypto t) (to_user : option user_id)
@@ -778,27 +831,32 @@ Definition action_adversary_safe (honestk : key_perms) (cs : ciphers) (a : actio
   end.
 
 Definition data_step0 (A B C : Type) : Type :=
-  honest_users A * user_data B * ciphers * keys * key_perms * queued_messages * my_ciphers * user_cmd C.
+  honest_users A * user_data B * ciphers * keys * key_perms * queued_messages * my_ciphers * recv_nonces * send_nonces * user_cmd C.
 
 Definition build_data_step {A B C} (U : universe A B) (u_data : user_data C) : data_step0 A B C :=
-  (U.(users), U.(adversary), U.(all_ciphers), U.(all_keys), u_data.(key_heap), u_data.(msg_heap), u_data.(c_heap), u_data.(protocol)).
+  (U.(users), U.(adversary), U.(all_ciphers), U.(all_keys),
+   u_data.(key_heap), u_data.(msg_heap), u_data.(c_heap), u_data.(from_ids), u_data.(to_ids), u_data.(protocol)).
 
 Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C -> data_step0 A B C -> Prop :=
 
 (* Plumbing *)
 | StepBindRecur : forall {B r r'} (usrs usrs' : honest_users r') (adv adv' : user_data B)
-                    lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs'
+                    lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' tos tos'
                     (cmd1 cmd1' : user_cmd r) (cmd2 : r -> user_cmd r'),
-      step_user lbl u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd1) (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd1')
-    -> step_user lbl u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, Bind cmd1 cmd2) (usrs', adv', cs', gks', ks', qmsgs', mycs', Bind cmd1' cmd2)
-| StepBindProceed : forall {B r r'} (usrs : honest_users r) (adv : user_data B) cs u_id gks ks qmsgs mycs (v : r') (cmd : r' -> user_cmd r),
-    step_user Silent u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, Bind (Return v) cmd) (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd v)
+    step_user lbl u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd1)
+                       (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd1')
+    -> step_user lbl u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, Bind cmd1 cmd2)
+                         (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', Bind cmd1' cmd2)
+| StepBindProceed : forall {B r r'} (usrs : honest_users r) (adv : user_data B) cs u_id gks ks qmsgs mycs froms tos (v : r') (cmd : r' -> user_cmd r),
+    step_user Silent u_id
+              (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, Bind (Return v) cmd)
+              (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd v)
 
-| StepGen : forall {A B} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks qmsgs mycs n,
-    step_user Silent u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, Gen) (usrs, adv, cs, gks, ks, qmsgs, mycs, Return n)
+| StepGen : forall {A B} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks qmsgs mycs froms tos n,
+    step_user Silent u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, Gen) (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, Return n)
 
 (* Comms  *)
-| StepRecv : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks ks' qmsgs qmsgs' mycs mycs'
+| StepRecv : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks ks' qmsgs qmsgs' mycs mycs' froms tos froms'
                (msg : crypto t) msgs pat newkeys newcs,
       qmsgs = (existT _ _ msg) :: msgs (* we have a message waiting for us! *)
     -> qmsgs' = msgs
@@ -806,24 +864,25 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> newcs = findCiphers msg
     -> ks' = ks $k++ newkeys
     -> mycs' = newcs ++ mycs
+    -> froms' = updateRecvNonce froms cs msg
     -> msg_accepted_by_pattern cs u_id pat msg
     -> step_user (Action (Input msg pat)) u_id
-                (usrs, adv, cs, gks, ks , qmsgs , mycs,  Recv pat)
-                (usrs, adv, cs, gks, ks', qmsgs', mycs', Return msg)
+                (usrs, adv, cs, gks, ks , qmsgs , mycs, froms, tos,  Recv pat)
+                (usrs, adv, cs, gks, ks', qmsgs', mycs', froms', tos, Return msg)
 
-| StepRecvDrop : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks qmsgs qmsgs' mycs (msg : crypto t) pat msgs,
+| StepRecvDrop : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks qmsgs qmsgs' mycs froms tos (msg : crypto t) pat msgs,
       qmsgs = (existT _ _ msg) :: msgs (* we have a message waiting for us! *)
     -> qmsgs' = msgs
     -> ~ msg_accepted_by_pattern cs u_id pat msg
     -> step_user Silent u_id (* Error label ... *)
-                (usrs, adv, cs, gks, ks, qmsgs , mycs, Recv pat)
-                (usrs, adv, cs, gks, ks, qmsgs', mycs, @Recv t pat)
+                (usrs, adv, cs, gks, ks, qmsgs , mycs, froms, tos, Recv pat)
+                (usrs, adv, cs, gks, ks, qmsgs', mycs, froms, tos, @Recv t pat)
 
 (* Augment attacker's keys with those available through messages sent, *)
 (*  * including traversing through ciphers already known by attacker, etc. *)
 (*  *)
 | StepSend : forall {A B} {t} (usrs usrs' : honest_users A) (adv adv' : user_data B)
-               cs u_id gks ks qmsgs mycs rec_u_id rec_u newkeys (msg : crypto t),
+               cs u_id gks ks qmsgs mycs froms tos rec_u_id rec_u newkeys (msg : crypto t),
     findKeysCrypto cs msg = newkeys
     -> keys_mine ks newkeys
     -> incl (findCiphers msg) mycs
@@ -832,20 +891,24 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> usrs' = usrs $+ (rec_u_id, {| key_heap := rec_u.(key_heap)
                                   ; protocol := rec_u.(protocol)
                                   ; msg_heap := rec_u.(msg_heap) ++ [existT _ _ msg]
-                                  ; c_heap   := rec_u.(c_heap) |})
+                                  ; c_heap   := rec_u.(c_heap)
+                                  ; from_ids := rec_u.(from_ids)
+                                  ; to_ids   := rec_u.(to_ids) |})
     (* -> adv' = addUserKeys newkeys adv (* TODO: also add ciphers to adv??? *) *)
     -> adv' = 
       {| key_heap := adv.(key_heap) $k++ newkeys
        ; protocol := adv.(protocol)
        ; msg_heap := adv.(msg_heap) ++ [existT _ _ msg]
-       ; c_heap   := adv.(c_heap) |}
+       ; c_heap   := adv.(c_heap)
+       ; from_ids := adv.(from_ids)
+       ; to_ids   := adv.(to_ids) |}
     -> step_user (Action (Output msg (Some rec_u_id))) (Some u_id)
-                (usrs , adv , cs, gks, ks, qmsgs, mycs, Send rec_u_id msg)
-                (usrs', adv', cs, gks, ks, qmsgs, mycs, Return tt)
+                (usrs , adv , cs, gks, ks, qmsgs, mycs, froms, tos, Send rec_u_id msg)
+                (usrs', adv', cs, gks, ks, qmsgs, mycs, froms, tos, Return tt)
 
 (* Encryption / Decryption *)
-| StepEncrypt : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs cs' u_id gks ks qmsgs mycs mycs'
-                  (msg : message t) k__signid k__encid kp__enc kt__enc kt__sign c_id cipherMsg opt_msg_to,
+| StepEncrypt : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs cs' u_id gks ks qmsgs mycs mycs' pr_nonce_tos froms tos tos'
+                  (msg : message t) k__signid k__encid kp__enc kt__enc kt__sign c_id cipherMsg msg_to,
       gks $? k__encid  = Some (MkCryptoKey k__encid Encryption kt__enc)
     -> gks $? k__signid = Some (MkCryptoKey k__signid Signing kt__sign)
     -> ks $? k__encid   = Some kp__enc
@@ -853,16 +916,18 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> ~ In c_id cs
     -> keys_mine ks (findKeysMessage msg)
     (* -> incl (findCiphers msg) mycs *)
-    -> cipherMsg = SigEncCipher k__signid k__encid opt_msg_to msg
+    -> pr_nonce_tos = updateSendNonce tos k__signid msg_to
+    -> cipherMsg = SigEncCipher k__signid k__encid msg_to (fst pr_nonce_tos) msg
     -> cs' = cs $+ (c_id, cipherMsg)
     -> mycs' = c_id :: mycs
+    -> tos' = snd pr_nonce_tos
     -> step_user Silent u_id
-                (usrs, adv, cs , gks, ks, qmsgs, mycs,  SignEncrypt k__signid k__encid msg)
-                (usrs, adv, cs', gks, ks, qmsgs, mycs', Return (SignedCiphertext c_id))
+                (usrs, adv, cs , gks, ks, qmsgs, mycs, froms, tos,  SignEncrypt k__signid k__encid msg)
+                (usrs, adv, cs', gks, ks, qmsgs, mycs', froms, tos', Return (SignedCiphertext c_id))
 
 | StepDecrypt : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks ks' qmsgs mycs mycs'
-                  (msg : message t) k__signid kp__sign k__encid c_id newkeys kt__sign kt__enc opt_msg_to,
-      cs $? c_id     = Some (SigEncCipher k__signid k__encid opt_msg_to msg)
+                  (msg : message t) k__signid kp__sign k__encid c_id nonce newkeys kt__sign kt__enc msg_to froms tos,
+      cs $? c_id     = Some (SigEncCipher k__signid k__encid msg_to nonce msg)
     -> gks $? k__encid  = Some (MkCryptoKey k__encid Encryption kt__enc)
     -> gks $? k__signid = Some (MkCryptoKey k__signid Signing kt__sign)
     -> ks  $? k__encid  = Some true
@@ -873,71 +938,77 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> mycs' = (* newcs ++  *)mycs
     -> List.In c_id mycs
     -> step_user Silent u_id
-                (usrs, adv, cs, gks, ks , qmsgs, mycs,  Decrypt (SignedCiphertext c_id))
-                (usrs, adv, cs, gks, ks', qmsgs, mycs', Return msg)
+                (usrs, adv, cs, gks, ks , qmsgs, mycs,  froms, tos,  Decrypt (SignedCiphertext c_id))
+                (usrs, adv, cs, gks, ks', qmsgs, mycs', froms, tos, Return msg)
 
 (* Signing / Verification *)
-| StepSign : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs cs' u_id gks ks qmsgs mycs mycs'
-               (msg : message t) k_id kt c_id cipherMsg opt_msg_to,
+| StepSign : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs cs' u_id gks ks qmsgs mycs mycs' pr_nonce_tos froms tos tos'
+               (msg : message t) k_id kt c_id cipherMsg msg_to,
       gks $? k_id = Some (MkCryptoKey k_id Signing kt)
     -> ks  $? k_id = Some true
     -> ~ In c_id cs
-    -> cipherMsg = SigCipher k_id opt_msg_to msg
+    -> pr_nonce_tos = updateSendNonce tos k_id msg_to
+    -> cipherMsg = SigCipher k_id msg_to (fst pr_nonce_tos) msg
     -> cs' = cs $+ (c_id, cipherMsg)
     -> mycs' = c_id :: mycs
+    -> tos' = snd pr_nonce_tos
     -> step_user Silent u_id
-                (usrs, adv, cs , gks, ks, qmsgs, mycs,  Sign k_id msg)
-                (usrs, adv, cs', gks, ks, qmsgs, mycs', Return (SignedCiphertext c_id))
+                (usrs, adv, cs , gks, ks, qmsgs, mycs,  froms, tos,  Sign k_id msg)
+                (usrs, adv, cs', gks, ks, qmsgs, mycs', froms, tos', Return (SignedCiphertext c_id))
 
-| StepVerify : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks qmsgs mycs
-                 (msg : message t) k_id kp kt c_id opt_msg_to,
+| StepVerify : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks qmsgs mycs froms tos
+                 (msg : message t) k_id kp kt c_id nonce msg_to,
       gks $? k_id = Some (MkCryptoKey k_id Signing kt)
     -> ks  $? k_id = Some kp
-    -> cs $? c_id = Some (SigCipher k_id opt_msg_to msg)
+    -> cs $? c_id = Some (SigCipher k_id msg_to nonce msg)
     -> List.In c_id mycs
     -> step_user Silent u_id
-                (usrs, adv, cs, gks, ks, qmsgs, mycs, Verify k_id (SignedCiphertext c_id))
-                (usrs, adv, cs, gks, ks, qmsgs, mycs, Return (true, msg))
+                (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, Verify k_id (SignedCiphertext c_id))
+                (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, Return (true, msg))
 | StepGenerateSymKey: forall {A B} (usrs : honest_users A) (adv : user_data B)
-                        cs u_id gks gks' ks ks' qmsgs mycs
+                        cs u_id gks gks' ks ks' qmsgs mycs froms tos
                         (k_id : key_identifier) k usage,
     gks $? k_id = None
     -> k = MkCryptoKey k_id usage SymKey
     -> gks' = gks $+ (k_id, k)
     -> ks' = add_key_perm k_id true ks
     -> step_user Silent u_id
-                (usrs, adv, cs, gks, ks, qmsgs, mycs, GenerateSymKey usage)
-                (usrs, adv, cs, gks', ks', qmsgs, mycs, Return (k_id, true))
+                (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, GenerateSymKey usage)
+                (usrs, adv, cs, gks', ks', qmsgs, mycs, froms, tos, Return (k_id, true))
 | StepGenerateAsymKey: forall {A B} (usrs : honest_users A) (adv : user_data B)
-                         cs u_id gks gks' ks ks' qmsgs mycs
+                         cs u_id gks gks' ks ks' qmsgs mycs froms tos
                          (k_id : key_identifier) k usage,
     gks $? k_id = None
     -> k = MkCryptoKey k_id usage AsymKey
     -> gks' = gks $+ (k_id, k)
     -> ks' = add_key_perm k_id true ks
     -> step_user Silent u_id
-                (usrs, adv, cs, gks, ks, qmsgs, mycs, GenerateAsymKey usage)
-                (usrs, adv, cs, gks', ks', qmsgs, mycs, Return (k_id, true))
+                (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, GenerateAsymKey usage)
+                (usrs, adv, cs, gks', ks', qmsgs, mycs, froms, tos, Return (k_id, true))
 .
 
 Inductive step_universe {A B} : universe A B -> rlabel -> universe A B -> Prop :=
-| StepUser : forall U U' (u_id : user_id) userData usrs adv cs gks ks qmsgs mycs lbl (cmd : user_cmd A),
+| StepUser : forall U U' (u_id : user_id) userData usrs adv cs gks ks qmsgs mycs froms tos lbl (cmd : user_cmd A),
     U.(users) $? u_id = Some userData
     -> step_user lbl (Some u_id)
                 (build_data_step U userData)
-                (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+                (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
     -> U' = buildUniverse usrs adv cs gks u_id {| key_heap := ks
                                                ; msg_heap := qmsgs
                                                ; protocol := cmd
-                                               ; c_heap   := mycs |}
+                                               ; c_heap   := mycs
+                                               ; from_ids := froms
+                                               ; to_ids   := tos |}
     -> step_universe U lbl U'
-| StepAdversary : forall U U' usrs adv cs gks ks qmsgs mycs lbl (cmd : user_cmd B),
+| StepAdversary : forall U U' usrs adv cs gks ks qmsgs mycs froms tos lbl (cmd : user_cmd B),
     step_user lbl None
               (build_data_step U U.(adversary))
-              (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+              (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
     -> U' = buildUniverseAdv usrs cs gks {| key_heap := ks
                                          ; msg_heap := qmsgs
                                          ; protocol := cmd
-                                         ; c_heap   := mycs |}
+                                         ; c_heap   := mycs
+                                         ; from_ids := froms
+                                         ; to_ids   := tos |}
     -> step_universe U Silent U'
 .
