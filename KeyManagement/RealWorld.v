@@ -795,11 +795,12 @@ Definition updateRecvNonce {t} (froms : recv_nonces) (cs : ciphers) (msg : crypt
       in  match froms $? kid with
           | None => froms $+ (kid, nonce)
           | Some nonce' =>
-            match nonce ?= nonce' with
-            | Lt => froms $+ (kid, nonce')
-            | Gt => froms
-            | Eq => froms
-            end
+            if nonce' <? nonce then froms $+ (kid,nonce) else froms
+            (* match nonce ?= nonce' with *)
+            (* | Lt => froms $+ (kid, nonce') *)
+            (* | Gt => froms *)
+            (* | Eq => froms *)
+            (* end *)
           end
     end
   end.
@@ -814,20 +815,42 @@ Definition updateSendNonce (tos : send_nonces) (k_id : key_identifier) (u_id : u
     end
   end.
 
+Definition cipher_nonce_absent_or_gt (froms : recv_nonces) (c : cipher) :=
+    froms $? cipher_signing_key c = None
+  \/ (exists n, froms $? cipher_signing_key c = Some n /\ n < cipher_nonce c).
+
+Definition overlapping_msg_nonce_smaller (new_cipher : cipher) (cs : ciphers) {t} (msg : crypto t) : Prop :=
+  forall c_id c,
+      msg = SignedCiphertext c_id
+    -> cs $? c_id = Some c
+    -> cipher_signing_key c = cipher_signing_key new_cipher
+    -> cipher_nonce c < cipher_nonce new_cipher.
+
+Definition msg_not_replayed {t} (cs : ciphers) (froms : recv_nonces) (msg : crypto t) (msgs : queued_messages) : Prop :=
+  exists c_id c,
+      msg = SignedCiphertext c_id
+    /\ cs $? c_id = Some c
+    /\ cipher_nonce_absent_or_gt froms c
+    /\ Forall (fun sigM => match sigM with existT _ _ m => overlapping_msg_nonce_smaller c cs m end) msgs.
+
 Inductive action : Type :=
-| Input  t (msg : crypto t) (pat : msg_pat)
-| Output t (msg : crypto t) (to_user : option user_id)
+| Input  t (msg : crypto t) (pat : msg_pat) (froms : recv_nonces)
+| Output t (msg : crypto t) (to_user : option user_id) (to_queue : queued_messages) (to_froms : recv_nonces)
 .
 
 Definition rlabel := @label action.
 
 Definition action_adversary_safe (honestk : key_perms) (cs : ciphers) (a : action) : Prop :=
   match a with
-  | Input  msg pat    => msg_pattern_safe honestk pat
-  | Output msg msg_to => msg_contains_only_honest_public_keys honestk cs msg
-                      /\ msg_honestly_signed honestk cs msg = true
-                      /\ msg_to_this_user cs msg_to msg = true
-                      /\ msgCiphersSignedOk honestk cs msg
+  | Input  msg pat froms    => msg_pattern_safe honestk pat
+                            /\ exists c_id c, msg = SignedCiphertext c_id
+                                      /\ cs $? c_id = Some c
+                                      /\ cipher_nonce_absent_or_gt froms c
+  | Output msg msg_to to_q to_frms => msg_contains_only_honest_public_keys honestk cs msg
+                                   /\ msg_honestly_signed honestk cs msg = true
+                                   /\ msg_to_this_user cs msg_to msg = true
+                                   /\ msgCiphersSignedOk honestk cs msg
+                                   /\ msg_not_replayed cs to_frms msg to_q
   end.
 
 Definition data_step0 (A B C : Type) : Type :=
@@ -866,7 +889,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> mycs' = newcs ++ mycs
     -> froms' = updateRecvNonce froms cs msg
     -> msg_accepted_by_pattern cs u_id pat msg
-    -> step_user (Action (Input msg pat)) u_id
+    -> step_user (Action (Input msg pat froms)) u_id
                 (usrs, adv, cs, gks, ks , qmsgs , mycs, froms, tos,  Recv pat)
                 (usrs, adv, cs, gks, ks', qmsgs', mycs', froms', tos, Return msg)
 
@@ -902,7 +925,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
        ; c_heap   := adv.(c_heap)
        ; from_ids := adv.(from_ids)
        ; to_ids   := adv.(to_ids) |}
-    -> step_user (Action (Output msg (Some rec_u_id))) (Some u_id)
+    -> step_user (Action (Output msg (Some rec_u_id) rec_u.(msg_heap) rec_u.(from_ids))) (Some u_id)
                 (usrs , adv , cs, gks, ks, qmsgs, mycs, froms, tos, Send rec_u_id msg)
                 (usrs', adv', cs, gks, ks, qmsgs, mycs, froms, tos, Return tt)
 

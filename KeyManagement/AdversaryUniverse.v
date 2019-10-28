@@ -1878,17 +1878,16 @@ Section StripAdv.
         ; s_all_keys    := clean_keys honestk U__r.(s_all_keys)
        |}.
 
-  Definition strip_action (honestk : key_perms) (act : action) :=
-    act.
-    (* match act with *)
-    (* | Input msg pat msg_to => Input msg pat msg_to *)
-    (* | output              => output *)
-    (* end. *)
+  Definition strip_action (honestk : key_perms) (cs : ciphers) (act : action) :=
+    match act with
+    | Input msg pat froms            => Input msg pat froms
+    | Output msg msg_to to_q to_frms => Output msg msg_to (clean_messages honestk cs msg_to to_frms to_q) to_frms
+    end.
 
-  Definition strip_label (honestk : key_perms) (lbl : label) :=
+  Definition strip_label (honestk : key_perms) (cs : ciphers) (lbl : label) :=
     match lbl with
     | Silent => Silent
-    | Action a => Action (strip_action honestk a)
+    | Action a => Action (strip_action honestk cs a)
     end.
 
   Lemma peel_strip_univ_eq_strip_adv :
