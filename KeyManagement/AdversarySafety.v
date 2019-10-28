@@ -1,4 +1,4 @@
-1From Coq Require Import
+From Coq Require Import
      List
      Morphisms
      Eqdep
@@ -2193,7 +2193,7 @@ Section SingleAdversarySimulates.
         -> user_data' =
             {| key_heap := clean_key_permissions (findUserKeys U.(users)) user_data.(key_heap)
              ; protocol := user_data.(protocol)
-             ; msg_heap := clean_messages (findUserKeys U.(users)) U.(all_ciphers) (Some u_id) user_data.(c_heap) user_data.(msg_heap)
+             ; msg_heap := clean_messages (findUserKeys U.(users)) U.(all_ciphers) (Some u_id) user_data.(from_ids) user_data.(msg_heap)
              ; c_heap   := user_data.(c_heap)
              ; from_ids := user_data.(from_ids)
              ; to_ids   := user_data.(to_ids) |}
@@ -2208,14 +2208,18 @@ Section SingleAdversarySimulates.
     Hint Resolve user_in_univ_user_in_stripped_univ.
 
     Lemma prop_in_adv_message_queues_still_good_after_cleaning :
-      forall msgs honestk cs suid mycs P,
+      forall msgs honestk cs suid froms P,
         Forall P msgs
-        -> Forall P (clean_messages honestk cs suid mycs msgs).
+        -> Forall P (clean_messages honestk cs suid froms msgs).
     Proof.
       induction msgs; intros; eauto.
       invert H.
-      unfold clean_messages; simpl.
-      cases (msg_filter honestk cs suid mycs a); eauto.
+      unfold clean_messages, clean_messages'; simpl.
+      unfold msg_filter at 2; destruct a.
+      destruct (msg_signed_addressed honestk cs suid c); eauto; simpl.
+      cases (msg_nonce_ok cs froms c); eauto.
+      rewrite fold_clean_messages2'.
+      rewrite clean_messages'_fst_pull; eauto.
     Qed.
 
     Hint Resolve prop_in_adv_message_queues_still_good_after_cleaning.
