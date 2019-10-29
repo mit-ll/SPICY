@@ -4120,7 +4120,7 @@ Section SingleAdversarySimulates.
                 usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
                 -> usrs'' = usrs' $+ (u_id, {| key_heap := ks'; protocol := cmdc'; msg_heap := qmsgs' ; c_heap := mycs' ; from_ids := froms' ; to_ids := tos' |})
                 ->  clean_ciphers (findUserKeys usrs'') cs' = clean_ciphers (findUserKeys usrs') cs'
-                /\ clean_messages (findUserKeys usrs'') cs' suid froms' qmsgs' = clean_messages (findUserKeys usrs') cs' suid froms' qmsgs'
+                /\ clean_messages (findUserKeys usrs'') cs' suid froms' qmsgs' = clean_messages (findUserKeys usrs'') cs' suid froms qmsgs'
                 /\ clean_users (findUserKeys usrs'') cs' usrs' = clean_users (findUserKeys usrs') cs' usrs'.
     Proof.
       induction 1; inversion 2; inversion 6; intros; try discriminate; subst;
@@ -4194,7 +4194,7 @@ Section SingleAdversarySimulates.
 
 
     Lemma silent_honest_step_advuniv_implies_stripped_univ_step_or_none :
-      forall {A B} (U U' : universe A B) b u_id userData usrs adv cs gks ks qmsgs mycs cmd,
+      forall {A B} (U U' : universe A B) b u_id userData usrs adv cs gks ks qmsgs mycs froms tos cmd,
         universe_ok U
         -> adv_universe_ok U
         -> user_cipher_queues_ok U.(all_ciphers) (findUserKeys U.(users)) U.(users)
@@ -4226,9 +4226,13 @@ Section SingleAdversarySimulates.
           exact H10.
         + unfold buildUniverse, clean_adv; simpl.
           f_equal.
-          rewrite clean_users_add_pull; auto.
+          rewrite clean_users_add_pull; simpl.
+          apply map_eq_Equal; unfold Equal; intros.
+          destruct (y ==n u_id); subst; clean_map_lookups; eauto.
+          f_equal; f_equal.
+          eapply honest_silent_step_nochange_honestk_clean_ciphers_msgs_usrs in H3; eauto; split_ands; eassumption.
+
           f_equal.
-          
           eapply honest_silent_step_nochange_clean_adv_messages.
           exact H3.
           all: (reflexivity || eassumption).
@@ -4253,34 +4257,42 @@ Section SingleAdversarySimulates.
           all : (reflexivity || eassumption).
     Qed.
 
-    Lemma stripped_labeled_step_implies_advuniv_step_action_stripped :
-       forall {A B C} cs cs' u_id suid (usrs usrs' usrs__ra usrs__ra': honest_users A) (adv adv' adv__ra adv__ra': user_data B)
-         gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd' a (b : B)
-         cs__ra gks__ra ks__ra qmsgs__ra cs__ra' gks__ra' ks__ra' qmsgs__ra'
-         lbl,
-        step_user lbl suid bd bd'
-        -> suid = Some u_id
-        -> lbl = Action a
-        -> forall (cmd : user_cmd C) honestk,
-            honestk = findUserKeys usrs
-            -> bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
-            -> usrs = clean_users honestk cs usrs__ra
-            -> adv = clean_adv adv__ra honestk cs b
-            -> cs = clean_ciphers honestk cs__ra
-            -> gks = clean_keys honestk gks__ra
-            -> ks = clean_key_permissions honestk ks__ra
-            -> qmsgs = clean_messages honestk cs suid qmsgs__ra
-            -> forall cmd' bd__ra' a__ra,
-                bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
-                -> bd__ra' = (usrs__ra', adv__ra', cs__ra', gks__ra', ks__ra', qmsgs__ra', mycs', froms', tos', cmd')
-                -> step_user (Action a__ra) suid (usrs__ra, adv__ra, cs__ra, gks__ra, ks__ra, qmsgs__ra, mycs, froms, tos, cmd) bd__ra'
-                -> a = strip_action honestk a__ra.
-    Proof.
-      induction 1; inversion 4; inversion 7; intros; try discriminate; subst;
-        match goal with
-        | [ H : step_user (Action ?ara) _ _ _ |- _ = strip_action _ ?ara ] => invert H
-        end; clean_context; try reflexivity; eauto.
-    Qed.
+    (* Lemma stripped_labeled_step_implies_advuniv_step_action_stripped : *)
+    (*    forall {A B C} cs cs' u_id suid (usrs usrs' usrs__ra usrs__ra': honest_users A) (adv adv' adv__ra adv__ra': user_data B) *)
+    (*      gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd' a (b : B) *)
+    (*      cs__ra gks__ra ks__ra qmsgs__ra cs__ra' gks__ra' ks__ra' qmsgs__ra' *)
+    (*      lbl, *)
+    (*     step_user lbl suid bd bd' *)
+    (*     -> suid = Some u_id *)
+    (*     -> lbl = Action a *)
+    (*     -> forall (cmd : user_cmd C) honestk, *)
+    (*         honestk = findUserKeys usrs *)
+    (*         -> bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd) *)
+    (*         -> usrs = clean_users honestk cs usrs__ra *)
+    (*         -> adv = clean_adv adv__ra honestk cs b *)
+    (*         -> cs = clean_ciphers honestk cs__ra *)
+    (*         -> gks = clean_keys honestk gks__ra *)
+    (*         -> ks = clean_key_permissions honestk ks__ra *)
+    (*         -> qmsgs = clean_messages honestk cs suid froms qmsgs__ra *)
+    (*         -> forall cmd' bd__ra' a__ra, *)
+    (*             bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd') *)
+    (*             -> bd__ra' = (usrs__ra', adv__ra', cs__ra', gks__ra', ks__ra', qmsgs__ra', mycs', froms', tos', cmd') *)
+    (*             -> step_user (Action a__ra) suid (usrs__ra, adv__ra, cs__ra, gks__ra, ks__ra, qmsgs__ra, mycs, froms, tos, cmd) bd__ra' *)
+    (*             -> a = strip_action honestk cs__ra a__ra. *)
+    (* Proof. *)
+    (*   induction 1; inversion 4; inversion 7; intros; try discriminate; subst; *)
+    (*     match goal with *)
+    (*     | [ H : step_user (Action ?ara) _ _ _ |- _ = strip_action _ _ ?ara ] => invert H *)
+    (*     end; clean_context; try reflexivity; eauto. *)
+
+    (*   rewrite H10 in H2. *)
+    (*   apply clean_users_cleans_user_inv in H2; split_ex. *)
+    (*   rewrite H33 in H. *)
+    (*   destruct rec_u0; destruct rec_u; invert H; simpl in *. *)
+    (*   invert H2; split_ands; subst. *)
+    (*   f_equal. *)
+      
+    (* Admitted. *)
 
     Lemma labeled_honest_step_advuniv_implies_stripped_univ_step :
       forall {A B} (U U' : universe A B) act b,
@@ -4289,7 +4301,7 @@ Section SingleAdversarySimulates.
         -> message_queues_ok U.(all_ciphers) U.(users) U.(all_keys)
         -> step_universe U (Action act) U'
         -> step_universe (strip_adversary_univ U b)
-                        (Action (strip_action (findUserKeys U.(users)) act))
+                        (Action (strip_action (findUserKeys U.(users)) U.(all_ciphers) act))
                         (strip_adversary_univ U' b).
     Proof.
       intros.
@@ -4317,15 +4329,22 @@ Section SingleAdversarySimulates.
         + unfold user_queue; rewrite H2; trivial.
       - unfold buildUniverse; subst; simpl in *.
         destruct x0; subst; simpl in *.
-        remember (x2 $+ (x, {| key_heap := x6; protocol := x9; msg_heap := x7 ; c_heap := x8 |})) as usrs''.
+        remember (x2 $+ (x, {| key_heap := x6
+                             ; protocol := x11
+                             ; msg_heap := x7
+                             ; from_ids := x8
+                             ; to_ids := x9
+                             ; c_heap := x10 |})) as usrs''.
 
         assert (clean_ciphers (findUserKeys usrs'') x4 = clean_ciphers (findUserKeys x2) x4
-              /\ clean_messages (findUserKeys usrs'') x4 (Some x) x7 = clean_messages (findUserKeys x2) x4 (Some x) x7
+              /\ clean_messages (findUserKeys usrs'') x4 (Some x) x8 x7 = clean_messages (findUserKeys x2) x4 (Some x) x8 x7
               /\ clean_users (findUserKeys usrs'') x4 usrs'' =
                 clean_users (findUserKeys x2) x4 x2 $+ (x, {| key_heap := clean_key_permissions (findUserKeys x2) x6
-                                                         ; protocol := x9
-                                                         ; msg_heap := clean_messages (findUserKeys x2) x4 (Some x) x7
-                                                         ; c_heap := x8 |})
+                                                         ; protocol := x11
+                                                         ; msg_heap := clean_messages (findUserKeys x2) x4 (Some x) x8 x7
+                                                         ; from_ids := x8
+                                                         ; to_ids := x9
+                                                         ; c_heap := x10 |})
               /\ clean_adv x3 (findUserKeys usrs'') x4 b = clean_adv x3 (findUserKeys users) x4 b
               /\ clean_keys (findUserKeys usrs'') x5 = clean_keys (findUserKeys x2) x5 ).
         eapply honest_labeled_step_nochange_clean_ciphers_users_messages; eauto.
@@ -4338,10 +4357,10 @@ Section SingleAdversarySimulates.
 
     Lemma  adv_step_implies_no_new_ciphers_after_cleaning :
       forall {A B C} cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-                gks gks' ks' qmsgs' mycs' bd bd',
+                gks gks' ks' qmsgs' froms' tos' mycs' bd bd',
         step_user lbl None bd bd'
         -> forall (cmd : user_cmd C) honestk cs__s,
-            bd = (usrs, adv, cs, gks, adv.(key_heap), adv.(msg_heap), adv.(c_heap), cmd)
+            bd = (usrs, adv, cs, gks, adv.(key_heap), adv.(msg_heap), adv.(c_heap), adv.(from_ids), adv.(to_ids), cmd)
           -> honestk = findUserKeys usrs
           -> adv_no_honest_keys (findUserKeys usrs) adv.(key_heap)
           -> cs__s = clean_ciphers honestk cs
@@ -4355,12 +4374,20 @@ Section SingleAdversarySimulates.
         erewrite findUserKeys_readd_user_same_keys_idempotent; eauto.
     Qed.
 
+    Lemma clean_keys_drops_added_dishonest_key :
+      forall honestk gks k_id ku kt,
+        honestk $? k_id = None
+        -> clean_keys honestk (gks $+ (k_id, {| keyId := k_id; keyUsage := ku; keyType := kt |}))
+          = clean_keys honestk gks.
+    Proof.
+      intros; unfold clean_keys, filter; apply map_eq_Equal; unfold Equal; intros.
+                   
     Lemma adv_step_implies_no_new_keys_after_cleaning :
       forall {A B C} cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-                gks gks' ks' qmsgs' mycs' bd bd',
+                gks gks' ks' qmsgs' mycs' froms' tos' bd bd',
         step_user lbl None bd bd'
         -> forall (cmd : user_cmd C) honestk gks__s,
-            bd = (usrs, adv, cs, gks, adv.(key_heap), adv.(msg_heap), adv.(c_heap), cmd)
+            bd = (usrs, adv, cs, gks, adv.(key_heap), adv.(msg_heap), adv.(c_heap), adv.(from_ids), adv.(to_ids), cmd)
           -> honestk = findUserKeys usrs
           -> keys_and_permissions_good gks usrs adv.(key_heap)
 
@@ -4373,6 +4400,14 @@ Section SingleAdversarySimulates.
     Proof.
       induction 1; inversion 1; inversion 4; intros; subst; eauto;
         autorewrite with find_user_keys; eauto; clean_context.
+
+
+      unfold keys_and_permissions_good in *; split_ands.
+      assert (permission_heap_good gks (findUserKeys usrs')) as PHG by eauto.
+      unfold permission_heap_good in PHG.
+      cases (findUserKeys usrs' $? k_id).
+      specialize (PHG _ _ Heq); split_ex; contra_map_lookup.
+      rewrite clean_keys_drops_dishonest_key; eauto.
 
       - apply map_eq_Equal; unfold Equal; intros.
         unfold keys_and_permissions_good in H13; split_ands.
