@@ -1848,10 +1848,16 @@ End FindUserKeysCleanUsers.
 Section StripAdv.
   Import RealWorld.
 
+  Definition clean_adv_msgs (honestk : key_perms) (cs : ciphers) (msgs : queued_messages) :=
+    List.filter (fun sigM => match sigM with 
+                          | existT _ _ msg => msg_honestly_signed honestk cs msg
+                          end) msgs.
+
   Definition clean_adv {B} (adv : user_data B) (honestk : key_perms) (cs : ciphers) (b : B) :=
     {| key_heap := clean_key_permissions honestk adv.(key_heap)
      ; protocol := Return b
-     ; msg_heap := clean_messages honestk cs None adv.(from_ids) adv.(msg_heap)
+     (* ; msg_heap := clean_messages honestk cs None adv.(from_ids) adv.(msg_heap) *)
+     ; msg_heap := clean_adv_msgs honestk cs adv.(msg_heap)
      ; c_heap   := []
      ; from_ids := $0
      ; to_ids   := $0 |}.
