@@ -3211,7 +3211,7 @@ Section SingleAdversarySimulates.
                                clean_messages honestk cs suid froms qmsgs, mycs, froms, tos, cmd)
                               (usrs__s', clean_adv adv' honestk' cs b, cs__s', clean_keys honestk' gks',
                                clean_key_permissions honestk' ks',
-                               clean_messages honestk' cs' suid froms qmsgs', mycs', froms', tos', cmd')
+                               clean_messages honestk' cs' suid froms' qmsgs', mycs', froms', tos', cmd')
                   \/ (usrs__s, clean_adv adv honestk cs b, cs__s, clean_keys honestk gks,
                      clean_key_permissions honestk ks,
                      clean_messages honestk cs suid froms qmsgs, mycs, froms, tos, cmd)
@@ -3271,18 +3271,16 @@ Section SingleAdversarySimulates.
       - cases (msg_signed_addressed (findUserKeys usrs') cs' (Some u_id) msg).
 
         + cases (msg_nonce_ok cs' froms' msg).
-          * left. econstructor; eauto.
-            unfold clean_messages at 1.
-            unfold clean_messages', msg_filter; simpl.
-            rewrite Heq , Heq0, fold_clean_messages1'; trivial.
-            rewrite clean_messages'_fst_pull, fold_clean_messages; eauto.
-            admit. (* TODO need to know this was original honest message *)
-
+          * unfold msg_nonce_ok in Heq0; destruct msg; try discriminate.
+            cases (cs' $? c_id); try discriminate.
+            cases (froms' $? cipher_signing_key c); clean_context.
+            ** admit.
+            ** left; econstructor; eauto.
+               admit.
           * right; simpl.
             unfold clean_messages at 1.
             unfold clean_messages', msg_filter; simpl.
             rewrite Heq , Heq0, fold_clean_messages1'; trivial.
-          
         + right; simpl.
           unfold clean_messages at 1.
           unfold clean_messages', msg_filter; simpl.
