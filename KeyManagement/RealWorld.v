@@ -190,6 +190,9 @@ Section SafeMessages.
     | _ => false
     end.
 
+  Definition msg_signed_addressed (cs : ciphers) (to_user_id : option user_id) {t} (msg : crypto t) :=
+    msg_honestly_signed cs msg && msg_to_this_user cs to_user_id msg.
+
   Definition keys_mine (my_perms key_perms: key_perms) : Prop :=
     forall k_id kp,
       key_perms $? k_id = Some kp
@@ -893,13 +896,17 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
                 (usrs, adv, cs, gks, ks , qmsgs , mycs, froms, tos,  Recv pat)
                 (usrs, adv, cs, gks, ks', qmsgs', mycs', froms', tos, Return msg)
 
-| StepRecvDrop : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks qmsgs qmsgs' mycs froms tos (msg : crypto t) pat msgs,
+| StepRecvDrop : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs suid gks ks qmsgs qmsgs'
+                   mycs froms froms' tos (msg : crypto t) pat msgs,
       qmsgs = (existT _ _ msg) :: msgs (* we have a message waiting for us! *)
     -> qmsgs' = msgs
-    -> ~ msg_accepted_by_pattern cs u_id pat msg
-    -> step_user Silent u_id (* Error label ... *)
-                (usrs, adv, cs, gks, ks, qmsgs , mycs, froms, tos, Recv pat)
-                (usrs, adv, cs, gks, ks, qmsgs', mycs, froms, tos, @Recv t pat)
+    -> froms' = (if msg_signed_addressed (findUserKeys usrs) cs suid msg
+               then updateRecvNonce froms cs msg
+               else froms)
+    -> ~ msg_accepted_by_pattern cs suid pat msg
+    -> step_user Silent suid (* Error label ... *)
+                (usrs, adv, cs, gks, ks, qmsgs , mycs, froms,  tos, Recv pat)
+                (usrs, adv, cs, gks, ks, qmsgs', mycs, froms', tos, @Recv t pat)
 
 (* Augment attacker's keys with those available through messages sent, *)
 (*  * including traversing through ciphers already known by attacker, etc. *)

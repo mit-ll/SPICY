@@ -403,8 +403,8 @@ Section CleanMessages.
         end
       end.
 
-    Definition msg_signed_addressed (to_user_id : option user_id) {t} (msg : crypto t) :=
-      msg_honestly_signed honestk cs msg && msg_to_this_user cs to_user_id msg.
+    (* Definition msg_signed_addressed (to_user_id : option user_id) {t} (msg : crypto t) := *)
+    (*   msg_honestly_signed honestk cs msg && msg_to_this_user cs to_user_id msg. *)
 
     Definition msg_filter
                (to_user_id : option user_id) 
@@ -412,7 +412,7 @@ Section CleanMessages.
                (sigM : { t & crypto t } ) : queued_messages * recv_nonces :=
       match sigM with
       | existT _ _ msg =>
-        if msg_signed_addressed to_user_id msg
+        if msg_signed_addressed honestk cs to_user_id msg
         then match msg_nonce_ok (snd fld_param) msg with
              | None => fld_param
              | Some froms => (fst fld_param ++ [sigM], froms)
