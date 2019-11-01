@@ -1437,6 +1437,205 @@ Section UniverseLemmas.
     msg_queue_prop; eauto.
   Qed.
 
+  Lemma adv_cipher_queue_ok_read_msg :
+    forall {A t} (usrs : honest_users A) (msg : crypto t) honestk cs u_id adv_mycs ks ks' cmd cmd' qmsgs mycs froms tos tos',
+      adv_cipher_queue_ok cs honestk usrs adv_mycs
+      -> usrs $? u_id = Some {| key_heap := ks; protocol := cmd; msg_heap := (existT _ _ msg) :: qmsgs
+                               ; c_heap := mycs; from_ids := froms; to_ids := tos |}
+      -> adv_cipher_queue_ok cs honestk
+                            (usrs $+ (u_id, {| key_heap := ks'; protocol := cmd'; msg_heap := qmsgs
+                                               ; c_heap := mycs
+                                               ; from_ids := if msg_signed_addressed honestk cs (Some u_id) msg
+                                                             then updateRecvNonce froms cs msg
+                                                             else froms
+                                               ; to_ids := tos' |})) adv_mycs.
+  Proof.
+    unfold adv_cipher_queue_ok; intros.
+    rewrite Forall_forall in *; intros.
+    specialize (H _ H1); split_ex; split_ands.
+    eexists; intuition eauto.
+    cases (u_id ==n cipher_to_user x0); subst; clean_map_lookups; eauto; simpl.
+    specialize (H5 _ H0); simpl in *; split_ors.
+    - left.
+      invert H2; eauto.
+      rewrite Exists_exists; split_ex; split_ands; subst.
+      admit.
+      
+    - right; split_ex; split_ands.
+      match goal with
+        [ |- context [ if ?cond then _ else _] ] => cases cond
+      end; eauto.
+
+      unfold updateRecvNonce; destruct msg; eauto.
+      cases (cs $? c_id); eauto.
+      cases (froms $? cipher_signing_key c); eauto.
+      + cases (n <? cipher_nonce c); eauto.
+        destruct (cipher_signing_key c ==n cipher_signing_key x0); clean_map_lookups; subst; eauto.
+        rewrite e; clean_map_lookups; eauto.
+        exists (cipher_nonce c); intuition eauto.
+        rewrite Nat.ltb_lt in Heq2.
+        rewrite e in *; clean_map_lookups.
+        Nat.order.
+        
+  Admitted.
+
+  Lemma adv_cipher_queue_ok_readd_user_same_mycs_froms_msgs :
+    forall {A} (usrs : honest_users A) honestk cs u_id adv_mycs ks ks' cmd cmd' qmsgs mycs froms tos tos',
+      adv_cipher_queue_ok cs honestk usrs adv_mycs
+      -> usrs $? u_id = Some {| key_heap := ks; protocol := cmd; msg_heap := qmsgs; c_heap := mycs; from_ids := froms; to_ids := tos |}
+      -> adv_cipher_queue_ok cs honestk
+                            (usrs $+ (u_id, {| key_heap := ks'; protocol := cmd'; msg_heap := qmsgs
+                                               ; c_heap := mycs; from_ids := froms; to_ids := tos' |})) adv_mycs.
+  Proof.
+    unfold adv_cipher_queue_ok; intros.
+    rewrite Forall_forall in *; intros.
+    specialize (H _ H1); split_ex; split_ands.
+    eexists; intuition eauto.
+    cases (u_id ==n cipher_to_user x0); subst; clean_map_lookups; eauto.
+    simpl.
+    specialize (H5 _ H0); simpl in *; eauto.
+  Qed.
+
+  Lemma adv_cipher_queue_ok_msg_send :
+    forall {A t} (usrs : honest_users A) (msg : crypto t) honestk cs u_id adv_mycs ks ks' cmd cmd' qmsgs mycs froms tos tos',
+      adv_cipher_queue_ok cs honestk usrs adv_mycs
+      -> usrs $? u_id = Some {| key_heap := ks; protocol := cmd; msg_heap := qmsgs; c_heap := mycs; from_ids := froms; to_ids := tos |}
+      -> adv_cipher_queue_ok cs honestk
+                            (usrs $+ (u_id, {| key_heap := ks'; protocol := cmd'; msg_heap := qmsgs ++ [existT _ _ msg]
+                                               ; c_heap := mycs; from_ids := froms; to_ids := tos' |})) adv_mycs.
+  Proof.
+    unfold adv_cipher_queue_ok; intros.
+    rewrite Forall_forall in *; intros.
+    specialize (H _ H1); split_ex; split_ands.
+    eexists; intuition eauto.
+    cases (u_id ==n cipher_to_user x0); subst; clean_map_lookups; eauto; simpl.
+    specialize (H5 _ H0); simpl in *; intuition eauto.
+    left; rewrite Exists_exists in *.
+    split_ex; split_ands; destruct x1; split_ex; split_ands.
+    exists (existT _ _ c); split; eauto.
+    apply in_or_app; eauto.
+    exists x2; exists x3; eauto.
+  Qed.
+
+  Lemma adv_cipher_queue_ok_new_msg_keys :
+    forall {A} (usrs : honest_users A) honestk cs u_id adv_mycs ks ks' cmd cmd' qmsgs mycs froms tos tos' pubk,
+      adv_cipher_queue_ok cs honestk usrs adv_mycs
+      -> usrs $? u_id = Some {| key_heap := ks; protocol := cmd; msg_heap := qmsgs; c_heap := mycs; from_ids := froms; to_ids := tos |}
+      -> (forall k_id kp, pubk $? k_id = Some kp -> honestk $? k_id = Some true)
+      -> adv_cipher_queue_ok cs (honestk $k++ pubk)
+                            (usrs $+ (u_id, {| key_heap := ks'; protocol := cmd'; msg_heap := qmsgs
+                                               ; c_heap := mycs; from_ids := froms; to_ids := tos' |})) adv_mycs.
+  Proof.
+    unfold adv_cipher_queue_ok; intros.
+    rewrite Forall_forall in *; intros.
+    specialize (H _ H2); split_ex; split_ands.
+    eexists; intuition eauto.
+    assert (honestk $? cipher_signing_key x0 = Some true) as HONESTK
+        by (generalize (merge_perms_split _ _ _ H4); intros; split_ors; eauto).
+    cases (u_id ==n cipher_to_user x0); subst; clean_map_lookups; eauto.
+    specialize (H3 _ H0); intuition eauto.
+  Qed.
+
+  Lemma adv_cipher_queue_ok_new_honest_key :
+    forall {A} (usrs : honest_users A) honestk cs u_id gks adv_keys adv_mycs ks ks' cmd cmd' qmsgs mycs froms tos tos' k_id,
+      ~ In k_id gks
+      -> adv_cipher_queue_ok cs honestk usrs adv_mycs
+      -> usrs $? u_id = Some {| key_heap := ks; protocol := cmd; msg_heap := qmsgs; c_heap := mycs; from_ids := froms; to_ids := tos |}
+      -> keys_and_permissions_good gks usrs adv_keys
+      -> encrypted_ciphers_ok (findUserKeys usrs) cs gks
+      -> adv_cipher_queue_ok cs (honestk $+ (k_id,true))
+                            (usrs $+ (u_id, {| key_heap := ks'; protocol := cmd'; msg_heap := qmsgs
+                                               ; c_heap := mycs; from_ids := froms; to_ids := tos' |})) adv_mycs.
+  Proof.
+    unfold adv_cipher_queue_ok; intros.
+    rewrite Forall_forall in *; intros.
+    specialize (H0 _ H4); split_ex; split_ands.
+    rewrite not_find_in_iff in H.
+    eexists; intuition eauto.
+    
+    assert (honestk $? cipher_signing_key x0 = Some true) as HONESTK.
+    destruct (k_id ==n cipher_signing_key x0); subst; clean_map_lookups; eauto.
+    keys_and_permissions_prop;
+      encrypted_ciphers_prop;
+      simpl in *; contra_map_lookup.
+
+    cases (u_id ==n cipher_to_user x0); subst; clean_map_lookups; eauto.
+    specialize (H5 _ H1); intuition eauto.
+  Qed.
+
+  Lemma adv_cipher_queue_ok_new_cipher :
+    forall {A} (usrs : honest_users A) honestk cs c_id c u_id adv_mycs ks cmd cmd' qmsgs mycs froms tos msg_to,
+    ~ In c_id cs
+    -> adv_cipher_queue_ok cs honestk usrs adv_mycs
+    -> usrs $? u_id = Some {| key_heap := ks; protocol := cmd; msg_heap := qmsgs; c_heap := mycs; from_ids := froms; to_ids := tos |}
+    -> adv_cipher_queue_ok (cs $+ (c_id, c)) honestk
+                          (usrs $+ (u_id,
+                                    {| key_heap := ks;
+                                       protocol := cmd';
+                                       msg_heap := qmsgs;
+                                       c_heap := c_id :: mycs;
+                                       from_ids := froms;
+                                       to_ids := snd (updateSendNonce tos (cipher_signing_key c) msg_to) |})) adv_mycs.
+  Proof.
+    unfold adv_cipher_queue_ok; intros.
+    rewrite Forall_forall in *; intros.
+    specialize (H0 _ H2); split_ex; split_ands.
+    destruct (c_id ==n x); subst; clean_map_lookups; eauto.
+    eexists; split; eauto; intros.
+    destruct (u_id ==n cipher_to_user x0); subst; clean_map_lookups; simpl; eauto.
+    - specialize (H3 _ H1); split_ors; eauto.
+      rewrite Exists_exists in *; split_ex; destruct x1; intuition eauto.
+      left; eexists; intuition eauto.
+      split_ex; split_ands; subst.
+      destruct (x2 ==n c_id); subst; contra_map_lookup.
+      exists x2; exists x3; intuition eauto.
+    - specialize (H3 _ H5); split_ors; eauto.
+      rewrite Exists_exists in *; split_ex; destruct x1; intuition eauto.
+      left; eexists; intuition eauto.
+      split_ex; split_ands; subst.
+      destruct (x2 ==n c_id); subst; contra_map_lookup.
+      exists x2; exists x3; intuition eauto.
+  Qed.
+
+  Lemma adv_cipher_queue_ok_new_adv_cipher :
+    forall {A} (usrs : honest_users A) honestk cs c_id c adv_ks adv_mycs,
+      ~ In c_id cs
+      -> adv_ks $? (cipher_signing_key c) = Some true
+      -> adv_no_honest_keys honestk adv_ks
+      -> adv_cipher_queue_ok cs honestk usrs adv_mycs
+      -> adv_cipher_queue_ok (cs $+ (c_id, c)) honestk usrs (c_id :: adv_mycs).
+  Proof.
+    unfold adv_cipher_queue_ok; intros.
+    rewrite Forall_forall in *; intros.
+    simpl  in *; split_ors; subst.
+    - eexists; split.
+      + clean_map_lookups; auto.
+      + intros.
+        specialize (H1 (cipher_signing_key c)); split_ors; split_ands;
+          contra_map_lookup; contradiction.
+    - specialize (H2 _ H3); split_ex; split_ands.
+      destruct (c_id ==n x); subst; clean_map_lookups; eexists; eauto.
+      split; eauto.
+      intros.
+      specialize (H4 H5 _ H6); split_ors; eauto.
+      left. rewrite Exists_exists in *; split_ex; split_ands.
+      destruct x1; split_ex; split_ands; subst.
+      eexists; intuition eauto.
+      exists x2.
+      destruct (c_id ==n x2); subst; clean_map_lookups.
+      exists x3; eauto.
+  Qed.
+    
+  Hint Resolve
+       adv_cipher_queue_ok_read_msg
+       adv_cipher_queue_ok_msg_send
+       adv_cipher_queue_ok_readd_user_same_mycs_froms_msgs
+       adv_cipher_queue_ok_new_msg_keys
+       adv_cipher_queue_ok_new_honest_key
+       adv_cipher_queue_ok_new_adv_cipher
+       adv_cipher_queue_ok_new_cipher
+  .
+
   Lemma adv_step_adv_cipher_queue_ok :
     forall {A B C} cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
               gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd',
@@ -1454,15 +1653,22 @@ Section UniverseLemmas.
             bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
             -> adv_cipher_queue_ok cs' (findUserKeys usrs') usrs' mycs'.
   Proof.
-   (* induction 1; inversion 1; inversion 8; intros; subst; *)
-   (*    eauto 2; try discriminate; eauto; clean_context; *)
-   (*      unfold adv_cipher_queue_ok in *; rewrite Forall_forall in *; intros. *)
-   (* - invert H21; split_ands. *)
-   (*   rewrite in_app_iff in H; split_ors; eauto. *)
-   (* - destruct (c_id ==n x); subst; clean_map_lookups; eauto. *)
-   (*   invert H5; try contradiction; eauto. *)
-   (* - destruct (c_id ==n x); subst; clean_map_lookups; eauto. *)
-   (*   invert H2; try contradiction; eauto. *)
+   induction 1; inversion 1; inversion 8; intros; subst;
+     eauto 2; clean_context;
+       autorewrite with find_user_keys;
+       eauto.
+
+   - invert H21; split_ands.
+     unfold adv_cipher_queue_ok in *.
+     rewrite Forall_forall in H24.
+     rewrite Forall_forall; intros.
+     rewrite in_app_iff in H4; split_ors; eauto.
+     clear H24 H2.
+     specialize (H3 _ H4); split_ex; eexists; split; eauto; intros.
+     left; rewrite Exists_exists.
+     admit.
+   - destruct rec_u; eapply adv_cipher_queue_ok_msg_send; eauto.
+ 
   Admitted.
 
   Lemma adv_cipher_in_cipher_heap :
@@ -1646,7 +1852,51 @@ Section UniverseLemmas.
     induction 1; inversion 2; inversion 3; intros; subst; try discriminate;
       eauto 2; autorewrite with find_user_keys; eauto;
         clean_context.
-  Admitted.
+
+    destruct rec_u; eapply adv_cipher_queue_ok_msg_send; eauto.
+  Qed.
+
+  Lemma honest_labeled_step_adv_cipher_queue_ok' :
+    forall {A B C} u_id suid cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
+              gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd' a,
+      step_user lbl suid bd bd'
+      -> suid = Some u_id
+      -> forall (cmd : user_cmd C) honestk,
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
+        -> honestk = findUserKeys usrs
+        -> encrypted_ciphers_ok honestk cs gks
+        -> adv_cipher_queue_ok cs honestk usrs adv.(c_heap)
+        -> forall cmd',
+            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
+            -> lbl = Action a
+            -> action_adversary_safe honestk cs a
+            -> forall cmdc cmdc' usrs'',
+                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc
+                                     ; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
+                -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs ; protocol := cmdc'
+                                              ; c_heap := mycs ; from_ids := froms ; to_ids := tos |})
+                -> adv_cipher_queue_ok cs' (findUserKeys usrs'') usrs'' adv'.(c_heap).
+  Proof.
+    induction 1; inversion 2; inversion 4; intros; subst; try discriminate;
+      eauto 2; autorewrite with find_user_keys; eauto;
+        clean_context.
+
+    - assert (msg_honestly_signed (findUserKeys usrs') cs' msg = true) by eauto.
+      split_ex; split_ands; subst.
+      unfold msg_honestly_signed, msg_signing_key in *;
+        context_map_rewrites;
+        unfold honest_keyb in *;
+        cases (findUserKeys usrs' $? cipher_signing_key x0 ); try discriminate;
+          destruct b; try discriminate.
+
+      encrypted_ciphers_prop; context_map_rewrites; eauto.
+      eapply adv_cipher_queue_ok_new_msg_keys in H21; eauto; intros.
+      destruct kp; eauto.
+      exfalso; eauto.
+
+    - destruct rec_u; eauto.
+
+  Qed.
 
   Lemma adv_message_queue_ok_addnl_honestk_key :
     forall {A} (usrs : honest_users A) adv_heap cs gks k_id usage kt,
@@ -1683,11 +1933,13 @@ Section UniverseLemmas.
       -> suid = Some u_id
       -> forall (cmd : user_cmd C),
         bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
+        -> encrypted_ciphers_ok (findUserKeys usrs) cs gks
+        -> user_cipher_queues_ok cs (findUserKeys usrs) usrs
+        -> keys_and_permissions_good gks usrs adv.(key_heap)
         -> adv_cipher_queue_ok cs (findUserKeys usrs) usrs adv.(c_heap)
         -> forall cmd',
             bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
             -> lbl = Silent
-
             -> forall cmdc cmdc' usrs'',
                 usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc
                                      ; c_heap := mycs ; from_ids := froms ; to_ids := tos |}
@@ -1695,14 +1947,16 @@ Section UniverseLemmas.
                                             ; c_heap := mycs' ; from_ids := froms' ; to_ids := tos' |})
                 -> adv_cipher_queue_ok cs' (findUserKeys usrs'') usrs'' adv'.(c_heap).
   Proof.
-    (* induction 1; inversion 2; inversion 2; intros; subst; try discriminate; *)
-    (*   eauto 2; clean_context; *)
-    (*     autorewrite with find_user_keys; *)
-    (*     eauto; *)
-    (*     unfold adv_cipher_queue_ok in *; rewrite Forall_forall in *; intros; *)
-    (*       destruct (c_id ==n x); subst; clean_map_lookups; eauto. *)
+    induction 1; inversion 2; inversion 5; intros; subst; try discriminate;
+      eauto 2; clean_context;
+        autorewrite with find_user_keys;
+        eauto.
+
+    - eapply adv_cipher_queue_ok_new_cipher; eauto.
+    - user_cipher_queues_prop; encrypted_ciphers_prop; eauto.
+    - eapply adv_cipher_queue_ok_new_cipher; eauto.
     
-  Admitted.
+  Qed.
 
   Lemma adv_message_queue_ok_addnl_global_key :
     forall {A} (usrs : honest_users A) adv_heap cs gks k_id usage kt,
@@ -4084,13 +4338,56 @@ Section SingleAdversarySimulates.
       destruct U; destruct userData.
       unfold build_data_step in *; simpl in *.
       split_ands.
-      (* intuition *)
-      (*   eauto using honest_labeled_step_keys_and_permissions_good *)
-      (*             , honest_labeled_step_user_cipher_queues_ok *)
-      (*             , honest_labeled_step_message_queues_ok *)
-      (*             , honest_labeled_step_adv_cipher_queue_ok *)
-      (*             , honest_labeled_step_adv_message_queue_ok *)
-      (*             , honest_labeled_step_adv_no_honest_keys. *)
+      intuition idtac.
+
+      
+        eauto using honest_labeled_step_keys_and_permissions_good
+                  , honest_labeled_step_user_cipher_queues_ok
+                  , honest_labeled_step_message_queues_ok
+                  , honest_labeled_step_adv_cipher_queue_ok
+                  , honest_labeled_step_adv_message_queue_ok
+                  , honest_labeled_step_adv_no_honest_keys.
+
+
+        eauto using honest_labeled_step_keys_and_permissions_good
+                  , honest_labeled_step_user_cipher_queues_ok
+                  , honest_labeled_step_message_queues_ok
+                  , honest_labeled_step_adv_cipher_queue_ok
+                  , honest_labeled_step_adv_message_queue_ok
+                  , honest_labeled_step_adv_no_honest_keys.
+
+        eauto using honest_labeled_step_keys_and_permissions_good
+                  , honest_labeled_step_user_cipher_queues_ok
+                  , honest_labeled_step_message_queues_ok
+                  , honest_labeled_step_adv_cipher_queue_ok
+                  , honest_labeled_step_adv_message_queue_ok
+                  , honest_labeled_step_adv_no_honest_keys.
+
+        
+
+        eauto using honest_labeled_step_keys_and_permissions_good
+                  , honest_labeled_step_user_cipher_queues_ok
+                  , honest_labeled_step_message_queues_ok
+                  , honest_labeled_step_adv_cipher_queue_ok
+                  , honest_labeled_step_adv_message_queue_ok
+                  , honest_labeled_step_adv_no_honest_keys.
+
+        eauto using honest_labeled_step_keys_and_permissions_good
+                  , honest_labeled_step_user_cipher_queues_ok
+                  , honest_labeled_step_message_queues_ok
+                  , honest_labeled_step_adv_cipher_queue_ok
+                  , honest_labeled_step_adv_message_queue_ok
+                  , honest_labeled_step_adv_no_honest_keys.
+
+        
+
+      intuition
+        eauto using honest_labeled_step_keys_and_permissions_good
+                  , honest_labeled_step_user_cipher_queues_ok
+                  , honest_labeled_step_message_queues_ok
+                  , honest_labeled_step_adv_cipher_queue_ok
+                  , honest_labeled_step_adv_message_queue_ok
+                  , honest_labeled_step_adv_no_honest_keys.
 
     Admitted.
 
