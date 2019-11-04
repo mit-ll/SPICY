@@ -32,9 +32,15 @@ Inductive msg_pat :=
 | SignedEncrypted (k__sign k__enc : key_identifier)
 .
 
+Definition msg_seq : Set := (option user_id) * nat.
+
+Definition msg_seq_eq (s1 s2 : msg_seq) : {s1 = s2} + {s1 <> s2}.
+  repeat (decide equality).
+Defined.
+
 Inductive cipher : Type :=
-| SigCipher {t} (k__sign : key_identifier) (msg_to : user_id) (c_nonce : nat) (msg : message t) : cipher
-| SigEncCipher {t} (k__sign k__enc : key_identifier) (msg_to : user_id) (c_nonce : nat) (msg : message t) : cipher
+| SigCipher {t} (k__sign : key_identifier) (msg_to : user_id) (c_nonce : msg_seq) (msg : message t) : cipher
+| SigEncCipher {t} (k__sign k__enc : key_identifier) (msg_to : user_id) (c_nonce : msg_seq) (msg : message t) : cipher
 .
 
 Definition cipher_signing_key (c : cipher) :=
@@ -58,8 +64,11 @@ Definition cipher_nonce (c : cipher) :=
 Definition queued_messages := list (sigT crypto).
 Definition ciphers         := NatMap.t cipher.
 Definition my_ciphers      := list cipher_id.
-Definition recv_nonces     := NatMap.t nat.
-Definition send_nonces     := NatMap.t (NatMap.t nat).
+Definition recv_nonces     := list msg_seq.
+Definition sent_nonces     := list msg_seq.
+
+(* Definition recv_nonces     := NatMap.t nat. *)
+(* Definition send_nonces     := NatMap.t (NatMap.t nat). *)
 
 Inductive msg_accepted_by_pattern (cs : ciphers) (opt_uid_to : option user_id) : forall {t : type}, msg_pat -> crypto t -> Prop :=
 | MsgAccept : forall {t} (m : crypto t),
@@ -260,12 +269,13 @@ Open Scope realworld_scope.
 
 Record user_data (A : Type) :=
   mkUserData {
-      key_heap : key_perms
-    ; protocol : user_cmd A
-    ; msg_heap : queued_messages
-    ; c_heap   : my_ciphers
-    ; from_ids : recv_nonces
-    ; to_ids   : send_nonces
+      key_heap  : key_perms
+    ; protocol  : user_cmd A
+    ; msg_heap  : queued_messages
+    ; c_heap    : my_ciphers
+    ; from_nons : recv_nonces
+    ; sent_nons : sent_nonces
+    ; cur_nonce : nat
     }.
 
 Definition honest_users A := user_list (user_data A).
@@ -294,12 +304,13 @@ Definition findUserKeys {A} (us : user_list (user_data A)) : key_perms :=
   fold (fun u_id u ks => ks $k++ u.(key_heap)) us $0.
 
 Definition addUserKeys {A} (ks : key_perms) (u : user_data A) : user_data A :=
-  {| key_heap := u.(key_heap) $k++ ks
-   ; protocol := u.(protocol)
-   ; msg_heap := u.(msg_heap)
-   ; c_heap   := u.(c_heap)
-   ; from_ids := u.(from_ids)
-   ; to_ids   := u.(to_ids)
+  {| key_heap  := u.(key_heap) $k++ ks
+   ; protocol  := u.(protocol)
+   ; msg_heap  := u.(msg_heap)
+   ; c_heap    := u.(c_heap)
+   ; from_nons := u.(from_nons)
+   ; sent_nons := u.(sent_nons)
+   ; cur_nonce := u.(cur_nonce)
   |}.
 
 Definition addUsersKeys {A} (us : user_list (user_data A)) (ks : key_perms) : user_list (user_data A) :=
@@ -429,14 +440,15 @@ Section RealWorldLemmas.
   Qed.
 
   Lemma findUserKeys_readd_user_same_keys_idempotent :
-    forall {A} (usrs : honest_users A) u_id u_d proto msgs mycs froms tos,
+    forall {A} (usrs : honest_users A) u_id u_d proto msgs mycs froms sents cur_n,
       usrs $? u_id = Some u_d
-      -> findUserKeys usrs = findUserKeys (usrs $+ (u_id, {| key_heap := key_heap u_d
-                                                          ; protocol := proto
-                                                          ; msg_heap := msgs
-                                                          ; c_heap   := mycs
-                                                          ; from_ids := froms
-                                                          ; to_ids   := tos
+      -> findUserKeys usrs = findUserKeys (usrs $+ (u_id, {| key_heap  := key_heap u_d
+                                                          ; protocol  := proto
+                                                          ; msg_heap  := msgs
+                                                          ; c_heap    := mycs
+                                                          ; from_nons := froms
+                                                          ; sent_nons := sents
+                                                          ; cur_nonce := cur_n
                                                          |} )).
   Proof.
     intros.
@@ -456,14 +468,15 @@ Section RealWorldLemmas.
   Qed.
 
   Lemma findUserKeys_readd_user_same_keys_idempotent' :
-    forall {A} (usrs : honest_users A) u_id ks proto msgs mycs froms tos,
+    forall {A} (usrs : honest_users A) u_id ks proto msgs mycs froms sents cur_n,
       user_keys usrs u_id = Some ks
-      -> findUserKeys (usrs $+ (u_id, {| key_heap := ks
-                                      ; protocol := proto
-                                      ; msg_heap := msgs
-                                      ; c_heap   := mycs
-                                      ; from_ids := froms
-                                      ; to_ids   := tos |})) = findUserKeys usrs.
+      -> findUserKeys (usrs $+ (u_id, {| key_heap  := ks
+                                      ; protocol  := proto
+                                      ; msg_heap  := msgs
+                                      ; c_heap    := mycs
+                                      ; from_nons := froms
+                                      ; sent_nons := sents
+                                      ; cur_nonce := cur_n |})) = findUserKeys usrs.
   Proof.
     intros.
     induction usrs using P.map_induction_bis; intros; Equal_eq; contra_map_lookup; auto.
@@ -484,14 +497,15 @@ Section RealWorldLemmas.
   Qed.
 
   Lemma findUserKeys_readd_user_addnl_keys :
-    forall {A} (usrs : honest_users A) u_id proto msgs ks ks' mycs froms tos,
+    forall {A} (usrs : honest_users A) u_id proto msgs ks ks' mycs froms sents cur_n,
       user_keys usrs u_id = Some ks
-      -> findUserKeys (usrs $+ (u_id, {| key_heap := ks $k++ ks'
-                                      ; protocol := proto
-                                      ; msg_heap := msgs
-                                      ; c_heap   := mycs
-                                      ; from_ids := froms
-                                      ; to_ids   := tos |})) = findUserKeys usrs $k++ ks'.
+      -> findUserKeys (usrs $+ (u_id, {| key_heap  := ks $k++ ks'
+                                      ; protocol  := proto
+                                      ; msg_heap  := msgs
+                                      ; c_heap    := mycs
+                                      ; from_nons := froms
+                                      ; sent_nons := sents
+                                      ; cur_nonce := cur_n |})) = findUserKeys usrs $k++ ks'.
   Proof.
     intros.
     induction usrs using P.map_induction_bis; intros; Equal_eq; contra_map_lookup; auto.
@@ -513,14 +527,15 @@ Section RealWorldLemmas.
   Qed.
 
   Lemma findUserKeys_readd_user_private_key :
-    forall {A} (usrs : honest_users A) u_id proto msgs k_id ks mycs froms tos,
+    forall {A} (usrs : honest_users A) u_id proto msgs k_id ks mycs froms sents cur_n,
       user_keys usrs u_id = Some ks
-      -> findUserKeys (usrs $+ (u_id, {| key_heap := add_key_perm k_id true ks
-                                      ; protocol := proto
-                                      ; msg_heap := msgs
-                                      ; c_heap   := mycs
-                                      ; from_ids := froms
-                                      ; to_ids   := tos  |})) = findUserKeys usrs $+ (k_id,true).
+      -> findUserKeys (usrs $+ (u_id, {| key_heap  := add_key_perm k_id true ks
+                                      ; protocol  := proto
+                                      ; msg_heap  := msgs
+                                      ; c_heap    := mycs
+                                      ; from_nons := froms
+                                      ; sent_nons := sents
+                                      ; cur_nonce := cur_n  |})) = findUserKeys usrs $+ (k_id,true).
   Proof.
     intros.
     induction usrs using P.map_induction_bis; intros; Equal_eq; contra_map_lookup; auto.
@@ -786,59 +801,74 @@ Definition extractPlainText {t} (msg : message t) : option nat :=
   | _           => None
   end.
 
-Definition updateRecvNonce {t} (froms : recv_nonces) (cs : ciphers) (msg : crypto t) :=
+Definition updateTrackedNonce {t} (froms : recv_nonces) (cs : ciphers) (msg : crypto t) :=
   match msg with
   | Content _ => froms
   | SignedCiphertext c_id =>
     match cs $? c_id with
     | None => froms
     | Some c =>
-      let nonce := cipher_nonce c in
-      let kid   := cipher_signing_key c
-      in  match froms $? kid with
-          | None => froms $+ (kid, nonce)
-          | Some nonce' =>
-            if nonce' <? nonce then froms $+ (kid,nonce) else froms
-            (* match nonce ?= nonce' with *)
-            (* | Lt => froms $+ (kid, nonce') *)
-            (* | Gt => froms *)
-            (* | Eq => froms *)
-            (* end *)
-          end
+      match count_occ msg_seq_eq froms (cipher_nonce c) with
+      | 0 => cipher_nonce c :: froms
+      | _ => froms
+      end
+                      
+      (* let nonce := cipher_nonce c in *)
+      (* let kid   := cipher_signing_key c *)
+      (* in  match froms $? kid with *)
+      (*     | None => froms $+ (kid, nonce) *)
+      (*     | Some nonce' => *)
+      (*       if nonce' <? nonce then froms $+ (kid,nonce) else froms *)
+      (*     end *)
     end
   end.
 
-Definition updateSendNonce (tos : send_nonces) (k_id : key_identifier) (u_id : user_id) :=
-  match tos $? k_id with
-  | None => (0, tos $+ (k_id, ($0 $+ (u_id, 0))))
-  | Some usrs =>
-    match usrs $? u_id with
-    | None => (0, tos $+ (k_id, usrs $+ (u_id, 0)))
-    | Some nonce => (nonce+1, tos $+ (k_id, usrs $+ (u_id, nonce+1)))
-    end
-  end.
+(* Definition updateSendNonce (tos : send_nonces) (k_id : key_identifier) (u_id : user_id) := *)
+(*   match tos $? k_id with *)
+(*   | None => (0, tos $+ (k_id, ($0 $+ (u_id, 0)))) *)
+(*   | Some usrs => *)
+(*     match usrs $? u_id with *)
+(*     | None => (0, tos $+ (k_id, usrs $+ (u_id, 0))) *)
+(*     | Some nonce => (nonce+1, tos $+ (k_id, usrs $+ (u_id, nonce+1))) *)
+(*     end *)
+(*   end. *)
 
-Definition cipher_nonce_absent_or_gt (froms : recv_nonces) (c : cipher) :=
-    froms $? cipher_signing_key c = None
-  \/ (exists n, froms $? cipher_signing_key c = Some n /\ n < cipher_nonce c).
+(* Definition cipher_nonce_absent_or_gt (froms : recv_nonces) (c : cipher) := *)
+(*     froms $? cipher_signing_key c = None *)
+(*   \/ (exists n, froms $? cipher_signing_key c = Some n /\ n < cipher_nonce c). *)
 
-Definition overlapping_msg_nonce_smaller (new_cipher : cipher) (cs : ciphers) {t} (msg : crypto t) : Prop :=
+(* Definition overlapping_msg_nonce_smaller (new_cipher : cipher) (cs : ciphers) {t} (msg : crypto t) : Prop := *)
+(*   forall c_id c, *)
+(*       msg = SignedCiphertext c_id *)
+(*     -> cs $? c_id = Some c *)
+(*     -> cipher_signing_key c = cipher_signing_key new_cipher *)
+(*     -> cipher_nonce c < cipher_nonce new_cipher. *)
+
+Definition msg_nonce_not_same (new_cipher : cipher) (cs : ciphers) {t} (msg : crypto t) : Prop :=
   forall c_id c,
       msg = SignedCiphertext c_id
     -> cs $? c_id = Some c
-    -> cipher_signing_key c = cipher_signing_key new_cipher
-    -> cipher_nonce c < cipher_nonce new_cipher.
+    -> cipher_nonce new_cipher <> cipher_nonce c.
+
+Definition msg_nonce_same (new_cipher : cipher) (cs : ciphers) {t} (msg : crypto t) : Prop :=
+  forall c_id c,
+      msg = SignedCiphertext c_id
+    -> cs $? c_id = Some c
+    -> cipher_nonce new_cipher = cipher_nonce c.
+
 
 Definition msg_not_replayed {t} (cs : ciphers) (froms : recv_nonces) (msg : crypto t) (msgs : queued_messages) : Prop :=
   exists c_id c,
       msg = SignedCiphertext c_id
     /\ cs $? c_id = Some c
-    /\ cipher_nonce_absent_or_gt froms c
-    /\ Forall (fun sigM => match sigM with existT _ _ m => overlapping_msg_nonce_smaller c cs m end) msgs.
+    /\ ~ List.In (cipher_nonce c) froms
+    /\ Forall (fun sigM => match sigM with existT _ _ m =>  msg_nonce_not_same c cs m end) msgs.
+    (* /\ cipher_nonce_absent_or_gt froms c *)
+    (* /\ Forall (fun sigM => match sigM with existT _ _ m => overlapping_msg_nonce_smaller c cs m end) msgs. *)
 
 Inductive action : Type :=
 | Input  t (msg : crypto t) (pat : msg_pat) (froms : recv_nonces)
-| Output t (msg : crypto t) (to_user : option user_id) (to_queue : queued_messages) (to_froms : recv_nonces)
+| Output t (msg : crypto t) (to_user : option user_id) (sents : sent_nonces)
 .
 
 Definition rlabel := @label action.
@@ -848,97 +878,105 @@ Definition action_adversary_safe (honestk : key_perms) (cs : ciphers) (a : actio
   | Input  msg pat froms    => msg_pattern_safe honestk pat
                             /\ exists c_id c, msg = SignedCiphertext c_id
                                       /\ cs $? c_id = Some c
-                                      /\ cipher_nonce_absent_or_gt froms c
-  | Output msg msg_to to_q to_frms => msg_contains_only_honest_public_keys honestk cs msg
+                                      /\ ~ List.In (cipher_nonce c) froms
+  | Output msg msg_to sents => msg_contains_only_honest_public_keys honestk cs msg
                                    /\ msg_honestly_signed honestk cs msg = true
                                    /\ msg_to_this_user cs msg_to msg = true
                                    /\ msgCiphersSignedOk honestk cs msg
-                                   /\ msg_not_replayed cs to_frms msg to_q
+                                   /\ exists c_id c, msg = SignedCiphertext c_id
+                                             /\ cs $? c_id = Some c
+                                             /\ ~ List.In (cipher_nonce c) sents
+                                   (* /\ msg_not_replayed cs to_frms msg to_q *)
   end.
 
 Definition data_step0 (A B C : Type) : Type :=
-  honest_users A * user_data B * ciphers * keys * key_perms * queued_messages * my_ciphers * recv_nonces * send_nonces * user_cmd C.
+  honest_users A * user_data B * ciphers * keys * key_perms * queued_messages * my_ciphers * recv_nonces * sent_nonces * nat * user_cmd C.
 
 Definition build_data_step {A B C} (U : universe A B) (u_data : user_data C) : data_step0 A B C :=
   (U.(users), U.(adversary), U.(all_ciphers), U.(all_keys),
-   u_data.(key_heap), u_data.(msg_heap), u_data.(c_heap), u_data.(from_ids), u_data.(to_ids), u_data.(protocol)).
+   u_data.(key_heap), u_data.(msg_heap), u_data.(c_heap), u_data.(from_nons), u_data.(sent_nons), u_data.(cur_nonce), u_data.(protocol)).
 
 Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C -> data_step0 A B C -> Prop :=
 
 (* Plumbing *)
 | StepBindRecur : forall {B r r'} (usrs usrs' : honest_users r') (adv adv' : user_data B)
-                    lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' tos tos'
+                    lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' sents sents' cur_n cur_n'
                     (cmd1 cmd1' : user_cmd r) (cmd2 : r -> user_cmd r'),
-    step_user lbl u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd1)
-                       (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd1')
-    -> step_user lbl u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, Bind cmd1 cmd2)
-                         (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', Bind cmd1' cmd2)
-| StepBindProceed : forall {B r r'} (usrs : honest_users r) (adv : user_data B) cs u_id gks ks qmsgs mycs froms tos (v : r') (cmd : r' -> user_cmd r),
+    step_user lbl u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd1)
+                       (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd1')
+    -> step_user lbl u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Bind cmd1 cmd2)
+                         (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', Bind cmd1' cmd2)
+| StepBindProceed : forall {B r r'} (usrs : honest_users r) (adv : user_data B) cs u_id gks ks qmsgs mycs froms sents cur_n
+                      (v : r') (cmd : r' -> user_cmd r),
     step_user Silent u_id
-              (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, Bind (Return v) cmd)
-              (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd v)
+              (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Bind (Return v) cmd)
+              (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd v)
 
-| StepGen : forall {A B} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks qmsgs mycs froms tos n,
-    step_user Silent u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, Gen) (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, Return n)
+| StepGen : forall {A B} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks qmsgs mycs froms sents cur_n n,
+    step_user Silent u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Gen)
+              (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Return n)
 
 (* Comms  *)
-| StepRecv : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks ks' qmsgs qmsgs' mycs mycs' froms tos froms'
-               (msg : crypto t) msgs pat newkeys newcs,
+| StepRecv : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks ks' qmsgs qmsgs' mycs mycs' froms froms'
+               sents cur_n (msg : crypto t) msgs pat newkeys newcs,
       qmsgs = (existT _ _ msg) :: msgs (* we have a message waiting for us! *)
     -> qmsgs' = msgs
     -> findKeysCrypto cs msg = newkeys
     -> newcs = findCiphers msg
     -> ks' = ks $k++ newkeys
     -> mycs' = newcs ++ mycs
-    -> froms' = updateRecvNonce froms cs msg
+    -> froms' = updateTrackedNonce froms cs msg
     -> msg_accepted_by_pattern cs u_id pat msg
     -> step_user (Action (Input msg pat froms)) u_id
-                (usrs, adv, cs, gks, ks , qmsgs , mycs, froms, tos,  Recv pat)
-                (usrs, adv, cs, gks, ks', qmsgs', mycs', froms', tos, Return msg)
+                (usrs, adv, cs, gks, ks , qmsgs , mycs, froms, sents, cur_n,  Recv pat)
+                (usrs, adv, cs, gks, ks', qmsgs', mycs', froms', sents, cur_n, Return msg)
 
 | StepRecvDrop : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs suid gks ks qmsgs qmsgs'
-                   mycs froms froms' tos (msg : crypto t) pat msgs,
+                   mycs froms froms' sents cur_n (msg : crypto t) pat msgs,
       qmsgs = (existT _ _ msg) :: msgs (* we have a message waiting for us! *)
     -> qmsgs' = msgs
     -> froms' = (if msg_signed_addressed (findUserKeys usrs) cs suid msg
-               then updateRecvNonce froms cs msg
+               then updateTrackedNonce froms cs msg
                else froms)
     -> ~ msg_accepted_by_pattern cs suid pat msg
     -> step_user Silent suid (* Error label ... *)
-                (usrs, adv, cs, gks, ks, qmsgs , mycs, froms,  tos, Recv pat)
-                (usrs, adv, cs, gks, ks, qmsgs', mycs, froms', tos, @Recv t pat)
+                (usrs, adv, cs, gks, ks, qmsgs , mycs, froms,  sents, cur_n, Recv pat)
+                (usrs, adv, cs, gks, ks, qmsgs', mycs, froms', sents, cur_n, @Recv t pat)
 
 (* Augment attacker's keys with those available through messages sent, *)
 (*  * including traversing through ciphers already known by attacker, etc. *)
 (*  *)
 | StepSend : forall {A B} {t} (usrs usrs' : honest_users A) (adv adv' : user_data B)
-               cs u_id gks ks qmsgs mycs froms tos rec_u_id rec_u newkeys (msg : crypto t),
+               cs u_id gks ks qmsgs mycs froms sents sents' cur_n rec_u_id rec_u newkeys (msg : crypto t),
     findKeysCrypto cs msg = newkeys
     -> keys_mine ks newkeys
     -> incl (findCiphers msg) mycs
     -> usrs $? rec_u_id = Some rec_u
     -> rec_u_id <> u_id
-    -> usrs' = usrs $+ (rec_u_id, {| key_heap := rec_u.(key_heap)
-                                  ; protocol := rec_u.(protocol)
-                                  ; msg_heap := rec_u.(msg_heap) ++ [existT _ _ msg]
-                                  ; c_heap   := rec_u.(c_heap)
-                                  ; from_ids := rec_u.(from_ids)
-                                  ; to_ids   := rec_u.(to_ids) |})
+    -> sents' = updateTrackedNonce sents cs msg
+    -> usrs' = usrs $+ (rec_u_id, {| key_heap  := rec_u.(key_heap)
+                                  ; protocol  := rec_u.(protocol)
+                                  ; msg_heap  := rec_u.(msg_heap) ++ [existT _ _ msg]
+                                  ; c_heap    := rec_u.(c_heap)
+                                  ; from_nons := rec_u.(from_nons)
+                                  ; sent_nons := rec_u.(sent_nons)
+                                  ; cur_nonce := rec_u.(cur_nonce) |})
     (* -> adv' = addUserKeys newkeys adv (* TODO: also add ciphers to adv??? *) *)
     -> adv' = 
-      {| key_heap := adv.(key_heap) $k++ newkeys
-       ; protocol := adv.(protocol)
-       ; msg_heap := adv.(msg_heap) ++ [existT _ _ msg]
-       ; c_heap   := adv.(c_heap)
-       ; from_ids := adv.(from_ids)
-       ; to_ids   := adv.(to_ids) |}
-    -> step_user (Action (Output msg (Some rec_u_id) rec_u.(msg_heap) rec_u.(from_ids))) (Some u_id)
-                (usrs , adv , cs, gks, ks, qmsgs, mycs, froms, tos, Send rec_u_id msg)
-                (usrs', adv', cs, gks, ks, qmsgs, mycs, froms, tos, Return tt)
+      {| key_heap  := adv.(key_heap) $k++ newkeys
+       ; protocol  := adv.(protocol)
+       ; msg_heap  := adv.(msg_heap) ++ [existT _ _ msg]
+       ; c_heap    := adv.(c_heap)
+       ; from_nons := adv.(from_nons)
+       ; sent_nons := adv.(sent_nons)
+       ; cur_nonce := adv.(cur_nonce) |}
+    -> step_user (Action (Output msg (Some rec_u_id) sents)) (Some u_id)
+                (usrs , adv , cs, gks, ks, qmsgs, mycs, froms, sents,  cur_n, Send rec_u_id msg)
+                (usrs', adv', cs, gks, ks, qmsgs, mycs, froms, sents', cur_n, Return tt)
 
 (* Encryption / Decryption *)
-| StepEncrypt : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs cs' u_id gks ks qmsgs mycs mycs' pr_nonce_tos froms tos tos'
-                  (msg : message t) k__signid k__encid kp__enc kt__enc kt__sign c_id cipherMsg msg_to,
+| StepEncrypt : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs cs' u_id gks ks qmsgs mycs mycs' froms sents
+                  cur_n cur_n' (msg : message t) k__signid k__encid kp__enc kt__enc kt__sign c_id cipherMsg msg_to,
       gks $? k__encid  = Some (MkCryptoKey k__encid Encryption kt__enc)
     -> gks $? k__signid = Some (MkCryptoKey k__signid Signing kt__sign)
     -> ks $? k__encid   = Some kp__enc
@@ -946,17 +984,18 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> ~ In c_id cs
     -> keys_mine ks (findKeysMessage msg)
     (* -> incl (findCiphers msg) mycs *)
-    -> pr_nonce_tos = updateSendNonce tos k__signid msg_to
-    -> cipherMsg = SigEncCipher k__signid k__encid msg_to (fst pr_nonce_tos) msg
+    (* -> pr_nonce_tos = updateTrackedNonce tos k__signid msg_to *)
+    -> cur_n' = cur_n + 1
+    -> cipherMsg = SigEncCipher k__signid k__encid msg_to (u_id, cur_n) msg
     -> cs' = cs $+ (c_id, cipherMsg)
     -> mycs' = c_id :: mycs
-    -> tos' = snd pr_nonce_tos
+    (* -> tos' = snd pr_nonce_tos *)
     -> step_user Silent u_id
-                (usrs, adv, cs , gks, ks, qmsgs, mycs, froms, tos,  SignEncrypt k__signid k__encid msg)
-                (usrs, adv, cs', gks, ks, qmsgs, mycs', froms, tos', Return (SignedCiphertext c_id))
+                (usrs, adv, cs , gks, ks, qmsgs, mycs,  froms, sents, cur_n,  SignEncrypt k__signid k__encid msg)
+                (usrs, adv, cs', gks, ks, qmsgs, mycs', froms, sents, cur_n', Return (SignedCiphertext c_id))
 
 | StepDecrypt : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks ks' qmsgs mycs mycs'
-                  (msg : message t) k__signid kp__sign k__encid c_id nonce newkeys kt__sign kt__enc msg_to froms tos,
+                  (msg : message t) k__signid kp__sign k__encid c_id nonce newkeys kt__sign kt__enc msg_to froms sents cur_n,
       cs $? c_id     = Some (SigEncCipher k__signid k__encid msg_to nonce msg)
     -> gks $? k__encid  = Some (MkCryptoKey k__encid Encryption kt__enc)
     -> gks $? k__signid = Some (MkCryptoKey k__signid Signing kt__sign)
@@ -968,77 +1007,79 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> mycs' = (* newcs ++  *)mycs
     -> List.In c_id mycs
     -> step_user Silent u_id
-                (usrs, adv, cs, gks, ks , qmsgs, mycs,  froms, tos,  Decrypt (SignedCiphertext c_id))
-                (usrs, adv, cs, gks, ks', qmsgs, mycs', froms, tos, Return msg)
+                (usrs, adv, cs, gks, ks , qmsgs, mycs,  froms, sents, cur_n, Decrypt (SignedCiphertext c_id))
+                (usrs, adv, cs, gks, ks', qmsgs, mycs', froms, sents, cur_n, Return msg)
 
 (* Signing / Verification *)
-| StepSign : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs cs' u_id gks ks qmsgs mycs mycs' pr_nonce_tos froms tos tos'
+| StepSign : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs cs' u_id gks ks qmsgs mycs mycs' froms sents cur_n cur_n'
                (msg : message t) k_id kt c_id cipherMsg msg_to,
       gks $? k_id = Some (MkCryptoKey k_id Signing kt)
     -> ks  $? k_id = Some true
     -> ~ In c_id cs
-    -> pr_nonce_tos = updateSendNonce tos k_id msg_to
-    -> cipherMsg = SigCipher k_id msg_to (fst pr_nonce_tos) msg
+    -> cur_n' = cur_n + 1
+    (* -> pr_nonce_tos = updateSendNonce tos k_id msg_to *)
+    -> cipherMsg = SigCipher k_id msg_to (u_id, cur_n) msg
     -> cs' = cs $+ (c_id, cipherMsg)
     -> mycs' = c_id :: mycs
-    -> tos' = snd pr_nonce_tos
     -> step_user Silent u_id
-                (usrs, adv, cs , gks, ks, qmsgs, mycs,  froms, tos,  Sign k_id msg)
-                (usrs, adv, cs', gks, ks, qmsgs, mycs', froms, tos', Return (SignedCiphertext c_id))
+                (usrs, adv, cs , gks, ks, qmsgs, mycs,  froms, sents, cur_n,  Sign k_id msg)
+                (usrs, adv, cs', gks, ks, qmsgs, mycs', froms, sents, cur_n', Return (SignedCiphertext c_id))
 
-| StepVerify : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks qmsgs mycs froms tos
+| StepVerify : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks qmsgs mycs froms sents cur_n
                  (msg : message t) k_id kp kt c_id nonce msg_to,
       gks $? k_id = Some (MkCryptoKey k_id Signing kt)
     -> ks  $? k_id = Some kp
     -> cs $? c_id = Some (SigCipher k_id msg_to nonce msg)
     -> List.In c_id mycs
     -> step_user Silent u_id
-                (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, Verify k_id (SignedCiphertext c_id))
-                (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, Return (true, msg))
+                (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Verify k_id (SignedCiphertext c_id))
+                (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Return (true, msg))
 | StepGenerateSymKey: forall {A B} (usrs : honest_users A) (adv : user_data B)
-                        cs u_id gks gks' ks ks' qmsgs mycs froms tos
+                        cs u_id gks gks' ks ks' qmsgs mycs froms sents cur_n
                         (k_id : key_identifier) k usage,
     gks $? k_id = None
     -> k = MkCryptoKey k_id usage SymKey
     -> gks' = gks $+ (k_id, k)
     -> ks' = add_key_perm k_id true ks
     -> step_user Silent u_id
-                (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, GenerateSymKey usage)
-                (usrs, adv, cs, gks', ks', qmsgs, mycs, froms, tos, Return (k_id, true))
+                (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, GenerateSymKey usage)
+                (usrs, adv, cs, gks', ks', qmsgs, mycs, froms, sents, cur_n, Return (k_id, true))
 | StepGenerateAsymKey: forall {A B} (usrs : honest_users A) (adv : user_data B)
-                         cs u_id gks gks' ks ks' qmsgs mycs froms tos
+                         cs u_id gks gks' ks ks' qmsgs mycs froms sents cur_n
                          (k_id : key_identifier) k usage,
     gks $? k_id = None
     -> k = MkCryptoKey k_id usage AsymKey
     -> gks' = gks $+ (k_id, k)
     -> ks' = add_key_perm k_id true ks
     -> step_user Silent u_id
-                (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, GenerateAsymKey usage)
-                (usrs, adv, cs, gks', ks', qmsgs, mycs, froms, tos, Return (k_id, true))
+                (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, GenerateAsymKey usage)
+                (usrs, adv, cs, gks', ks', qmsgs, mycs, froms, sents, cur_n, Return (k_id, true))
 .
 
 Inductive step_universe {A B} : universe A B -> rlabel -> universe A B -> Prop :=
-| StepUser : forall U U' (u_id : user_id) userData usrs adv cs gks ks qmsgs mycs froms tos lbl (cmd : user_cmd A),
+| StepUser : forall U U' (u_id : user_id) userData usrs adv cs gks ks qmsgs mycs froms sents cur_n lbl (cmd : user_cmd A),
     U.(users) $? u_id = Some userData
     -> step_user lbl (Some u_id)
                 (build_data_step U userData)
-                (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
-    -> U' = buildUniverse usrs adv cs gks u_id {| key_heap := ks
-                                               ; msg_heap := qmsgs
-                                               ; protocol := cmd
-                                               ; c_heap   := mycs
-                                               ; from_ids := froms
-                                               ; to_ids   := tos |}
+                (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+    -> U' = buildUniverse usrs adv cs gks u_id {| key_heap  := ks
+                                               ; msg_heap  := qmsgs
+                                               ; protocol  := cmd
+                                               ; c_heap    := mycs
+                                               ; from_nons := froms
+                                               ; sent_nons := sents
+                                               ; cur_nonce := cur_n |}
     -> step_universe U lbl U'
-| StepAdversary : forall U U' usrs adv cs gks ks qmsgs mycs froms tos lbl (cmd : user_cmd B),
+| StepAdversary : forall U U' usrs adv cs gks ks qmsgs mycs froms sents cur_n lbl (cmd : user_cmd B),
     step_user lbl None
               (build_data_step U U.(adversary))
-              (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
-    -> U' = buildUniverseAdv usrs cs gks {| key_heap := ks
-                                         ; msg_heap := qmsgs
-                                         ; protocol := cmd
-                                         ; c_heap   := mycs
-                                         ; from_ids := froms
-                                         ; to_ids   := tos |}
+              (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+    -> U' = buildUniverseAdv usrs cs gks {| key_heap  := ks
+                                         ; msg_heap  := qmsgs
+                                         ; protocol  := cmd
+                                         ; c_heap    := mycs
+                                         ; from_nons := froms
+                                         ; sent_nons := sents
+                                         ; cur_nonce := cur_n |}
     -> step_universe U Silent U'
 .

@@ -57,8 +57,8 @@ Inductive action_matches : forall {A B : Type},
       -> U__iw.(IdealWorld.channel_vector) $? ch_id = Some ((existT _ _ m__expected) :: ms)
       -> MessageEq.message_eq m__rw U__rw m__iw U__iw m__expected ch_id {} {}
       -> action_matches rw U__rw iw U__iw
-| Out : forall A B t__r t__i (m__rw : RealWorld.crypto t__r) (m__iw m__expected : IdealWorld.message.message t__i) ms (U__rw : RealWorld.universe A B) (U__iw : IdealWorld.universe A) rw iw ch_id cs ps suid to_q to_froms,
-    rw = RealWorld.Output m__rw suid to_q to_froms
+| Out : forall A B t__r t__i (m__rw : RealWorld.crypto t__r) (m__iw m__expected : IdealWorld.message.message t__i) ms (U__rw : RealWorld.universe A B) (U__iw : IdealWorld.universe A) rw iw ch_id cs ps suid sents,
+    rw = RealWorld.Output m__rw suid sents
     -> iw = IdealWorld.Output m__iw ch_id cs ps
     -> U__iw.(IdealWorld.channel_vector) $? ch_id = Some (ms ++ [existT _ _ m__expected])
     -> MessageEq.message_eq m__rw U__rw m__iw U__iw m__expected ch_id {} {}
@@ -109,12 +109,14 @@ Section RealWorldUniverseProperties.
                                   | existT _ _ msg =>
                                     exists c_id c, msg = SignedCiphertext c_id
                                               /\ cs $? c_id = Some c
-                                              /\ cipher_signing_key c = cipher_signing_key new_cipher
-                                              /\ cipher_to_user c = cipher_to_user new_cipher
-                                              /\ cipher_nonce new_cipher <= cipher_nonce c
+                                              /\ cipher_nonce new_cipher = cipher_nonce c
+                                              (* /\ cipher_signing_key c = cipher_signing_key new_cipher *)
+                                              (* /\ cipher_to_user c = cipher_to_user new_cipher *)
+                                              (* /\ cipher_nonce new_cipher <= cipher_nonce c *)
                                   end) rec_u.(msg_heap)
-                        \/ (exists n, rec_u.(from_ids) $? cipher_signing_key new_cipher = Some n
-                                /\ cipher_nonce new_cipher <= n )
+                        \/ (List.In (cipher_nonce new_cipher) rec_u.(from_nons))
+                        (* \/ (exists n, rec_u.(from_ids) $? cipher_signing_key new_cipher = Some n *)
+                        (*         /\ cipher_nonce new_cipher <= n ) *)
            )).
 
   Inductive encrypted_cipher_ok (cs : ciphers) (gks : keys): cipher -> Prop :=
@@ -552,10 +554,10 @@ Section RealWorldLemmas.
 
   Lemma adv_step_encrypted_ciphers_ok :
     forall {A B C} cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-              gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' tos tos' bd bd',
+              gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd',
       step_user lbl None bd bd'
       -> forall (cmd : user_cmd C) honestk,
-        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
         -> honestk = findUserKeys usrs
         -> ks = adv.(key_heap)
         -> adv_no_honest_keys honestk ks
@@ -563,7 +565,7 @@ Section RealWorldLemmas.
         -> adv_cipher_queue_ok cs honestk usrs mycs
         -> encrypted_ciphers_ok honestk cs gks
         -> forall cmd' honestk',
-            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cmd')
+            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
             -> honestk' = findUserKeys usrs'
             -> encrypted_ciphers_ok honestk' cs' gks'.
   Proof.
@@ -588,18 +590,20 @@ Section RealWorldLemmas.
   Qed.
 
   Lemma universe_ok_adv_step :
-    forall {A B} (U__r : universe A B) lbl usrs adv cs gks ks qmsgs mycs froms tos cmd,
+    forall {A B} (U__r : universe A B) lbl usrs adv cs gks ks qmsgs mycs froms sents cur_n cmd,
       universe_ok U__r
       -> adv_universe_ok U__r
       -> step_user lbl None
                   (users U__r, adversary U__r, all_ciphers U__r, all_keys U__r,
                    key_heap (adversary U__r), msg_heap (adversary U__r),
-                   c_heap (adversary U__r), from_ids (adversary U__r),
-                   to_ids (adversary U__r), protocol (adversary U__r)) (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cmd)
+                   c_heap (adversary U__r), from_nons (adversary U__r),
+                   sent_nons (adversary U__r), cur_nonce (adversary U__r),
+                   protocol (adversary U__r)) (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
       -> universe_ok
           (buildUniverseAdv
              usrs cs gks
-             {| key_heap := ks; protocol := cmd; msg_heap := qmsgs; c_heap := mycs; from_ids := froms; to_ids := tos |}).
+             {| key_heap := ks; protocol := cmd; msg_heap := qmsgs; c_heap := mycs
+                ; from_nons := froms; sent_nons := sents; cur_nonce := cur_n |}).
   Proof.
     unfold universe_ok, adv_universe_ok; destruct U__r; simpl; intros; split_ands; eauto using adv_step_encrypted_ciphers_ok.
   Qed.
