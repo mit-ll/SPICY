@@ -868,7 +868,7 @@ Definition msg_not_replayed {t} (cs : ciphers) (froms : recv_nonces) (msg : cryp
 
 Inductive action : Type :=
 | Input  t (msg : crypto t) (pat : msg_pat) (froms : recv_nonces)
-| Output t (msg : crypto t) (to_user : option user_id) (sents : sent_nonces)
+| Output t (msg : crypto t) (from_user : option user_id) (to_user : option user_id) (sents : sent_nonces)
 .
 
 Definition rlabel := @label action.
@@ -879,13 +879,14 @@ Definition action_adversary_safe (honestk : key_perms) (cs : ciphers) (a : actio
                             /\ exists c_id c, msg = SignedCiphertext c_id
                                       /\ cs $? c_id = Some c
                                       /\ ~ List.In (cipher_nonce c) froms
-  | Output msg msg_to sents => msg_contains_only_honest_public_keys honestk cs msg
-                                   /\ msg_honestly_signed honestk cs msg = true
-                                   /\ msg_to_this_user cs msg_to msg = true
-                                   /\ msgCiphersSignedOk honestk cs msg
-                                   /\ exists c_id c, msg = SignedCiphertext c_id
-                                             /\ cs $? c_id = Some c
-                                             /\ ~ List.In (cipher_nonce c) sents
+  | Output msg msg_from msg_to sents => msg_contains_only_honest_public_keys honestk cs msg
+                                     /\ msg_honestly_signed honestk cs msg = true
+                                     /\ msg_to_this_user cs msg_to msg = true
+                                     /\ msgCiphersSignedOk honestk cs msg
+                                     /\ exists c_id c, msg = SignedCiphertext c_id
+                                               /\ cs $? c_id = Some c
+                                               /\ fst (cipher_nonce c) = msg_from  (* only send my messages *)
+                                               /\ ~ List.In (cipher_nonce c) sents
                                    (* /\ msg_not_replayed cs to_frms msg to_q *)
   end.
 
@@ -947,12 +948,12 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
 (*  * including traversing through ciphers already known by attacker, etc. *)
 (*  *)
 | StepSend : forall {A B} {t} (usrs usrs' : honest_users A) (adv adv' : user_data B)
-               cs u_id gks ks qmsgs mycs froms sents sents' cur_n rec_u_id rec_u newkeys (msg : crypto t),
+               cs suid gks ks qmsgs mycs froms sents sents' cur_n rec_u_id rec_u newkeys (msg : crypto t),
     findKeysCrypto cs msg = newkeys
     -> keys_mine ks newkeys
     -> incl (findCiphers msg) mycs
     -> usrs $? rec_u_id = Some rec_u
-    -> rec_u_id <> u_id
+    -> Some rec_u_id <> suid
     -> sents' = updateTrackedNonce sents cs msg
     -> usrs' = usrs $+ (rec_u_id, {| key_heap  := rec_u.(key_heap)
                                   ; protocol  := rec_u.(protocol)
@@ -961,7 +962,6 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
                                   ; from_nons := rec_u.(from_nons)
                                   ; sent_nons := rec_u.(sent_nons)
                                   ; cur_nonce := rec_u.(cur_nonce) |})
-    (* -> adv' = addUserKeys newkeys adv (* TODO: also add ciphers to adv??? *) *)
     -> adv' = 
       {| key_heap  := adv.(key_heap) $k++ newkeys
        ; protocol  := adv.(protocol)
@@ -970,7 +970,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
        ; from_nons := adv.(from_nons)
        ; sent_nons := adv.(sent_nons)
        ; cur_nonce := adv.(cur_nonce) |}
-    -> step_user (Action (Output msg (Some rec_u_id) sents)) (Some u_id)
+    -> step_user (Action (Output msg suid (Some rec_u_id) sents)) suid
                 (usrs , adv , cs, gks, ks, qmsgs, mycs, froms, sents,  cur_n, Send rec_u_id msg)
                 (usrs', adv', cs, gks, ks, qmsgs, mycs, froms, sents', cur_n, Return tt)
 

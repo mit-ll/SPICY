@@ -57,8 +57,8 @@ Inductive action_matches : forall {A B : Type},
       -> U__iw.(IdealWorld.channel_vector) $? ch_id = Some ((existT _ _ m__expected) :: ms)
       -> MessageEq.message_eq m__rw U__rw m__iw U__iw m__expected ch_id {} {}
       -> action_matches rw U__rw iw U__iw
-| Out : forall A B t__r t__i (m__rw : RealWorld.crypto t__r) (m__iw m__expected : IdealWorld.message.message t__i) ms (U__rw : RealWorld.universe A B) (U__iw : IdealWorld.universe A) rw iw ch_id cs ps suid sents,
-    rw = RealWorld.Output m__rw suid sents
+| Out : forall A B t__r t__i (m__rw : RealWorld.crypto t__r) (m__iw m__expected : IdealWorld.message.message t__i) ms (U__rw : RealWorld.universe A B) (U__iw : IdealWorld.universe A) rw iw ch_id cs ps suid_to suid_from sents,
+    rw = RealWorld.Output m__rw suid_to suid_from sents
     -> iw = IdealWorld.Output m__iw ch_id cs ps
     -> U__iw.(IdealWorld.channel_vector) $? ch_id = Some (ms ++ [existT _ _ m__expected])
     -> MessageEq.message_eq m__rw U__rw m__iw U__iw m__expected ch_id {} {}
@@ -96,11 +96,31 @@ Section RealWorldUniverseProperties.
     Forall_natmap
       (fun u => user_cipher_queue_ok cs honestk u.(c_heap)) usrs.
 
-  Definition adv_cipher_queue_ok {A} (cs : ciphers) (honestk : key_perms) (usrs : honest_users A) :=
-    (* Forall (fun cid => exists c, cs $? cid = Some c). *)
+  (* Definition adv_cipher_queue_ok {A} (cs : ciphers) (honestk : key_perms) (usrs : honest_users A) := *)
+  (*   Forall (fun cid => exists new_cipher, *)
+  (*               cs $? cid = Some new_cipher *)
+  (*               /\ ( honestk $? cipher_signing_key new_cipher = Some true *)
+  (*                   (* Message must be replayed for receiving user: *) *)
+  (*                   -> forall rec_u, *)
+  (*                     usrs $? cipher_to_user new_cipher = Some rec_u *)
+  (*                     -> Exists (fun sigM => *)
+  (*                                 match sigM with *)
+  (*                                 | existT _ _ msg => *)
+  (*                                   exists c_id c, msg = SignedCiphertext c_id *)
+  (*                                             /\ cs $? c_id = Some c *)
+  (*                                             /\ cipher_nonce new_cipher = cipher_nonce c *)
+  (*                                 end) rec_u.(msg_heap) *)
+  (*                       \/ (List.In (cipher_nonce new_cipher) rec_u.(from_nons)) *)
+  (*          )). *)
+
+  Definition adv_cipher_queue_ok {A} (cs : ciphers) (usrs : honest_users A) :=
     Forall (fun cid => exists new_cipher,
                 cs $? cid = Some new_cipher
-                /\ ( honestk $? cipher_signing_key new_cipher = Some true
+                /\ ( (* honestk $? cipher_signing_key new_cipher = Some true *)
+                  forall u_id u,
+                    fst (cipher_nonce new_cipher) = Some u_id
+                    -> u_id <> cipher_to_user new_cipher
+                    -> usrs $? u_id = Some u
                     (* Message must be replayed for receiving user: *)
                     -> forall rec_u,
                       usrs $? cipher_to_user new_cipher = Some rec_u
@@ -110,9 +130,6 @@ Section RealWorldUniverseProperties.
                                     exists c_id c, msg = SignedCiphertext c_id
                                               /\ cs $? c_id = Some c
                                               /\ cipher_nonce new_cipher = cipher_nonce c
-                                              (* /\ cipher_signing_key c = cipher_signing_key new_cipher *)
-                                              (* /\ cipher_to_user c = cipher_to_user new_cipher *)
-                                              (* /\ cipher_nonce new_cipher <= cipher_nonce c *)
                                   end) rec_u.(msg_heap)
                         \/ (List.In (cipher_nonce new_cipher) rec_u.(from_nons))
                         (* \/ (exists n, rec_u.(from_ids) $? cipher_signing_key new_cipher = Some n *)
@@ -200,10 +217,37 @@ Section RealWorldUniverseProperties.
     invert H.
   Qed.
 
+  Definition honest_nonce_tracking_ok (me : option user_id) (my_sents : sent_nonces) (cs : ciphers)
+             (to_froms : recv_nonces) (to_msgs : queued_messages) :=
+    forall c,
+      ~ List.In (cipher_nonce c) my_sents
+      -> fst (cipher_nonce c) = me
+      -> honestk $? cipher_signing_key c = Some true
+      -> ~ List.In (cipher_nonce c) to_froms
+      /\ Forall (fun sigM => match sigM with (existT _ _ msg) => msg_nonce_not_same c cs msg end) to_msgs
+      /\ honestk $? cipher_signing_key c = Some true.
+
 End RealWorldUniverseProperties.
 
 Definition message_queues_ok {A} (cs : RealWorld.ciphers) (usrs : RealWorld.honest_users A) (gks : keys) :=
   Forall_natmap (fun u => message_queue_ok (RealWorld.findUserKeys usrs) cs u.(RealWorld.msg_heap) gks) usrs.
+
+Definition honest_nonces_ok {A} (cs : RealWorld.ciphers) (usrs : RealWorld.honest_users A) :=
+  forall u_id u rec_u_id rec_u,
+    u_id <> rec_u_id
+    -> usrs $? u_id = Some u
+    -> usrs $? rec_u_id = Some rec_u
+    -> honest_nonce_tracking_ok (RealWorld.findUserKeys usrs)
+                        (Some u_id)
+                        u.(RealWorld.sent_nons)
+                        cs
+                        rec_u.(RealWorld.from_nons)
+                        rec_u.(RealWorld.msg_heap).
+
+(* Definition adv_nonces_ok {A B} (cs : RealWorld.ciphers) (adv : RealWorld.user_data B) (usrs : RealWorld.honest_users A) := *)
+(*   forall u_id u, *)
+(*       usrs $? u_id = Some u *)
+(*     -> nonce_tracking_ok None adv.(RealWorld.sent_nons) cs u.(RealWorld.from_nons) u.(RealWorld.msg_heap). *)
 
 Definition universe_ok {A B} (U : RealWorld.universe A B) : Prop :=
   let honestk := RealWorld.findUserKeys U.(RealWorld.users)
@@ -215,9 +259,10 @@ Definition adv_universe_ok {A B} (U : RealWorld.universe A B) : Prop :=
   in  keys_and_permissions_good U.(RealWorld.all_keys) U.(RealWorld.users) U.(RealWorld.adversary).(RealWorld.key_heap)
     /\ user_cipher_queues_ok U.(RealWorld.all_ciphers) honestk U.(RealWorld.users)
     /\ message_queues_ok U.(RealWorld.all_ciphers) U.(RealWorld.users) U.(RealWorld.all_keys)
-    /\ adv_cipher_queue_ok U.(RealWorld.all_ciphers) honestk U.(RealWorld.users) U.(RealWorld.adversary).(RealWorld.c_heap)
+    /\ adv_cipher_queue_ok U.(RealWorld.all_ciphers) U.(RealWorld.users) U.(RealWorld.adversary).(RealWorld.c_heap)
     /\ adv_message_queue_ok honestk U.(RealWorld.all_ciphers) U.(RealWorld.all_keys) U.(RealWorld.adversary).(RealWorld.msg_heap)
-    /\ adv_no_honest_keys honestk U.(RealWorld.adversary).(RealWorld.key_heap).
+    /\ adv_no_honest_keys honestk U.(RealWorld.adversary).(RealWorld.key_heap)
+    /\ honest_nonces_ok U.(RealWorld.all_ciphers) U.(RealWorld.users).
 
 Section Simulation.
   Variable A B : Type.
@@ -562,7 +607,7 @@ Section RealWorldLemmas.
         -> ks = adv.(key_heap)
         -> adv_no_honest_keys honestk ks
         -> keys_and_permissions_good gks usrs ks
-        -> adv_cipher_queue_ok cs honestk usrs mycs
+        -> adv_cipher_queue_ok cs usrs mycs
         -> encrypted_ciphers_ok honestk cs gks
         -> forall cmd' honestk',
             bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')

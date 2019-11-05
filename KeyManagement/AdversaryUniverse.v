@@ -2042,7 +2042,7 @@ Section StripAdv.
   Definition strip_action (honestk : key_perms) (cs : ciphers) (act : action) :=
     match act with
     | Input msg pat froms     => Input msg pat froms
-    | Output msg msg_to sents => Output msg msg_to sents
+    | Output msg msg_from msg_to sents => Output msg msg_from msg_to sents
     end.
 
   Definition strip_label (honestk : key_perms) (cs : ciphers) (lbl : label) :=
