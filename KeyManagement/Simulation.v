@@ -217,15 +217,44 @@ Section RealWorldUniverseProperties.
     invert H.
   Qed.
 
-  Definition honest_nonce_tracking_ok (me : option user_id) (my_sents : sent_nonces) (cs : ciphers)
-             (to_froms : recv_nonces) (to_msgs : queued_messages) :=
-    forall c,
-      ~ List.In (cipher_nonce c) my_sents
-      -> fst (cipher_nonce c) = me
-      -> honestk $? cipher_signing_key c = Some true
-      -> ~ List.In (cipher_nonce c) to_froms
-      /\ Forall (fun sigM => match sigM with (existT _ _ msg) => msg_nonce_not_same c cs msg end) to_msgs
-      /\ honestk $? cipher_signing_key c = Some true.
+  Definition honest_nonce_tracking_ok (cs : ciphers)
+             (me : option user_id) (my_sents : sent_nonces) (my_cur_n : nat)
+             (to_usr : user_id) (to_froms : recv_nonces) (to_msgs : queued_messages) :=
+
+      Forall (fun non => snd non < my_cur_n) my_sents
+    /\ Forall (fun non => fst non = me -> snd non < my_cur_n) to_froms
+    /\ Forall (fun sigM => match sigM with
+                       | existT _ _ msg =>
+                         forall c_id c,
+                           msg = SignedCiphertext c_id
+                           -> cs $? c_id = Some c
+                           -> cipher_to_user c = to_usr
+                           -> fst (cipher_nonce c) = me
+                           -> snd (cipher_nonce c) < my_cur_n
+                       end) to_msgs
+    /\ forall c_id c,
+        cs $? c_id = Some c
+      -> fst (cipher_nonce c) = me (* if cipher created by me *) 
+      -> snd (cipher_nonce c) < my_cur_n
+      /\ ( cipher_to_user c = to_usr
+          -> ~ List.In (cipher_nonce c) my_sents (* and hasn't yet been sent *)
+          -> ~ List.In (cipher_nonce c) to_froms (* then it hasn't been read by destination user *)
+            /\ Forall (fun sigM => match sigM with (* and isn't in destination user's message queue *)
+                               | (existT _ _ msg) => msg_to_this_user cs (Some to_usr) msg = false
+                                                  \/ msg_nonce_not_same c cs msg end) to_msgs).
+
+  (* Definition honest_nonce_tracking_ok (cs : ciphers) *)
+  (*            (me : option user_id) (my_sents : sent_nonces) *)
+  (*            (to_usr : user_id) (to_froms : recv_nonces) (to_msgs : queued_messages) := *)
+  (*   forall c_id c, *)
+  (*       cs $? c_id = Some c *)
+  (*     -> fst (cipher_nonce c) = me (* if cipher created by me *)  *)
+  (*     -> cipher_to_user c = to_usr *)
+  (*     -> ~ List.In (cipher_nonce c) my_sents (* and hasn't yet been sent *) *)
+  (*     -> ~ List.In (cipher_nonce c) to_froms (* then it hasn't been read by destination user *) *)
+  (*     /\ Forall (fun sigM => match sigM with (* and isn't in destination user's message queue *) *)
+  (*                        | (existT _ _ msg) => msg_to_this_user cs (Some to_usr) msg = false *)
+  (*                                           \/ msg_nonce_not_same c cs msg end) to_msgs. *)
 
 End RealWorldUniverseProperties.
 
@@ -237,12 +266,21 @@ Definition honest_nonces_ok {A} (cs : RealWorld.ciphers) (usrs : RealWorld.hones
     u_id <> rec_u_id
     -> usrs $? u_id = Some u
     -> usrs $? rec_u_id = Some rec_u
-    -> honest_nonce_tracking_ok (RealWorld.findUserKeys usrs)
-                        (Some u_id)
-                        u.(RealWorld.sent_nons)
-                        cs
-                        rec_u.(RealWorld.from_nons)
-                        rec_u.(RealWorld.msg_heap).
+    -> honest_nonce_tracking_ok cs
+                        (Some u_id) u.(RealWorld.sent_nons) u.(RealWorld.cur_nonce)
+                        rec_u_id rec_u.(RealWorld.from_nons) rec_u.(RealWorld.msg_heap).
+    (* /\ honest_nonce_values_ok cs *)
+    (*                     (Some u_id) u.(RealWorld.sent_nons) u.(RealWorld.cur_nonce) *)
+    (*                     rec_u_id rec_u.(RealWorld.from_nons) rec_u.(RealWorld.msg_heap). *)
+
+(* Definition honest_nonces_ok' {A} (cs : RealWorld.ciphers) (usrs : RealWorld.honest_users A) := *)
+(*   forall u_id u rec_u_id rec_u, *)
+(*     u_id <> rec_u_id *)
+(*     -> usrs $? u_id = Some u *)
+(*     -> usrs $? rec_u_id = Some rec_u *)
+(*     -> honest_nonce_values_ok cs *)
+(*                         (Some u_id) u.(RealWorld.sent_nons) u.(RealWorld.cur_nonce) *)
+(*                         rec_u_id rec_u.(RealWorld.from_nons) rec_u.(RealWorld.msg_heap). *)
 
 (* Definition adv_nonces_ok {A B} (cs : RealWorld.ciphers) (adv : RealWorld.user_data B) (usrs : RealWorld.honest_users A) := *)
 (*   forall u_id u, *)

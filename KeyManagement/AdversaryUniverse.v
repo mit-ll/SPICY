@@ -486,6 +486,22 @@ Section CleanMessages.
       unfold honest_cipher_filter_fn, cipher_honestly_signed; destruct c; eauto.
   Qed.
 
+  Lemma msg_to_this_user_false_before_after_cleaning :
+    forall {t} (msg : crypto t) honestk cs msg_to,
+      msg_honestly_signed honestk cs msg = true
+      -> msg_to_this_user cs msg_to msg = false
+      -> msg_to_this_user (clean_ciphers honestk cs) msg_to msg = false.
+  Proof.
+    intros.
+    unfold msg_honestly_signed, msg_to_this_user in *.
+    unfold msg_signing_key in *; destruct msg; try discriminate.
+    cases (cs $? c_id); try discriminate.
+    unfold msg_destination_user in *; context_map_rewrites.
+    apply clean_ciphers_keeps_honest_cipher with (honestk := honestk) in Heq.
+    - rewrite Heq; eauto.
+    - unfold honest_cipher_filter_fn, cipher_honestly_signed; destruct c; auto.
+  Qed.
+
   Hint Resolve
        msg_to_this_user_before_after_cleaning
        msg_honestly_signed_after_without_cleaning
@@ -493,9 +509,9 @@ Section CleanMessages.
        msg_honestly_signed_before_after_cleaning'.
 
   Lemma message_not_replayed_addnl_destruct :
-    forall {t1 t2} (msg1 : crypto t1) (msg2 : crypto t2) cs froms msgs,
-      msg_not_replayed cs froms msg1 (existT _ _ msg2 :: msgs)
-      -> msg_not_replayed cs froms msg1 msgs.
+    forall {t1 t2} (msg1 : crypto t1) (msg2 : crypto t2) to_usr cs froms msgs,
+      msg_not_replayed to_usr cs froms msg1 (existT _ _ msg2 :: msgs)
+      -> msg_not_replayed to_usr cs froms msg1 msgs.
   Proof.
     intros.
     unfold msg_not_replayed in *; intros; split_ex; split_ands; subst; eauto.
@@ -1081,7 +1097,7 @@ Section CleanMessages.
         | [ H : ~ List.In ?x ?xs |- context [ count_occ _ ?xs ?x ] ] => rewrite count_occ_not_In in H; rewrite H
         | [ H : ~ List.In ?x ?xs |- _ ] => rewrite count_occ_not_In with (eq_dec := msg_seq_eq) in H
         | [ H : Forall _ (_ :: _) |- _ ] => invert H
-        | [ H : msg_not_replayed _ _ _ (_ :: _) |- _ ] => unfold msg_not_replayed in H; split_ex; split_ands
+        | [ H : msg_not_replayed _ _ _ _ (_ :: _) |- _ ] => unfold msg_not_replayed in H; split_ex; split_ands
         | [ |- context [ count_occ msg_seq_eq ?froms ?cn ] ] => cases (count_occ msg_seq_eq froms cn)
         | [ |- context [ ?msgs = ?msgs ++ _ ] ] => exfalso
         | [ H : count_occ _ (_ :: _) _ = _ |- _ ] =>
@@ -1105,7 +1121,7 @@ Section CleanMessages.
   Lemma clean_messages_keeps_honestly_signed :
     forall {t} (msg : crypto t) honestk cs to_usr msgs froms,
       msg_signed_addressed honestk cs to_usr msg = true
-      -> msg_not_replayed cs froms msg msgs
+      -> msg_not_replayed to_usr cs froms msg msgs
       -> clean_messages honestk cs to_usr froms (msgs ++ [existT _ _ msg])
         = clean_messages honestk cs to_usr froms msgs ++ [existT _ _ msg].
   Proof.
@@ -1131,12 +1147,11 @@ Section CleanMessages.
         cases (cs $? c_id0); try discriminate.
         cases (count_occ msg_seq_eq froms (cipher_nonce c));
           rewrite !fold_clean_messages2';
-          process_clean_messages.
+          process_clean_messages; eauto.
 
       + rewrite !fold_clean_messages2';
           process_clean_messages.
   Qed.
-
 
   Lemma clean_messages_drops_msg_signed_addressed_false :
     forall {t} (msg : crypto t) msgs honestk to_usr froms cs,
@@ -1810,6 +1825,44 @@ Section FindUserKeysCleanUsers.
       eapply clean_key_permissions_keeps_honest_permission; eauto.
       unfold honest_perm_filter_fn; context_map_rewrites; trivial.
       cases (findUserKeys (clean_users honestk cs usrs) $? k_id); simplify_key_merges; eauto.
+  Qed.
+
+  Lemma clean_users_no_change_honestk'' :
+    forall {A} (usrs : honest_users A) honestk cs k_id,
+        findUserKeys (clean_users honestk cs usrs) $? k_id = Some true
+      -> findUserKeys usrs $? k_id = Some true.
+  Proof.
+    induction usrs using P.map_induction_bis; intros; Equal_eq; subst; eauto.
+
+    unfold findUserKeys; rewrite fold_add; eauto;
+      rewrite findUserKeys_notation.
+
+    rewrite clean_users_add_pull in H0; simpl in H.
+    unfold findUserKeys in H0; rewrite fold_add in H0; eauto;
+      simpl in H0;
+      rewrite !findUserKeys_notation in H0.
+
+    apply merge_perms_split in H0.
+
+    split_ors.
+
+    - specialize (IHusrs _ _ _ H0).
+      cases (key_heap e $? k_id); simplify_key_merges; eauto.
+    - apply clean_key_permissions_inv in H0; split_ands.
+      cases (findUserKeys usrs $? k_id); simplify_key_merges; eauto.
+
+    - Search (~ In _ _).
+      apply not_find_in_iff.
+      apply not_find_in_iff in H; eauto.
+  Qed.
+
+  Lemma clean_users_no_change_honestk' :
+    forall {A} (usrs : honest_users A) cs k_id,
+      findUserKeys (clean_users (findUserKeys usrs) cs usrs) $? k_id = Some true
+      -> findUserKeys usrs $? k_id = Some true.
+  Proof.
+    intros.
+    eapply clean_users_no_change_honestk''; eauto.
   Qed.
 
   Lemma clean_users_removes_non_honest_keys :

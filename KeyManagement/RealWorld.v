@@ -801,18 +801,23 @@ Definition extractPlainText {t} (msg : message t) : option nat :=
   | _           => None
   end.
 
-Definition updateTrackedNonce {t} (froms : recv_nonces) (cs : ciphers) (msg : crypto t) :=
+Definition updateTrackedNonce {t} (to_usr : option user_id) (froms : recv_nonces) (cs : ciphers) (msg : crypto t) :=
   match msg with
   | Content _ => froms
   | SignedCiphertext c_id =>
     match cs $? c_id with
     | None => froms
     | Some c =>
-      match count_occ msg_seq_eq froms (cipher_nonce c) with
-      | 0 => cipher_nonce c :: froms
-      | _ => froms
-      end
-                      
+      match to_usr with
+      | None => froms
+      | Some to_uid =>
+        if to_uid ==n cipher_to_user c
+        then match count_occ msg_seq_eq froms (cipher_nonce c) with
+             | 0 => cipher_nonce c :: froms
+             | _ => froms
+             end
+        else froms
+      end                
       (* let nonce := cipher_nonce c in *)
       (* let kid   := cipher_signing_key c *)
       (* in  match froms $? kid with *)
@@ -846,23 +851,28 @@ Definition updateTrackedNonce {t} (froms : recv_nonces) (cs : ciphers) (msg : cr
 
 Definition msg_nonce_not_same (new_cipher : cipher) (cs : ciphers) {t} (msg : crypto t) : Prop :=
   forall c_id c,
-      msg = SignedCiphertext c_id
+    msg = SignedCiphertext c_id
     -> cs $? c_id = Some c
     -> cipher_nonce new_cipher <> cipher_nonce c.
+    (* \/ cipher_to_user new_cipher <> cipher_to_user c. *)
 
 Definition msg_nonce_same (new_cipher : cipher) (cs : ciphers) {t} (msg : crypto t) : Prop :=
   forall c_id c,
       msg = SignedCiphertext c_id
     -> cs $? c_id = Some c
     -> cipher_nonce new_cipher = cipher_nonce c.
+    (* /\ cipher_to_user new_cipher = cipher_to_user c. *)
 
 
-Definition msg_not_replayed {t} (cs : ciphers) (froms : recv_nonces) (msg : crypto t) (msgs : queued_messages) : Prop :=
+Definition msg_not_replayed {t} (to_usr : option user_id) (cs : ciphers) (froms : recv_nonces) (msg : crypto t) (msgs : queued_messages) : Prop :=
   exists c_id c,
       msg = SignedCiphertext c_id
     /\ cs $? c_id = Some c
     /\ ~ List.In (cipher_nonce c) froms
-    /\ Forall (fun sigM => match sigM with existT _ _ m =>  msg_nonce_not_same c cs m end) msgs.
+    /\ Forall (fun sigM => match sigM with
+                       | (existT _ _ m) => msg_to_this_user cs to_usr m = true
+                                        /\ msg_nonce_not_same c cs m
+                       end) msgs.
     (* /\ cipher_nonce_absent_or_gt froms c *)
     (* /\ Forall (fun sigM => match sigM with existT _ _ m => overlapping_msg_nonce_smaller c cs m end) msgs. *)
 
@@ -926,7 +936,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> newcs = findCiphers msg
     -> ks' = ks $k++ newkeys
     -> mycs' = newcs ++ mycs
-    -> froms' = updateTrackedNonce froms cs msg
+    -> froms' = updateTrackedNonce u_id froms cs msg
     -> msg_accepted_by_pattern cs u_id pat msg
     -> step_user (Action (Input msg pat froms)) u_id
                 (usrs, adv, cs, gks, ks , qmsgs , mycs, froms, sents, cur_n,  Recv pat)
@@ -937,7 +947,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
       qmsgs = (existT _ _ msg) :: msgs (* we have a message waiting for us! *)
     -> qmsgs' = msgs
     -> froms' = (if msg_signed_addressed (findUserKeys usrs) cs suid msg
-               then updateTrackedNonce froms cs msg
+               then updateTrackedNonce suid froms cs msg
                else froms)
     -> ~ msg_accepted_by_pattern cs suid pat msg
     -> step_user Silent suid (* Error label ... *)
@@ -954,7 +964,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> incl (findCiphers msg) mycs
     -> usrs $? rec_u_id = Some rec_u
     -> Some rec_u_id <> suid
-    -> sents' = updateTrackedNonce sents cs msg
+    -> sents' = updateTrackedNonce (Some rec_u_id) sents cs msg
     -> usrs' = usrs $+ (rec_u_id, {| key_heap  := rec_u.(key_heap)
                                   ; protocol  := rec_u.(protocol)
                                   ; msg_heap  := rec_u.(msg_heap) ++ [existT _ _ msg]
