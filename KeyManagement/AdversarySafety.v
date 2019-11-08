@@ -2841,6 +2841,28 @@ Section SingleAdversarySimulates.
         cases (msg_to ==n msg_to); try congruence; auto.
     Qed.
 
+    Ltac solve_simply1 :=
+      match goal with
+      | [ H : ?arg -> _, ARG : ?arg |- _ ] =>
+        match type of arg with
+        | Type => fail 1
+        | Set => fail 1
+        | cipher_id => fail 1
+        | user_id => fail 1
+        | key_identifier => fail 1
+        | nat => fail 1
+        | NatMap.key => fail 1
+        | _ => specialize (H ARG)
+        end
+      | [ H : ?arg = ?arg -> _ |- _ ] => assert (arg = arg) by trivial
+      | [ H : _ /\ _ |- _ ] => destruct H
+      | [ |- _ -> _ ] => intros
+      | [ |- _ /\ _ ] => split
+      | [ H : _ \/ _ |- _ ] => destruct H
+      end.
+
+    Ltac solve_simply := repeat solve_simply1.
+
     Ltac instantiate_cs_lkup :=
       match goal with 
       | [ H : forall c_id c, ?cs $? c_id = Some c -> _ |- _ ] =>
@@ -2853,6 +2875,19 @@ Section SingleAdversarySimulates.
                       | [ OH : toh |- _ ] => fail 1
                       | _ => generalize (H _ _ CS); intro INST
                       end
+        end
+      end.
+
+    Ltac instantiate_cs_lkup' :=
+      match goal with 
+      | [ H : forall c_id c, ?cs $? c_id = Some c -> _ |- _ ] =>
+        match goal with
+        | [ CS : cs $? _ = Some _ |- _ ] =>
+          let INST := fresh "INST" in
+          generalize (H _ _ CS); intro INST;
+          let toh := type of INST in
+          clear INST;
+          (assert toh by (solve_simply; assumption); fail 1) || (generalize (H _ _ CS); intros)
         end
       end.
 
@@ -2870,17 +2905,6 @@ Section SingleAdversarySimulates.
             clear cidsome; specialize (H _ _ cidsome')
       end.
         
-    Ltac instantiate_cs_lkup_ex :=
-      match goal with 
-      | [ H : forall c_id c, ?cs $? c_id = Some c -> _ |- _ ] =>
-        let cid := fresh "cid" in
-        let c := fresh "c" in
-        evar (cid : cipher_id); evar (c : cipher);
-        let cid' := eval unfold cid in cid in
-            let c' := eval unfold c in c in
-                clear cid; clear c; specialize (H cid' c')
-      end.
-
     Ltac process_nonce_ok1 :=
         match goal with
         | [ H : _ $+ (?uid1,_) $? ?uid2 = _ |- _ ] => destruct (uid1 ==n uid2); subst; clean_map_lookups; simpl
@@ -2937,24 +2961,13 @@ Section SingleAdversarySimulates.
         (* | [ H : forall c_id c, ?cs $? c_id = Some c -> fst (cipher_nonce c) = ?suid -> _ *)
         (*   , CS : ?cs $? ?c_id = Some ?c *)
         (*   , FST : fst (cipher_nonce ?c) = ?suid *)
-        (*     |- _ ] => specialize (H _ _ CS FST) *)
-        (* | [ H : forall c_id c, ?cs $? c_id = Some c -> _ *)
-        (*   , CS1 : ?cs $? ?c_id1 = Some ?c1 *)
-        (*   , CS2 : ?cs $? ?c_id2 = Some ?c2 *)
-        (*     |- _ ] => idtac CS1 CS2; generalize (H _ _ CS1); intros; specialize (H _ _ CS2) *)
-        (* | [ H : forall c_id c, ?cs $? c_id = Some c -> _ *)
-        (*   , CS : ?cs $? ?c_id = Some ?c *)
-        (*     |- _ ] => generalize (H _ _ CS); intros; clear CS *)
-        | [ H : forall c_id c, ?cs $? c_id = Some c -> fst (cipher_nonce c) = ?suid -> _
-          , CS : ?cs $? ?c_id = Some ?c
-          , FST : fst (cipher_nonce ?c) = ?suid
-            |- _ ] =>
-          match goal with
-          | [  |- snd (cipher_nonce ?c) < _ ] => specialize (H _ _ CS FST)
-          | [  |- _ <> (cipher_nonce ?c) ] => specialize (H _ _ CS FST)
-          | [  |- ~ List.In (cipher_nonce ?c) _ ] => specialize (H _ _ CS FST)
-          | [  |- context [ msg_nonce_not_same ?c _ _] ] => specialize (H _ _ CS FST)
-          end
+        (*     |- _ ] => *)
+        (*   match goal with *)
+        (*   | [  |- snd (cipher_nonce ?c) < _ ] => specialize (H _ _ CS FST) *)
+        (*   | [  |- _ <> (cipher_nonce ?c) ] => specialize (H _ _ CS FST) *)
+        (*   | [  |- ~ List.In (cipher_nonce ?c) _ ] => specialize (H _ _ CS FST) *)
+        (*   | [  |- context [ msg_nonce_not_same ?c _ _] ] => specialize (H _ _ CS FST) *)
+        (*   end *)
         | [ H : ?arg -> _, ARG : ?arg |- _ ] =>
           match type of arg with
           | Type => fail 1
@@ -2966,7 +2979,8 @@ Section SingleAdversarySimulates.
           | NatMap.key => fail 1
           | _ => specialize (H ARG)
           end
-        | [ H : ?arg = ?arg -> _ |- _ ] => assert (arg = arg) by trivial
+        | [ H : (?arg1 = ?arg2) -> _ |- _ ] => let EQ := fresh "EQ" in
+                                            assert (arg1 = arg2) as EQ by solve [ trivial ]; specialize (H EQ)
         | [ H : Forall _ (_ :: _) |- _ ] => invert H
         | [ H : _ /\ _ |- _ ] => destruct H
         | [ H : List.In _ (_ :: _) |- _ ] => simpl in H; split_ors
@@ -3014,7 +3028,7 @@ Section SingleAdversarySimulates.
     Hint Extern 1 (message_queue_ok _ _ _ _) => eassumption || (msg_queue_prop; eassumption).
 
     Ltac process_nonce_ok :=
-      repeat ( simpl in *; clean_map_lookups1 || congruence || discriminate || process_nonce_ok1 ).
+      repeat ( simpl in *; clean_map_lookups1 || congruence || discriminate || process_nonce_ok1 || instantiate_cs_lkup' || Nat.order).
 
     Ltac process_nonce_ok_with_single :=
       repeat ( clean_map_lookups1 || congruence || discriminate || process_nonce_ok1 ||
@@ -3360,35 +3374,15 @@ Section SingleAdversarySimulates.
         simpl in *; subst;
           process_nonce_ok; eauto.
 
-      + rewrite Forall_forall in H9; unfold not; intro LIN; specialize (H9 _ LIN); simpl in H9.
-        assert (Some u_id0 = Some u_id0) as SUID by trivial; specialize (H9 SUID); Nat.order.
-
-        Ltac discharge_missing_cipher_mqok :=
-          match goal with
-          | [ IN : List.In (existT _ _ (SignedCiphertext ?cid)) ?msgs |- _ ] =>
-            idtac "IN " IN; repeat msg_queue_prop;
-            match goal with
-            | [ MQOK : message_queue_ok _ ?cs msgs _ |- _ ] =>
-              idtac "MQOK " MQOK cid;
-              unfold message_queue_ok in MQOK; rewrite Forall_forall in MQOK;
-              specialize (MQOK _ IN); simpl in MQOK; split_ands;
-              assert (cs $? cid <> None) by eauto 2;
-              match goal with
-              | [ CS : cs $? cid = None |- _ ] => contradiction
-              (* | [ CS : cs $? cid = Some _ |- _ ] => fail 2 *)
-              (* | _ => cases (cs $? cid); try contradiction *)
-              end
-            end
-          end.
+      + rewrite Forall_forall in H9; unfold not; intro LIN;
+          specialize (H9 _ LIN); simpl in H9; process_nonce_ok.
 
       + rewrite Forall_forall; intros; destruct x.
         right; unfold msg_nonce_not_same; intros; subst; simpl.
-        cases (c_id0 ==n c_id); subst; clean_map_lookups; simpl; eauto.
-        * discharge_missing_cipher_mqok.
-        * unfold not; intros.
-          specialize (H11 _ _ H16).
-          rewrite <- H12 in H11; simpl in H11.
-          assert (Some u_id0 = Some u_id0) as SUID by trivial; specialize (H11 SUID); split_ands; Nat.order.
+        cases (c_id0 ==n c_id); subst; clean_map_lookups; simpl; process_nonce_ok.
+        unfold not; intros; process_nonce_ok.
+        rewrite <- H15 in H12; simpl in H12;
+          process_nonce_ok.
 
     - unfold honest_nonces_ok in *; intros;
         process_nonce_ok; eauto.
@@ -3400,12 +3394,10 @@ Section SingleAdversarySimulates.
 
       + rewrite Forall_forall; intros; destruct x.
         right; unfold msg_nonce_not_same; intros; subst; simpl.
-        cases (c_id0 ==n c_id); subst; clean_map_lookups; simpl; eauto.
-        * discharge_missing_cipher_mqok.
-        * unfold not; intros.
-          specialize (H8 _ _ H13).
-          rewrite <- H9 in H8; simpl in H8.
-          assert (Some u_id0 = Some u_id0) as SUID by trivial; specialize (H8 SUID); split_ands; Nat.order.
+        cases (c_id0 ==n c_id); subst; clean_map_lookups; process_nonce_ok.
+        unfold not; intros; process_nonce_ok.
+        rewrite <- H12 in H9; simpl in H9;
+          process_nonce_ok.
   Qed.
 
   Lemma honest_nonce_tracking_ok_new_adv_cipher :
@@ -3476,10 +3468,25 @@ Section SingleAdversarySimulates.
 
     subst.
 
-    unfold adv_cipher_queue_ok in H29.
+    unfold adv_cipher_queue_ok in H29;
+      rewrite Forall_forall in H29.
 
+    unfold msg_nonce_not_same; destruct msg.
+    - right; intros; discriminate.
+    - simpl in H1.
+      assert (List.In c_id0 (c_heap adv)) as LIN by eauto.
+      specialize (H29 _ LIN); split_ex; split_ands.
+      unfold msg_to_this_user, msg_destination_user; context_map_rewrites.
+      destruct (cipher_to_user x ==n cipher_to_user c); eauto.
+      right; intros; process_nonce_ok.
+      unfold not; intros.
+      clear H8 H16.
+      rewrite <- H18 in H17; process_nonce_ok.
 
-
+      (* need : List.In (cipher_nonce c0) (sent_nons u) *)
+    
+    
+  Admitted.
 
   
     (* Lemma adv_message_queue_ok_after_cleaning : *)
