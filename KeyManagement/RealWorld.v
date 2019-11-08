@@ -995,7 +995,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> keys_mine ks (findKeysMessage msg)
     (* -> incl (findCiphers msg) mycs *)
     (* -> pr_nonce_tos = updateTrackedNonce tos k__signid msg_to *)
-    -> cur_n' = cur_n + 1
+    -> cur_n' = 1 + cur_n
     -> cipherMsg = SigEncCipher k__signid k__encid msg_to (u_id, cur_n) msg
     -> cs' = cs $+ (c_id, cipherMsg)
     -> mycs' = c_id :: mycs
@@ -1026,7 +1026,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
       gks $? k_id = Some (MkCryptoKey k_id Signing kt)
     -> ks  $? k_id = Some true
     -> ~ In c_id cs
-    -> cur_n' = cur_n + 1
+    -> cur_n' = 1 + cur_n
     (* -> pr_nonce_tos = updateSendNonce tos k_id msg_to *)
     -> cipherMsg = SigCipher k_id msg_to (u_id, cur_n) msg
     -> cs' = cs $+ (c_id, cipherMsg)

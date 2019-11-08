@@ -1586,7 +1586,7 @@ Section UniverseLemmas.
                                        c_heap := c_id :: mycs;
                                        from_nons := froms;
                                        sent_nons := sents;
-                                       cur_nonce := cur_n + 1 |})) adv_mycs.
+                                       cur_nonce := 1 + cur_n |})) adv_mycs.
   Proof.
     unfold adv_cipher_queue_ok; intros.
     rewrite Forall_forall in *; intros.
@@ -3390,31 +3390,72 @@ Section SingleAdversarySimulates.
           rewrite <- H12 in H11; simpl in H11.
           assert (Some u_id0 = Some u_id0) as SUID by trivial; specialize (H11 SUID); split_ands; Nat.order.
 
-      + rewrite Nat.add_1_r; eauto.
-
     - unfold honest_nonces_ok in *; intros;
         process_nonce_ok; eauto.
     - unfold honest_nonces_ok in *; intros;
         process_nonce_ok; eauto.
 
-      admit.
-      admit.
-      admit.
+      + rewrite Forall_forall in H6; unfold not; intro LIN; specialize (H6 _ LIN); simpl in H6.
+        assert (Some u_id0 = Some u_id0) as SUID by trivial; specialize (H6 SUID); Nat.order.
 
+      + rewrite Forall_forall; intros; destruct x.
+        right; unfold msg_nonce_not_same; intros; subst; simpl.
+        cases (c_id0 ==n c_id); subst; clean_map_lookups; simpl; eauto.
+        * discharge_missing_cipher_mqok.
+        * unfold not; intros.
+          specialize (H8 _ _ H13).
+          rewrite <- H9 in H8; simpl in H8.
+          assert (Some u_id0 = Some u_id0) as SUID by trivial; specialize (H8 SUID); split_ands; Nat.order.
   Qed.
+
+  Lemma honest_nonce_tracking_ok_new_adv_cipher :
+    forall cs c_id c me my_sents my_n you your_froms your_msgs honestk gks,
+      ~ In c_id cs
+      -> message_queue_ok honestk cs your_msgs gks
+      -> fst (cipher_nonce c) = None
+      -> honest_nonce_tracking_ok cs (Some me) my_sents my_n you your_froms your_msgs
+      -> honest_nonce_tracking_ok (cs $+ (c_id,c)) (Some me) my_sents my_n you your_froms your_msgs.
+  Proof.
+    unfold honest_nonce_tracking_ok; intros; split_ands;
+      repeat (apply conj); eauto.
+
+    intros.
+    destruct (c_id ==n c_id0); subst; clean_map_lookups.
+    - rewrite H1 in H7; invert H7.
+    - specialize (H5 _ _ H6 H7); eauto; split_ands; split; eauto; intros.
+      specialize (H8 H9 H10); split_ands; split; eauto.
+  Qed.
+
+  Lemma honest_nonces_ok_adv_new_cipher :
+    forall {A} (usrs : honest_users A) cs c_id c gks,
+      ~ In c_id cs
+      -> message_queues_ok cs usrs gks
+      -> fst (cipher_nonce c) = None
+      -> honest_nonces_ok cs usrs
+      -> honest_nonces_ok (cs $+ (c_id,c)) usrs.
+  Proof.
+    unfold honest_nonces_ok; intros.
+    specialize (H2 _ _ _ _ H3 H4 H5).
+    repeat msg_queue_prop.
+    eapply honest_nonce_tracking_ok_new_adv_cipher; eauto.
+  Qed.
+
+  Hint Resolve honest_nonces_ok_adv_new_cipher.
 
   Lemma adv_step_honest_nonces_ok :
     forall {A B C} cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-              gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd',
-      step_user lbl None bd bd'
+              gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd' suid,
+      step_user lbl suid bd bd'
       -> forall (cmd : user_cmd C) honestk,
         bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+        -> suid = None
         -> honestk = findUserKeys usrs
         -> ks = adv.(key_heap)
         -> qmsgs = adv.(msg_heap)
         -> mycs = adv.(c_heap)
         -> froms = adv.(from_nons)
         -> sents = adv.(sent_nons)
+        -> cur_n = adv.(cur_nonce)
         -> honest_nonces_ok cs usrs
         (* -> encrypted_ciphers_ok honestk cs gks *)
         -> message_queues_ok cs usrs gks
@@ -3426,50 +3467,16 @@ Section SingleAdversarySimulates.
             -> honestk' = findUserKeys usrs'
             -> honest_nonces_ok cs' usrs'.
   Proof.
-    induction 1; inversion 1; inversion 10; intros; subst;
+    induction 1; inversion 1; inversion 12; intros; subst;
       eauto;
       clean_context.
 
     unfold honest_nonces_ok in *; intros;
-      autorewrite with find_user_keys;
       process_nonce_ok; eauto.
 
-    unfold adv_cipher_queue_ok in H27; rewrite Forall_forall in H27.
+    subst.
 
-    unfold honest_nonce_tracking_ok in *; intros.
-    specialize (H25 _ H5 H6 H7); split_ands; split; eauto.
-    rewrite Forall_app; econstructor; eauto.
-    unfold msg_nonce_not_same; intros.
-
-    cases (cipher_to_user c ==n cipher_to_user c0); subst; eauto.
-    - unfold not; intros.
-      rewrite H7 in H6.
-      rewrite e in H2, H.
-      simpl in *; assert (List.In c_id adv.(c_heap)) as IN by eauto.
-      specialize (H27 _ IN); split_ex; split_ands; clean_map_lookups.
-      specialize (H12 _ _ H6 H H4 _ H2); split_ors.
-      + rewrite Exists_exists in H11; split_ex; split_ands; destruct x;
-          split_ex; split_ands; subst; clean_map_lookups.
-
-        rewrite Forall_forall in H9; specialize (H9 _ H11); simpl in H9;
-          unfold msg_nonce_not_same in H9.
-        assert (cipher_nonce c <> cipher_nonce x1); eauto.
-        rewrite <- H14 in H12; contradiction.
-        
-      + rewrite H7 in H8; contradiction.
-
-    - 
-
-    
-
-    simpl in *; assert (List.In c_id adv.(c_heap)) by eauto.
-    specialize (H27 _ H7); split_ex; split_ands;
-      clean_map_lookups.
-
-    unfold not; intros.
-    rewrite H11 in H6.
-
-    admit.
+    unfold adv_cipher_queue_ok in H29.
 
 
 
