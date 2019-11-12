@@ -520,32 +520,6 @@ Section CleanMessages.
 
   Hint Resolve message_not_replayed_addnl_destruct.
 
-  (* Lemma message_nonce_ok_no_replay : *)
-  (*   forall {t} (msg : crypto t) cs c_id c honestk nonce froms, *)
-  (*     nonce_absent_or_gt froms (cipher_signing_key c) nonce *)
-  (*     -> cipher_nonce c = nonce *)
-  (*     -> msg_cipher_id msg = Some c_id *)
-  (*     -> msg_honestly_signed honestk cs msg = true *)
-  (*     -> cs $? c_id = Some c *)
-  (*     -> msg_nonce_ok cs froms msg = Some (froms $+ (cipher_signing_key c, cipher_nonce c)). *)
-  (* Proof. *)
-  (*   unfold msg_nonce_ok; intros. *)
-  (*   unfold msg_cipher_id, msg_honestly_signed in *; destruct msg; try discriminate. *)
-  (*   invert H1; context_map_rewrites. *)
-  (*   unfold nonce_absent_or_gt in *; split_ors; split_ex; split_ands; context_map_rewrites; auto. *)
-  (*   cases (cipher_nonce c <=? x); eauto. *)
-  (*   Nat.order. *)
-  (* Qed. *)
-
-  (* Lemma message_not_replayed_cons_split : *)
-  (*   forall {t} (msg : crypto t) cs froms m msgs, *)
-  (*     msg_not_replayed cs froms msg (m :: msgs) *)
-  (*     -> msg_not_replayed cs froms msg msgs. *)
-  (* Proof. *)
-  (*   unfold msg_not_replayed; intros; split_ex; split_ands; eauto. *)
-  (*   invert H2; eauto 8. *)
-  (* Qed. *)
-
   Lemma fold_msg_filter :
     forall honestk cs to_usr sigM acc,
       match sigM with
@@ -1112,7 +1086,7 @@ Section CleanMessages.
           | [ H : cipher_nonce x <> cipher_nonce c |- _ ] => fail 1
           | _ => assert (cipher_nonce x <> cipher_nonce c) by (eapply H; eauto 2)
           end
-        | [ FA : Forall _ ?xs, IN : List.In _ ?xs |- _ ] => rewrite Forall_forall in FA; specialize (FA _ IN)
+        | [ FA : Forall _ ?xs, IN : List.In _ ?xs |- _ ] => rewrite Forall_forall in FA; generalize (FA _ IN); clear IN; rewrite <- Forall_forall in FA
         | [ EX : Exists _ _ |- _ ] => rewrite Exists_exists in EX
         | [ H : let (_,_) := ?x in _ |- _ ] => progress (simpl in H) || destruct x
         end; split_ex; split_ands; eauto 2).
@@ -1149,9 +1123,14 @@ Section CleanMessages.
           rewrite !fold_clean_messages2';
           process_clean_messages; eauto.
 
-      + rewrite !fold_clean_messages2';
+        specialize (H9 H4); process_clean_messages.
+        admit.
+        admit.
+        
+      + rewrite !fold_clean_messages2'.
           process_clean_messages.
-  Qed.
+          admit.
+  Admitted.
 
   Lemma clean_messages_drops_msg_signed_addressed_false :
     forall {t} (msg : crypto t) msgs honestk to_usr froms cs,

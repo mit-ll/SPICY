@@ -871,7 +871,7 @@ Definition msg_not_replayed {t} (to_usr : option user_id) (cs : ciphers) (froms 
     /\ ~ List.In (cipher_nonce c) froms
     /\ Forall (fun sigM => match sigM with
                        | (existT _ _ m) => msg_to_this_user cs to_usr m = true
-                                        /\ msg_nonce_not_same c cs m
+                                        -> msg_nonce_not_same c cs m
                        end) msgs.
     (* /\ cipher_nonce_absent_or_gt froms c *)
     (* /\ Forall (fun sigM => match sigM with existT _ _ m => overlapping_msg_nonce_smaller c cs m end) msgs. *)
