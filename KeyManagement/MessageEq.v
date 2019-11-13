@@ -20,7 +20,7 @@ Fixpoint content_eq  {t__rw t__iw} (m__rw : RealWorld.message.message t__rw) (m_
   | _ => False
   end.
 
-Inductive  message_eq : forall {A B} {t : type}, (* just one t : type? *)
+Inductive  message_eq : forall {A B} {t : type}, 
   RealWorld.crypto t -> RealWorld.universe A B ->
   IdealWorld.message.message t -> IdealWorld.universe A -> IdealWorld.channel_id -> Prop :=
 | ContentCase : forall {A B t}  (U__rw : RealWorld.universe A B) U__iw (m__rw : RealWorld.message.message t) m__iw ch_id user_data,
@@ -29,21 +29,29 @@ Inductive  message_eq : forall {A B} {t : type}, (* just one t : type? *)
             -> user_data.(IdealWorld.perms) $? ch_id = Some (IdealWorld.construct_permission true true))
     -> message_eq (RealWorld.Content m__rw) U__rw m__iw U__iw ch_id
 | CryptoSigCase : forall {A B t} (U__rw : RealWorld.universe A B) U__iw (m__iw : IdealWorld.message.message t) c_id ch_id k__sign
-                    (m__rw : RealWorld.message.message t) data__rw data__iw b__rw b__iw,
+                    (m__rw : RealWorld.message.message t) b__iw honestk,
     U__rw.(RealWorld.all_ciphers) $? c_id = Some (RealWorld.SigCipher k__sign m__rw)
     -> content_eq m__rw m__iw
-    -> (forall u, U__rw.(RealWorld.users) $? u = Some data__rw
-            -> U__iw.(IdealWorld.users) $? u = Some data__iw
-            -> (data__rw.(RealWorld.key_heap) $? k__sign = Some b__rw
+    -> honestk = RealWorld.findUserKeys (U__rw.(RealWorld.users))
+    -> (forall u data__rw data__iw,
+	                     U__rw.(RealWorld.users) $? u = Some data__rw
+                          -> U__iw.(IdealWorld.users) $? u = Some data__iw
+                          ->  RealWorld.honest_key honestk k__sign
+          (*sign key is honest.  honest key : find user keys on all users*)
+            -> (data__rw.(RealWorld.key_heap) $? k__sign = Some true
                <-> data__iw.(IdealWorld.perms) $? ch_id = Some (IdealWorld.construct_permission true b__iw)))
     -> message_eq (RealWorld.SignedCiphertext c_id) U__rw m__iw U__iw ch_id
 | CryptoSigEncCase : forall {A B t} (U__rw : RealWorld.universe A B) U__iw (m__iw : IdealWorld.message.message t) c_id ch_id k__sign k__enc
-                       (m__rw : RealWorld.message.message t) data__rw data__iw b__rwsig,
+                       (m__rw : RealWorld.message.message t) honestk,
     U__rw.(RealWorld.all_ciphers) $? c_id = Some (RealWorld.SigEncCipher k__sign k__enc m__rw)
     -> content_eq m__rw m__iw
-    -> (forall u, U__rw.(RealWorld.users) $? u = Some data__rw
-            -> U__iw.(IdealWorld.users) $? u = Some data__iw
-            -> ((data__rw.(RealWorld.key_heap) $? k__sign = Some b__rwsig
-                /\ data__rw.(RealWorld.key_heap) $? k__enc = Some true)
+    -> honestk = RealWorld.findUserKeys (U__rw.(RealWorld.users))
+    -> (forall u data__rw data__iw b__rwenc,
+	                     U__rw.(RealWorld.users) $? u = Some data__rw
+                          -> U__iw.(IdealWorld.users) $? u = Some data__iw
+                          -> RealWorld.honest_key honestk k__sign
+                          -> RealWorld.honest_key honestk k__enc
+            -> ((data__rw.(RealWorld.key_heap) $? k__sign = Some true
+                /\ data__rw.(RealWorld.key_heap) $? k__enc = Some b__rwenc)
                <-> data__iw.(IdealWorld.perms) $? ch_id = Some (IdealWorld.construct_permission true true)))
     -> message_eq (RealWorld.SignedCiphertext c_id) U__rw m__iw U__iw ch_id.

@@ -4141,6 +4141,14 @@ Section SingleAdversarySimulates.
 
   Hint Resolve stripped_action_matches_then_action_matches.
 
+  Lemma honest_key_is_honest_clean_key :
+    forall {A} (us : RealWorld.honest_users A) k cs,
+      RealWorld.honest_key (RealWorld.findUserKeys us) k
+      -> RealWorld.honest_key (RealWorld.findUserKeys (clean_users (RealWorld.findUserKeys us) cs us)) k.
+  Proof.
+    intros; invert H. pose proof @findUserKeys_clean_users_correct A us cs k; rewrite H0 in H; constructor. assumption.
+  Qed.
+
   Lemma msg_matches_strip :
     forall {A B t} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A)
       (m__rw : RealWorld.crypto t) (m__iw : IdealWorld.message.message t)
@@ -4151,22 +4159,36 @@ Section SingleAdversarySimulates.
     intros.
     invert H.
     - econstructor; eauto; intros.
-    - econstructor; eauto; intros.
-
+    - unfold strip_adversary_univ in H10, H7; simpl in *. unfold clean_ciphers in *; apply clean_ciphers_inv in H7.
+      eapply MessageEq.CryptoSigCase with (honestk := (RealWorld.findUserKeys U__ra.(RealWorld.users))).
+      eapply H7. assumption. reflexivity. intros. specialize (H10 u).
+      eapply clean_users_cleans_user with (honestk := (RealWorld.findUserKeys U__ra.(RealWorld.users))) (cs := U__ra.(RealWorld.all_ciphers)) in H.
+      2: reflexivity. eapply H10 in H. simpl in H. intuition (eauto using clean_key_permissions_inv', clean_key_permissions_keeps_honest_permission).
+      eapply clean_key_permissions_keeps_honest_permission in H. eauto. rewrite RealWorld.honest_key_honest_keyb in H1.
+      unfold honest_perm_filter_fn. unfold RealWorld.honest_keyb in H1. assumption. apply H3 in H. eapply clean_key_permissions_inv in H. invert H. assumption.
+      assumption. eapply honest_key_is_honest_clean_key in H1. eapply H1.
+    - unfold strip_adversary_univ in H10, H7; simpl in *. unfold clean_ciphers in *; apply clean_ciphers_inv in H7.
+      eapply MessageEq.CryptoSigEncCase with (honestk := (RealWorld.findUserKeys U__ra.(RealWorld.users))).
+      eapply H7. assumption. reflexivity. intros. specialize (H10 u).
+      eapply clean_users_cleans_user with (honestk := (RealWorld.findUserKeys U__ra.(RealWorld.users))) (cs := U__ra.(RealWorld.all_ciphers)) in H.
+      2: reflexivity. eapply H10 in H. simpl in H. intuition (eauto using clean_key_permissions_inv', clean_key_permissions_keeps_honest_permission).
+      eapply clean_key_permissions_keeps_honest_permission in H5. eapply clean_key_permissions_keeps_honest_permission in H6. eauto.
+      rewrite RealWorld.honest_key_honest_keyb in H2. assumption.
+      rewrite RealWorld.honest_key_honest_keyb in H1. assumption.
+      apply H4 in H3. split_ands. eapply clean_key_permissions_inv in H3. split_ands. assumption.
+      apply H4 in H3. split_ands. eapply clean_key_permissions_inv in H5. split_ands. assumption.
+      assumption. eapply honest_key_is_honest_clean_key in H1. eapply H1.
+      eapply honest_key_is_honest_clean_key in H2. eapply H2.
+  Qed.
   
   Lemma action_matches_strip :
     forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A) a__r a__i b,
       action_matches a__r (strip_adversary_univ U__ra b) a__i U__i
       -> action_matches a__r U__ra a__i U__i.
   Proof.
-    intros.
-    invert H.
-    - econstructor; eauto.
-      admit.
-    - eapply Out; eauto.
-           
-  Admitted.
-
+    intros; invert H; econstructor; eauto; eapply msg_matches_strip; eauto.
+  Qed.
+  
   Hint Resolve action_matches_strip.
 
   Lemma simulates_with_adversary_labeled :
