@@ -48,10 +48,13 @@ Ltac clean_map_lookups1 :=
   | [ H : context [ match _ $+ (?k1,_) $? ?k2 with _ => _ end ] |- _ ] => rewrite add_neq_o in H by auto 2
   | [ |- context[_ $+ (?k,_) $? ?k] ] => rewrite add_eq_o by trivial
   | [ |- context[_ $+ (?k1,_) $? ?k2] ] => rewrite add_neq_o by auto
+  | [ |- context[_ $+ (?k1,_) $? ?k2] ] => rewrite add_eq_o by auto
   | [ |- context[_ $- ?k $? ?k] ] => rewrite remove_eq_o by trivial
   | [ |- context[_ $- ?k1 $? ?k2] ] => rewrite remove_neq_o by auto
+  | [ |- context[_ $- ?k1 $? ?k2] ] => rewrite remove_eq_o by auto
   | [ H : ~ In _ _ |- _ ] => rewrite not_find_in_iff in H
   | [ H1 : ?m $? ?k = _ , H2 : ?m $? ?k = _ |- _] => rewrite H1 in H2
+  | [ H1 : ?m $? ?k1 = _ , H2 : ?m $? ?k2 = _ |- _] => assert (k1 = k2) as RW by auto; rewrite RW in H1; clear RW; rewrite H1 in H2
   end.
 
 Ltac contra_map_lookup :=

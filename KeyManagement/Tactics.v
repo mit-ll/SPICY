@@ -21,6 +21,7 @@ Ltac split_ors :=
 Ltac split_ex :=
   repeat match goal with
          | [ H : exists _, _ |- _ ] => destruct H
+         | [ H : _ /\ _ |- _ ] => destruct H
          end.
 
 Ltac invert H :=

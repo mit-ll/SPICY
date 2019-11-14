@@ -100,11 +100,18 @@ Section RealWorldUniverseProperties.
     Forall (fun cid => exists new_cipher,
                 cs $? cid = Some new_cipher
                 /\ ( (fst (cipher_nonce new_cipher) = None /\ cipher_honestly_signed (findUserKeys usrs) new_cipher = false)
-                  \/ exists u_id u,
+                  \/ exists u_id u rec_u,
                       fst (cipher_nonce new_cipher) = Some u_id
                       /\ usrs $? u_id = Some u
                       /\ u_id <> cipher_to_user new_cipher
-                      /\ List.In (cipher_nonce new_cipher) u.(sent_nons))
+                      /\ List.In (cipher_nonce new_cipher) u.(sent_nons)
+                      /\ usrs $? cipher_to_user new_cipher = Some rec_u
+                      /\ ( List.In (cipher_nonce new_cipher) rec_u.(from_nons)
+                        \/ Exists (fun sigM => match sigM with
+                                           | existT _ _ m =>
+                                             msg_signed_addressed (findUserKeys usrs) cs (Some (cipher_to_user new_cipher)) m = true
+                                           /\ msg_nonce_same new_cipher cs m
+                                           end) rec_u.(msg_heap)))
            ).
 
   Inductive encrypted_cipher_ok (cs : ciphers) (gks : keys): cipher -> Prop :=
@@ -156,11 +163,19 @@ Section RealWorldUniverseProperties.
                      /\ (forall c_id, List.In c_id (findCiphers m)
                                 -> exists c, cs $? c_id = Some c
                                      /\ ( ( fst (cipher_nonce c) = None /\ cipher_honestly_signed (findUserKeys usrs) c = false )
-                                       \/ exists uid u,
+                                       \/ exists uid u rec_u,
                                            fst (cipher_nonce c) = Some uid
                                            /\ usrs $? uid = Some u
                                            /\ uid <> cipher_to_user c
-                                           /\ List.In (cipher_nonce c) u.(sent_nons)))
+                                           /\ List.In (cipher_nonce c) u.(sent_nons)
+                                           /\ usrs $? cipher_to_user c = Some rec_u
+                                           /\ ( List.In (cipher_nonce c) rec_u.(from_nons)
+                                             \/ Exists (fun sigM =>
+                                                         match sigM with
+                                                         | existT _ _ m =>
+                                                           msg_signed_addressed (findUserKeys usrs) cs (Some (cipher_to_user c)) m = true
+                                                           /\ msg_nonce_same c cs m
+                                                         end) rec_u.(msg_heap))))
                      end
            ) msgs.
 
