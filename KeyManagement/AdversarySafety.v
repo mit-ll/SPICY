@@ -4567,7 +4567,7 @@ Section SingleAdversarySimulates.
       admit.
     - apply count_occ_gt_0_clean_msgs in Heq0.
       admit.
-  Admitted.
+  Admitted. 
 
     Lemma adv_message_queue_ok_after_cleaning :
       forall {A} (usrs : honest_users A) honestk cs gks msgs,
@@ -4648,9 +4648,14 @@ Section SingleAdversarySimulates.
           split.
           eapply clean_users_cleans_user; eauto.
           simpl.
-          split_ors; eauto.
 
-          assert (~ List.In (cipher_nonce x) (from_nons x2)) by admit.
+
+          assert (
+              {List.In (cipher_nonce x) (from_nons x2)} + {~ List.In (cipher_nonce x) (from_nons x2)}).
+          apply in_dec; eauto using msg_seq_eq.
+
+          destruct H6; eauto.
+          split_ors; try contradiction.
 
           right; rewrite Exists_exists in *.
           split_ex; destruct x3.
@@ -4660,7 +4665,7 @@ Section SingleAdversarySimulates.
             with (honestk := findUserKeys usrs) (honestk' := findUserKeys (clean_users (findUserKeys usrs) cs usrs)) in H6; eauto.
           split_ex; eexists; split; eauto.
           simpl; eauto 9.
-    Admitted.
+    Qed.
 
     Lemma adv_no_honest_keys_after_cleaning :
       forall {A} (usrs : honest_users A) honestk honestk' cs adv_keys,
