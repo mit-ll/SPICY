@@ -4532,43 +4532,6 @@ Section SingleAdversarySimulates.
       rewrite H16 in H10; clean_context; clean_map_lookups; contradiction.
   Qed.
 
-  Lemma list_in_msgs_list_in_cleaned_msgs_not_in_froms :
-    forall {t} (msg : crypto t) c qmsgs honestk honestk' froms cs,
-      List.In (existT _ _ msg) qmsgs
-      -> (forall k, honestk $? k = Some true -> honestk' $? k = Some true)
-      -> msg_signed_addressed honestk cs (Some (cipher_to_user c)) msg = true
-      -> msg_nonce_same c cs msg
-      -> honest_key honestk (cipher_signing_key c)
-      -> ~ List.In (cipher_nonce c) froms
-      -> exists t' (msg' : crypto t'),
-          List.In (existT _ _ msg') (clean_messages honestk cs (Some (cipher_to_user c)) froms qmsgs)
-          /\ msg_signed_addressed honestk' (clean_ciphers honestk cs) (Some (cipher_to_user c)) msg' = true
-          /\ msg_nonce_same c (clean_ciphers honestk cs) msg'.
-  Proof.
-    intros.
-    apply in_split in H; split_ex.
-    subst.
-    unfold clean_messages, clean_messages'.
-    rewrite fold_left_app.
-    unfold msg_filter at 1; simpl.
-    rewrite H1.
-    rewrite fold_clean_messages2'.
-    unfold msg_nonce_ok at 2.
-    unfold msg_signed_addressed, msg_honestly_signed, msg_signing_key, msg_to_this_user, msg_destination_user in H1;
-      rewrite andb_true_iff in H1; split_ands.
-    destruct msg; try discriminate.
-    cases (cs $? c_id); try discriminate.
-
-    cases (count_occ msg_seq_eq (snd (clean_messages' honestk cs (Some (cipher_to_user c)) froms [] x)) (cipher_nonce c0)); eauto.
-    - apply count_occ_eq_0_clean_msgs in Heq0.
-      rewrite !fold_clean_messages1'.
-      rewrite fold_clean_messages.
-      unfold clean_messages' at 1.
-      admit.
-    - apply count_occ_gt_0_clean_msgs in Heq0.
-      admit.
-  Admitted. 
-
     Lemma adv_message_queue_ok_after_cleaning :
       forall {A} (usrs : honest_users A) honestk cs gks msgs,
         adv_message_queue_ok usrs cs gks msgs

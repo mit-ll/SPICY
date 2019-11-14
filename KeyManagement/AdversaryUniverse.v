@@ -1045,6 +1045,20 @@ Section CleanMessages.
       rewrite Heq in H2; discriminate.
   Qed.
 
+  Lemma msg_nonce_same_after_cleaning :
+    forall {t} (msg : crypto t) c cs honestk,
+      msg_nonce_same c cs msg 
+      -> msg_signed_addressed honestk cs (Some (cipher_to_user c)) msg = true
+      -> msg_nonce_same c (clean_ciphers honestk cs) msg.
+  Proof.
+    unfold msg_nonce_same; intros.
+    subst.
+    rewrite <- find_mapsto_iff, clean_ciphers_mapsto_iff, find_mapsto_iff in H2;
+      split_ands; eauto.
+  Qed.
+
+  Hint Resolve msg_nonce_same_after_cleaning.
+
   Lemma msg_nonce_same_not_same_contra :
     forall {t} (msg : crypto t) honestk cs c,
         msg_honestly_signed honestk cs msg = true
@@ -1211,6 +1225,93 @@ Section CleanMessages.
     intros; unfold clean_messages.
     rewrite clean_messages_idempotent'; eauto.
   Qed.
+
+  Lemma list_in_msgs_list_in_cleaned_msgs_not_in_froms' :
+    forall {t} (msg : crypto t) c qmsgs1 qmsgs2 qmsgs honestk honestk' froms cs,
+        qmsgs = qmsgs1 ++ (existT _ _ msg) :: qmsgs2
+      -> (forall k, honestk $? k = Some true -> honestk' $? k = Some true)
+      -> msg_signed_addressed honestk cs (Some (cipher_to_user c)) msg = true
+      -> msg_nonce_same c cs msg
+      -> honest_key honestk (cipher_signing_key c)
+      -> ~ List.In (cipher_nonce c) froms
+      -> exists t' (msg' : crypto t'),
+          List.In (existT _ _ msg') (clean_messages honestk cs (Some (cipher_to_user c)) froms qmsgs)
+          /\ msg_signed_addressed honestk' (clean_ciphers honestk cs) (Some (cipher_to_user c)) msg' = true
+          /\ msg_nonce_same c (clean_ciphers honestk cs) msg'.
+  Proof.
+    unfold clean_messages, clean_messages'; induction qmsgs1; intros; eauto.
+    - rewrite app_nil_l in H; subst; simpl.
+      rewrite H1.
+      unfold msg_nonce_ok.
+      generalize H1;  intros MSA.
+      unfold msg_signed_addressed, msg_honestly_signed, msg_signing_key, msg_to_this_user, msg_destination_user in MSA;
+        rewrite andb_true_iff in MSA; split_ands.
+      destruct msg; try discriminate.
+      cases (cs $? c_id); try discriminate.
+      generalize H2; intros MNS.
+      unfold msg_nonce_same in MNS.
+      assert (cipher_nonce c = cipher_nonce c0) as RW by eauto.
+      rewrite RW, count_occ_not_In with (eq_dec := msg_seq_eq) in H4.
+      rewrite H4.
+      rewrite fold_clean_messages2', clean_messages'_fst_pull.
+      do 2 eexists.
+      split.
+      apply in_eq.
+      eauto.
+
+    - subst.
+      simpl.
+      unfold msg_filter at 2; destruct a.
+      cases (msg_signed_addressed honestk cs (Some (cipher_to_user c)) c0); eauto.
+      simpl.
+
+      unfold msg_nonce_ok.
+      generalize Heq; intro MSA.
+      unfold msg_signed_addressed, msg_honestly_signed, msg_signing_key in MSA;
+        rewrite andb_true_iff in MSA; split_ands.
+      destruct c0; try discriminate.
+      cases (cs $? c_id); try discriminate.
+      cases (count_occ msg_seq_eq froms (cipher_nonce c0)); eauto.
+      rewrite fold_clean_messages2', clean_messages'_fst_pull.
+      destruct (msg_seq_eq (cipher_nonce c0) (cipher_nonce c)).
+      + do 2 eexists.
+        split.
+        apply in_eq.
+        split; eauto.
+        unfold msg_nonce_same; intros.
+        invert H6; eauto.
+        eapply clean_ciphers_keeps_honest_cipher in Heq0; eauto; clean_map_lookups; eauto.
+
+      + assert (~ List.In (cipher_nonce c) (cipher_nonce c0 :: froms)) as NLIN.
+        intros NLIN; simpl in NLIN; split_ors; try contradiction.
+        remember (qmsgs1 ++ existT crypto t0 msg :: qmsgs2) as qmsgs.
+        specialize (IHqmsgs1 _ _ _ _ _ _ Heqqmsgs H0 H1 H2 H3 NLIN).
+        split_ex.
+        rewrite fold_clean_messages2' in H6; eauto.
+        do 2 eexists; split.
+        apply in_cons; eauto.
+        eauto.
+
+  Qed.
+
+  Lemma list_in_msgs_list_in_cleaned_msgs_not_in_froms :
+    forall {t} (msg : crypto t) c qmsgs honestk honestk' froms cs,
+      List.In (existT _ _ msg) qmsgs
+      -> (forall k, honestk $? k = Some true -> honestk' $? k = Some true)
+      -> msg_signed_addressed honestk cs (Some (cipher_to_user c)) msg = true
+      -> msg_nonce_same c cs msg
+      -> honest_key honestk (cipher_signing_key c)
+      -> ~ List.In (cipher_nonce c) froms
+      -> exists t' (msg' : crypto t'),
+          List.In (existT _ _ msg') (clean_messages honestk cs (Some (cipher_to_user c)) froms qmsgs)
+          /\ msg_signed_addressed honestk' (clean_ciphers honestk cs) (Some (cipher_to_user c)) msg' = true
+          /\ msg_nonce_same c (clean_ciphers honestk cs) msg'.
+  Proof.
+    intros.
+    apply in_split in H; split_ex.
+    eapply list_in_msgs_list_in_cleaned_msgs_not_in_froms'; eauto.
+  Qed.
+
   
 End CleanMessages.
 
