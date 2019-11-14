@@ -1091,47 +1091,6 @@ Section CleanMessages.
         | [ H : let (_,_) := ?x in _ |- _ ] => progress (simpl in H) || destruct x
         end; split_ex; split_ands; eauto 2).
 
-    
-  Lemma clean_messages_keeps_honestly_signed :
-    forall {t} (msg : crypto t) honestk cs to_usr msgs froms,
-      msg_signed_addressed honestk cs to_usr msg = true
-      -> msg_not_replayed to_usr cs froms msg msgs
-      -> clean_messages honestk cs to_usr froms (msgs ++ [existT _ _ msg])
-        = clean_messages honestk cs to_usr froms msgs ++ [existT _ _ msg].
-  Proof.
-    intros; unfold clean_messages; induction msgs; simpl; eauto.
-    - unfold clean_messages'; simpl; rewrite H;
-      unfold msg_nonce_ok, msg_not_replayed in *; simpl;
-        split_ex; split_ands; subst; context_map_rewrites;
-          count_occ_list_in1; eauto.
-
-    - unfold msg_filter, clean_messages'.
-      destruct a; simpl.
-      rewrite fold_left_app; simpl.
-      rewrite H.
-      assert (msg_signed_addressed honestk cs to_usr msg = true) as MSA by assumption;
-        unfold msg_signed_addressed in MSA; apply andb_prop in MSA;
-          unfold msg_honestly_signed, msg_signing_key in MSA; split_ands.
-
-      unfold msg_nonce_ok; destruct msg; try discriminate.
-      cases (cs $? c_id); try discriminate.
-      cases (msg_signed_addressed honestk cs to_usr c).
-      + destruct c; simpl; message_cleaning.
-        unfold msg_honestly_signed in H3; simpl in *.
-        cases (cs $? c_id0); try discriminate.
-        cases (count_occ msg_seq_eq froms (cipher_nonce c));
-          rewrite !fold_clean_messages2';
-          process_clean_messages; eauto.
-
-        specialize (H9 H4); process_clean_messages.
-        admit.
-        admit.
-        
-      + rewrite !fold_clean_messages2'.
-          process_clean_messages.
-          admit.
-  Admitted.
-
   Lemma clean_messages_drops_msg_signed_addressed_false :
     forall {t} (msg : crypto t) msgs honestk to_usr froms cs,
         msg_signed_addressed honestk cs to_usr msg = false
@@ -1144,23 +1103,6 @@ Section CleanMessages.
     - rewrite fold_left_app; simpl.
       rewrite H; trivial.
   Qed.
-      
-  (* Lemma clean_messages_drops_msg_signed_addressed_true_msg_nonce_none : *)
-  (*   forall (sigM : { type & crypto type }) msgs froms honestk to_usr cs, *)
-  (*     match sigM with *)
-  (*     | existT _ _ msg =>  *)
-  (*       msg_signed_addressed honestk cs to_usr msg = true *)
-  (*       -> msg_nonce_ok cs froms msg = None *)
-  (*       -> clean_messages honestk cs to_usr froms (msgs ++ [sigM]) *)
-  (*         = clean_messages honestk cs to_usr froms msgs *)
-  (*   end. *)
-  (* Proof. *)
-  (*   unfold clean_messages, clean_messages'; *)
-  (*     induction msgs; intros; destruct sigM; intros; simpl; eauto. *)
-  (*   - rewrite H, H0; trivial. *)
-  (*   - rewrite fold_left_app; simpl. *)
-  (*     rewrite H. *)
-  (* Qed. *)
 
   Lemma clean_messages'_fst :
     forall honestk cs msg_to msgs msg acc froms,
