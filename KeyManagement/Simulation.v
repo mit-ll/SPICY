@@ -7,13 +7,16 @@ From Coq Require Import
 
 Require Import
         MyPrelude
-        AdversaryUniverse
         Maps
         MessageEq
         Common
         MapLtac
         Keys
-        Tactics.
+        Tactics
+        AdversaryUniverse
+        CipherTheory
+        MessagesTheory
+.
 
 Require IdealWorld
         RealWorld.
