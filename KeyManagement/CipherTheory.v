@@ -12,7 +12,8 @@ Require Import
         MapLtac
         Keys
         Automation
-        Tactics.
+        Tactics
+        AdversaryUniverse.
 
 Require IdealWorld
         RealWorld.
@@ -30,11 +31,8 @@ Section CleanCiphers.
 
   Variable honestk : key_perms.
 
-  Definition honest_cipher_filter_fn (c_id : cipher_id) (c : cipher) :=
-    cipher_honestly_signed honestk c.
-
   Lemma honest_cipher_filter_fn_proper :
-    Proper (eq  ==>  eq  ==>  eq) honest_cipher_filter_fn.
+    Proper (eq  ==>  eq  ==>  eq) (honest_cipher_filter_fn honestk).
   Proof.
     solve_proper.
   Qed.
@@ -42,7 +40,7 @@ Section CleanCiphers.
   Lemma honest_cipher_filter_fn_filter_proper :
     Proper
       ( eq  ==>  eq  ==>  Equal  ==>  Equal)
-      (fun (k : NatMap.key) (e : cipher) (m : t cipher) => if honest_cipher_filter_fn k e then m $+ (k, e) else m).
+      (fun (k : NatMap.key) (e : cipher) (m : t cipher) => if honest_cipher_filter_fn honestk k e then m $+ (k, e) else m).
   Proof.
     unfold Proper, respectful;
       unfold Equal; intros; apply map_eq_Equal in H1; subst; auto.
@@ -50,7 +48,7 @@ Section CleanCiphers.
 
   Lemma honest_cipher_filter_fn_filter_transpose :
     transpose_neqkey Equal
-       (fun (k : NatMap.key) (e : cipher) (m : t cipher) => if honest_cipher_filter_fn k e then m $+ (k, e) else m).
+       (fun (k : NatMap.key) (e : cipher) (m : t cipher) => if honest_cipher_filter_fn honestk k e then m $+ (k, e) else m).
   Proof.
     unfold transpose_neqkey, Equal, honest_cipher_filter_fn, cipher_honestly_signed; intros.
     cases e; cases e'; simpl;
@@ -63,14 +61,14 @@ Section CleanCiphers.
   Lemma honest_cipher_filter_fn_filter_proper_eq :
     Proper
       ( eq  ==>  eq  ==>  eq  ==>  eq)
-      (fun (k : NatMap.key) (e : cipher) (m : t cipher) => if honest_cipher_filter_fn k e then m $+ (k, e) else m).
+      (fun (k : NatMap.key) (e : cipher) (m : t cipher) => if honest_cipher_filter_fn honestk k e then m $+ (k, e) else m).
   Proof.
     solve_proper.
   Qed.
 
   Lemma honest_cipher_filter_fn_filter_transpose_eq :
     transpose_neqkey eq
-       (fun (k : NatMap.key) (e : cipher) (m : t cipher) => if honest_cipher_filter_fn k e then m $+ (k, e) else m).
+       (fun (k : NatMap.key) (e : cipher) (m : t cipher) => if honest_cipher_filter_fn honestk k e then m $+ (k, e) else m).
   Proof.
     unfold transpose_neqkey, honest_cipher_filter_fn, cipher_honestly_signed; intros.
     cases e; cases e'; subst; simpl;
@@ -81,9 +79,6 @@ Section CleanCiphers.
         rewrite map_ne_swap; eauto.
   Qed.
 
-  Definition clean_ciphers (cs : ciphers) :=
-    filter honest_cipher_filter_fn cs.
-
   Hint Resolve
        honest_cipher_filter_fn_proper
        honest_cipher_filter_fn_filter_proper
@@ -92,7 +87,7 @@ Section CleanCiphers.
        honest_cipher_filter_fn_filter_transpose_eq.
 
   Lemma clean_ciphers_mapsto_iff : forall cs c_id c,
-      MapsTo c_id c (clean_ciphers cs) <-> MapsTo c_id c cs /\ honest_cipher_filter_fn c_id c = true.
+      MapsTo c_id c (clean_ciphers honestk cs) <-> MapsTo c_id c cs /\ honest_cipher_filter_fn honestk c_id c = true.
   Proof.
     intros.
     apply filter_iff; eauto.
@@ -101,8 +96,8 @@ Section CleanCiphers.
   Lemma clean_ciphers_keeps_honest_cipher :
     forall c_id c cs,
       cs $? c_id = Some c
-      -> honest_cipher_filter_fn c_id c = true
-      -> clean_ciphers cs $? c_id = Some c.
+      -> honest_cipher_filter_fn honestk c_id c = true
+      -> clean_ciphers honestk cs $? c_id = Some c.
   Proof.
     intros.
     rewrite <- find_mapsto_iff.
@@ -114,7 +109,7 @@ Section CleanCiphers.
       cs $? c_id = Some c
       -> k = cipher_signing_key c
       -> honest_key honestk k
-      -> clean_ciphers cs $? c_id = Some c.
+      -> clean_ciphers honestk cs $? c_id = Some c.
   Proof.
     intros.
     eapply clean_ciphers_keeps_honest_cipher; auto.
@@ -136,11 +131,11 @@ Section CleanCiphers.
       cs $? c_id = Some c
       -> honest_keyb honestk k = false
       -> k = cipher_signing_key c
-      -> clean_ciphers cs $? c_id = None.
+      -> clean_ciphers honestk cs $? c_id = None.
   Proof.
     intros; unfold clean_ciphers, filter.
     apply P.fold_rec_bis; intros; eauto.
-    cases (honest_cipher_filter_fn k0 e); eauto.
+    cases (honest_cipher_filter_fn honestk k0 e); eauto.
     cases (c_id ==n k0); subst; eauto.
     exfalso.
     rewrite find_mapsto_iff in H2; rewrite H2 in H; invert H.
@@ -152,9 +147,9 @@ Section CleanCiphers.
 
   Lemma clean_ciphers_keeps_added_honest_cipher :
     forall c_id c cs,
-      honest_cipher_filter_fn c_id c = true
+      honest_cipher_filter_fn honestk c_id c = true
       -> ~ In c_id cs
-      -> clean_ciphers (cs $+ (c_id,c)) = clean_ciphers cs $+ (c_id,c).
+      -> clean_ciphers honestk (cs $+ (c_id,c)) = clean_ciphers honestk cs $+ (c_id,c).
   Proof.
     intros.
     apply map_eq_Equal; unfold Equal; intros.
@@ -167,9 +162,9 @@ Section CleanCiphers.
     forall c_id c cs k,
       cs $? c_id = Some c
       -> cipher_signing_key c = k
-      -> ( clean_ciphers  cs $? c_id = Some c
+      -> ( clean_ciphers  honestk cs $? c_id = Some c
         /\ honest_keyb honestk k = true)
-      \/ ( clean_ciphers cs $? c_id = None
+      \/ ( clean_ciphers honestk cs $? c_id = None
         /\ honest_keyb honestk k = false).
   Proof.
     intros.
@@ -183,12 +178,12 @@ Section CleanCiphers.
   Lemma clean_ciphers_no_new_ciphers :
     forall c_id cs,
       cs $? c_id = None
-      -> clean_ciphers cs $? c_id = None.
+      -> clean_ciphers honestk cs $? c_id = None.
   Proof.
     intros.
     unfold clean_ciphers, filter.
     apply P.fold_rec_bis; intros; eauto.
-    cases (honest_cipher_filter_fn k e); eauto.
+    cases (honest_cipher_filter_fn honestk k e); eauto.
     - case (c_id ==n k); intro; subst; unfold honest_cipher_filter_fn.
       + rewrite find_mapsto_iff in H0; rewrite H0 in H; invert H.
       + rewrite add_neq_o; eauto.
@@ -201,7 +196,7 @@ Section CleanCiphers.
       cs $? c_id = None
       -> honest_keyb honestk k = false
       -> k = cipher_signing_key c
-      -> clean_ciphers cs = clean_ciphers (cs $+ (c_id,c)).
+      -> clean_ciphers honestk cs = clean_ciphers honestk (cs $+ (c_id,c)).
   Proof.
     intros.
     apply map_eq_Equal; unfold Equal; intros.
@@ -218,7 +213,7 @@ Section CleanCiphers.
   Lemma not_in_ciphers_not_in_cleaned_ciphers :
     forall c_id cs,
       ~ In c_id cs
-      -> ~ In c_id (clean_ciphers cs).
+      -> ~ In c_id (clean_ciphers honestk cs).
   Proof.
     intros.
     rewrite not_find_in_iff in H.
@@ -232,7 +227,7 @@ Section CleanCiphers.
       cipher_signing_key cipherMsg = k
       -> honest_keyb honestk k = false
       -> ~ In c_id cs
-      -> clean_ciphers cs = clean_ciphers (cs $+ (c_id, cipherMsg)).
+      -> clean_ciphers honestk cs = clean_ciphers honestk (cs $+ (c_id, cipherMsg)).
   Proof.
     intros.
     apply map_eq_Equal; unfold Equal; intros.
@@ -248,13 +243,13 @@ Section CleanCiphers.
 
   Hint Resolve dishonest_cipher_cleaned.
 
-  Hint Extern 1 (honest_cipher_filter_fn _ ?c = _) => unfold honest_cipher_filter_fn; cases c.
+  Hint Extern 1 (honest_cipher_filter_fn _ _ ?c = _) => unfold honest_cipher_filter_fn; cases c.
 
   Lemma clean_ciphers_added_honest_cipher_not_cleaned :
     forall cs c_id c k,
         honest_key honestk k
       -> k = cipher_signing_key c
-      -> clean_ciphers (cs $+ (c_id,c)) = clean_ciphers cs $+ (c_id,c).
+      -> clean_ciphers honestk (cs $+ (c_id,c)) = clean_ciphers honestk cs $+ (c_id,c).
   Proof.
     intros.
     apply map_eq_Equal; unfold Equal; intros.
@@ -264,7 +259,7 @@ Section CleanCiphers.
       invert H; unfold honest_cipher_filter_fn; eauto.
       unfold cipher_honestly_signed, honest_keyb;
         cases c; simpl in *; context_map_rewrites; auto; invert H0; rewrite H1; trivial.
-    - case_eq (clean_ciphers cs $? y); intros; subst;
+    - case_eq (clean_ciphers honestk cs $? y); intros; subst;
         cases (cs $? y); subst; eauto.
         * assert (cs $? y = Some c1) as CSY by assumption;
             eapply clean_ciphers_reduces_or_keeps_same_ciphers in CSY; eauto;
@@ -280,7 +275,7 @@ Section CleanCiphers.
   Lemma clean_ciphers_idempotent :
     forall cs,
       ciphers_honestly_signed honestk cs
-      -> clean_ciphers cs = cs.
+      -> clean_ciphers honestk cs = cs.
   Proof.
     unfold clean_ciphers, filter, ciphers_honestly_signed; intros.
     apply P.fold_rec_bis; intros; Equal_eq; subst; eauto.
@@ -293,7 +288,7 @@ Section CleanCiphers.
 
   Lemma clean_ciphers_honestly_signed :
     forall cs,
-      ciphers_honestly_signed honestk (clean_ciphers cs).
+      ciphers_honestly_signed honestk (clean_ciphers honestk cs).
   Proof.
     unfold ciphers_honestly_signed; intros.
     rewrite Forall_natmap_forall; intros.

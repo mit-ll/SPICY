@@ -14,12 +14,13 @@ Require Import
         Automation
         Tactics
         RealWorld
-        CipherTheory
+        AdversaryUniverse
+        KeysTheory
         MessagesTheory
-        KeysTheory.
+        CipherTheory
+.
 
 Set Implicit Arguments.
-
 
 (******************** USER CLEANING ***********************
  **********************************************************
@@ -28,18 +29,8 @@ Set Implicit Arguments.
  *)
 
 Section CleanUsers.
-  Import RealWorld.
 
   Variable honestk : key_perms.
-
-  Definition clean_users {A} (cs : ciphers) (usrs : honest_users A) :=
-    mapi (fun u_id u_d => {| key_heap  := clean_key_permissions honestk u_d.(key_heap)
-                        ; protocol  := u_d.(protocol)
-                        ; msg_heap  := clean_messages honestk cs (Some u_id) u_d.(from_nons) u_d.(msg_heap)
-                        ; c_heap    := u_d.(c_heap)
-                        ; from_nons := u_d.(from_nons)
-                        ; sent_nons := u_d.(sent_nons)
-                        ; cur_nonce := u_d.(cur_nonce) |}) usrs.
 
   Lemma clean_users_notation :
     forall {A} (cs : ciphers) (usrs : honest_users A),
@@ -49,7 +40,7 @@ Section CleanUsers.
                           ; c_heap   := u_d.(c_heap)
                           ; from_nons := u_d.(from_nons)
                           ; sent_nons := u_d.(sent_nons)
-                          ; cur_nonce := u_d.(cur_nonce) |}) usrs = clean_users cs usrs.
+                          ; cur_nonce := u_d.(cur_nonce) |}) usrs = clean_users honestk cs usrs.
   Proof. unfold clean_users; trivial. Qed.
 
   Lemma clean_users_cleans_user :
@@ -62,7 +53,7 @@ Section CleanUsers.
                 ; from_nons := u_d.(from_nons)
                 ; sent_nons := u_d.(sent_nons)
                 ; cur_nonce := u_d.(cur_nonce) |}
-      -> clean_users cs usrs $? u_id = Some u_d'.
+      -> clean_users honestk cs usrs $? u_id = Some u_d'.
   Proof.
     intros.
     unfold clean_users; rewrite mapi_o; intros; subst; unfold option_map;
@@ -71,7 +62,7 @@ Section CleanUsers.
 
   Lemma clean_users_cleans_user_inv :
     forall {A} (cs : ciphers) (usrs : honest_users A) u_id u_d,
-      clean_users cs usrs $? u_id = Some u_d
+      clean_users honestk cs usrs $? u_id = Some u_d
       -> exists msgs perms,
         usrs $? u_id = Some {| key_heap := perms
                              ; protocol := u_d.(protocol)
@@ -93,8 +84,8 @@ Section CleanUsers.
 
   Lemma clean_users_add_pull :
     forall {A} (cs : ciphers) (usrs : honest_users A) u_id u,
-      clean_users cs (usrs $+ (u_id,u))
-      = clean_users cs usrs $+ (u_id, {| key_heap := clean_key_permissions honestk u.(key_heap)
+      clean_users honestk cs (usrs $+ (u_id,u))
+      = clean_users honestk cs usrs $+ (u_id, {| key_heap := clean_key_permissions honestk u.(key_heap)
                                        ; protocol := u.(protocol)
                                        ; msg_heap := clean_messages honestk cs (Some u_id) u.(from_nons) u.(msg_heap)
                                        ; c_heap   := u.(c_heap)
@@ -111,7 +102,7 @@ Section CleanUsers.
   Lemma clean_users_adds_no_users :
     forall {A} (cs : ciphers) (usrs : honest_users A) u_id,
       usrs $? u_id = None
-      -> clean_users cs usrs $? u_id = None.
+      -> clean_users honestk cs usrs $? u_id = None.
   Proof.
     unfold clean_users; intros.
     rewrite mapi_o; intros; subst; eauto.

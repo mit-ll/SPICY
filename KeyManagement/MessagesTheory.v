@@ -14,72 +14,55 @@ Require Import
         Automation
         Tactics
         RealWorld
+        AdversaryUniverse
         CipherTheory.
 
 Set Implicit Arguments.
 
-(******************** MESSAGE CLEANING ********************
- **********************************************************
- *
- * Function to clean messages and lemmas about it.
- *)
+Lemma accepted_safe_msg_pattern_msg_filter_true :
+  forall {t} (msg : RealWorld.crypto t) honestk cs msg_to pat,
+    RealWorld.msg_pattern_safe honestk pat
+    -> RealWorld.msg_accepted_by_pattern cs msg_to pat msg
+    -> RealWorld.msg_honestly_signed honestk cs msg = true
+    /\ RealWorld.msg_to_this_user cs msg_to msg = true.
+Proof.
+  intros.
+  destruct msg;
+    repeat match goal with
+           | [ H : RealWorld.msg_pattern_safe _ _ |- _] => invert H
+           | [ H : RealWorld.msg_accepted_by_pattern _ _ _ _ |- _] => invert H
+           end;
+    unfold RealWorld.msg_honestly_signed, RealWorld.msg_to_this_user;
+    simpl; context_map_rewrites; unfold RealWorld.cipher_to_user;
+      destruct (msg_to0 ==n msg_to0); subst; try contradiction;
+      rewrite <- RealWorld.honest_key_honest_keyb; auto.
+Qed.
+
+Lemma accepted_safe_msg_pattern_honestly_signed :
+  forall {t} (msg : RealWorld.crypto t) honestk cs msg_to pat,
+    RealWorld.msg_pattern_safe honestk pat
+    -> RealWorld.msg_accepted_by_pattern cs msg_to pat msg
+    -> RealWorld.msg_honestly_signed honestk cs msg = true.
+Proof.
+  intros;
+    pose proof (accepted_safe_msg_pattern_msg_filter_true H H0); split_ands; assumption.
+Qed.
+
+Lemma accepted_safe_msg_pattern_to_this_user :
+  forall {t} (msg : RealWorld.crypto t) honestk cs msg_to pat,
+    RealWorld.msg_pattern_safe honestk pat
+    -> RealWorld.msg_accepted_by_pattern cs msg_to pat msg
+    -> RealWorld.msg_to_this_user cs msg_to msg = true.
+Proof.
+  intros;
+    pose proof (accepted_safe_msg_pattern_msg_filter_true H H0); split_ands; assumption.
+Qed.
+
+Hint Resolve
+     accepted_safe_msg_pattern_honestly_signed
+     accepted_safe_msg_pattern_to_this_user.
 
 Section CleanMessages.
-  Import RealWorld.
-
-  Section CleanMessagesImpl.
-    Variable honestk : key_perms.
-    Variable cs : ciphers.
-    (* Variable msgs : queued_messages. *)
-
-    Definition msg_nonce_ok {t} (froms : recv_nonces) (msg : crypto t) : option recv_nonces :=
-      match msg with
-      | Content _ => Some froms
-      | SignedCiphertext c_id =>
-        match cs $? c_id with
-        | None => None
-        | Some c =>
-          match count_occ msg_seq_eq froms (cipher_nonce c) with
-          | 0 => Some (cipher_nonce c :: froms)
-          | _ => None
-          (* let msg_nonce := cipher_nonce c in *)
-          (* let msg_kid   := cipher_signing_key c *)
-          (* in  match froms $? msg_kid with *)
-          (*     | None => Some (froms $+ (msg_kid, msg_nonce)) *)
-          (*     | Some froms_nonce => if msg_nonce <=? froms_nonce then None else Some (froms $+ (msg_kid,msg_nonce)) *)
-          (*     end *)
-          end
-        end
-      end.
-
-    (* Definition msg_signed_addressed (to_user_id : option user_id) {t} (msg : crypto t) := *)
-    (*   msg_honestly_signed honestk cs msg && msg_to_this_user cs to_user_id msg. *)
-
-    Definition msg_filter
-               (to_user_id : option user_id) 
-               (fld_param : queued_messages * recv_nonces)
-               (sigM : { t & crypto t } ) : queued_messages * recv_nonces :=
-      match sigM with
-      | existT _ _ msg =>
-        if msg_signed_addressed honestk cs to_user_id msg
-        then match msg_nonce_ok (snd fld_param) msg with
-             | None => fld_param
-             | Some froms => (fst fld_param ++ [sigM], froms)
-             end
-        else fld_param
-      end.
-
-    Definition clean_messages' (to_usr_id : option user_id) (froms : recv_nonces) (acc msgs : queued_messages) :=
-      List.fold_left (msg_filter to_usr_id) msgs (acc, froms).
-
-    Definition clean_messages (to_usr_id : option user_id) (froms : recv_nonces) (msgs : queued_messages) :=
-      fst (clean_messages' to_usr_id froms [] msgs).
-
-    (* Definition nonce_absent_or_gt (froms : recv_nonces) (k_id : key_identifier) (nonce : nat) :=  *)
-    (*   froms $? k_id = None *)
-    (*   \/ (exists n, froms $? k_id = Some n /\ n < nonce). *)
-
-  End CleanMessagesImpl.
 
   Lemma msg_honestly_signed_after_without_cleaning :
     forall {t} (msg : crypto t) honestk cs,

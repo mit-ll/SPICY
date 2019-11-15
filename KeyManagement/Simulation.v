@@ -2,7 +2,6 @@ From Coq Require Import
      List
      Morphisms
      Eqdep
-     Program.Equality (* for dependent induction *)
 .
 
 Require Import
@@ -15,7 +14,6 @@ Require Import
         Tactics
         AdversaryUniverse
         CipherTheory
-        MessagesTheory
 .
 
 Require IdealWorld
