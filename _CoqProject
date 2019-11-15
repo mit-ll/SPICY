@@ -6,6 +6,7 @@ KeyManagement/CipherTheory.v
 KeyManagement/MessagesTheory.v
 KeyManagement/KeysTheory.v
 KeyManagement/UsersTheory.v
+KeyManagement/InvariantsTheory.v
 KeyManagement/Common.v
 KeyManagement/MyPrelude.v
 KeyManagement/Maps.v

@@ -11,8 +11,6 @@ Require Import
         Common
         MapLtac
         Keys
-        Automation
-        Tactics
         RealWorld
 .
 
