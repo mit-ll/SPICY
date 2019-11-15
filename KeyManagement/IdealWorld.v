@@ -29,6 +29,7 @@ End IW_message.
 
 Module message := Messages(IW_message).
 Import message.
+Export message.
 
 (* shouldn't this be just Permissions ? *)
 Definition channels := NatMap.t (list (sigT message)).

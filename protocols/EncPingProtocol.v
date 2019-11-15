@@ -7,7 +7,7 @@ Require Import MyPrelude.
 Module Foo <: EMPTY. End Foo.
 Module Import SN := SetNotations(Foo).
 
-Require Import Common Maps Keys Simulation MapLtac Tactics Automation AdversaryUniverse ProtocolAutomation.
+Require Import Common Maps Keys Messages Simulation MapLtac Tactics Automation AdversaryUniverse ProtocolAutomation.
 
 Require IdealWorld RealWorld.
 
@@ -39,7 +39,7 @@ Section IdealProtocol.
     |}.
 
   Definition ideal_univ_start :=
-    mkiU ($0 $+ (CH__A2B, { }) $+ (CH__B2A, { }))
+    mkiU ($0 $+ (CH__A2B, []) $+ (CH__B2A, []))
          ( n <- Gen
          ; _ <- Send (Content n) CH__A2B
          ; m <- @Recv Nat CH__B2A
@@ -52,7 +52,7 @@ Section IdealProtocol.
          ; Return true).
 
   Definition ideal_univ_sent1 n :=
-    mkiU ($0 $+ (CH__A2B, {Exm (Content n)}) $+ (CH__B2A, { }))
+    mkiU ($0 $+ (CH__A2B, [existT _ _ (Content n)]) $+ (CH__B2A, []))
          ( _ <- Return tt
          ; m <- @Recv Nat CH__B2A
          ; Return match extractContent m with
@@ -64,7 +64,7 @@ Section IdealProtocol.
          ; Return true).
 
   Definition ideal_univ_recd1 n :=
-    mkiU ($0 $+ (CH__A2B, {Exm (Content n)}) $+ (CH__B2A, { }))
+    mkiU ($0 $+ (CH__A2B, []) $+ (CH__B2A, []))
          ( m <- @Recv Nat CH__B2A
          ; Return match extractContent m with
                   | None =>    false
@@ -75,7 +75,7 @@ Section IdealProtocol.
          ; Return true).
 
   Definition ideal_univ_sent2 n :=
-    mkiU ($0 $+ (CH__A2B, {Exm (Content n)}) $+ (CH__B2A, {Exm (Content n)}))
+    mkiU ($0 $+ (CH__A2B, []) $+ (CH__B2A, [existT _ _ (Content n)]))
          ( m <- @Recv Nat CH__B2A
          ; Return match extractContent m with
                   | None =>    false
@@ -85,7 +85,7 @@ Section IdealProtocol.
          ; Return true).
 
   Definition ideal_univ_recd2 n :=
-    mkiU ($0 $+ (CH__A2B, {Exm (Content n)}) $+ (CH__B2A, {Exm (Content n)}))
+    mkiU ($0 $+ (CH__A2B, []) $+ (CH__B2A, []))
          ( m <- Return (Content n)
          ; Return match extractContent m with
                   | None =>    false
@@ -93,8 +93,8 @@ Section IdealProtocol.
                   end)
          (Return true).
 
-  Definition ideal_univ_done n :=
-    mkiU ($0 $+ (CH__A2B, {Exm (Content n)}) $+ (CH__B2A, {Exm (Content n)}))
+  Definition ideal_univ_done :=
+    mkiU ($0 $+ (CH__A2B, []) $+ (CH__B2A, []))
          (Return true)
          (Return true).
 
@@ -130,82 +130,91 @@ Section RealProtocol.
   Definition real_univ_start cs mycs1 mycs2 :=
     mkrU  mycs1 mycs2 [] [] cs
          ( n  <- Gen
-         ; m  <- Sign KID1 (Plaintext n)
-         ; _  <- Send B m
-         ; m' <- @Recv Nat (Signed KID2)
-         ; Return match unSig m' with
-                  | Some (Plaintext n') => if n ==n n' then true else false (* also do verify? *)
+         ; c  <- Sign KID1 (message.Content n)
+         ; _  <- Send B c
+         ; c' <- @Recv Nat (Signed KID2)
+         ; v <- Verify KID2 c'
+         ; Return match snd v with
+                  | message.Content n' => if n ==n n' then fst v else false
                   | _       => false
                   end)
 
-         ( m  <- @Recv Nat (Signed KID1)
-         ; v  <- Verify KID1 m
-         ; m' <- match unSig m with
-                | Some p => Sign KID2 p
-                | _      => Sign KID2 (Plaintext 1)
+         ( c  <- @Recv Nat (Signed KID1)
+         ; v  <- Verify KID1 c
+         ; c' <- match snd v with
+                | message.Content p => Sign KID2 (message.Content p)
+                | _                 => Sign KID2 (message.Content 1)
                 end
-         ; _  <- Send A m'
-         ; Return v).
+         ; _  <- Send A c'
+         ; Return (fst v)).
 
   Definition real_univ_sent1 n cs mycs1 mycs2 cid1 :=
-    mkrU  mycs1 mycs2 [] [existT _ _ (Signature (Plaintext n) KID1 cid1)]
-         (cs $+ (cid1, SigCipher KID1 (Plaintext n)))
+    mkrU  mycs1 mycs2 [] [existT _ Nat (SignedCiphertext cid1)]
+         (cs $+ (cid1, SigCipher KID1 (message.Content n)))
          ( _  <- Return tt
-         ; m' <- @Recv Nat (Signed KID2)
-         ; Return match unSig m' with
-                  | Some (Plaintext n') => if n ==n n' then true else false (* also do verify? *)
+         ; c' <- @Recv Nat (Signed KID2)
+         ; v <- Verify KID2 c'
+         ; Return match snd v with
+                  | message.Content n' => if n ==n n' then fst v else false
                   | _       => false
                   end)
-         ( m  <- @Recv Nat (Signed KID1)
-         ; v  <- Verify KID1 m
-         ; m' <- match unSig m with
-                | Some p => Sign KID2 p
-                | _      => Sign KID2 (Plaintext 1)
+
+         ( c  <- @Recv Nat (Signed KID1)
+         ; v  <- Verify KID1 c
+         ; c' <- match snd v with
+                | message.Content p => Sign KID2 (message.Content p)
+                | _                 => Sign KID2 (message.Content 1)
                 end
-         ; _  <- Send A m'
-         ; Return v).
+         ; _  <- Send A c'
+         ; Return (fst v)).
 
   Definition real_univ_recd1 n cs mycs1 mycs2 cid1 :=
     mkrU mycs1 mycs2 [] []
-         (cs $+ (cid1, SigCipher KID1 (Plaintext n)))
+         (cs $+ (cid1, SigCipher KID1 (message.Content n)))
          ( _  <- Return tt
-         ; m' <- @Recv Nat (Signed KID2)
-         ; Return match unSig m' with
-                  | Some (Plaintext n') => if n ==n n' then true else false (* also do verify? *)
+         ; c' <- @Recv Nat (Signed KID2)
+         ; v <- Verify KID2 c'
+         ; Return match snd v with
+                  | message.Content n' => if n ==n n' then fst v else false
                   | _       => false
                   end)
 
-         ( m  <- Return (Signature (Plaintext n) KID1 cid1)
-         ; v  <- Verify KID1 m
-         ; m' <- match unSig m with
-                | Some p => Sign KID2 p
-                | _      => Sign KID2 (Plaintext 1)
+         ( c  <- Return (SignedCiphertext cid1)
+         ; v  <- @Verify Nat KID1 c
+         ; c' <- match snd v with
+                | message.Content p => Sign KID2 (message.Content p)
+                | _                 => Sign KID2 (message.Content 1)
                 end
-         ; _  <- Send A m'
-         ; Return v).
-
+         ; _  <- Send A c'
+         ; Return (fst v)).
+  
   Definition real_univ_sent2 n cs mycs1 mycs2 cid1 cid2 :=
-    mkrU mycs1 mycs2 [existT _ _ (Signature (Plaintext n) KID2 cid2)] []
-         (cs $+ (cid1, SigCipher KID1 (Plaintext n)) $+ (cid2, SigCipher KID2 (Plaintext n)))
+    mkrU mycs1 mycs2 [existT _ Nat (SignedCiphertext cid2)] []
+         (cs $+ (cid1, SigCipher KID1 (message.Content n)) $+ (cid2, SigCipher KID2 (message.Content n)))
          ( _  <- Return tt
-         ; m' <- @Recv Nat (Signed KID2)
-         ; Return match unSig m' with
-                  | Some (Plaintext n') => if n ==n n' then true else false (* also do verify? *)
+         ; c' <- @Recv Nat (Signed KID2)
+         ; v <- Verify KID2 c'
+         ; Return match snd v with
+                  | message.Content n' => if n ==n n' then fst v else false
                   | _       => false
                   end)
 
-         ( _  <- Return tt ; Return true).
+         ( _  <- Return tt
+         ; Return true).
 
   Definition real_univ_recd2 n cs mycs1 mycs2 cid1 cid2 :=
-    mkrU mycs1 mycs2 [] [] (cs $+ (cid1, SigCipher KID1 (Plaintext n)) $+ (cid2, SigCipher KID2 (Plaintext n)))
-         ( m' <- Return (Signature (Plaintext n) KID2 cid2)
-         ; Return match unSig m' with
-                  | Some (Plaintext n') => if n ==n n' then true else false (* also do verify? *)
+    mkrU mycs1 mycs2 [] []
+         (cs $+ (cid1, SigCipher KID1 (message.Content n)) $+ (cid2, SigCipher KID2 (message.Content n)))
+         ( c' <- Return (SignedCiphertext cid2)
+         ; v <- @Verify Nat KID2 c'
+         ; Return match snd v with
+                  | message.Content n' => if n ==n n' then fst v else false
                   | _       => false
                   end)
 
-         ( _  <- Return tt ; Return true).
-
+         ( _  <- Return tt
+           ; Return true).
+  
   Definition real_univ_done mycs1 mycs2 cs :=
     mkrU mycs1 mycs2 [] [] cs (Return true) (Return true).
 
@@ -235,10 +244,10 @@ Section RealProtocol.
       -> lameAdv tt adv
       -> RPingPongBase (peel_adv U__r) (ideal_univ_recd2 n)
 
-  | Done : forall U__r cs mycs1 mycs2 n adv,
+  | Done : forall U__r cs mycs1 mycs2 adv,
       lameAdv tt adv
       -> U__r = real_univ_done cs mycs1 mycs2 adv
-      -> RPingPongBase (peel_adv U__r) (ideal_univ_done n)
+      -> RPingPongBase (peel_adv U__r) ideal_univ_done
   .
 
 End RealProtocol.
@@ -253,16 +262,21 @@ progress(unfold real_univ_start, real_univ_sent1, real_univ_recd1,
                 real_univ_sent2, real_univ_recd2, real_univ_done, mkrU; simpl).
 Hint Extern 1 (RPingPongBase (RealWorld.buildUniverse _ _ _ _ _) _) => unfold RealWorld.buildUniverse; simpl.
 
-Hint Extern 1 (IdealWorld.lstep_universe _ _ _) =>
+Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
 progress(unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1,
-                ideal_univ_sent2, ideal_univ_recd2, ideal_univ_done, mkiU; simpl).
+         ideal_univ_sent2, ideal_univ_recd2, ideal_univ_done, mkiU; simpl).
 
+Hint Extern 1 (IdealWorld.lstep_universe _ _ _) => single_step_ideal_universe; eauto 2; econstructor.
+
+Hint Extern 1 (KEYS $? _ = _) => unfold KEYS, A__keys, B__keys, KEY1, KEY2, KID1, KID2.
 Hint Extern 1 (A__keys $? _ = _) => unfold A__keys, B__keys, KEY1, KEY2, KID1, KID2.
 Hint Extern 1 (B__keys $? _ = _) => unfold A__keys, B__keys, KEY1, KEY2, KID1, KID2.
 Hint Extern 1 (PERMS__a $? _ = _) => unfold PERMS__a.
 Hint Extern 1 (PERMS__b $? _ = _) => unfold PERMS__b.
 
 Section FeebleSimulates.
+
+  Hint Extern 1 (istepSilent ^* _ _) => repeat (ideal_single_silent_multistep A); repeat (ideal_single_silent_multistep B); solve_refl.
 
   Lemma rpingbase_silent_simulates :
     simulates_silent_step (lameAdv tt) RPingPongBase.
@@ -276,13 +290,14 @@ Section FeebleSimulates.
         churn; simpl_real_users_context;
         [> eexists; split; swap 1 2; eauto 9 ..]
       ).
+
   Qed.
 
   Lemma rpingbase_loud_simulates :
     simulates_labeled_step (lameAdv tt) RPingPongBase.
   Proof.
     unfold simulates_labeled_step.
-
+ 
     time
       (intros;
        invert H;
@@ -292,10 +307,9 @@ Section FeebleSimulates.
        (* autorewrite with simpl_univ; *)
        (* simpl; *)
        (do 3 eexists;
-        repeat
-          match goal with
-          | [ |- _ /\ _ ] => split
-          end; swap 3 4; swap 1 3; [ .. | admit (* action matches predicate *)];
+        repeat (apply conj);
+        swap 3 4; swap 2 3; swap 1 2; [ .. | admit (* action matches predicate *)];
+        simpl; clean_map_lookups;
         eauto; eauto 12)).
 
   Admitted.

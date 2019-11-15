@@ -2,18 +2,19 @@ From Coq Require Import
      List
      Morphisms
      Eqdep
-     Program.Equality (* for dependent induction *)
 .
 
 Require Import
         MyPrelude
-        AdversaryUniverse
         Maps
         MessageEq
         Common
         MapLtac
         Keys
-        Tactics.
+        Tactics
+        AdversaryUniverse
+        CipherTheory
+.
 
 Require IdealWorld
         RealWorld.
@@ -50,18 +51,29 @@ Inductive chan_key : Set :=
 Inductive action_matches : forall {A B : Type},
                            RealWorld.action -> RealWorld.universe A B ->
                            IdealWorld.action -> IdealWorld.universe A -> Prop :=
-| Inp : forall A B t__r t__i (m__rw : RealWorld.crypto t__r) (m__iw m__expected : IdealWorld.message.message t__i)
-               ms (U__rw : RealWorld.universe A B) (U__iw : IdealWorld.universe A) rw iw ch_id cs ps p y,
-      rw = (RealWorld.Input m__rw p y)
+(* <<<<<<< HEAD *)
+(* | Inp : forall A B t__r t__i (m__rw : RealWorld.crypto t__r) (m__iw m__expected : IdealWorld.message.message t__i) *)
+(*                ms (U__rw : RealWorld.universe A B) (U__iw : IdealWorld.universe A) rw iw ch_id cs ps p froms, *)
+(*       rw = (RealWorld.Input m__rw p froms) *)
+(* ======= *)
+| Inp : forall A B t (m__rw : RealWorld.crypto t) (m__iw m__expected : IdealWorld.message.message t)
+               ms (U__rw : RealWorld.universe A B) (U__iw : IdealWorld.universe A) rw iw ch_id cs ps p froms,
+      rw = (RealWorld.Input m__rw p froms)
+(* >>>>>>> issue037-build_message_eq_predicatea *)
       -> iw = IdealWorld.Input m__iw ch_id cs ps
       -> U__iw.(IdealWorld.channel_vector) $? ch_id = Some ((existT _ _ m__expected) :: ms)
-      -> MessageEq.message_eq m__rw U__rw m__iw U__iw m__expected ch_id {} {}
+      -> MessageEq.message_eq m__rw U__rw m__iw U__iw ch_id
       -> action_matches rw U__rw iw U__iw
-| Out : forall A B t__r t__i (m__rw : RealWorld.crypto t__r) (m__iw m__expected : IdealWorld.message.message t__i) ms (U__rw : RealWorld.universe A B) (U__iw : IdealWorld.universe A) rw iw ch_id cs ps,
-    rw = RealWorld.Output m__rw
+(* <<<<<<< HEAD *)
+(* | Out : forall A B t__r t__i (m__rw : RealWorld.crypto t__r) (m__iw m__expected : IdealWorld.message.message t__i) ms (U__rw : RealWorld.universe A B) (U__iw : IdealWorld.universe A) rw iw ch_id cs ps suid_to suid_from sents, *)
+(*     rw = RealWorld.Output m__rw suid_to suid_from sents *)
+(* ======= *)
+| Out : forall A B t (m__rw : RealWorld.crypto t) (m__iw m__expected : IdealWorld.message.message t) ms (U__rw : RealWorld.universe A B) (U__iw : IdealWorld.universe A) rw iw ch_id cs ps suid_to suid_from sents,
+    rw = RealWorld.Output m__rw suid_to suid_from sents
+(* >>>>>>> issue037-build_message_eq_predicatea *)
     -> iw = IdealWorld.Output m__iw ch_id cs ps
     -> U__iw.(IdealWorld.channel_vector) $? ch_id = Some (ms ++ [existT _ _ m__expected])
-    -> MessageEq.message_eq m__rw U__rw m__iw U__iw m__expected ch_id {} {}
+    -> MessageEq.message_eq m__rw U__rw m__iw U__iw ch_id
     -> action_matches rw U__rw iw U__iw
 .
 
@@ -96,35 +108,50 @@ Section RealWorldUniverseProperties.
     Forall_natmap
       (fun u => user_cipher_queue_ok cs honestk u.(c_heap)) usrs.
 
-  Definition adv_cipher_queue_ok (cs : ciphers) :=
-    Forall (fun cid => exists c, cs $? cid = Some c).
+  Definition adv_cipher_queue_ok {A} (cs : ciphers) (usrs : honest_users A) :=
+    Forall (fun cid => exists new_cipher,
+                cs $? cid = Some new_cipher
+                /\ ( (fst (cipher_nonce new_cipher) = None /\ cipher_honestly_signed (findUserKeys usrs) new_cipher = false)
+                  \/ exists u_id u rec_u,
+                      fst (cipher_nonce new_cipher) = Some u_id
+                      /\ usrs $? u_id = Some u
+                      /\ u_id <> cipher_to_user new_cipher
+                      /\ List.In (cipher_nonce new_cipher) u.(sent_nons)
+                      /\ usrs $? cipher_to_user new_cipher = Some rec_u
+                      /\ ( List.In (cipher_nonce new_cipher) rec_u.(from_nons)
+                        \/ Exists (fun sigM => match sigM with
+                                           | existT _ _ m =>
+                                             msg_signed_addressed (findUserKeys usrs) cs (Some (cipher_to_user new_cipher)) m = true
+                                           /\ msg_nonce_same new_cipher cs m
+                                           end) rec_u.(msg_heap)))
+           ).
 
   Inductive encrypted_cipher_ok (cs : ciphers) (gks : keys): cipher -> Prop :=
-  | SigCipherHonestOk : forall {t} (msg : message t) k k_data,
+  | SigCipherHonestOk : forall {t} (msg : message t) msg_to nonce k k_data,
       honestk $? k = Some true
       -> gks $? k = Some k_data
       -> (forall k_id, findKeysMessage msg $? k_id = Some true -> False)
       -> (forall k_id, findKeysMessage msg $? k_id = Some false -> honestk $? k_id = Some true)
-      -> encrypted_cipher_ok cs gks (SigCipher k msg)
-  | SigCipherNotHonestOk : forall {t} (msg : message t) k k_data,
+      -> encrypted_cipher_ok cs gks (SigCipher k msg_to nonce msg)
+  | SigCipherNotHonestOk : forall {t} (msg : message t) msg_to nonce k k_data,
       honestk $? k <> Some true
       -> gks $? k = Some k_data
-      -> encrypted_cipher_ok cs gks (SigCipher k msg)
-  | SigEncCipherAdvSignedOk :  forall {t} (msg : message t) k__s k__e k_data__s k_data__e,
+      -> encrypted_cipher_ok cs gks (SigCipher k msg_to nonce msg)
+  | SigEncCipherAdvSignedOk :  forall {t} (msg : message t) msg_to nonce k__s k__e k_data__s k_data__e,
       honestk $? k__s <> Some true
       -> gks $? k__s = Some k_data__s
       -> gks $? k__e = Some k_data__e
       -> (forall k kp, findKeysMessage msg $? k = Some kp
                  -> exists v, gks $? k = Some v
                       /\ (kp = true -> honestk $? k <> Some true))
-      -> encrypted_cipher_ok cs gks (SigEncCipher k__s k__e msg)
-  | SigEncCipherHonestSignedEncKeyHonestOk : forall {t} (msg : message t) k__s k__e k_data__s k_data__e,
+      -> encrypted_cipher_ok cs gks (SigEncCipher k__s k__e msg_to nonce msg)
+  | SigEncCipherHonestSignedEncKeyHonestOk : forall {t} (msg : message t) msg_to nonce k__s k__e k_data__s k_data__e,
       honestk $? k__s = Some true
       -> honestk $? k__e = Some true
       -> gks $? k__s = Some k_data__s
       -> gks $? k__e = Some k_data__e
       -> (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true /\ kp = false)
-      -> encrypted_cipher_ok cs gks (SigEncCipher k__s k__e msg).
+      -> encrypted_cipher_ok cs gks (SigEncCipher k__s k__e msg_to nonce msg).
 
   Definition encrypted_ciphers_ok (cs : ciphers) (gks : keys) :=
     Forall_natmap (encrypted_cipher_ok cs gks) cs.
@@ -134,14 +161,33 @@ Section RealWorldUniverseProperties.
 
   Hint Unfold message_no_adv_private.
 
-  Definition adv_message_queue_ok (honestk : key_perms) (cs : ciphers) (gks : keys) (msgs : queued_messages) :=
+  Definition adv_message_queue_ok {A} (usrs : honest_users A)
+             (cs : ciphers) (gks : keys) (msgs : queued_messages) :=
     Forall (fun sigm => match sigm with
                      | (existT _ _ m) =>
                        (forall cid, msg_cipher_id m = Some cid -> cs $? cid <> None)
                      /\ (forall k kp,
                            findKeysCrypto cs m $? k = Some kp
-                           -> gks $? k <> None /\ (kp = true /\ honestk $? k <> Some true))
-                     /\ (forall c_id, List.In c_id (findCiphers m) -> exists c, cs $? c_id = Some c)
+                           -> gks $? k <> None /\ (kp = true -> (findUserKeys usrs) $? k <> Some true))
+                     /\ (forall k,
+                           msg_signing_key cs m = Some k
+                           -> gks $? k <> None)
+                     /\ (forall c_id, List.In c_id (findCiphers m)
+                                -> exists c, cs $? c_id = Some c
+                                     /\ ( ( fst (cipher_nonce c) = None /\ cipher_honestly_signed (findUserKeys usrs) c = false )
+                                       \/ exists uid u rec_u,
+                                           fst (cipher_nonce c) = Some uid
+                                           /\ usrs $? uid = Some u
+                                           /\ uid <> cipher_to_user c
+                                           /\ List.In (cipher_nonce c) u.(sent_nons)
+                                           /\ usrs $? cipher_to_user c = Some rec_u
+                                           /\ ( List.In (cipher_nonce c) rec_u.(from_nons)
+                                             \/ Exists (fun sigM =>
+                                                         match sigM with
+                                                         | existT _ _ m =>
+                                                           msg_signed_addressed (findUserKeys usrs) cs (Some (cipher_to_user c)) m = true
+                                                           /\ msg_nonce_same c cs m
+                                                         end) rec_u.(msg_heap))))
                      end
            ) msgs.
 
@@ -177,10 +223,51 @@ Section RealWorldUniverseProperties.
     invert H.
   Qed.
 
+  Definition honest_nonce_tracking_ok (cs : ciphers)
+             (me : option user_id) (my_sents : sent_nonces) (my_cur_n : nat)
+             (to_usr : user_id) (to_froms : recv_nonces) (to_msgs : queued_messages) :=
+
+      Forall (fun non => snd non < my_cur_n) my_sents
+    /\ Forall (fun non => fst non = me -> snd non < my_cur_n) to_froms
+    /\ Forall (fun sigM => match sigM with
+                       | existT _ _ msg =>
+                         forall c_id c,
+                           msg = SignedCiphertext c_id
+                           -> cs $? c_id = Some c
+                           -> cipher_to_user c = to_usr
+                           -> fst (cipher_nonce c) = me
+                           -> snd (cipher_nonce c) < my_cur_n
+                       end) to_msgs
+    /\ forall c_id c,
+        cs $? c_id = Some c
+      -> fst (cipher_nonce c) = me (* if cipher created by me *) 
+      -> snd (cipher_nonce c) < my_cur_n
+      /\ ( cipher_to_user c = to_usr
+          -> ~ List.In (cipher_nonce c) my_sents (* and hasn't yet been sent *)
+          -> ~ List.In (cipher_nonce c) to_froms (* then it hasn't been read by destination user *)
+            /\ Forall (fun sigM => match sigM with (* and isn't in destination user's message queue *)
+                               | (existT _ _ msg) => msg_to_this_user cs (Some to_usr) msg = false
+                                                  \/ msg_nonce_not_same c cs msg end) to_msgs).
+      (* /\ ( cipher_to_user c = to_usr *)
+      (*     -> List.In (cipher_nonce c) my_sents (* and has been sent *) *)
+      (*     -> List.In (cipher_nonce c) to_froms (* then it has been read by destination user *) *)
+      (*     \/ Exists (fun sigM => match sigM with (* or is in destination user's message queue *) *)
+      (*                          | (existT _ _ msg) => msg_nonce_same c cs msg end) to_msgs). *)
+
+
 End RealWorldUniverseProperties.
 
 Definition message_queues_ok {A} (cs : RealWorld.ciphers) (usrs : RealWorld.honest_users A) (gks : keys) :=
   Forall_natmap (fun u => message_queue_ok (RealWorld.findUserKeys usrs) cs u.(RealWorld.msg_heap) gks) usrs.
+
+Definition honest_nonces_ok {A} (cs : RealWorld.ciphers) (usrs : RealWorld.honest_users A) :=
+  forall u_id u rec_u_id rec_u,
+    u_id <> rec_u_id
+    -> usrs $? u_id = Some u
+    -> usrs $? rec_u_id = Some rec_u
+    -> honest_nonce_tracking_ok cs
+                        (Some u_id) u.(RealWorld.sent_nons) u.(RealWorld.cur_nonce)
+                        rec_u_id rec_u.(RealWorld.from_nons) rec_u.(RealWorld.msg_heap).
 
 Definition universe_ok {A B} (U : RealWorld.universe A B) : Prop :=
   let honestk := RealWorld.findUserKeys U.(RealWorld.users)
@@ -192,9 +279,10 @@ Definition adv_universe_ok {A B} (U : RealWorld.universe A B) : Prop :=
   in  keys_and_permissions_good U.(RealWorld.all_keys) U.(RealWorld.users) U.(RealWorld.adversary).(RealWorld.key_heap)
     /\ user_cipher_queues_ok U.(RealWorld.all_ciphers) honestk U.(RealWorld.users)
     /\ message_queues_ok U.(RealWorld.all_ciphers) U.(RealWorld.users) U.(RealWorld.all_keys)
-    /\ adv_cipher_queue_ok U.(RealWorld.all_ciphers) U.(RealWorld.adversary).(RealWorld.c_heap)
-    /\ adv_message_queue_ok honestk U.(RealWorld.all_ciphers) U.(RealWorld.all_keys) U.(RealWorld.adversary).(RealWorld.msg_heap)
-    /\ adv_no_honest_keys honestk U.(RealWorld.adversary).(RealWorld.key_heap).
+    /\ adv_cipher_queue_ok U.(RealWorld.all_ciphers) U.(RealWorld.users) U.(RealWorld.adversary).(RealWorld.c_heap)
+    /\ adv_message_queue_ok U.(RealWorld.users) U.(RealWorld.all_ciphers) U.(RealWorld.all_keys) U.(RealWorld.adversary).(RealWorld.msg_heap)
+    /\ adv_no_honest_keys honestk U.(RealWorld.adversary).(RealWorld.key_heap)
+    /\ honest_nonces_ok U.(RealWorld.all_ciphers) U.(RealWorld.users).
 
 Section Simulation.
   Variable A B : Type.
@@ -452,8 +540,8 @@ Section RealWorldLemmas.
       cases (keyId k ==n k__e); subst; clean_map_lookups; eauto.
       intros.
       cases (keyId k ==n k0); subst; clean_map_lookups; eauto.
-      exists k; eauto.
-      specialize (H12 _ _ H); split_ex; split_ands; auto.
+      eexists; intuition eauto; subst.
+      specialize (H14 _ _ H); split_ex; split_ands; auto.
   Qed.
 
   Lemma encrypted_ciphers_ok_addnl_key :
@@ -508,7 +596,7 @@ Section RealWorldLemmas.
     - destruct (keyId k ==n k__s); subst; clean_map_lookups; eauto.
     - destruct (keyId k ==n k__e); subst; clean_map_lookups; eauto.
     - intros.
-      specialize (H13 _ _ H); split_ex; split_ands.
+      specialize (H15 _ _ H); split_ex; split_ands.
       eexists; destruct (keyId k ==n k0); subst; clean_map_lookups; eauto.
   Qed.
 
@@ -531,18 +619,18 @@ Section RealWorldLemmas.
 
   Lemma adv_step_encrypted_ciphers_ok :
     forall {A B C} cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-              gks gks' ks ks' qmsgs qmsgs' mycs mycs' bd bd',
+              gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd',
       step_user lbl None bd bd'
       -> forall (cmd : user_cmd C) honestk,
-        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
         -> honestk = findUserKeys usrs
         -> ks = adv.(key_heap)
         -> adv_no_honest_keys honestk ks
         -> keys_and_permissions_good gks usrs ks
-        -> adv_cipher_queue_ok cs mycs
+        -> adv_cipher_queue_ok cs usrs mycs
         -> encrypted_ciphers_ok honestk cs gks
         -> forall cmd' honestk',
-            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')
+            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
             -> honestk' = findUserKeys usrs'
             -> encrypted_ciphers_ok honestk' cs' gks'.
   Proof.
@@ -551,7 +639,7 @@ Section RealWorldLemmas.
 
     - econstructor; auto.
       assert (adv_no_honest_keys (findUserKeys usrs') (key_heap adv')) as ADV by assumption.
-      specialize (H19 k__signid).
+      specialize (H23 k__signid).
       econstructor; eauto.
       + unfold not; intros; split_ors; split_ands; contra_map_lookup; contradiction.
       + intros.
@@ -562,22 +650,25 @@ Section RealWorldLemmas.
               intuition (intros; eauto); contra_map_lookup;
                 contradiction.
     - econstructor; eauto.
-      specialize (H16 k_id); eauto.
+      specialize (H20 k_id); eauto.
       eapply SigCipherNotHonestOk; unfold not; intros; split_ors; split_ands; contra_map_lookup; try contradiction; eauto.
   Qed.
 
   Lemma universe_ok_adv_step :
-    forall {A B} (U__r : universe A B) lbl usrs adv cs gks ks qmsgs mycs cmd,
+    forall {A B} (U__r : universe A B) lbl usrs adv cs gks ks qmsgs mycs froms sents cur_n cmd,
       universe_ok U__r
       -> adv_universe_ok U__r
       -> step_user lbl None
                   (users U__r, adversary U__r, all_ciphers U__r, all_keys U__r,
                    key_heap (adversary U__r), msg_heap (adversary U__r),
-                   c_heap (adversary U__r), protocol (adversary U__r)) (usrs, adv, cs, gks, ks, qmsgs, mycs, cmd)
+                   c_heap (adversary U__r), from_nons (adversary U__r),
+                   sent_nons (adversary U__r), cur_nonce (adversary U__r),
+                   protocol (adversary U__r)) (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
       -> universe_ok
           (buildUniverseAdv
              usrs cs gks
-             {| key_heap := ks; protocol := cmd; msg_heap := qmsgs; c_heap := mycs |}).
+             {| key_heap := ks; protocol := cmd; msg_heap := qmsgs; c_heap := mycs
+                ; from_nons := froms; sent_nons := sents; cur_nonce := cur_n |}).
   Proof.
     unfold universe_ok, adv_universe_ok; destruct U__r; simpl; intros; split_ands; eauto using adv_step_encrypted_ciphers_ok.
   Qed.

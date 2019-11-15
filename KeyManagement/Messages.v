@@ -6,18 +6,18 @@ Inductive label  {A} : Type :=
 | Action :  A -> label
 .
 
+Inductive type : Set :=
+| Nat
+(* | Text *)
+| Access
+| Pair (t1 t2 : type)
+.
+
 Module Type GRANT_ACCESS.
   Parameter access : Set.
 End GRANT_ACCESS.
 
 Module Messages (GA : GRANT_ACCESS).
-
-  Inductive type : Set :=
-  | Nat
-  (* | Text *)
-  | Access
-  | Pair (t1 t2 : type)
-  .
 
   Inductive message : type -> Type :=
   | Permission (acc : GA.access) : message Access

@@ -21,6 +21,7 @@ Ltac split_ors :=
 Ltac split_ex :=
   repeat match goal with
          | [ H : exists _, _ |- _ ] => destruct H
+         | [ H : _ /\ _ |- _ ] => destruct H
          end.
 
 Ltac invert H :=
@@ -32,6 +33,10 @@ Ltac invert H :=
 
 Ltac is_not_var V :=
   first [ is_var V; fail 1
+        | idtac ].
+
+Ltac is_not_evar V :=
+  first [ is_evar V; fail 1
         | idtac ].
 
 Ltac does_not_unify term1 term2 :=
