@@ -4658,13 +4658,6 @@ Section SingleAdversarySimulates.
       Unshelve. eauto.
     Qed.
 
-    Hint Resolve
-         honest_key_filter_fn_proper honest_key_filter_fn_filter_proper honest_key_filter_fn_filter_transpose
-         honest_key_filter_fn_filter_proper_Equal honest_key_filter_fn_filter_transpose_Equal
-         honest_perm_filter_fn_proper
-         honest_perm_filter_fn_filter_proper honest_perm_filter_fn_filter_transpose
-         honest_perm_filter_fn_filter_proper_Equal honest_perm_filter_fn_filter_transpose_Equal.
-
     Ltac solve_clean_keys_clean_key_permissions :=
       match goal with
       | [  |- clean_keys ?honestk ?gks $? ?kid = Some _ ] =>
