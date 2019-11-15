@@ -93,6 +93,16 @@ Section CleanCiphers.
     apply filter_iff; eauto.
   Qed.
 
+  Lemma clean_ciphers_inv :
+    forall c_id c cs,
+      (clean_ciphers honestk cs) $? c_id = Some c
+      -> cs $? c_id = Some c.
+  Proof.
+    intros.
+    rewrite <- find_mapsto_iff, clean_ciphers_mapsto_iff, find_mapsto_iff in H;
+      split_ands; assumption.
+  Qed.
+
   Lemma clean_ciphers_keeps_honest_cipher :
     forall c_id c cs,
       cs $? c_id = Some c
