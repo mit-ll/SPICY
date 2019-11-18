@@ -24,9 +24,6 @@ Import IdealWorld.IdealNotations
 
 Set Implicit Arguments.
 
-Module Foo <: EMPTY. End Foo.
-Module Import SN := SetNotations(Foo).
-
 Definition rstepSilent {A B : Type} (U1 U2 : RealWorld.universe A B) :=
   RealWorld.step_universe U1 Messages.Silent U2.
 
