@@ -81,6 +81,16 @@ Ltac context_map_rewrites :=
     (*  ,  H1 : ?matchee = _ |- _] => rewrite H1 in H *)
     end.
 
+Ltac solve_maps1 :=
+  match goal with
+  | [ |- context [ _ $+ (?k1,_) $? ?k2 ] ] =>
+    progress clean_map_lookups
+    || destruct (k1 ==n k2); subst; clean_map_lookups
+  | [ |- context [ ?m $? ?k ]] =>
+    progress context_map_rewrites
+    || cases (m $? k)
+  end.
+
 Section MapLemmas.
 
   Lemma lookup_split : forall V (m : NatMap.t V) k v k' v',

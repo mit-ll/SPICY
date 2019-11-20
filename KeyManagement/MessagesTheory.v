@@ -350,11 +350,12 @@ Section CleanMessages.
       cases (count_occ msg_seq_eq froms (cipher_nonce c0)); eauto;
         generalize (IHmsgs _ _ _ H); intros; split_ands; split; eauto.
       + unfold not; intros; simpl in *.
-        apply Decidable.not_or in H2; split_ands; contradiction.
-      + econstructor; eauto; intros.
+        apply Decidable.not_or in H2; split_ands.
+        econstructor; eauto; intros.
         unfold msg_nonce_not_same; intros.
-        invert H5; clean_map_lookups.
-        simpl in *; apply Decidable.not_or in H2; split_ands; auto.
+        invert H6; clean_map_lookups.
+        unfold not; intros; eauto.
+        
       + econstructor; eauto; intros.
         unfold msg_nonce_not_same; intros.
         invert H5; clean_map_lookups.

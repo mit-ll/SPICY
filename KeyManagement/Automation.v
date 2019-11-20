@@ -8,11 +8,14 @@ Require Import
         Tactics
         Common
         Maps
-        Keys.
-
-Require Import RealWorld.
+        Keys
+        RealWorld
+        Simulation.
 
 Set Implicit Arguments.
+
+Hint Resolve in_eq in_cons.
+Remove Hints absurd_eq_true trans_eq_bool.
 
 Ltac solve_findUserKeys_rewrites :=
   repeat
@@ -26,7 +29,6 @@ Hint Rewrite @findUserKeys_readd_user_same_keys_idempotent' using solve [ solve_
 Hint Rewrite @findUserKeys_readd_user_addnl_keys using solve [ solve_findUserKeys_rewrites ] : find_user_keys.
 Hint Rewrite @findUserKeys_readd_user_private_key using solve [ solve_findUserKeys_rewrites ] : find_user_keys.
 
-
 Ltac clean_context :=
   try discriminate;
   repeat
@@ -36,3 +38,71 @@ Ltac clean_context :=
     | [ H : Messages.Action _ = Messages.Action _ |- _ ] => invert H; simpl in *; split_ands
     | [ H : ?x = ?y |- _] => assert (x = y) as EQ by (clear H; trivial); clear H; clear EQ
     end.
+
+Lemma msg_signed_addressed_has_signing_key :
+  forall {t} (msg : crypto t) honestk cs,
+    msg_honestly_signed honestk cs msg = true
+    -> exists k, msg_signing_key cs msg = Some k
+           /\ honest_key honestk k.
+Proof.
+  unfold msg_honestly_signed, msg_signing_key; intros;
+    destruct msg; try discriminate;
+      cases (cs $? c_id); try discriminate.
+  rewrite <- honest_key_honest_keyb in H; eauto.
+Qed.
+
+Ltac specialize_simply1 :=
+  match goal with
+  | [ H : ?arg -> _, ARG : ?arg |- _ ] =>
+    match type of arg with
+    | Type => fail 1
+    | Set => fail 1
+    | cipher_id => fail 1
+    | user_id => fail 1
+    | key_identifier => fail 1
+    | nat => fail 1
+    | NatMap.key => fail 1
+    | _ => specialize (H ARG)
+    end
+
+  | [ H : message_no_adv_private ?honk ?cs ?msg , CONTRA : findKeysCrypto ?cs ?msg $? _ = Some true |- _ ] =>
+    specialize (H _ _ CONTRA); split_ands; discriminate
+  | [ H : forall x, msg_signing_key ?cs ?msg = Some x -> _, ARG : msg_signing_key ?cs ?msg = Some _ |- _ ] =>
+    specialize (H _ ARG)
+  | [ H : forall x, msg_signing_key ?cs ?msg = Some x -> _, ARG : msg_honestly_signed _ ?cs ?msg = true |- _ ] =>
+    generalize (msg_signed_addressed_has_signing_key _ _ _ ARG); intros; split_ex
+  | [ H : forall x, Some ?v = Some x -> _ |- _ ] =>
+    assert (Some v = Some v) as ARG by trivial; specialize (H _ ARG); clear ARG
+  | [ HK : honest_keyb ?honk ?k = true, H : honest_key ?honk ?k -> _ |- _ ] =>
+    assert (honest_key honk k) as HONK by (rewrite honest_key_honest_keyb; assumption); specialize (H HONK); clear HONK
+  | [ H : ?arg = ?arg -> _ |- _ ] => assert (arg = arg) by trivial
+  | [ H : _ /\ _ |- _ ] => destruct H
+  | [ |- _ -> _ ] => intros
+  | [ |- _ /\ _ ] => split
+  end.
+
+Ltac specialize_simply := repeat specialize_simply1.
+
+
+
+Ltac solve_simply1 :=
+  match goal with
+  | [ H : ?arg -> _, ARG : ?arg |- _ ] =>
+    match type of arg with
+    | Type => fail 1
+    | Set => fail 1
+    | cipher_id => fail 1
+    | user_id => fail 1
+    | key_identifier => fail 1
+    | nat => fail 1
+    | NatMap.key => fail 1
+    | _ => specialize (H ARG)
+    end
+  | [ H : ?arg = ?arg -> _ |- _ ] => assert (arg = arg) by trivial
+  | [ H : _ /\ _ |- _ ] => destruct H
+  | [ |- _ -> _ ] => intros
+  | [ |- _ /\ _ ] => split
+  | [ H : _ \/ _ |- _ ] => destruct H
+  end.
+
+Ltac solve_simply := repeat solve_simply1.
