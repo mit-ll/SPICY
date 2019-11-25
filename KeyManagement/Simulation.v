@@ -9,11 +9,8 @@ Require Import
         Maps
         MessageEq
         Common
-        MapLtac
         Keys
-        Tactics
         AdversaryUniverse
-        CipherTheory
 .
 
 Require IdealWorld

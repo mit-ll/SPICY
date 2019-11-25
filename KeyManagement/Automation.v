@@ -17,27 +17,26 @@ Set Implicit Arguments.
 Hint Resolve in_eq in_cons.
 Remove Hints absurd_eq_true trans_eq_bool.
 
-Ltac solve_findUserKeys_rewrites :=
-  repeat
-    match goal with
-    | [ |- context [RealWorld.user_keys] ] => unfold RealWorld.user_keys
-    | [ |- context [ _ $? _] ] => progress clean_map_lookups
-    | [ |- context [match _ $? _ with _ => _ end]] => context_map_rewrites
-    end; simpl; trivial.
-
-Hint Rewrite @findUserKeys_readd_user_same_keys_idempotent' using solve [ solve_findUserKeys_rewrites ] : find_user_keys.
-Hint Rewrite @findUserKeys_readd_user_addnl_keys using solve [ solve_findUserKeys_rewrites ] : find_user_keys.
-Hint Rewrite @findUserKeys_readd_user_private_key using solve [ solve_findUserKeys_rewrites ] : find_user_keys.
-
 Ltac clean_context :=
   try discriminate;
   repeat
     match goal with
     | [ H : ?X = ?X |- _ ] => clear H
     | [ H : Some _ = Some _ |- _ ] => invert H
+    | [ H : SignedCiphertext _ = SignedCiphertext _ |- _ ] => invert H
     | [ H : Messages.Action _ = Messages.Action _ |- _ ] => invert H; simpl in *; split_ands
     | [ H : ?x = ?y |- _] => assert (x = y) as EQ by (clear H; trivial); clear H; clear EQ
     end.
+
+Lemma honest_key_honest_keyb :
+  forall honestk k,
+    honest_key honestk k <-> honest_keyb honestk k = true.
+Proof.
+  split; unfold honest_keyb; intros.
+  - destruct H; context_map_rewrites; trivial.
+  - cases (honestk $? k); subst; try discriminate.
+    cases b; try discriminate; econstructor; eauto.
+Qed.
 
 Lemma msg_signed_addressed_has_signing_key :
   forall {t} (msg : crypto t) honestk cs,
@@ -48,7 +47,7 @@ Proof.
   unfold msg_honestly_signed, msg_signing_key; intros;
     destruct msg; try discriminate;
       cases (cs $? c_id); try discriminate.
-  rewrite <- honest_key_honest_keyb in H; eauto.
+  eexists; rewrite honest_key_honest_keyb; eauto.
 Qed.
 
 Ltac specialize_simply1 :=
@@ -72,10 +71,11 @@ Ltac specialize_simply1 :=
   | [ H : forall x, msg_signing_key ?cs ?msg = Some x -> _, ARG : msg_honestly_signed _ ?cs ?msg = true |- _ ] =>
     generalize (msg_signed_addressed_has_signing_key _ _ _ ARG); intros; split_ex
   | [ H : forall x, Some ?v = Some x -> _ |- _ ] =>
-    assert (Some v = Some v) as ARG by trivial; specialize (H _ ARG); clear ARG
+    specialize (H _ (eq_refl (Some v)))
+    (* assert (Some v = Some v) as ARG by trivial; specialize (H _ ARG); clear ARG *)
   | [ HK : honest_keyb ?honk ?k = true, H : honest_key ?honk ?k -> _ |- _ ] =>
     assert (honest_key honk k) as HONK by (rewrite honest_key_honest_keyb; assumption); specialize (H HONK); clear HONK
-  | [ H : ?arg = ?arg -> _ |- _ ] => assert (arg = arg) by trivial
+  | [ H : ?arg = ?arg -> _ |- _ ] => specialize (H (eq_refl arg))
   | [ H : _ /\ _ |- _ ] => destruct H
   | [ |- _ -> _ ] => intros
   | [ |- _ /\ _ ] => split

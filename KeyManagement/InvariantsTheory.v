@@ -9,7 +9,6 @@ Require Import
         Maps
         Messages
         Common
-        MapLtac
         Keys
         Tactics
         AdversaryUniverse
@@ -198,7 +197,7 @@ Section RealWorldLemmas.
   Proof.
     inversion 1; intros; subst; invert H;
       try solve [
-            econstructor; try assumption;
+            try contradiction; econstructor; try assumption;
             try
               match goal with
               | [ |- _ $+ (?kid1,_) $? ?kid2 = _] => cases (kid1 ==n kid2); subst; clean_map_lookups; eauto

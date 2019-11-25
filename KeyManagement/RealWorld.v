@@ -4,7 +4,6 @@ Require Import
         MyPrelude
         Common
         Maps
-        Tactics
         Keys
         Messages.
 
@@ -67,9 +66,6 @@ Definition my_ciphers      := list cipher_id.
 Definition recv_nonces     := list msg_seq.
 Definition sent_nonces     := list msg_seq.
 
-(* Definition recv_nonces     := NatMap.t nat. *)
-(* Definition send_nonces     := NatMap.t (NatMap.t nat). *)
-
 Inductive msg_accepted_by_pattern (cs : ciphers) (opt_uid_to : option user_id) : forall {t : type}, msg_pat -> crypto t -> Prop :=
 | MsgAccept : forall {t} (m : crypto t),
     msg_accepted_by_pattern cs opt_uid_to Accept m
@@ -99,37 +95,6 @@ Section SafeMessages.
     | _ => false
     end.
 
-  Hint Constructors honest_key.
-
-  Lemma honest_key_honest_keyb :
-    forall k,
-      honest_key k <-> honest_keyb k = true.
-  Proof.
-    split; unfold honest_keyb; intros.
-    - destruct H; context_map_rewrites; trivial.
-    - cases (honestk $? k); subst; try discriminate.
-      cases b; try discriminate; eauto.
-  Qed.
-
-  Lemma not_honest_key_honest_keyb :
-    forall k,
-      not (honest_key k) <-> honest_keyb k = false.
-  Proof.
-    split; unfold honest_keyb; intros.
-    - cases (honestk $? k); trivial.
-      cases b; trivial.
-      assert (honest_key k) by eauto; contradiction.
-    - unfold not; intro HK; destruct HK; context_map_rewrites; discriminate.
-  Qed.
-
-  Lemma honest_keyb_true_findKeys :
-    forall k,
-      honest_keyb k = true
-      -> honestk $? k = Some true.
-  Proof.
-    intros; rewrite <- honest_key_honest_keyb in H; invert H; eauto.
-  Qed.
-
   Inductive content_only_honest_public_keys : forall {t}, message t -> Prop :=
   | ContentHPK : forall txt,
       content_only_honest_public_keys (message.Content txt)
@@ -155,8 +120,6 @@ Section SafeMessages.
       cs $? c_id = Some (SigCipher k__sign msg_to nonce m)
       -> content_only_honest_public_keys m
       -> msg_contains_only_honest_public_keys cs (@SignedCiphertext t c_id).
-
-  Hint Constructors msg_contains_only_honest_public_keys.
 
   Definition msg_cipher_id {t} (msg : crypto t) : option cipher_id :=
     match msg with
@@ -226,17 +189,6 @@ Section SafeMessages.
       -> msg_pattern_safe (SignedEncrypted k__sign k__enc).
 
 End SafeMessages.
-
-Hint Constructors honest_key
-     msg_pattern_safe.
-
-Lemma cipher_honestly_signed_proper :
-  Proper (eq ==> eq ==> eq) (fun _ : NatMap.key => cipher_honestly_signed).
-Proof.
-  unfold Proper, respectful; intros; subst; eauto.
-Qed.
-
-Hint Resolve cipher_honestly_signed_proper.
 
 Inductive user_cmd : Type -> Type :=
 (* Plumbing *)
@@ -316,34 +268,6 @@ Definition addUserKeys {A} (ks : key_perms) (u : user_data A) : user_data A :=
 Definition addUsersKeys {A} (us : user_list (user_data A)) (ks : key_perms) : user_list (user_data A) :=
   map (addUserKeys ks) us.
 
-Lemma Forall_app_sym :
-  forall {A} (P : A -> Prop) (l1 l2 : list A),
-    Forall P (l1 ++ l2) <-> Forall P (l2 ++ l1).
-Proof.
-  split; intros;
-    rewrite Forall_forall in *; intros;
-      eapply H;
-      apply in_or_app; apply in_app_or in H0; intuition idtac.
-Qed.
-
-Lemma Forall_app :
-  forall {A} (P : A -> Prop) (l : list A) a,
-    Forall P (l ++ [a]) <-> Forall P (a :: l).
-Proof.
-  intros.
-  rewrite Forall_app_sym; simpl; split; trivial.
-Qed.
-
-Lemma Forall_dup :
-  forall {A} (P : A -> Prop) (l : list A) a,
-    Forall P (a :: a :: l) <-> Forall P (a :: l).
-Proof.
-  split; intros;
-    rewrite Forall_forall in *; intros;
-      eapply H;
-      apply in_inv in H0; split_ors; subst; simpl; eauto.
-Qed.
-
 Fixpoint findKeysMessage {t} (msg : message t) : key_perms :=
   match msg with
   | message.Permission k => $0 $+ (fst k, snd k) 
@@ -397,386 +321,6 @@ Definition user_cipher_queue {A} (usrs : honest_users A) (u_id : user_id) : opti
   | None     => None
   end.
 
-Section RealWorldLemmas.
-
-  Lemma findUserKeys_foldfn_proper :
-    forall {A},
-      Proper (eq ==> eq ==> eq ==> eq) (fun (_ : NatMap.key) (u : user_data A) (ks : key_perms) => ks $k++ key_heap u).
-  Proof.
-    unfold Proper, respectful; intros; subst; trivial.
-  Qed.
-
-  Lemma findUserKeys_foldfn_proper_Equal :
-    forall {A},
-      Proper (eq ==> eq ==> Equal ==> Equal) (fun (_ : NatMap.key) (u : user_data A) (ks : key_perms) => ks $k++ key_heap u).
-  Proof.
-
-    unfold Proper, respectful; intros; subst; Equal_eq; unfold Equal; intros; trivial.
-  Qed.
-
-  Lemma findUserKeys_foldfn_transpose :
-    forall {A},
-      transpose_neqkey eq (fun (_ : NatMap.key) (u : user_data A) (ks : key_perms) => ks $k++ key_heap u).
-  Proof.
-    unfold transpose_neqkey; intros.
-    rewrite !merge_perms_assoc,merge_perms_sym with (ks1:=key_heap e'); trivial.
-  Qed.
-
-  Lemma findUserKeys_foldfn_transpose_Equal :
-    forall {A},
-      transpose_neqkey Equal (fun (_ : NatMap.key) (u : user_data A) (ks : key_perms) => ks $k++ key_heap u).
-  Proof.
-    unfold transpose_neqkey; intros; unfold Equal; intros.
-    rewrite !merge_perms_assoc,merge_perms_sym with (ks1:=key_heap e'); trivial.
-  Qed.
-
-  Hint Resolve findUserKeys_foldfn_proper findUserKeys_foldfn_transpose
-       findUserKeys_foldfn_proper_Equal findUserKeys_foldfn_transpose_Equal.
-
-  Lemma findUserKeys_notation :
-    forall {A} (usrs : honest_users A),
-      fold (fun (_ : NatMap.key) (u : user_data A) (ks : key_perms) => ks $k++ key_heap u) usrs $0 = findUserKeys usrs.
-    unfold findUserKeys; trivial.
-  Qed.
-
-  Lemma findUserKeys_readd_user_same_keys_idempotent :
-    forall {A} (usrs : honest_users A) u_id u_d proto msgs mycs froms sents cur_n,
-      usrs $? u_id = Some u_d
-      -> findUserKeys usrs = findUserKeys (usrs $+ (u_id, {| key_heap  := key_heap u_d
-                                                          ; protocol  := proto
-                                                          ; msg_heap  := msgs
-                                                          ; c_heap    := mycs
-                                                          ; from_nons := froms
-                                                          ; sent_nons := sents
-                                                          ; cur_nonce := cur_n
-                                                         |} )).
-  Proof.
-    intros.
-    induction usrs using P.map_induction_bis; intros; Equal_eq; contra_map_lookup; auto.
-
-    cases (x ==n u_id); subst; clean_map_lookups.
-    - rewrite map_add_eq.
-      unfold findUserKeys.
-      rewrite !fold_add; auto.
-    - rewrite map_ne_swap; auto.
-      unfold findUserKeys.
-      rewrite fold_add; auto.
-      rewrite fold_add; auto; clean_map_lookups.
-      rewrite !findUserKeys_notation.
-      rewrite IHusrs at 1; auto.
-      rewrite not_find_in_iff; clean_map_lookups; trivial.
-  Qed.
-
-  Lemma findUserKeys_readd_user_same_keys_idempotent' :
-    forall {A} (usrs : honest_users A) u_id ks proto msgs mycs froms sents cur_n,
-      user_keys usrs u_id = Some ks
-      -> findUserKeys (usrs $+ (u_id, {| key_heap  := ks
-                                      ; protocol  := proto
-                                      ; msg_heap  := msgs
-                                      ; c_heap    := mycs
-                                      ; from_nons := froms
-                                      ; sent_nons := sents
-                                      ; cur_nonce := cur_n |})) = findUserKeys usrs.
-  Proof.
-    intros.
-    induction usrs using P.map_induction_bis; intros; Equal_eq; contra_map_lookup; auto.
-    cases (x ==n u_id); subst; clean_map_lookups.
-    - rewrite map_add_eq.
-      unfold findUserKeys.
-      unfold user_keys in *; rewrite add_eq_o in H; invert H; auto.
-      rewrite !fold_add; simpl; eauto.
-    - rewrite map_ne_swap; auto.
-      unfold findUserKeys.
-      assert (user_keys usrs u_id = Some ks) by (unfold user_keys in H; rewrite add_neq_o in H; auto).
-      rewrite fold_add; auto.
-      rewrite !findUserKeys_notation.
-      rewrite IHusrs; auto.
-      unfold findUserKeys at 2.
-      rewrite fold_add; auto.
-      rewrite not_find_in_iff; clean_map_lookups; trivial.
-  Qed.
-
-  Lemma findUserKeys_readd_user_addnl_keys :
-    forall {A} (usrs : honest_users A) u_id proto msgs ks ks' mycs froms sents cur_n,
-      user_keys usrs u_id = Some ks
-      -> findUserKeys (usrs $+ (u_id, {| key_heap  := ks $k++ ks'
-                                      ; protocol  := proto
-                                      ; msg_heap  := msgs
-                                      ; c_heap    := mycs
-                                      ; from_nons := froms
-                                      ; sent_nons := sents
-                                      ; cur_nonce := cur_n |})) = findUserKeys usrs $k++ ks'.
-  Proof.
-    intros.
-    induction usrs using P.map_induction_bis; intros; Equal_eq; contra_map_lookup; auto.
-    cases (x ==n u_id); subst; clean_map_lookups; try rewrite map_add_eq.
-    - unfold findUserKeys. rewrite !fold_add; auto.
-      rewrite findUserKeys_notation; simpl.
-      unfold user_keys in H; rewrite add_eq_o in H; invert H; auto.
-      rewrite merge_perms_assoc; trivial.
-    - rewrite map_ne_swap; auto.
-      unfold findUserKeys.
-      assert (user_keys usrs u_id = Some ks) by (unfold user_keys in H; rewrite add_neq_o in H; auto).
-      rewrite fold_add; auto.
-      rewrite findUserKeys_notation.
-      rewrite fold_add; auto.
-      rewrite IHusrs; auto.
-      rewrite findUserKeys_notation.
-      rewrite !merge_perms_assoc, merge_perms_sym with (ks1:=ks'); trivial.
-      rewrite not_find_in_iff; clean_map_lookups; auto.
-  Qed.
-
-  Lemma findUserKeys_readd_user_private_key :
-    forall {A} (usrs : honest_users A) u_id proto msgs k_id ks mycs froms sents cur_n,
-      user_keys usrs u_id = Some ks
-      -> findUserKeys (usrs $+ (u_id, {| key_heap  := add_key_perm k_id true ks
-                                      ; protocol  := proto
-                                      ; msg_heap  := msgs
-                                      ; c_heap    := mycs
-                                      ; from_nons := froms
-                                      ; sent_nons := sents
-                                      ; cur_nonce := cur_n  |})) = findUserKeys usrs $+ (k_id,true).
-  Proof.
-    intros.
-    induction usrs using P.map_induction_bis; intros; Equal_eq; contra_map_lookup; auto.
-    cases (x ==n u_id); subst; clean_map_lookups.
-    - unfold user_keys in H; rewrite add_eq_o in H; clean_map_lookups; trivial.
-      rewrite map_add_eq; eauto.
-      unfold findUserKeys; rewrite !fold_add; simpl; eauto.
-      unfold add_key_perm, greatest_permission; cases (key_heap e $? k_id); subst; simpl;
-        apply map_eq_Equal; unfold Equal; intros;
-          cases (fold (fun (_ : NatMap.key) (u : user_data A) (ks : key_perms) => ks $k++ key_heap u) usrs $0 $? y);
-          cases (key_heap e $? y);
-          destruct (y ==n k_id); subst;
-            clean_map_lookups;
-            simplify_key_merges;
-            eauto.
-
-    - assert (user_keys usrs u_id = Some ks) by (unfold user_keys in *; clean_map_lookups; auto).
-      rewrite map_ne_swap by trivial.
-      unfold findUserKeys; rewrite !fold_add with (k:=x) by (rewrite ?not_find_in_iff; clean_map_lookups; eauto).
-      rewrite !findUserKeys_notation, IHusrs; auto.
-
-      apply map_eq_Equal; unfold Equal; intros.
-      cases (findUserKeys usrs $? y); cases (key_heap e $? y); destruct (k_id ==n y); subst;
-        clean_map_lookups;
-        simplify_key_merges;
-        eauto.
-  Qed.
-
-  Lemma findUserKeys_has_key_of_user :
-    forall {A} (usrs : honest_users A) u_id u_d ks k kp,
-      usrs $? u_id = Some u_d
-      -> ks = key_heap u_d
-      -> ks $? k = Some kp
-      -> findUserKeys usrs $? k <> None.
-  Proof.
-    intros.
-    induction usrs using P.map_induction_bis; intros; Equal_eq; subst; contra_map_lookup; auto.
-    cases (x ==n u_id); subst; clean_map_lookups.
-    - unfold findUserKeys.
-      rewrite fold_add; auto.
-      rewrite findUserKeys_notation.
-      cases (findUserKeys usrs $? k); subst; unfold not; intros.
-      + erewrite merge_perms_chooses_greatest in H; eauto; discriminate.
-      + eapply merge_perms_no_disappear_perms in H; split_ands; contra_map_lookup.
-    - unfold findUserKeys; rewrite fold_add; auto; rewrite findUserKeys_notation; unfold not; intros.
-      cases (key_heap e $? k); subst; auto.
-      + eapply merge_perms_no_disappear_perms in H0; split_ands; contra_map_lookup.
-      + eapply merge_perms_no_disappear_perms in H0; split_ands. assert ( findUserKeys usrs $? k <> None ); eauto.
-  Qed.
-
-  Lemma findUserKeys_has_private_key_of_user :
-    forall {A} (usrs : honest_users A) u_id u_d ks k,
-      usrs $? u_id = Some u_d
-      -> ks = key_heap u_d
-      -> ks $? k = Some true
-      -> findUserKeys usrs $? k = Some true.
-  Proof.
-    intros.
-    induction usrs using P.map_induction_bis; intros; Equal_eq; subst; contra_map_lookup; auto.
-    cases (x ==n u_id); subst; clean_map_lookups.
-    - unfold findUserKeys.
-      rewrite fold_add; auto.
-      rewrite findUserKeys_notation.
-      cases (findUserKeys usrs $? k); subst.
-      + erewrite merge_perms_chooses_greatest; eauto; unfold greatest_permission; rewrite orb_true_r; auto.
-      + erewrite merge_perms_adds_ks2; eauto.
-    - unfold findUserKeys; rewrite fold_add; auto; rewrite findUserKeys_notation; eauto.
-      cases (key_heap e $? k); subst; auto.
-      + erewrite merge_perms_chooses_greatest; eauto; unfold greatest_permission; rewrite orb_true_l; auto.
-      + erewrite merge_perms_adds_ks1 with (ks1:=findUserKeys usrs); eauto.
-  Qed.
-
-  Lemma findUserKeys_readd_user_same_key_heap_idempotent :
-    forall {A} (usrs : honest_users A) u_id ks,
-      user_keys usrs u_id = Some ks
-      -> findUserKeys usrs $k++ ks = findUserKeys usrs.
-  Proof.
-    intros.
-    induction usrs using P.map_induction_bis; intros; Equal_eq; subst; contra_map_lookup; auto.
-    unfold user_keys in H.
-    cases (x ==n u_id); subst.
-    - rewrite add_eq_o in H; simpl in H; auto.
-      unfold findUserKeys; rewrite fold_add; auto.
-      rewrite findUserKeys_notation.
-      invert H.
-      rewrite merge_perms_assoc; rewrite merge_perms_refl; trivial.
-    - rewrite add_neq_o in H; auto.
-      unfold findUserKeys; rewrite fold_add; auto.
-      rewrite findUserKeys_notation.
-      cases (usrs $? u_id); subst; try discriminate; invert H.
-      rewrite merge_perms_assoc. rewrite merge_perms_sym with (ks2:=key_heap u); rewrite <- merge_perms_assoc.
-      rewrite IHusrs.
-      trivial.
-      unfold user_keys; context_map_rewrites; trivial.
-  Qed.
-
-  Lemma honest_key_after_new_keys :
-    forall honestk msgk k_id,
-        honest_key honestk k_id
-      -> honest_key (honestk $k++ msgk) k_id.
-  Proof.
-    invert 1; intros; econstructor; eauto.
-    cases (msgk $? k_id); subst; eauto.
-    - erewrite merge_perms_chooses_greatest by eauto; eauto.
-    - erewrite merge_perms_adds_ks1; eauto.
-  Qed.
-
-  Hint Resolve honest_key_after_new_keys.
-
-  Lemma honest_keyb_after_new_keys :
-    forall honestk msgk k_id,
-      honest_keyb honestk k_id = true
-      -> honest_keyb (honestk $k++ msgk) k_id = true.
-  Proof.
-    intros; rewrite <- honest_key_honest_keyb in *; eauto.
-  Qed.
-
-  Hint Resolve honest_keyb_after_new_keys.
-
-  Lemma not_honest_key_after_new_pub_keys :
-    forall pubk honestk k,
-      ~ honest_key honestk k
-      -> (forall (k_id : NatMap.key) (kp : bool), pubk $? k_id = Some kp -> kp = false)
-      -> ~ honest_key (honestk $k++ pubk) k.
-  Proof.
-    unfold not; invert 3; intros.
-    cases (honestk $? k); cases (pubk $? k); subst;
-      simplify_key_merges1; clean_map_lookups; eauto.
-    - cases b; cases b0; simpl in *; eauto; try discriminate.
-      specialize (H0 _ _ Heq0); discriminate.
-    - specialize (H0 _ _ Heq0); discriminate.
-  Qed.
-
-  Hint Resolve not_honest_key_after_new_pub_keys.
-
-  Lemma message_honestly_signed_after_add_keys :
-    forall {t} (msg : crypto t) cs honestk ks,
-      msg_honestly_signed honestk cs msg = true
-      -> msg_honestly_signed (honestk $k++ ks) cs msg = true.
-  Proof.
-    intros.
-    destruct msg; unfold msg_honestly_signed in *; simpl in *;
-      try discriminate;
-      repeat
-        match goal with
-        | [ |- context [ cs $? ?cid ]] => cases (cs $? cid); clean_map_lookups
-        | [ |- context [ match ?c with _ => _ end ]] =>
-          match type of c with
-          | cipher => destruct c
-          end
-        end; eauto.
-  Qed.
-
-  Lemma message_honestly_signed_after_remove_pub_keys :
-    forall {t} (msg : crypto t) honestk cs pubk,
-      msg_honestly_signed (honestk $k++ pubk) cs msg = true
-      -> (forall k kp, pubk $? k = Some kp -> kp = false)
-      -> msg_honestly_signed honestk cs msg = true.
-  Proof.
-    intros.
-    destruct msg; simpl in *; eauto;
-      unfold msg_honestly_signed in *;
-      repeat
-        match goal with
-        | [ H : match msg_signing_key ?cs ?c with _ => _ end = _ |- _ ] => cases (msg_signing_key cs c); try discriminate
-        | [ |- context [ honest_keyb _ _ ] ] => unfold honest_keyb in *
-        | [ H : match ?honk $k++ ?pubk $? ?k with _ => _ end = _ |- _ ] =>
-          match goal with
-          | [ H : honk $? k = _ |- _ ] => fail 1
-          | _ => cases (honk $? k); cases (pubk $? k); simplify_key_merges1
-          end
-        | [ |- context [ if ?b then _ else _ ] ] => destruct b; subst
-        | [ H : (forall k kp, ?pubk $? k = Some kp -> _), H1 : ?pubk $? _ = Some _ |- _ ] => specialize (H _ _ H1); subst
-        end; try discriminate; auto.
-  Qed.
-
-  Lemma cipher_honestly_signed_after_msg_keys :
-    forall honestk msgk c,
-      cipher_honestly_signed honestk c = true
-      -> cipher_honestly_signed (honestk $k++ msgk) c = true.
-  Proof.
-    unfold cipher_honestly_signed. intros; cases c; trivial;
-      rewrite <- honest_key_honest_keyb in *; eauto.
-  Qed.
-
-  Hint Resolve cipher_honestly_signed_after_msg_keys.
-
-  Lemma ciphers_honestly_signed_after_msg_keys :
-    forall honestk msgk cs,
-      ciphers_honestly_signed honestk cs
-      -> ciphers_honestly_signed (honestk $k++ msgk) cs.
-  Proof.
-    induction 1; econstructor; eauto.
-  Qed.
-
-End RealWorldLemmas.
-
-Lemma safe_messages_have_only_honest_public_keys :
-  forall {t} (msg : message t) honestk,
-    content_only_honest_public_keys honestk msg
-    -> forall k_id,
-      findKeysMessage msg $? k_id = None
-      \/ (honestk $? k_id = Some true /\ findKeysMessage msg $? k_id = Some false).
-Proof.
-  induction 1; intros; subst; simpl in *; eauto.
-  - destruct kp; simpl in *; subst;
-      destruct (k_id ==n k); subst; clean_map_lookups; eauto.
-  - specialize (IHcontent_only_honest_public_keys1 k_id).
-    specialize (IHcontent_only_honest_public_keys2 k_id).
-    split_ors; split_ands; eauto.
-    + left; simplify_key_merges1; eauto.
-    + right. intuition eauto; simplify_key_merges1; eauto.
-    + right. intuition eauto; simplify_key_merges1; eauto.
-    + right. intuition eauto; simplify_key_merges1; eauto.
-Qed.
-
-Hint Resolve safe_messages_have_only_honest_public_keys.
-
-Lemma safe_cryptos_have_only_honest_public_keys :
-  forall {t} (msg : crypto t) honestk cs,
-    msg_contains_only_honest_public_keys honestk cs msg
-    -> forall k_id,
-      findKeysCrypto cs msg $? k_id = None
-      \/ (honestk $? k_id = Some true /\ findKeysCrypto cs msg $? k_id = Some false).
-Proof.
-  intros.
-  unfold findKeysCrypto; invert H; eauto;
-    context_map_rewrites; eauto.
-Qed.
-
-Lemma safe_messages_perm_merge_honestk_idempotent :
-  forall {t} (msg : crypto t) honestk cs,
-    msg_contains_only_honest_public_keys honestk cs msg
-    -> honestk $k++ findKeysCrypto cs msg = honestk.
-Proof.
-    intros.
-    apply map_eq_Equal; unfold Equal; intros.
-    apply safe_cryptos_have_only_honest_public_keys with (k_id := y) in H; split_ors; split_ands;
-      cases (honestk $? y); simplify_key_merges; clean_map_lookups; eauto.
-Qed.
-
 Definition buildUniverse {A B}
            (usrs : honest_users A) (adv : user_data B) (cs : ciphers) (ks : keys)
            (u_id : user_id) (userData : user_data A) : universe A B :=
@@ -818,51 +362,20 @@ Definition updateTrackedNonce {t} (to_usr : option user_id) (froms : recv_nonces
              end
         else froms
       end                
-      (* let nonce := cipher_nonce c in *)
-      (* let kid   := cipher_signing_key c *)
-      (* in  match froms $? kid with *)
-      (*     | None => froms $+ (kid, nonce) *)
-      (*     | Some nonce' => *)
-      (*       if nonce' <? nonce then froms $+ (kid,nonce) else froms *)
-      (*     end *)
     end
   end.
-
-(* Definition updateSendNonce (tos : send_nonces) (k_id : key_identifier) (u_id : user_id) := *)
-(*   match tos $? k_id with *)
-(*   | None => (0, tos $+ (k_id, ($0 $+ (u_id, 0)))) *)
-(*   | Some usrs => *)
-(*     match usrs $? u_id with *)
-(*     | None => (0, tos $+ (k_id, usrs $+ (u_id, 0))) *)
-(*     | Some nonce => (nonce+1, tos $+ (k_id, usrs $+ (u_id, nonce+1))) *)
-(*     end *)
-(*   end. *)
-
-(* Definition cipher_nonce_absent_or_gt (froms : recv_nonces) (c : cipher) := *)
-(*     froms $? cipher_signing_key c = None *)
-(*   \/ (exists n, froms $? cipher_signing_key c = Some n /\ n < cipher_nonce c). *)
-
-(* Definition overlapping_msg_nonce_smaller (new_cipher : cipher) (cs : ciphers) {t} (msg : crypto t) : Prop := *)
-(*   forall c_id c, *)
-(*       msg = SignedCiphertext c_id *)
-(*     -> cs $? c_id = Some c *)
-(*     -> cipher_signing_key c = cipher_signing_key new_cipher *)
-(*     -> cipher_nonce c < cipher_nonce new_cipher. *)
 
 Definition msg_nonce_not_same (new_cipher : cipher) (cs : ciphers) {t} (msg : crypto t) : Prop :=
   forall c_id c,
     msg = SignedCiphertext c_id
     -> cs $? c_id = Some c
     -> cipher_nonce new_cipher <> cipher_nonce c.
-    (* \/ cipher_to_user new_cipher <> cipher_to_user c. *)
 
 Definition msg_nonce_same (new_cipher : cipher) (cs : ciphers) {t} (msg : crypto t) : Prop :=
   forall c_id c,
       msg = SignedCiphertext c_id
     -> cs $? c_id = Some c
     -> cipher_nonce new_cipher = cipher_nonce c.
-    (* /\ cipher_to_user new_cipher = cipher_to_user c. *)
-
 
 Definition msg_not_replayed {t} (to_usr : option user_id) (cs : ciphers) (froms : recv_nonces) (msg : crypto t) (msgs : queued_messages) : Prop :=
   exists c_id c,
@@ -873,8 +386,6 @@ Definition msg_not_replayed {t} (to_usr : option user_id) (cs : ciphers) (froms 
                        | (existT _ _ m) => msg_to_this_user cs to_usr m = true
                                         -> msg_nonce_not_same c cs m
                        end) msgs.
-    (* /\ cipher_nonce_absent_or_gt froms c *)
-    (* /\ Forall (fun sigM => match sigM with existT _ _ m => overlapping_msg_nonce_smaller c cs m end) msgs. *)
 
 Inductive action : Type :=
 | Input  t (msg : crypto t) (pat : msg_pat) (froms : recv_nonces)
@@ -897,7 +408,6 @@ Definition action_adversary_safe (honestk : key_perms) (cs : ciphers) (a : actio
                                                /\ cs $? c_id = Some c
                                                /\ fst (cipher_nonce c) = msg_from  (* only send my messages *)
                                                /\ ~ List.In (cipher_nonce c) sents
-                                   (* /\ msg_not_replayed cs to_frms msg to_q *)
   end.
 
 Definition data_step0 (A B C : Type) : Type :=
@@ -993,13 +503,10 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> ks $? k__signid  = Some true
     -> ~ In c_id cs
     -> keys_mine ks (findKeysMessage msg)
-    (* -> incl (findCiphers msg) mycs *)
-    (* -> pr_nonce_tos = updateTrackedNonce tos k__signid msg_to *)
     -> cur_n' = 1 + cur_n
     -> cipherMsg = SigEncCipher k__signid k__encid msg_to (u_id, cur_n) msg
     -> cs' = cs $+ (c_id, cipherMsg)
     -> mycs' = c_id :: mycs
-    (* -> tos' = snd pr_nonce_tos *)
     -> step_user Silent u_id
                 (usrs, adv, cs , gks, ks, qmsgs, mycs,  froms, sents, cur_n,  SignEncrypt k__signid k__encid msg)
                 (usrs, adv, cs', gks, ks, qmsgs, mycs', froms, sents, cur_n', Return (SignedCiphertext c_id))
@@ -1012,7 +519,6 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> ks  $? k__encid  = Some true
     -> ks  $? k__signid = Some kp__sign
     -> findKeysMessage msg = newkeys
-    (* -> newcs = findCiphers msg *)
     -> ks' = ks $k++ newkeys
     -> mycs' = (* newcs ++  *)mycs
     -> List.In c_id mycs
@@ -1027,7 +533,6 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> ks  $? k_id = Some true
     -> ~ In c_id cs
     -> cur_n' = 1 + cur_n
-    (* -> pr_nonce_tos = updateSendNonce tos k_id msg_to *)
     -> cipherMsg = SigCipher k_id msg_to (u_id, cur_n) msg
     -> cs' = cs $+ (c_id, cipherMsg)
     -> mycs' = c_id :: mycs

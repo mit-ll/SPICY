@@ -36,127 +36,79 @@ Notation "m1 $++ m2" := (merge_maps m2 m1) (at level 50, left associativity).
 Module Import OTF := OrderedType.OrderedTypeFacts OrderedTypeEx.Nat_as_OT.
 Module Import OMF := FSets.FMapFacts.OrdProperties NatMap.
 
-Ltac clean_map_lookups1 :=
-  match goal with
-  | [ H : Some _ = None   |- _ ] => invert H
-  | [ H : None = Some _   |- _ ] => invert H
-  | [ H : Some _ = Some _ |- _ ] => invert H
-  | [ H : $0 $? _ = Some _ |- _ ] => invert H
-  | [ H : _ $+ (?k,_) $? ?k = _ |- _ ] => rewrite add_eq_o in H by trivial
-  | [ H : _ $+ (?k1,_) $? ?k2 = _ |- _ ] => rewrite add_neq_o in H by auto 2
-  | [ H : context [ match _ $+ (?k,_) $? ?k with _ => _ end ] |- _ ] => rewrite add_eq_o in H by trivial
-  | [ H : context [ match _ $+ (?k1,_) $? ?k2 with _ => _ end ] |- _ ] => rewrite add_neq_o in H by auto 2
-  | [ |- context[_ $+ (?k,_) $? ?k] ] => rewrite add_eq_o by trivial
-  | [ |- context[_ $+ (?k1,_) $? ?k2] ] => rewrite add_neq_o by auto
-  | [ |- context[_ $+ (?k1,_) $? ?k2] ] => rewrite add_eq_o by auto
-  | [ |- context[_ $- ?k $? ?k] ] => rewrite remove_eq_o by trivial
-  | [ |- context[_ $- ?k1 $? ?k2] ] => rewrite remove_neq_o by auto
-  | [ |- context[_ $- ?k1 $? ?k2] ] => rewrite remove_eq_o by auto
-  | [ H : ~ In _ _ |- _ ] => rewrite not_find_in_iff in H
-  | [ H1 : ?m $? ?k = _ , H2 : ?m $? ?k = _ |- _] => rewrite H1 in H2
-  | [ H1 : ?m $? ?k1 = _ , H2 : ?m $? ?k2 = _ |- _] => assert (k1 = k2) as RW by auto; rewrite RW in H1; clear RW; rewrite H1 in H2
-  end.
+Lemma lookup_empty_none :
+  forall {A} k,
+    (@empty A) $? k = None.
+Proof. unfold find, Raw.find; trivial. Qed.
 
-Ltac contra_map_lookup :=
-  repeat
-    match goal with
-    (* | [ H1 : ?ks1 $? ?k = _, H2 : ?ks2 $? ?k = _ |- _ ] => rewrite H1 in H2; invert H2 *)
-    | [ H : ?ks $? ?k = ?v -> _, ARG : ?ks $? ?k = ?v |- _ ] => specialize (H ARG)
-    | [ H1 : ?ks $? ?k = _, H2 : ?ks $? ?k = _ |- _ ] => rewrite H1 in H2; invert H2
-    | [ H : ?ks $? ?k = _ |- context [ ?ks $? ?k <> _] ] => unfold not; intros
-    end; try discriminate.
-
-Ltac clean_map_lookups :=
-  (repeat clean_map_lookups1);
-  try discriminate;
-  try contra_map_lookup.
-
-Ltac context_map_rewrites :=
-  repeat
+Ltac context_map_rewrites1 :=
     match goal with
     | [ H : ?m $? ?k = _ |- context[?m $? ?k] ] => rewrite H
     | [ H : context [ match ?matchee with _ => _ end ]
      ,  H1 : ?matchee = _ |- _] => rewrite H1 in H
-    (* | [ H : match ?matchee with _ => _ end = _ *)
-    (*  ,  H1 : ?matchee = _ |- _] => rewrite H1 in H *)
     end.
 
-Ltac solve_maps1 :=
-  match goal with
-  | [ |- context [ _ $+ (?k1,_) $? ?k2 ] ] =>
-    progress clean_map_lookups
-    || destruct (k1 ==n k2); subst; clean_map_lookups
-  | [ |- context [ ?m $? ?k ]] =>
-    progress context_map_rewrites
-    || cases (m $? k)
-  end.
+Ltac contra_map_lookup1 :=
+    match goal with
+    | [ H : ?ks $? ?k = ?v -> _, ARG : ?ks $? ?k = ?v |- _ ] => specialize (H ARG)
+    | [ H1 : ?ks $? ?k = _, H2 : ?ks $? ?k = _ |- _ ] => rewrite H1 in H2; invert H2
+    | [ H : ?ks $? ?k = _ |- context [ ?ks $? ?k <> _] ] => unfold not; intros
+    end.
+
+Ltac clean_map_lookups1 :=
+  invert_base_equalities1
+  || contra_map_lookup1
+  || context_map_rewrites1
+  || match goal with
+    | [ H : context [ $0 $? _ ] |- _ ] => rewrite lookup_empty_none in H
+    | [ H : _ $+ (?k,_) $? ?k = _ |- _ ] => rewrite add_eq_o in H by trivial
+    | [ H : _ $+ (?k1,_) $? ?k2 = _ |- _ ] => rewrite add_neq_o in H by auto 2
+    | [ H : _ $+ (?k1,_) $? ?k2 = _ |- _ ] => rewrite add_eq_o in H by auto 2
+    | [ H : context [ match _ $+ (?k,_) $? ?k with _ => _ end ] |- _ ] => rewrite add_eq_o in H by trivial
+    | [ H : context [ match _ $+ (?k1,_) $? ?k2 with _ => _ end ] |- _ ] => rewrite add_neq_o in H by auto 2
+    | [ H : context [ match _ $+ (?k1,_) $? ?k2 with _ => _ end ] |- _ ] => rewrite add_eq_o in H by auto 2
+    | [ |- context[_ $+ (?k,_) $? ?k] ] => rewrite add_eq_o by trivial
+    | [ |- context[_ $+ (?k1,_) $? ?k2] ] => rewrite add_neq_o by auto 2
+    | [ |- context[_ $+ (?k1,_) $? ?k2] ] => rewrite add_eq_o by auto 2
+    | [ |- context[_ $- ?k $? ?k] ] => rewrite remove_eq_o by trivial
+    | [ |- context[_ $- ?k1 $? ?k2] ] => rewrite remove_neq_o by auto 2
+    | [ |- context[_ $- ?k1 $? ?k2] ] => rewrite remove_eq_o by auto 2
+    | [ H : ~ In _ _ |- _ ] => rewrite not_find_in_iff in H
+    | [ |- ~ In _ _ ] => rewrite not_find_in_iff
+    | [ H : In _ _ |- _ ] => rewrite in_find_iff in H
+    | [ H1 : ?m $? ?k = _ , H2 : ?m $? ?k = _ |- _] => rewrite H1 in H2
+    | [ H1 : ?m $? ?k1 = _ , H2 : ?m $? ?k2 = _ |- _] => assert (k1 = k2) as RW by auto 2; rewrite RW in H1; clear RW; rewrite H1 in H2
+    | [ H : ?m $? ?k <> None |- _ ] => cases (m $? k); try contradiction; clear H
+    | [ H : MapsTo _ _ _ |- _ ] => rewrite find_mapsto_iff in H
+    | [ |- context [ MapsTo _ _ _ ] ] => rewrite find_mapsto_iff
+    end.
+
+Ltac contra_map_lookup := repeat (invert_base_equalities1 || contra_map_lookup1).
+Ltac clean_map_lookups := repeat clean_map_lookups1.
+Ltac context_map_rewrites := repeat context_map_rewrites1.
 
 Section MapLemmas.
-
-  Lemma lookup_split : forall V (m : NatMap.t V) k v k' v',
-    (m $+ (k, v)) $? k' = Some v'
-    -> (k' <> k /\ m $? k' = Some v') \/ (k' = k /\ v' = v).
-  Proof.
-    intros.
-    case (eq_dec k k').
-    - intros.
-      subst.
-      right; intuition.
-      rewrite add_eq_o in H by auto.
-      congruence.
-    - intros. left.
-      intuition.
-      rewrite add_neq_o in H by auto.
-      exact H.
-  Qed.
-
-  Lemma lookup_split' : forall V (m : NatMap.t V) k v,
-      m $? k = Some v
-      -> fold (fun k' v' p => p \/ (k = k' /\ v = v')) m False.
-  Proof.
-    intros.
-    (* rewrite <- find_mapsto_iff in H. *)
-    revert dependent H.
-    apply P.fold_rec; intros.
-    
-    - rewrite <- find_mapsto_iff in H0.
-      specialize (H k v). contradiction.
-      
-    - case (eq_dec k k0).
-      + intros. subst.
-        right; intuition.
-        unfold Add in H1.
-        specialize (H1 k0). rewrite H3 in H1.
-        symmetry in H1; rewrite <- find_mapsto_iff in H1.
-        rewrite add_mapsto_iff in H1.
-        destruct H1; intuition.
-      + intros. left. apply H2; auto.
-        (* rewrite <- find_mapsto_iff in H3. unfold Add in *. *)
-        specialize (H1 k). rewrite H3 in H1. symmetry in H1.
-        rewrite <- find_mapsto_iff in H1.
-        rewrite add_mapsto_iff in H1.
-        destruct H1; intuition idtac.
-        symmetry in H4; contradiction.
-        apply find_mapsto_iff; auto.
-  Qed.
 
   Lemma lookup_some_implies_in : forall V (m : NatMap.t V) k v,
       m $? k = Some v
       -> List.In (k,v) (to_list m).
   Proof.
-    intros.
+    intros * H.
 
-    rewrite <- find_mapsto_iff in H.
-    rewrite elements_mapsto_iff in H.
-    rewrite InA_alt in H.
-    destruct H. destruct H.
+    rewrite <- find_mapsto_iff, elements_mapsto_iff, InA_alt in H;
+      split_ex.
     unfold to_list.
 
-    unfold eq_key_elt, Raw.PX.eqke in H; simpl in H.
-    destruct H.
-    subst.
-    rewrite (surjective_pairing x) in H0.
-    assumption.
+    unfold eq_key_elt, Raw.PX.eqke in H; simpl in H; split_ands; subst.
+    rewrite (surjective_pairing x) in *; auto.
+  Qed.
+
+  Lemma lookup_split : forall V (m : NatMap.t V) k v k' v',
+    (m $+ (k, v)) $? k' = Some v'
+    -> (k' <> k /\ m $? k' = Some v') \/ (k' = k /\ v' = v).
+  Proof.
+    intros;
+      case (eq_dec k k'); intros; subst; clean_map_lookups; eauto.
   Qed.
 
   Lemma map_eq_fields_eq :
@@ -192,43 +144,36 @@ Section MapLemmas.
     destruct x as [n1 v1]; destruct y as [n2 v2]; simpl in *.
 
     assert ( (n1,v1) = (n2,v2) ).
-    - unfold Equal in H1; subst; simpl in *.
-      unfold Equal in H1.
-      pose proof H1 as HH1; pose proof H1 as HH2.
-      specialize (HH1 n1); specialize (HH2 n2).
-      unfold find, Raw.find in HH1, HH2; simpl in *.
+    - unfold Equal in *; subst; simpl in *.
+      match goal with
+      | [ H : forall _, _ |- _ ] => 
+        generalize (H n1); generalize (H n2); intros
+      end;
+        unfold find, Raw.find in *; simpl in *.
       
-      pose proof (Raw.MX.elim_compare_eq) as EQn1.
-      pose proof (Raw.MX.elim_compare_eq) as EQn2.
-      specialize (EQn1 n1 n1 (eq_refl n1)); specialize (EQn2 n2 n2 (eq_refl n2)).
-      destruct EQn1, EQn2. rewrite H in *; rewrite H0 in *; clear x H x0 H0.
+      pose proof (Raw.MX.elim_compare_eq (eq_refl n1)) as EQn1.
+      pose proof (Raw.MX.elim_compare_eq (eq_refl n2)) as EQn2.
+      split_ex.
+      rewrite H2, H3 in *.
 
-      cases (OrderedTypeEx.Nat_as_OT.compare n1 n2).
-      + invert HH1.
-      + unfold OrderedTypeEx.Nat_as_OT.eq in e; invert HH1; trivial.
-      + cases (OrderedTypeEx.Nat_as_OT.compare n2 n1).
-        * invert HH2.
-        * unfold OrderedTypeEx.Nat_as_OT.eq in e; invert HH2; trivial. (* hokey proof -- shorter than deriving the contradiction *)
-        * unfold OrderedTypeEx.Nat_as_OT.lt in l; unfold OrderedTypeEx.Nat_as_OT.lt in l0.
-          assert (LT : n1 < n2) by assumption; apply lt_le in LT; contradiction.
+      cases (OrderedTypeEx.Nat_as_OT.compare n1 n2);
+        cases (OrderedTypeEx.Nat_as_OT.compare n2 n1);
+        try discriminate; subst; repeat invert_base_equalities1; eauto;
+          repeat 
+            match goal with
+            | [ H : OrderedTypeEx.Nat_as_OT.eq _ _ |- _ ] => unfold OrderedTypeEx.Nat_as_OT.eq in H; subst
+            end; eauto.
+      Nat.order.
 
-    - constructor; auto.
+    - split; auto; subst.
 
-      subst.
-
-      pose proof (Raw.MX.elim_compare_eq) as EQn2.
-      specialize (EQn2 n2 n2 (eq_refl n2)).
-      destruct EQn2.
+      pose proof (Raw.MX.elim_compare_eq (eq_refl n2)); split_ex.
       unfold Equal in *; simpl in *.
 
       intro k; invert H4.
-      case (k ==n n2); intros; subst.
-      + rewrite remove_eq_o by apply eq_refl.
-        rewrite remove_eq_o by apply eq_refl.
-        auto.
-      + rewrite remove_neq_o by auto.
-        rewrite remove_neq_o by auto.
-        specialize (H1 k); assumption.
+      case (k ==n n2); intros; subst;
+        (rewrite !remove_eq_o by auto 2)
+      || (rewrite !remove_neq_o by auto 2); eauto.
   Qed.
 
   Lemma remove_hd :
@@ -239,8 +184,18 @@ Section MapLemmas.
     unfold remove, Raw.remove. simpl.
     eapply map_eq_elements_eq; simpl.
 
-    pose proof (Raw.MX.elim_compare_eq) as EQn; specialize (EQn n n (eq_refl n)); destruct EQn.
+    pose proof (Raw.MX.elim_compare_eq (eq_refl n)); split_ex.
     rewrite H; trivial.
+  Qed.
+
+  Lemma Empty_eq_empty :
+    forall v m,
+      Empty (elt:=v) m
+      -> $0 = m.
+  Proof.
+    intros.
+    apply elements_Empty in H.
+    apply map_eq_elements_eq. auto.
   Qed.
 
   Lemma map_eq_Equal :
@@ -248,29 +203,23 @@ Section MapLemmas.
       Equal m m'
       -> m = m'.
   Proof.
-
-    intro V.
-    intro m.
     destruct m as [l sl].
     generalize dependent l.
     induction l; intros.
 
     - unfold Equal in H. simpl in *.
-      symmetry in H.
       apply map_eq_elements_eq; simpl.
+      symmetry in H.
 
       destruct m'; simpl in *.
-      cases this0.
-      + trivial.
-      + intros. destruct p. specialize (H n).
-        unfold find, Raw.find in H; simpl in H.
-        (* assert (n = n) by trivial. *)
+      cases this0; trivial.
+      exfalso.
+      destruct p; specialize (H n).
+      unfold find, Raw.find in *; simpl in *.
         
-        pose proof (Raw.MX.elim_compare_eq).
-        specialize (H0 n n (eq_refl n)).
-        destruct H0.
-        rewrite H0 in H.
-        invert H.
+      pose proof (Raw.MX.elim_compare_eq (eq_refl n)); split_ex.
+      rewrite H0 in H.
+      discriminate.
 
     - simpl.
       destruct m'; cases this0; simpl in *.
@@ -278,11 +227,9 @@ Section MapLemmas.
         unfold Equal in H; specialize (H n).
         unfold find, Raw.find in H; simpl in H.
         pose proof (Raw.MX.elim_compare_eq) as P; specialize (P n n (eq_refl n)); destruct P.
-        rewrite H0 in H; invert H.
+        rewrite H0 in H; discriminate.
 
-      + destruct a as [n1 v1]; destruct p as [n2 v2].
-        eapply Equal_hd_tl in H; eauto.
-        destruct H; invert H.
+      + eapply Equal_hd_tl in H; eauto; split_ands; subst.
         unfold Equal in H0; simpl in *.
 
         dependent destruction sl.
@@ -290,7 +237,9 @@ Section MapLemmas.
         specialize (IHl sl {| this := this0 ; sorted := sorted0 |}).
 
         assert (tlEQ : Equal {| this := l ; sorted := sl |} {| this := this0 ; sorted := sorted0 |} ).
-        * unfold Equal; intro k; specialize (H0 k); do 2 rewrite remove_hd in H0; assumption.
+        * destruct p;
+            unfold Equal; intro k;
+              specialize (H0 k); rewrite !remove_hd in H0; eauto.
         * specialize (IHl tlEQ).
           dependent destruction IHl.
           eapply map_eq_elements_eq; simpl; f_equal.
@@ -326,34 +275,20 @@ Section MapLemmas.
     invert H.
   Qed.
 
-  Lemma Empty_eq_empty :
-    forall v m,
-      Empty (elt:=v) m
-      -> $0 = m.
-  Proof.
-    intros.
-    apply elements_Empty in H.
-    apply map_eq_elements_eq. auto.
-  Qed.
-
   Lemma map_add_eq :
     forall {V} (m : NatMap.t V) k v1 v2,
       m $+ (k,v1) $+ (k,v2) = m $+ (k,v2).
   Proof.
-    intros; apply map_eq_Equal; unfold Equal; intros.
-    cases (k ==n y); subst.
-    - rewrite !add_eq_o; trivial.
-    - rewrite !add_neq_o; trivial.
+    intros; apply map_eq_Equal; unfold Equal; intros;
+      destruct (k ==n y); subst; clean_map_lookups; eauto.
   Qed.
 
   Lemma map_add_remove_eq :
-    forall {V} (m : NatMap.t V) k1 v1,
-      m $+ (k1, v1) $- k1 = m $- k1.
+    forall {V} (m : NatMap.t V) k v1,
+      m $+ (k, v1) $- k = m $- k.
   Proof.
     intros. apply map_eq_Equal; unfold Equal; intros.
-    case (k1 ==n y); intros; subst.
-    - rewrite !remove_eq_o; auto.
-    - rewrite !remove_neq_o, add_neq_o; auto.
+      destruct (k ==n y); subst; clean_map_lookups; eauto.
   Qed.
 
   Lemma map_add_remove_neq :
@@ -362,11 +297,7 @@ Section MapLemmas.
       -> m $+ (k1, v1) $- k2 = m $- k2 $+ (k1, v1).
   Proof.
     intros. apply map_eq_Equal; unfold Equal; intros.
-    case (k2 ==n y); case (k1 ==n y); intros; subst.
-    - contradiction.
-    - rewrite add_neq_o by assumption; rewrite !remove_eq_o; trivial.
-    - rewrite remove_neq_o by assumption; rewrite !add_eq_o; trivial.
-    - rewrite remove_neq_o by assumption; rewrite !add_neq_o by assumption; rewrite remove_neq_o; auto.
+    destruct (k2 ==n y); destruct (k1 ==n y); intros; subst; clean_map_lookups; eauto.
   Qed.
 
   Lemma map_ne_swap :
@@ -386,28 +317,8 @@ Section MapLemmas.
   Proof.
     intros.
     eapply map_eq_Equal; unfold Equal; intros.
-    cases (y ==n k1); subst; eauto.
-    rewrite remove_eq_o by trivial; rewrite H; trivial.
-    rewrite remove_neq_o; auto.
+    destruct (y ==n k1); subst; clean_map_lookups; eauto.
   Qed.
-
-  (* Lemma fold_over_empty : *)
-  (*   forall {V} (m : NatMap.t V), *)
-  (*     fold (fun k v a => *)
-  (*             if match v with *)
-  (*                | _ => true *)
-  (*                end then a $+ (k,v) else a) m $0 = m. *)
-  (* Proof. *)
-
-  (*   intros. *)
-  (*   apply P.fold_rec. *)
-  (*   - intros; simpl. eapply map_eq_Equal; unfold Equal; intros. *)
-  (*     rewrite empty_o. admit. *)
-  (*   - intros; subst. *)
-  (*     apply map_eq_Equal; unfold Equal; intros. *)
-  (*     unfold P.Add in H1. specialize (H1 y). symmetry; auto. *)
-
-  (* Admitted. *)
 
 End MapLemmas.
 
@@ -443,12 +354,31 @@ Proof.
     destruct (k ==n y); subst; context_map_rewrites; clean_map_lookups; trivial.
 Qed.
 
+Ltac solve_simple_maps1 :=
+  clean_map_lookups1
+  || match goal with
+    | [ |- context [ _ $+ (?k1,_) $? ?k2 ] ] => destruct (k1 ==n k2); subst
+    | [ H : context [ _ $+ (?k1,_) $? ?k2 ] |- _ ] => destruct (k1 ==n k2); subst
+    | [ |- context [ match ?m $? ?k with _ => _ end ]] => cases (m $? k)
+    | [ H : context [ match ?m $? ?k with _ => _ end ] |- _ ] => cases (m $? k)
+    | [ |- context [ ?m $+ (?k,_) $+ (?k,_) ]] => rewrite map_add_eq by trivial
+    (* maybe a little too specific? *)
+    | [ |- context [ ?m $+ (?k1,_) $+ (?k2,_) = ?m $+ (?k2,_) $+ (?k1,_)]] => rewrite map_ne_swap by auto 2; trivial
+    end.
+
+Ltac solve_simple_maps := repeat solve_simple_maps1.
+
+Ltac maps_equal1 :=
+  match goal with
+  | [ |- _ $+ (_,_) = _ ] => apply map_eq_Equal; unfold Equal; intros
+  | [ |- _ = _ $+ (_,_) ] => apply map_eq_Equal; unfold Equal; intros
+  end
+  || solve_simple_maps1.
+
+(* TODO -- think of how to eliminate this *)
 Ltac maps_equal :=
   apply map_eq_Equal; unfold Equal; intros;
-  repeat
-    match goal with
-    | [ |- context [ _ $+ (?k1,?v) $? ?k2 ]] => progress (clean_map_lookups) || destruct (k1 ==n k2); subst
-    end; trivial.
+  (repeat solve_simple_maps1); trivial.
 
 Ltac canonicalize_map m :=
   match m with
@@ -524,17 +454,16 @@ Section MapPredicates.
       Forall_natmap m <-> (forall k v, m $? k = Some v -> P v).
   Proof.
     split.
-    - induction 1; contra_map_lookup; intros.
-      cases (k ==n k0); intros; subst; clean_map_lookups; eauto.
+    - induction 1; intros; solve_simple_maps; eauto.
     - induction m using P.map_induction_bis; intros; Equal_eq; eauto.
-      + econstructor.
-      + assert (Forall_natmap m).
-        eapply IHm; intros.
-        apply H0 with (k:=k); eauto.
-        cases (x ==n k); subst; clean_map_lookups; eauto.
+      econstructor; solve_simple_maps; eauto.
 
-        econstructor; eauto.
-        eapply H0 with (k := x); clean_map_lookups; auto.
+      assert (Forall_natmap m).
+      eapply IHm; intros.
+      apply H0 with (k:=k); solve_simple_maps; eauto.
+
+      econstructor; eauto.
+      eapply H0 with (k := x); clean_map_lookups; auto.
   Qed.
 
   Lemma Forall_natmap_in_prop :
@@ -567,9 +496,8 @@ Section MapPredicates.
     rewrite Forall_natmap_forall in *; intros.
     assert (P v) by (eapply H with (k0:=k); clean_map_lookups; trivial).
     split; auto; intros.
-    cases (k ==n k0); subst; clean_map_lookups.
+    destruct (k ==n k0); subst; clean_map_lookups; eauto.
     eapply H with (k0:=k0); clean_map_lookups; trivial.
   Qed.
 
 End MapPredicates.
-

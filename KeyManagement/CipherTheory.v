@@ -9,10 +9,11 @@ Require Import
         Maps
         Messages
         Common
-        MapLtac
         Keys
         Tactics
-        AdversaryUniverse.
+        Automation
+        AdversaryUniverse
+        KeysTheory.
 
 Require IdealWorld
         RealWorld.

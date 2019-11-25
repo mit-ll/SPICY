@@ -9,7 +9,6 @@ Require Import
         Maps
         Messages
         Common
-        MapLtac
         Keys
         RealWorld
 .

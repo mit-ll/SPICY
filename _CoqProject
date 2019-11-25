@@ -10,7 +10,6 @@ KeyManagement/InvariantsTheory.v
 KeyManagement/Common.v
 KeyManagement/MyPrelude.v
 KeyManagement/Maps.v
-KeyManagement/MapLtac.v
 KeyManagement/MessageEq.v
 KeyManagement/Automation.v
 KeyManagement/Keys.v
@@ -23,4 +22,5 @@ KeyManagement/Tactics.v
 KeyManagement/Messages.v
 
 protocols/ProtocolAutomation.v
+protocols/UniverseEqAutomation.v
 protocols/EncPingProtocol.v

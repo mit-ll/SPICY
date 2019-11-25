@@ -9,7 +9,6 @@ Require Import
         Maps
         Messages
         Common
-        MapLtac
         Keys
         Automation
         Tactics
@@ -151,7 +150,7 @@ Section FindUserKeysCleanUsers.
     apply merge_perms_split in H; split_ors.
     - specialize (IHusrs H);
         cases (clean_key_permissions (honestk $k++ ukeys) (key_heap e) $? k_id);
-        simplify_key_merges; eauto.
+        solve_perm_merges; eauto.
     - assert (clean_key_permissions (honestk $k++ ukeys) (key_heap e) $? k_id = Some true).
       eapply clean_key_permissions_inv in H; split_ands.
       eapply clean_key_permissions_keeps_honest_permission; eauto.
@@ -159,10 +158,10 @@ Section FindUserKeysCleanUsers.
       unfold honest_perm_filter_fn in H1.
       cases (honestk $? k_id); cases (ukeys $? k_id);
         try discriminate;
-        simplify_key_merges1;
+        solve_perm_merges;
         eauto.
-      destruct b; try discriminate; eauto.
-      cases (findUserKeys (clean_users (honestk $k++ ukeys) cs usrs) $? k_id); simplify_key_merges; eauto.
+
+      cases (findUserKeys (clean_users (honestk $k++ ukeys) cs usrs) $? k_id); solve_perm_merges; eauto.
   Qed.
 
   Hint Resolve findUserKeys_clean_users_addnl_keys.
@@ -189,14 +188,14 @@ Section FindUserKeysCleanUsers.
       assert (findUserKeys (clean_users honestk cs usrs) $? k_id = Some true).
       subst.
       rewrite findUserKeys_add_user; eauto.
-      cases (clean_key_permissions honestk (key_heap e) $? k_id); simplify_key_merges; eauto.
+      cases (clean_key_permissions honestk (key_heap e) $? k_id); solve_perm_merges; eauto.
 
     - assert ( honestk $? k_id = Some true )
         by (subst; eapply findUserKeys_has_private_key_of_user with (u_id := x); clean_map_lookups; eauto).
       assert (clean_key_permissions honestk (key_heap e) $? k_id = Some true).
       eapply clean_key_permissions_keeps_honest_permission; eauto.
       unfold honest_perm_filter_fn; context_map_rewrites; trivial.
-      cases (findUserKeys (clean_users honestk cs usrs) $? k_id); simplify_key_merges; eauto.
+      cases (findUserKeys (clean_users honestk cs usrs) $? k_id); solve_perm_merges; eauto.
   Qed.
 
   Lemma clean_users_no_change_honestk'' :
@@ -212,19 +211,15 @@ Section FindUserKeysCleanUsers.
     rewrite clean_users_add_pull in H0; simpl in H.
     unfold findUserKeys in H0; rewrite fold_add in H0; eauto;
       simpl in H0;
-      rewrite !findUserKeys_notation in H0.
+      rewrite !findUserKeys_notation in H0;
+      clean_map_lookups;
+      eauto.
 
     apply merge_perms_split in H0.
-
     split_ors.
 
-    - specialize (IHusrs _ _ _ H0).
-      cases (key_heap e $? k_id); simplify_key_merges; eauto.
-    - apply clean_key_permissions_inv in H0; split_ands.
-      cases (findUserKeys usrs $? k_id); simplify_key_merges; eauto.
-
-    - apply not_find_in_iff.
-      apply not_find_in_iff in H; eauto.
+    - specialize (IHusrs _ _ _ H0); solve_perm_merges; eauto.
+    - apply clean_key_permissions_inv in H0; split_ands; solve_perm_merges; eauto.
   Qed.
 
   Lemma clean_users_no_change_honestk' :
@@ -266,7 +261,7 @@ Section FindUserKeysCleanUsers.
     eapply clean_key_permissions_drops_dishonest_permission; eauto.
     unfold honest_perm_filter_fn; context_map_rewrites; trivial.
     eapply clean_key_permissions_adds_no_permissions; auto.
-    simplify_key_merges; eauto.
+    solve_perm_merges; eauto.
   Qed.
 
   Lemma findUserKeys_clean_users_removes_non_honest_keys' :
@@ -284,7 +279,7 @@ Section FindUserKeysCleanUsers.
     eapply clean_key_permissions_drops_dishonest_permission; eauto.
     unfold honest_perm_filter_fn; context_map_rewrites; trivial.
     eapply clean_key_permissions_adds_no_permissions; auto.
-    simplify_key_merges; eauto.
+    solve_perm_merges; eauto.
   Qed.
 
   Lemma findUserKeys_clean_users_correct :

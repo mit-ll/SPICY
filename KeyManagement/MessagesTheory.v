@@ -9,7 +9,6 @@ Require Import
         Maps
         Messages
         Common
-        MapLtac
         Keys
         Automation
         Tactics
@@ -35,7 +34,7 @@ Proof.
     unfold RealWorld.msg_honestly_signed, RealWorld.msg_to_this_user;
     simpl; context_map_rewrites; unfold RealWorld.cipher_to_user;
       destruct (msg_to0 ==n msg_to0); subst; try contradiction;
-      rewrite <- RealWorld.honest_key_honest_keyb; auto.
+      rewrite <- honest_key_honest_keyb; auto.
 Qed.
 
 Lemma accepted_safe_msg_pattern_honestly_signed :
