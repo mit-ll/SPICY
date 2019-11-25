@@ -205,7 +205,7 @@ Inductive user_cmd : Type -> Type :=
 | SignEncrypt {t} (k__sign k__enc : key_identifier) (msg : message t) : user_cmd (crypto t)
 | Decrypt {t} (c : crypto t) : user_cmd (message t)
 
-| Sign    {t} (k : key_identifier) (msg : message t) : user_cmd (crypto t)
+| Sign    {t} (k : key_identifier) (msg_to : user_id) (msg : message t) : user_cmd (crypto t)
 | Verify  {t} (k : key_identifier) (c : crypto t) : user_cmd (bool * message t)
 
 | GenerateSymKey  (usage : key_usage) : user_cmd key_permission
@@ -537,7 +537,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> cs' = cs $+ (c_id, cipherMsg)
     -> mycs' = c_id :: mycs
     -> step_user Silent u_id
-                (usrs, adv, cs , gks, ks, qmsgs, mycs,  froms, sents, cur_n,  Sign k_id msg)
+                (usrs, adv, cs , gks, ks, qmsgs, mycs,  froms, sents, cur_n,  Sign k_id msg_to msg)
                 (usrs, adv, cs', gks, ks, qmsgs, mycs', froms, sents, cur_n', Return (SignedCiphertext c_id))
 
 | StepVerify : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks qmsgs mycs froms sents cur_n

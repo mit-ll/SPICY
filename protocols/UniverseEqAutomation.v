@@ -56,7 +56,8 @@ Ltac smash_universe :=
   repeat (match goal with
           | [ |- {| RealWorld.users := _
                  ; RealWorld.adversary := _
-                 ; RealWorld.all_ciphers := _ |} = _
+                 ; RealWorld.all_ciphers := _
+                 ; RealWorld.all_keys := _ |} = _
             ] => eapply real_univ_eq_fields_eq
           | [ |- _ = _ ] => reflexivity
           end; m_equal).

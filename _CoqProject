@@ -23,4 +23,5 @@ KeyManagement/Messages.v
 
 protocols/ProtocolAutomation.v
 protocols/UniverseEqAutomation.v
-protocols/EncPingProtocol.v
+
+protocols/SimplePingProtocol.v
