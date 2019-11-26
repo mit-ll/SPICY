@@ -107,29 +107,29 @@ Section RealWorldUniverseProperties.
            ).
 
   Inductive encrypted_cipher_ok (cs : ciphers) (gks : keys): cipher -> Prop :=
-  | SigCipherHonestOk : forall {t} (msg : message t) msg_to nonce k k_data,
+  | SigCipherHonestOk : forall {t} (msg : message t) msg_to nonce k kt,
       honestk $? k = Some true
-      -> gks $? k = Some k_data
+      -> gks $? k = Some {| keyId := k; keyUsage := Signing; keyType := kt |}
       -> (forall k_id, findKeysMessage msg $? k_id = Some true -> False)
       -> (forall k_id, findKeysMessage msg $? k_id = Some false -> honestk $? k_id = Some true)
       -> encrypted_cipher_ok cs gks (SigCipher k msg_to nonce msg)
-  | SigCipherNotHonestOk : forall {t} (msg : message t) msg_to nonce k k_data,
+  | SigCipherNotHonestOk : forall {t} (msg : message t) msg_to nonce k kt,
       honestk $? k <> Some true
-      -> gks $? k = Some k_data
+      -> gks $? k = Some {| keyId := k; keyUsage := Signing; keyType := kt |}
       -> encrypted_cipher_ok cs gks (SigCipher k msg_to nonce msg)
-  | SigEncCipherAdvSignedOk :  forall {t} (msg : message t) msg_to nonce k__s k__e k_data__s k_data__e,
+  | SigEncCipherAdvSignedOk :  forall {t} (msg : message t) msg_to nonce k__s k__e kt__s kt__e,
       honestk $? k__s <> Some true
-      -> gks $? k__s = Some k_data__s
-      -> gks $? k__e = Some k_data__e
+      -> gks $? k__s = Some {| keyId := k__s; keyUsage := Signing; keyType := kt__s |}
+      -> gks $? k__e = Some {| keyId := k__e; keyUsage := Encryption; keyType := kt__e |}
       -> (forall k kp, findKeysMessage msg $? k = Some kp
                  -> exists v, gks $? k = Some v
                       /\ (kp = true -> honestk $? k <> Some true))
       -> encrypted_cipher_ok cs gks (SigEncCipher k__s k__e msg_to nonce msg)
-  | SigEncCipherHonestSignedEncKeyHonestOk : forall {t} (msg : message t) msg_to nonce k__s k__e k_data__s k_data__e,
+  | SigEncCipherHonestSignedEncKeyHonestOk : forall {t} (msg : message t) msg_to nonce k__s k__e kt__s kt__e,
       honestk $? k__s = Some true
       -> honestk $? k__e = Some true
-      -> gks $? k__s = Some k_data__s
-      -> gks $? k__e = Some k_data__e
+      -> gks $? k__s = Some {| keyId := k__s; keyUsage := Signing; keyType := kt__s |}
+      -> gks $? k__e = Some {| keyId := k__e; keyUsage := Encryption; keyType := kt__e |}
       -> (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true /\ kp = false)
       -> encrypted_cipher_ok cs gks (SigEncCipher k__s k__e msg_to nonce msg).
 

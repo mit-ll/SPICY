@@ -209,8 +209,13 @@ Hint Constructors RSimplePing.
 
 Import SimulationAutomation.
 
+Hint Unfold
+     A B PERMS__a PERMS__b
+     real_univ_start real_univ_sent1 real_univ_recd1 real_univ_done mkrU
+     ideal_univ_start ideal_univ_sent1 ideal_univ_recd1 ideal_univ_done mkiU : constants.
+
 Hint Extern 0 (rstepSilent ^* _ _) =>
-progress(unfold real_univ_start, real_univ_sent1, real_univ_recd1, real_univ_done, mkrU; simpl).
+ progress(unfold real_univ_start, real_univ_sent1, real_univ_recd1, real_univ_done, mkrU; simpl).
 Hint Extern 1 (RSimplePing (RealWorld.buildUniverse _ _ _ _ _ _) _) => unfold RealWorld.buildUniverse; simpl.
 Hint Extern 1 (RSimplePing (RealWorld.peel_adv _) _) => unfold RealWorld.peel_adv; simpl.
 
@@ -246,7 +251,6 @@ Section FeebleSimulates.
         churn; simpl_real_users_context;
         [> eexists; split; swap 1 2; eauto 12 ..]
       ).
-
   Qed.
 
   Lemma rsimpleping_loud_simulates :
@@ -260,6 +264,7 @@ Section FeebleSimulates.
       destruct U__r0; destruct U__r; simpl in *; subst.
 
     - churn.
+      
       do 3 eexists;
         repeat (apply conj);
         swap 3 4; swap 2 3; swap 1 2;
