@@ -11,6 +11,7 @@ Require Import
         MyPrelude
         Maps
         Messages
+        MessageEq
         Common
         Keys
         Automation
@@ -38,7 +39,7 @@ Section IdealProtocol.
 
   Definition CH__A2B : channel_id := 0.
 
-  Definition PERMS__a := $0 $+ (CH__A2B, {| read := false; write := true |}). (* writer *)
+  Definition PERMS__a := $0 $+ (CH__A2B, {| read := true; write := true |}). (* writer *)
   Definition PERMS__b := $0 $+ (CH__A2B, {| read := true; write := false |}). (* reader *)
 
   Definition mkiU (cv : channels) (p__a p__b : cmd nat): universe nat :=
@@ -269,11 +270,22 @@ Section FeebleSimulates.
         repeat (apply conj);
         swap 3 4; swap 2 3; swap 1 2;
        simpl; clean_map_lookups;
-       eauto; eauto 12.
+         eauto; eauto 12.
 
       simpl_real_users_context.
       simpl_ideal_users_context.
-      admit. (* equality goal *)
+      eapply Out; simpl; auto.
+      eapply CryptoSigCase; simpl; eauto.
+      econstructor.
+      intros.
+      split; intros; eauto.
+
+      apply lookup_some_implies_in in H1; simpl in H1; split_ors; try contradiction;
+        invert H1; clean_map_lookups; eauto.
+      simpl. unfold PERMS__a; clean_map_lookups; eauto.
+
+      apply lookup_some_implies_in in H1; simpl in H1; split_ors; try contradiction;
+        invert H1; clean_map_lookups; simpl; eauto.
 
     - churn.
       + do 3 eexists;
@@ -293,7 +305,21 @@ Section FeebleSimulates.
         
       simpl_real_users_context.
       simpl_ideal_users_context.
-      admit. (* equality goal *)
+      eapply Inp; simpl; auto.
+      eapply CryptoSigCase; simpl; eauto.
+      econstructor.
+      intros.
+      split; intros; eauto.
+
+      apply lookup_some_implies_in in H0; simpl in H0; split_ors; try contradiction;
+        invert H0; clean_map_lookups; eauto.
+      simpl. unfold PERMS__a; clean_map_lookups; eauto.
+
+      apply lookup_some_implies_in in H0; simpl in H0; split_ors; try contradiction;
+        invert H0; clean_map_lookups; simpl; eauto.
+
+      unfold A , B in *; clean_map_lookups; simpl.
+      unfold A__keys; eauto.
 
       + do 3 eexists;
           repeat (apply conj);
@@ -303,8 +329,19 @@ Section FeebleSimulates.
         
       simpl_real_users_context.
       simpl_ideal_users_context.
-      admit. (* equality goal *)
-      
+      eapply Inp; simpl; auto.
+      eapply CryptoSigCase; simpl; eauto.
+      econstructor.
+      intros.
+      split; intros; eauto.
+
+      apply lookup_some_implies_in in H1; simpl in H1; split_ors; try contradiction;
+        invert H1; clean_map_lookups; eauto.
+      simpl. unfold PERMS__a; clean_map_lookups; eauto.
+
+      apply lookup_some_implies_in in H2; simpl in H2; split_ors; try contradiction;
+        invert H2; clean_map_lookups; simpl; eauto.
+
     - churn.
 
     (* time *)
@@ -321,7 +358,7 @@ Section FeebleSimulates.
     (*     simpl; clean_map_lookups; *)
     (*     eauto; eauto 12)). *)
 
-  Admitted.
+  Qed.
 
   Lemma rsimpleping_univere_ok :
     simulates_universe_ok RSimplePing.

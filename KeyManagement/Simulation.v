@@ -49,10 +49,11 @@ Inductive action_matches : forall {A B : Type},
       -> U__iw.(IdealWorld.channel_vector) $? ch_id = Some ((existT _ _ m__expected) :: ms)
       -> MessageEq.message_eq m__rw U__rw m__iw U__iw ch_id
       -> action_matches rw U__rw iw U__iw
-| Out : forall A B t (m__rw : RealWorld.crypto t) (m__iw m__expected : IdealWorld.message.message t) ms (U__rw : RealWorld.universe A B) (U__iw : IdealWorld.universe A) rw iw ch_id cs ps suid_to suid_from sents,
+| Out : forall A B t (m__rw : RealWorld.crypto t) (m__iw : IdealWorld.message.message t)
+          (U__rw : RealWorld.universe A B) (U__iw : IdealWorld.universe A) rw iw ch_id cs ps suid_to suid_from sents,
     rw = RealWorld.Output m__rw suid_to suid_from sents
     -> iw = IdealWorld.Output m__iw ch_id cs ps
-    -> U__iw.(IdealWorld.channel_vector) $? ch_id = Some (ms ++ [existT _ _ m__expected])
+    (* -> U__iw.(IdealWorld.channel_vector) $? ch_id = Some (ms ++ [existT _ _ m__expected]) *)
     -> MessageEq.message_eq m__rw U__rw m__iw U__iw ch_id
     -> action_matches rw U__rw iw U__iw
 .

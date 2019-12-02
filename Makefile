@@ -18,6 +18,9 @@ protocols: coq
 pingpong: coq
 	$(MAKE) -f Makefile.coq protocols/EncPingProtocol.vo
 
+simpleping: coq
+	$(MAKE) -f Makefile.coq protocols/SimplePingProtocol.vo
+
 Makefile.coq.conf: _CoqProject
 	coq_makefile -f _CoqProject -o Makefile.coq
 

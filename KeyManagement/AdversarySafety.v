@@ -6966,7 +6966,6 @@ Section SingleAdversarySimulates.
 
     - eapply Out.
       2:reflexivity.
-      2:eassumption.
       2:eapply msg_matches_strip; eauto.
       unfold strip_action in H2.
       destruct a__r; try discriminate.
