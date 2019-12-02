@@ -202,7 +202,7 @@ Inductive user_cmd : Type -> Type :=
 | Recv {t} (pat : msg_pat) : user_cmd (crypto t)
 
 (* Crypto!! *)
-| SignEncrypt {t} (k__sign k__enc : key_identifier) (msg : message t) : user_cmd (crypto t)
+| SignEncrypt {t} (k__sign k__enc : key_identifier) (msg_to : user_id) (msg : message t) : user_cmd (crypto t)
 | Decrypt {t} (c : crypto t) : user_cmd (message t)
 
 | Sign    {t} (k : key_identifier) (msg_to : user_id) (msg : message t) : user_cmd (crypto t)
@@ -508,7 +508,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> cs' = cs $+ (c_id, cipherMsg)
     -> mycs' = c_id :: mycs
     -> step_user Silent u_id
-                (usrs, adv, cs , gks, ks, qmsgs, mycs,  froms, sents, cur_n,  SignEncrypt k__signid k__encid msg)
+                (usrs, adv, cs , gks, ks, qmsgs, mycs,  froms, sents, cur_n,  SignEncrypt k__signid k__encid msg_to msg)
                 (usrs, adv, cs', gks, ks, qmsgs, mycs', froms, sents, cur_n', Return (SignedCiphertext c_id))
 
 | StepDecrypt : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks ks' qmsgs mycs mycs'

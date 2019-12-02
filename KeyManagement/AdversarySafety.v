@@ -5098,7 +5098,7 @@ Section SingleAdversarySimulates.
         -> ( ( enc_cmd = Sign k__signid msg_to msg
             /\ c = SigCipher k__signid msg_to (Some u_id,cur_n) msg)
           \/ ( exists k__encid kp,
-                  enc_cmd = SignEncrypt k__signid k__encid msg
+                  enc_cmd = SignEncrypt k__signid k__encid msg_to msg
                 /\ ks $? k__encid = Some kp
                 /\ keys_mine ks (findKeysMessage msg)
                 /\ c = SigEncCipher k__signid k__encid msg_to (Some u_id,cur_n) msg)
