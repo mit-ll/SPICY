@@ -253,10 +253,10 @@ Module SimulationAutomation.
 
     Lemma step_user_inv_enc :
       forall {A B t} (usrs usrs' : honest_users A) (adv adv' : user_data B) k__sign k__enc (msg : message t)
-        lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' tos tos' cur_n cur_n' cmd,
+        lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' tos tos' cur_n cur_n' msg_to cmd,
         step_user lbl
                   u_id
-                  (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cur_n, SignEncrypt k__sign k__enc msg)
+                  (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cur_n, SignEncrypt k__sign k__enc msg_to msg)
                   (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cur_n', cmd)
         -> usrs = usrs'
         /\ adv = adv'
@@ -274,7 +274,7 @@ Module SimulationAutomation.
               /\ gks $? k__sign = Some (MkCryptoKey k__sign Signing kt__sign)
               /\ ks $? k__enc   = Some kp__enc
               /\ ks $? k__sign  = Some true)
-        /\ (exists c_id msg_to,
+        /\ (exists c_id,
               ~ In c_id cs
               /\ cs' = cs $+ (c_id, SigEncCipher k__sign k__enc msg_to (u_id, cur_n) msg)
               /\ mycs' = c_id :: mycs
