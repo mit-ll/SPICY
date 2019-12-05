@@ -342,7 +342,13 @@ Definition buildUniverseAdv {A B}
 Definition extractPlainText {t} (msg : message t) : option nat :=
   match msg with
   | message.Content t => Some t
-  | _           => None
+  | _                 => None
+  end.
+
+Definition extractPermission {t} (msg : message t) : option key_permission :=
+  match msg with
+  | Permission p => Some p
+  | _            => None
   end.
 
 Definition updateTrackedNonce {t} (to_usr : option user_id) (froms : recv_nonces) (cs : ciphers) (msg : crypto t) :=

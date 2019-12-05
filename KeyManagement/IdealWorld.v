@@ -99,6 +99,12 @@ Definition extractContent {t} (msg : message t) : option nat :=
   | _         => None
   end.
 
+Definition extractPermission {t} (msg : message t) : option access :=
+  match msg with
+  | Permission a => Some a
+  | _            => None
+  end.
+
 Inductive action : Type :=
 | Input  t (msg : message t) (ch_id : channel_id) (cs : channels) (ps : permissions)
 | Output t (msg : message t) (ch_id : channel_id) (cs : channels) (ps : permissions)

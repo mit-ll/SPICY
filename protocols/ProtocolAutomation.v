@@ -62,7 +62,7 @@ Ltac equality1 :=
 
   | [ H : _ $+ (_,_) $? _ = _ |- _ ] => progress clean_map_lookups
   | [ H : $0 $? _ = Some _ |- _ ] => apply find_mapsto_iff in H; apply empty_mapsto_iff in H; contradiction
-  | [ H : _  $? _ = Some _ |- _ ] => progress (simpl in H)
+  | [ H : _ $? _ = Some _ |- _ ] => progress (simpl in H)
 
   | [ H : add _ _ _ $? _ = Some ?UD |- _ ] =>
     match type of UD with
@@ -84,7 +84,8 @@ Ltac equality1 :=
   | [ H : (_,_) = (_,_) |- _ ] => inversion H; clear H
   | [ H : Action _ = Action _ |- _ ] => inversion H; clear H
   | [ H : RealWorld.Return _ = RealWorld.Return _ |- _ ] => inversion H; clear H
-  | [ H : existT _ ?x _ = existT _ ?x _ |- _ ] => apply inj_pair2 in H
+  | [ H : existT _ _ _ = existT _ _ _ |- _ ] => apply inj_pair2 in H
+  (* | [ H : existT _ ?x _ = existT _ ?x _ |- _ ] => apply inj_pair2 in H *)
 
   | [ H: RealWorld.SigCipher _ _ = RealWorld.SigCipher _ _ |- _ ] => invert H
   | [ H: RealWorld.SigEncCipher _ _ _ = RealWorld.SigEncCipher _ _ _ |- _ ] => invert H
@@ -465,6 +466,8 @@ Module SimulationAutomation.
     || eapply RealWorld.StepDecrypt
     || eapply RealWorld.StepSign
     || eapply RealWorld.StepVerify
+    || eapply RealWorld.StepGenerateSymKey
+    || eapply RealWorld.StepGenerateAsymKey
   .
 
   Ltac pick_user uid :=
@@ -578,9 +581,9 @@ Module SimulationAutomation.
   Hint Extern 1 (IdealWorld.msg_permissions_valid _ _) => progress simpl.
 
   Hint Extern 1 (_ = RealWorld.addUserKeys _ _) => unfold RealWorld.addUserKeys, map; simpl.
-  Hint Extern 1 (add _ _ _ = _) => m_equal.
-  Hint Extern 1 (find _ _ = _) => m_equal.
-  Hint Extern 1 (_ \in _) => sets.
+  Hint Extern 1 (add _ _ _ = _) => (progress m_equal) || (progress clean_map_lookups).
+  Hint Extern 1 (find _ _ = _) => (progress m_equal) || (progress clean_map_lookups).
+  (* Hint Extern 1 (_ \in _) => sets. *)
 
 End SimulationAutomation.
 

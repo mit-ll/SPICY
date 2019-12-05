@@ -137,14 +137,14 @@ Section RealProtocol.
                         end
                    else 1)).
   
-  Definition real_univ_sent1 kp k cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 :=
+  Definition real_univ_sent1 k_id k cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 :=
     mkrU mycs1 mycs2 [] [] [non1] [] cur_n1 cur_n2
-         (add_key_perm (fst kp) true A__keys) B__keys (KEYS $+ (fst kp, k))
+         (add_key_perm k_id true A__keys) B__keys (KEYS $+ (k_id, k))
          [] [existT _ Access (SignedCiphertext cid1)]
-         (cs $+ (cid1, SigCipher KID1 B non1 (Permission kp)))
+         (cs $+ (cid1, SigCipher KID1 B non1 (Permission (k_id,false))))
          (* user A *)
          ( _  <- Return tt
-         ; Return (fst kp))
+         ; Return k_id)
 
          (* user B *)
          ( c  <- @Recv Access (Signed KID1)
@@ -156,17 +156,17 @@ Section RealProtocol.
                         end
                    else 1)).
 
-  Definition real_univ_recd1 kp k cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 :=
+  Definition real_univ_recd1 k_id k cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 :=
     mkrU mycs1 mycs2 [] [non1] [non1] [] cur_n1 cur_n2
-         (add_key_perm (fst kp) true A__keys) B__keys (KEYS $+ (fst kp,k)) [] []
-         (cs $+ (cid1, SigCipher KID1 B non1 (Permission kp)))
+         (add_key_perm k_id true A__keys) B__keys (KEYS $+ (k_id,k)) [] []
+         (cs $+ (cid1, SigCipher KID1 B non1 (Permission (k_id,false))))
          (* user A *)
          ( _  <- Return tt
-         ; Return (fst kp))
+         ; Return k_id)
 
          (* user B *)
          ( c  <- (Return (SignedCiphertext cid1))
-         ; v  <- @Verify Nat KID1 c
+         ; v  <- @Verify Access KID1 c
          ; Return (if fst v
                    then match snd v with
                         | message.Permission p => fst p
@@ -174,27 +174,27 @@ Section RealProtocol.
                         end
                    else 1)).
 
-  Definition real_univ_done kp k cs mycs1 mycs2 froms1 froms2 sents1 sents2 cur_n1 cur_n2 cid1 seq1 :=
+  Definition real_univ_done k_id k cs mycs1 mycs2 froms1 froms2 sents1 sents2 cur_n1 cur_n2 cid1 seq1 :=
     mkrU mycs1 mycs2 froms1 froms2 sents1 sents2 cur_n1 cur_n2
-         (add_key_perm (fst kp) true A__keys) B__keys (KEYS $+ (fst kp, k))  [] []
-         (cs $+ (cid1, SigCipher KID1 B seq1 (Permission kp)))
+         (add_key_perm k_id true A__keys) B__keys (KEYS $+ (k_id, k))  [] []
+         (cs $+ (cid1, SigCipher KID1 B seq1 (Permission (k_id,false))))
          (* user A *)
-         ( Return (fst kp))
+         (Return k_id)
 
          (* user B *)
-         ( Return (fst kp)).
+         (Return k_id).
 
   Inductive RSimplePing : RealWorld.simpl_universe nat -> IdealWorld.universe nat -> Prop :=
   | Start : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 adv,
       rstepSilent^* (real_univ_start cs mycs1 mycs2 cur_n1 cur_n2 adv) U__r
       -> lameAdv tt adv
       -> RSimplePing (peel_adv U__r) ideal_univ_start
-  | Sent1 : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 kp k chid cid1 non1 adv,
-      rstepSilent^* (real_univ_sent1 kp k cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
+  | Sent1 : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 k k_id chid cid1 non1 adv,
+      rstepSilent^* (real_univ_sent1 k_id k cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
       -> lameAdv tt adv
       -> RSimplePing (peel_adv U__r) (ideal_univ_sent1 chid)
-  | Recd1 : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 kp k chid cid1 non1 adv,
-      rstepSilent^* (real_univ_recd1 kp k cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
+  | Recd1 : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 k k_id chid cid1 non1 adv,
+      rstepSilent^* (real_univ_recd1 k_id k cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
       -> lameAdv tt adv
       -> RSimplePing (peel_adv U__r) (ideal_univ_recd1 chid)
   (* | Done : forall U__r cs mycs1 mycs2 froms1 froms2 sents1 sents2 cur_n1 cur_n2 n cid1 seq1 adv, *)
@@ -253,17 +253,46 @@ Section FeebleSimulates.
       + eexists; split; swap 1 2; eauto 12.
       + eexists; split; swap 1 2; eauto 12.
       + eexists; split; swap 1 2; eauto 12.
+      + eexists; split; swap 1 2; eauto 12.
 
-        eapply Start.
+    - churn; simpl_real_users_context.
+      + eexists; split; swap 1 2; eauto 12.
+
+    - autounfold with constants; churn; simpl_real_users_context.
+      + eexists; split; swap 1 2; eauto 12.
+      + eexists; split; swap 1 2; eauto 12.
+      + eexists; split; swap 1 2; eauto 12.
+      + unfold KEYS in H5. clean_map_lookups.
+      + eexists; split; swap 1 2; eauto 12.
+      + eexists; split; swap 1 2; eauto 12.
+      + eexists; split; swap 1 2; eauto 12.
+
+        
+        eapply Sent1.
         progress (unfold real_univ_start, real_univ_sent1, real_univ_recd1, real_univ_done, mkrU; simpl).
         real_silent_multistep.
         real_silent_multistep.
 
         simpl_real_users_context.
-          match goal with
-          | |- (rstepSilent) ^* ?U1 ?U2 => first [ solve_refl | figure_out_user_step ltac:(rss_clean) U1 U2 ]
-          end.
+        match goal with
+        | |- (rstepSilent) ^* ?U1 ?U2 =>
+          match U1 with
+          | context [ _ $+ (?u, ?usr1) ] =>
+            match U2 with
+            | context [ _ $+ (u, ?usr2) ] => 
+              does_not_unify usr1 usr2; idtac u usr1 usr2
+            end
+          end
+          (* figure_out_user_step ltac:(rss_clean) U1 U2 *)
+        end.
 
+        real_single_silent_multistep A.
+        clean_map_lookups.
+        solve [ eauto 3 ].
+
+        ; [ solve [ eauto  3 ].. | idtac ].
+
+        rss_clean A.
 
 
     Time (
