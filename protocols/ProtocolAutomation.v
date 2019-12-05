@@ -253,10 +253,10 @@ Module SimulationAutomation.
 
     Lemma step_user_inv_enc :
       forall {A B t} (usrs usrs' : honest_users A) (adv adv' : user_data B) k__sign k__enc (msg : message t)
-        lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' tos tos' cur_n cur_n' cmd,
+        lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' tos tos' cur_n cur_n' cmd msg_to,
         step_user lbl
                   u_id
-                  (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cur_n, SignEncrypt k__sign k__enc msg)
+                  (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cur_n, SignEncrypt k__sign k__enc msg_to msg)
                   (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cur_n', cmd)
         -> usrs = usrs'
         /\ adv = adv'
