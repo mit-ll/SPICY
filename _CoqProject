@@ -2,26 +2,30 @@
 -R ./KeyManagement KeyManagement
 -R ./protocols protocols
 
-KeyManagement/CipherTheory.v
-KeyManagement/MessagesTheory.v
-KeyManagement/KeysTheory.v
-KeyManagement/UsersTheory.v
-KeyManagement/InvariantsTheory.v
-KeyManagement/Common.v
 KeyManagement/MyPrelude.v
-KeyManagement/Maps.v
-KeyManagement/MessageEq.v
-KeyManagement/Automation.v
+KeyManagement/Tactics.v
+
+KeyManagement/Common.v
 KeyManagement/Keys.v
+KeyManagement/Messages.v
+KeyManagement/Maps.v
 KeyManagement/IdealWorld.v
 KeyManagement/RealWorld.v
-KeyManagement/Simulation.v
+KeyManagement/MessageEq.v
+
 KeyManagement/AdversaryUniverse.v
+KeyManagement/Simulation.v
+KeyManagement/Automation.v
+
+KeyManagement/KeysTheory.v
+KeyManagement/CipherTheory.v
+KeyManagement/MessagesTheory.v
+KeyManagement/UsersTheory.v
+KeyManagement/InvariantsTheory.v
+
 KeyManagement/AdversarySafety.v
-KeyManagement/Tactics.v
-KeyManagement/Messages.v
 
-protocols/ProtocolAutomation.v
 protocols/UniverseEqAutomation.v
+protocols/ProtocolAutomation.v
 
-protocols/SimplePingProtocol.v
+protocols/SimpleEncProtocol.v
