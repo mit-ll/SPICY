@@ -146,9 +146,9 @@ Definition strip_action (honestk : key_perms) (cs : ciphers) (act : action) :=
   | Output msg msg_from msg_to sents => Output msg msg_from msg_to sents
   end.
 
-Definition strip_label (honestk : key_perms) (cs : ciphers) (lbl : label) :=
+Definition strip_label (honestk : key_perms) (cs : ciphers) (lbl : rlabel) :=
   match lbl with
-  | Silent => Silent
+  | Silent ca => Silent ca
   | Action a => Action (strip_action honestk cs a)
   end.
 

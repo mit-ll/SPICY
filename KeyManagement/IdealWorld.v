@@ -110,19 +110,21 @@ Inductive action : Type :=
 | Output t (msg : message t) (ch_id : channel_id) (cs : channels) (ps : permissions)
 .
 
-Definition ilabel := @label action.
+Definition ilabel := @label unit action.
+
+Definition silent : ilabel := Silent tt.
 
 Inductive lstep_user : forall A, ilabel -> channels * cmd A * permissions -> channels * cmd A * permissions -> Prop :=
 | LStepBindRecur : forall result result' lbl (c1 c1' : cmd result') (c2 : result' -> cmd result) cv cv' ps ps',
     lstep_user lbl (cv, c1, ps) (cv', c1', ps') ->
     lstep_user lbl (cv, (Bind c1 c2), ps) (cv', (Bind c1' c2), ps')
 | LStepBindProceed : forall (result result' : Type) (v : result') (c2 : result' -> cmd result) cv ps,
-    lstep_user Silent (cv, (Bind (Return v) c2), ps) (cv, c2 v, ps)
+    lstep_user silent (cv, (Bind (Return v) c2), ps) (cv, c2 v, ps)
 | LStepGen : forall cv ps n,
-    lstep_user Silent (cv, Gen, ps) (cv, Return n, ps)
+    lstep_user silent (cv, Gen, ps) (cv, Return n, ps)
 | LStepCreateChannel : forall ch_id cv ps,
     ~(In ch_id cv) ->
-    lstep_user Silent
+    lstep_user silent
                (cv, CreateChannel, ps)
                (cv $+ (ch_id, []), Return ch_id, ps $+ (ch_id, creator_permission))
 | LStepSend : forall t cv (m : message t) ch_id ps ch_d b,

@@ -393,12 +393,20 @@ Definition msg_not_replayed {t} (to_usr : option user_id) (cs : ciphers) (froms 
                                         -> msg_nonce_not_same c cs m
                        end) msgs.
 
+Inductive silentAction : Set :=
+| NoData
+| EncAction
+| SignAction
+.
+
 Inductive action : Type :=
 | Input  t (msg : crypto t) (pat : msg_pat) (froms : recv_nonces)
 | Output t (msg : crypto t) (from_user : option user_id) (to_user : option user_id) (sents : sent_nonces)
 .
 
-Definition rlabel := @label action.
+Definition rlabel := @label silentAction action.
+
+Definition silent : rlabel := Silent NoData.
 
 Definition action_adversary_safe (honestk : key_perms) (cs : ciphers) (a : action) : Prop :=
   match a with
@@ -435,12 +443,12 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
                          (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', Bind cmd1' cmd2)
 | StepBindProceed : forall {B r r'} (usrs : honest_users r) (adv : user_data B) cs u_id gks ks qmsgs mycs froms sents cur_n
                       (v : r') (cmd : r' -> user_cmd r),
-    step_user Silent u_id
+    step_user silent u_id
               (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Bind (Return v) cmd)
               (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd v)
 
 | StepGen : forall {A B} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks qmsgs mycs froms sents cur_n n,
-    step_user Silent u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Gen)
+    step_user silent u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Gen)
               (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Return n)
 
 (* Comms  *)
@@ -466,7 +474,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
                then updateTrackedNonce suid froms cs msg
                else froms)
     -> ~ msg_accepted_by_pattern cs suid pat msg
-    -> step_user Silent suid (* Error label ... *)
+    -> step_user silent suid (* Error label ... *)
                 (usrs, adv, cs, gks, ks, qmsgs , mycs, froms,  sents, cur_n, Recv pat)
                 (usrs, adv, cs, gks, ks, qmsgs', mycs, froms', sents, cur_n, @Recv t pat)
 
@@ -513,7 +521,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> cipherMsg = SigEncCipher k__signid k__encid msg_to (u_id, cur_n) msg
     -> cs' = cs $+ (c_id, cipherMsg)
     -> mycs' = c_id :: mycs
-    -> step_user Silent u_id
+    -> step_user (Silent EncAction) u_id
                 (usrs, adv, cs , gks, ks, qmsgs, mycs,  froms, sents, cur_n,  SignEncrypt k__signid k__encid msg_to msg)
                 (usrs, adv, cs', gks, ks, qmsgs, mycs', froms, sents, cur_n', Return (SignedCiphertext c_id))
 
@@ -528,7 +536,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> ks' = ks $k++ newkeys
     -> mycs' = (* newcs ++  *)mycs
     -> List.In c_id mycs
-    -> step_user Silent u_id
+    -> step_user silent u_id
                 (usrs, adv, cs, gks, ks , qmsgs, mycs,  froms, sents, cur_n, Decrypt (SignedCiphertext c_id))
                 (usrs, adv, cs, gks, ks', qmsgs, mycs', froms, sents, cur_n, Return msg)
 
@@ -542,7 +550,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> cipherMsg = SigCipher k_id msg_to (u_id, cur_n) msg
     -> cs' = cs $+ (c_id, cipherMsg)
     -> mycs' = c_id :: mycs
-    -> step_user Silent u_id
+    -> step_user (Silent SignAction) u_id
                 (usrs, adv, cs , gks, ks, qmsgs, mycs,  froms, sents, cur_n,  Sign k_id msg_to msg)
                 (usrs, adv, cs', gks, ks, qmsgs, mycs', froms, sents, cur_n', Return (SignedCiphertext c_id))
 
@@ -552,7 +560,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> ks  $? k_id = Some kp
     -> cs $? c_id = Some (SigCipher k_id msg_to nonce msg)
     -> List.In c_id mycs
-    -> step_user Silent u_id
+    -> step_user silent u_id
                 (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Verify k_id (SignedCiphertext c_id))
                 (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Return (true, msg))
 | StepGenerateSymKey: forall {A B} (usrs : honest_users A) (adv : user_data B)
@@ -562,7 +570,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> k = MkCryptoKey k_id usage SymKey
     -> gks' = gks $+ (k_id, k)
     -> ks' = add_key_perm k_id true ks
-    -> step_user Silent u_id
+    -> step_user silent u_id
                 (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, GenerateSymKey usage)
                 (usrs, adv, cs, gks', ks', qmsgs, mycs, froms, sents, cur_n, Return (k_id, true))
 | StepGenerateAsymKey: forall {A B} (usrs : honest_users A) (adv : user_data B)
@@ -572,7 +580,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> k = MkCryptoKey k_id usage AsymKey
     -> gks' = gks $+ (k_id, k)
     -> ks' = add_key_perm k_id true ks
-    -> step_user Silent u_id
+    -> step_user silent u_id
                 (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, GenerateAsymKey usage)
                 (usrs, adv, cs, gks', ks', qmsgs, mycs, froms, sents, cur_n, Return (k_id, true))
 .
@@ -602,5 +610,5 @@ Inductive step_universe {A B} : universe A B -> rlabel -> universe A B -> Prop :
                                          ; from_nons := froms
                                          ; sent_nons := sents
                                          ; cur_nonce := cur_n |}
-    -> step_universe U Silent U'
+    -> step_universe U silent U'
 .
