@@ -112,6 +112,7 @@ Section RealWorldUniverseProperties.
   | SigCipherHonestOk : forall {t} (msg : message t) msg_to nonce k kt,
       honestk $? k = Some true
       -> gks $? k = Some {| keyId := k; keyUsage := Signing; keyType := kt |}
+      (* only send honest public keys *)
       -> (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true /\ kp = false)
       -> encrypted_cipher_ok cs gks (SigCipher k msg_to nonce msg)
   | SigCipherNotHonestOk : forall {t} (msg : message t) msg_to nonce k kt,
@@ -131,6 +132,7 @@ Section RealWorldUniverseProperties.
       -> honestk $? k__e = Some true
       -> gks $? k__s = Some {| keyId := k__s; keyUsage := Signing; keyType := kt__s |}
       -> gks $? k__e = Some {| keyId := k__e; keyUsage := Encryption; keyType := kt__e |}
+      (* only send honest keys *)
       -> (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true)
       -> encrypted_cipher_ok cs gks (SigEncCipher k__s k__e msg_to nonce msg).
 
@@ -250,7 +252,6 @@ Definition adv_universe_ok {A B} (U : RealWorld.universe A B) : Prop :=
 
 Section OperationalSemanticsPredicates.
   Import RealWorld.
-
 
   Inductive honest_party_step : forall A B C, rlabel -> option user_id -> data_step0 A B C -> data_step0 A B C -> Prop :=
 

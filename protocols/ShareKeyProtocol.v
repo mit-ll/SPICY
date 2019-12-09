@@ -258,11 +258,86 @@ Section FeebleSimulates.
     - churn; simpl_real_users_context.
       + eexists; split; swap 1 2; eauto 12.
 
-    - autounfold with constants; churn; simpl_real_users_context.
+    - churn; simpl_real_users_context.
       + eexists; split; swap 1 2; eauto 12.
       + eexists; split; swap 1 2; eauto 12.
       + eexists; split; swap 1 2; eauto 12.
-      + unfold KEYS in H5. clean_map_lookups.
+      + eexists; split; swap 1 2.
+        eapply Recd1.
+        progress (unfold real_univ_start, real_univ_sent1, real_univ_recd1, real_univ_done, mkrU; simpl).
+        real_silent_multistep. simpl_real_users_context.
+
+        simpl_real_users_context.
+        match goal with
+        | |- (rstepSilent) ^* ?U1 ?U2 =>
+          match U1 with
+          | context [ _ $+ (?u, ?usr1) ] =>
+            match U2 with
+            | context [ _ $+ (u, ?usr2) ] => 
+              does_not_unify usr1 usr2; idtac u usr1 usr2
+            end
+          end
+          (* figure_out_user_step ltac:(rss_clean) U1 U2 *)
+        end.
+
+        real_single_silent_multistep B.
+        rewrite add_neq_o; swap 1 2.
+        
+        
+        2: debug eauto 2.
+
+        2: apply not_eq_sym. 2: trivial.
+          by debug auto 2.
+
+        match goal with
+        | [ H : context [ $0 $? _ ] |- _ ] => idtac 1; rewrite lookup_empty_none in H
+        | [ H : _ $+ (?k,_) $? ?k = _ |- _ ] => idtac 2; rewrite add_eq_o in H by trivial
+        | [ H : _ $+ (?k1,_) $? ?k2 = _ |- _ ] => idtac 3; rewrite add_neq_o in H by auto 2
+        | [ H : _ $+ (?k1,_) $? ?k2 = _ |- _ ] => idtac 4; rewrite add_eq_o in H by auto 2
+        | [ H : context [ match _ $+ (?k,_) $? ?k with _ => _ end ] |- _ ] => idtac 5; rewrite add_eq_o in H by trivial
+        | [ H : context [ match _ $+ (?k1,_) $? ?k2 with _ => _ end ] |- _ ] => idtac 6; rewrite add_neq_o in H by auto 2
+        | [ H : context [ match _ $+ (?k1,_) $? ?k2 with _ => _ end ] |- _ ] => idtac 7; rewrite add_eq_o in H by auto 2
+        | [ |- context[_ $+ (?k,_) $? ?k] ] => idtac 8; rewrite add_eq_o by trivial
+        | [ |- context[_ $+ (?k1,_) $? ?k2] ] => idtac 9; rewrite add_neq_o by auto 2
+        | [ |- context[_ $+ (?k1,_) $? ?k2] ] => idtac 10; rewrite add_eq_o by auto 2
+        | [ |- context[_ $- ?k $? ?k] ] => rewrite remove_eq_o by trivial
+        | [ |- context[_ $- ?k1 $? ?k2] ] => rewrite remove_neq_o by auto 2
+        | [ |- context[_ $- ?k1 $? ?k2] ] => rewrite remove_eq_o by auto 2
+        | [ H : ~ In _ _ |- _ ] => rewrite not_find_in_iff in H
+        | [ |- ~ In _ _ ] => rewrite not_find_in_iff
+        | [ H : In _ _ |- _ ] => rewrite in_find_iff in H
+        | [ H1 : ?m $? ?k = _ , H2 : ?m $? ?k = _ |- _] => rewrite H1 in H2
+        | [ H1 : ?m $? ?k1 = _ , H2 : ?m $? ?k2 = _ |- _] => assert (k1 = k2) as RW by auto 2; rewrite RW in H1; clear RW; rewrite H1 in H2
+        | [ H : ?m $? ?k <> None |- _ ] => cases (m $? k); try contradiction; clear H
+        | [ H : MapsTo _ _ _ |- _ ] => rewrite find_mapsto_iff in H
+        | [ |- context [ MapsTo _ _ _ ] ] => rewrite find_mapsto_iff
+        end.
+
+
+        
+        rewrite add_neq_o by eauto 2.
+        
+        real_silent_multistep.
+        real_silent_multistep.
+        simpl_real_users_context.
+        match goal with
+        | |- (rstepSilent) ^* ?U1 ?U2 =>
+          match U1 with
+          | context [ _ $+ (?u, ?usr1) ] =>
+            match U2 with
+            | context [ _ $+ (u, ?usr2) ] => 
+              does_not_unify usr1 usr2; idtac u usr1 usr2
+            end
+          end
+          (* figure_out_user_step ltac:(rss_clean) U1 U2 *)
+        end.
+
+
+        
+      + match goal with
+        | [ H : ?m $? _ = _ |- _ ] => unfold m in H
+        end; equality1.
+               
       + eexists; split; swap 1 2; eauto 12.
       + eexists; split; swap 1 2; eauto 12.
       + eexists; split; swap 1 2; eauto 12.
