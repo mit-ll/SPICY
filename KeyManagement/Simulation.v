@@ -7,6 +7,7 @@ From Coq Require Import
 Require Import
         MyPrelude
         Maps
+        Messages
         MessageEq
         Common
         Keys
@@ -21,10 +22,10 @@ Import IdealWorld.IdealNotations
 
 Set Implicit Arguments.
 
-Definition rstepSilent {A B : Type} (U1 U2 : RealWorld.universe A B) :=
+Definition rstepSilent {A B} (U1 U2 : RealWorld.universe A B) :=
   RealWorld.step_universe U1 Messages.Silent U2.
 
-Definition istepSilent {A : Type} (U1 U2 : IdealWorld.universe A) :=
+Definition istepSilent {A} (U1 U2 : IdealWorld.universe A) :=
   IdealWorld.lstep_universe U1 Messages.Silent U2.
 
 Inductive chan_key : Set :=
@@ -39,7 +40,7 @@ Inductive chan_key : Set :=
     -> chan_key
 .
 
-Inductive action_matches : forall {A B : Type},
+Inductive action_matches : forall {A B : type},
                            RealWorld.action -> RealWorld.universe A B ->
                            IdealWorld.action -> IdealWorld.universe A -> Prop :=
 | Inp : forall A B t (m__rw : RealWorld.crypto t) (m__iw m__expected : IdealWorld.message.message t)
@@ -248,7 +249,7 @@ Definition adv_universe_ok {A B} (U : RealWorld.universe A B) : Prop :=
     /\ honest_nonces_ok U.(RealWorld.all_ciphers) U.(RealWorld.users).
 
 Section Simulation.
-  Variable A B : Type.
+  Variable A B : type.
   Variable advP : RealWorld.user_data B -> Prop.
   Variable R : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop.
 
@@ -312,13 +313,13 @@ Section Simulation.
 
 End Simulation.
 
-Definition refines {A B : Type} (advP : RealWorld.user_data B -> Prop) (U1 : RealWorld.universe A B) (U2 : IdealWorld.universe A) :=
+Definition refines {A B} (advP : RealWorld.user_data B -> Prop) (U1 : RealWorld.universe A B) (U2 : IdealWorld.universe A) :=
   exists R, simulates advP R U1 U2.
 
 Notation "u1 <| u2 \ p " := (refines p u1 u2) (no associativity, at level 70).
 
-Definition lameAdv {B} (b : B) :=
-  fun adv => adv.(RealWorld.protocol) = RealWorld.Return b.
+Definition lameAdv {B} (b : RealWorld.denote (RealWorld.Base B)) :=
+  fun adv => adv.(RealWorld.protocol) = @RealWorld.Return (RealWorld.Base B) b.
 
 Definition awesomeAdv : forall B, RealWorld.user_data B -> Prop :=
   fun _ _ => True.

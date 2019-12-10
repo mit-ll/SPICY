@@ -7,10 +7,11 @@ Inductive label  {A} : Type :=
 .
 
 Inductive type : Set :=
-| Nat
-(* | Text *)
 | Access
-| Pair (t1 t2 : type)
+| Bool
+| Nat
+| Unit
+| TPair (t1 t2 : type)
 .
 
 Module Type GRANT_ACCESS.
@@ -22,7 +23,17 @@ Module Messages (GA : GRANT_ACCESS).
   Inductive message : type -> Type :=
   | Permission (acc : GA.access) : message Access
   | Content (n : nat) : message Nat
-  | MsgPair {t1 t2} (m1 : message t1) (m2 : message t2) : message (Pair t1 t2)
+  | MsgPair {t1 t2} (m1 : message t1) (m2 : message t2) : message (TPair t1 t2)
+  .
+
+  Fixpoint typeDenote (t : type) :=
+    match t with
+    | Access => GA.access
+    | Bool => bool
+    | Nat => nat
+    | Unit => unit
+    | TPair t1 t2 => (typeDenote t1 * typeDenote t2)%type
+    end
   .
 
 End Messages.

@@ -346,7 +346,7 @@ Import Automation.
 Section UniverseLemmas.
   Import RealWorld.
 
-  Definition add_adversary {A B} (U__r : universe A B) (advcode : user_cmd B) :=
+  Definition add_adversary {A B} (U__r : universe A B) (advcode : user_cmd (Base B)) :=
     {| users       := U__r.(users)
      ; adversary   := {| key_heap := U__r.(adversary).(key_heap)
                        ; msg_heap := U__r.(adversary).(msg_heap)
@@ -4540,7 +4540,7 @@ Section SingleAdversarySimulates.
     Qed.
 
     Lemma ok_adv_universe_strip_adversary_still_ok :
-      forall {A B} (U__ra U__r: universe A B) (b : B),
+      forall {A B} (U__ra U__r: universe A B) (b : <<(Base B)>>),
           U__r = strip_adversary_univ U__ra b
         -> universe_ok U__ra
         -> adv_universe_ok U__ra
@@ -5033,7 +5033,7 @@ Section SingleAdversarySimulates.
     
     Lemma honest_silent_step_advuniv_implies_honest_or_no_step_origuniv :
       forall {A B C} u_id suid cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-                gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd' (b: B),
+                gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd' (b: <<(Base B)>>),
         step_user lbl suid bd bd'
         -> suid = Some u_id
         -> forall (cmd : user_cmd C) cs__s usrs__s honestk,
@@ -5644,7 +5644,7 @@ Section SingleAdversarySimulates.
 
     Lemma honest_labeled_step_advuniv_implies_honest_step_origuniv :
       forall {A B C} cs cs' lbl u_id (usrs usrs' : honest_users A) (adv adv' : user_data B)
-                gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd' a (b : B) suid,
+                gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd' a (b : <<(Base B)>>) suid,
         step_user lbl suid bd bd'
         -> suid = Some u_id
         -> action_adversary_safe (findUserKeys usrs) cs a
@@ -5786,7 +5786,7 @@ Section SingleAdversarySimulates.
 
     Lemma honest_labeled_step_advuniv_implies_honest_step_origuniv' :
       forall {A B C} cs cs' lbl u_id suid (usrs usrs' : honest_users A) (adv adv' : user_data B)
-                gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd' a a' (b : B),
+                gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd' a a' (b : <<(Base B)>>),
         step_user lbl suid bd bd'
         -> suid = Some u_id
         -> action_adversary_safe (findUserKeys usrs) cs a
@@ -6467,7 +6467,7 @@ Section SingleAdversarySimulates.
     
     Lemma adv_step_stays_in_R :
       forall {A B} (U__i : IdealWorld.universe A) (U__r : universe A B) (R : simpl_universe A -> IdealWorld.universe A -> Prop)
-        (cmd : user_cmd B) lbl (usrs : honest_users A) (adv : user_data B) cs gks ks qmsgs mycs froms sents cur_n,
+        (cmd : user_cmd (Base B)) lbl (usrs : honest_users A) (adv : user_data B) cs gks ks qmsgs mycs froms sents cur_n,
         step_user lbl None
                   (build_data_step U__r U__r.(adversary))
                   (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
@@ -6672,7 +6672,7 @@ Section SingleAdversarySimulates.
     Qed.
 
     Lemma silent_step_advuniv_implies_univ_ok :
-      forall {A B} (U U' : universe A B) (U__i : IdealWorld.universe A) (R : simpl_universe A -> IdealWorld.universe A -> Prop) lbl (b:B),
+      forall {A B} (U U' : universe A B) (U__i : IdealWorld.universe A) (R : simpl_universe A -> IdealWorld.universe A -> Prop) lbl (b : <<(Base B)>>),
         step_universe U lbl U'
         -> lbl = Silent
         -> adv_universe_ok U
@@ -6715,7 +6715,7 @@ Section SingleAdversarySimulates.
 
   Lemma simulates_with_adversary_silent :
     forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A)
-            (R : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop) (b : B),
+            (R : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop) (b : RealWorld.denote (RealWorld.Base B)),
       simulates_silent_step (lameAdv b) R
       -> simulates_universe_ok R
       -> universe_ok U__ra
@@ -6856,7 +6856,7 @@ Section SingleAdversarySimulates.
 
   Lemma simulates_with_adversary_labeled :
     forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A)
-            (R : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop) (b : B),
+            (R : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop) (b : RealWorld.denote (RealWorld.Base B)),
       simulates_labeled_step (lameAdv b) R
       -> simulates_labeled_step_safe R
       -> R (RealWorld.peel_adv (strip_adversary_univ U__ra b)) U__i
@@ -7019,7 +7019,7 @@ Section SingleAdversarySimulates.
 
   Theorem simulates_ok_with_adversary :
     forall {A B} (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A)
-      (R : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop) (b : B),
+      (R : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop) (b : RealWorld.denote (RealWorld.Base B)),
       simulates (lameAdv b) R U__r U__i
       -> lameAdv b U__r.(RealWorld.adversary)
       -> universe_starts_ok U__r
@@ -7066,7 +7066,7 @@ Section SingleAdversarySimulates.
   Qed.
 
   Theorem simulates_ok_with_adversary' :
-    forall {A B} (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A) (b : B),
+    forall {A B} (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A) (b : RealWorld.denote (RealWorld.Base B)),
         U__r <| U__i \ lameAdv b
       -> lameAdv b U__r.(RealWorld.adversary)
       -> universe_starts_ok U__r
@@ -7195,7 +7195,7 @@ Proof.
 Qed.
 
 Lemma simulates_could_generate :
-  forall A B (R R' : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop) (b:B),
+  forall A B (R R' : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop) (b : RealWorld.denote (RealWorld.Base B)),
     R' = (fun ur ui => R (strip_adversary_simpl ur) ui)
     -> simulates_silent_step (awesomeAdv (B:=B)) R'
     -> simulates_labeled_step (awesomeAdv (B:=B)) R'
@@ -7261,7 +7261,7 @@ Proof.
 Qed.
 
 Theorem refines_could_generate :
-  forall A B (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A) (b : B),
+  forall A B (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A) (b : RealWorld.denote (RealWorld.Base B)),
     U__r <| U__i \ lameAdv b
     -> lameAdv b U__r.(RealWorld.adversary)
     -> universe_starts_ok U__r
