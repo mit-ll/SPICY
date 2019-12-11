@@ -23,7 +23,7 @@ Import IdealWorld.IdealNotations
 Set Implicit Arguments.
 
 Definition rstepSilent {A B : Type} (U1 U2 : RealWorld.universe A B) :=
-  RealWorld.step_universe U1 RealWorld.silent U2.
+  forall sa, RealWorld.step_universe U1 (Silent sa) U2.
 
 Definition istepSilent {A : Type} (U1 U2 : IdealWorld.universe A) :=
   IdealWorld.lstep_universe U1 IdealWorld.silent U2.
@@ -219,8 +219,40 @@ Section RealWorldUniverseProperties.
           -> ~ List.In (cipher_nonce c) to_froms (* then it hasn't been read by destination user *)
             /\ Forall (fun sigM => match sigM with (* and isn't in destination user's message queue *)
                                | (existT _ _ msg) => msg_to_this_user cs (Some to_usr) msg = false
-                                                  \/ msg_nonce_not_same c cs msg end) to_msgs).
+                                                    \/ msg_nonce_not_same c cs msg end) to_msgs).
 
+  Definition cipher_action_adversary_safe (honestk : key_perms) (a : silentAction) : Prop :=
+    match a with
+    | NoData => True
+    | EncAction msg k__enc =>
+        honestk $? k__enc = Some true
+      /\ (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true)
+    | SignAction msg =>
+        (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true /\ kp = false)
+    end.
+
+  Definition action_adversary_safe (honestk : key_perms) (cs : ciphers) (a : action) : Prop :=
+    match a with
+    | Input  msg pat froms    => msg_pattern_safe honestk pat
+                              /\ exists c_id c, msg = SignedCiphertext c_id
+                                        /\ cs $? c_id = Some c
+                                        /\ ~ List.In (cipher_nonce c) froms
+    | Output msg msg_from msg_to sents => msg_contains_only_honest_public_keys honestk cs msg
+                                       /\ msg_honestly_signed honestk cs msg = true
+                                       /\ msg_to_this_user cs msg_to msg = true
+                                       /\ msgCiphersSignedOk honestk cs msg
+                                       /\ exists c_id c, msg = SignedCiphertext c_id
+                                                 /\ cs $? c_id = Some c
+                                                 /\ fst (cipher_nonce c) = msg_from  (* only send my messages *)
+                                                 /\ ~ List.In (cipher_nonce c) sents
+    end.
+
+  Definition label_safe (honestk : key_perms) (cs : ciphers) (lbl : label) : Prop :=
+    match lbl with
+    | Silent ca => cipher_action_adversary_safe honestk ca
+    | Action  a => action_adversary_safe honestk cs a
+    end.
+  
 End RealWorldUniverseProperties.
 
 Definition message_queues_ok {A} (cs : RealWorld.ciphers) (usrs : RealWorld.honest_users A) (gks : keys) :=
@@ -250,186 +282,6 @@ Definition adv_universe_ok {A B} (U : RealWorld.universe A B) : Prop :=
     /\ adv_no_honest_keys honestk U.(RealWorld.adversary).(RealWorld.key_heap)
     /\ honest_nonces_ok U.(RealWorld.all_ciphers) U.(RealWorld.users).
 
-Section OperationalSemanticsPredicates.
-  Import RealWorld.
-
-  (* Inductive honest_party_step : forall A B C, rlabel -> option user_id -> data_step0 A B C -> data_step0 A B C -> Prop := *)
-
-  (* (* Plumbing *) *)
-  (* | HonestBindRecur : forall {B r r'} (usrs usrs' : honest_users r') (adv adv' : user_data B) *)
-  (*                     lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' sents sents' cur_n cur_n' *)
-  (*                     (cmd1 cmd1' : user_cmd r) (cmd2 : r -> user_cmd r'), *)
-  (*     honest_party_step lbl u_id *)
-  (*               (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd1) *)
-  (*               (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd1') *)
-  (*     -> honest_party_step lbl u_id *)
-  (*                 (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Bind cmd1 cmd2) *)
-  (*                 (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', Bind cmd1' cmd2) *)
-  (* | HonestBindProceed : forall {B r r'} (usrs : honest_users r) (adv : user_data B) cs u_id gks ks qmsgs mycs froms sents cur_n *)
-  (*                       (v : r') (cmd : r' -> user_cmd r), *)
-  (*     honest_party_step Silent u_id *)
-  (*               (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Bind (Return v) cmd) *)
-  (*               (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd v) *)
-
-  (* | HonestGen : forall {A B} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks qmsgs mycs froms sents cur_n n, *)
-  (*     honest_party_step Silent u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Gen) *)
-  (*               (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Return n) *)
-
-  (* (* Comms  *) *)
-  (* | HonestRecv : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks ks' qmsgs qmsgs' mycs mycs' froms froms' *)
-  (*                sents cur_n (msg : crypto t) msgs pat newkeys newcs, *)
-  (*     qmsgs = (existT _ _ msg) :: msgs (* we have a message waiting for us! *) *)
-  (*     -> qmsgs' = msgs *)
-  (*     -> findKeysCrypto cs msg = newkeys *)
-  (*     -> newcs = findCiphers msg *)
-  (*     -> ks' = ks $k++ newkeys *)
-  (*     -> mycs' = newcs ++ mycs *)
-  (*     -> froms' = updateTrackedNonce u_id froms cs msg *)
-  (*     -> msg_accepted_by_pattern cs u_id pat msg *)
-  (*     -> honest_party_step (Action (Input msg pat froms)) u_id *)
-  (*                 (usrs, adv, cs, gks, ks , qmsgs , mycs, froms, sents, cur_n,  Recv pat) *)
-  (*                 (usrs, adv, cs, gks, ks', qmsgs', mycs', froms', sents, cur_n, Return msg) *)
-
-  (* | HonestRecvDrop : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs suid gks ks qmsgs qmsgs' *)
-  (*                    mycs froms froms' sents cur_n (msg : crypto t) pat msgs, *)
-  (*     qmsgs = (existT _ _ msg) :: msgs (* we have a message waiting for us! *) *)
-  (*     -> qmsgs' = msgs *)
-  (*     -> froms' = (if msg_signed_addressed (findUserKeys usrs) cs suid msg *)
-  (*                 then updateTrackedNonce suid froms cs msg *)
-  (*                 else froms) *)
-  (*     -> ~ msg_accepted_by_pattern cs suid pat msg *)
-  (*     -> honest_party_step Silent suid (* Error label ... *) *)
-  (*                 (usrs, adv, cs, gks, ks, qmsgs , mycs, froms,  sents, cur_n, Recv pat) *)
-  (*                 (usrs, adv, cs, gks, ks, qmsgs', mycs, froms', sents, cur_n, @Recv t pat) *)
-
-  (* (* Augment attacker's keys with those available through messages sent, *) *)
-  (* (*  * including traversing through ciphers already known by attacker, etc. *) *)
-  (* (*  *) *)
-  (* | HonestSend : forall {A B} {t} (usrs usrs' : honest_users A) (adv adv' : user_data B) *)
-  (*                cs suid gks ks qmsgs mycs froms sents sents' cur_n rec_u_id rec_u newkeys (msg : crypto t), *)
-  (*     findKeysCrypto cs msg = newkeys *)
-  (*     -> keys_mine ks newkeys *)
-  (*     -> incl (findCiphers msg) mycs *)
-  (*     -> usrs $? rec_u_id = Some rec_u *)
-  (*     -> Some rec_u_id <> suid *)
-  (*     -> sents' = updateTrackedNonce (Some rec_u_id) sents cs msg *)
-  (*     -> usrs' = usrs $+ (rec_u_id, {| key_heap  := rec_u.(key_heap) *)
-  (*                                     ; protocol  := rec_u.(protocol) *)
-  (*                                     ; msg_heap  := rec_u.(msg_heap) ++ [existT _ _ msg] *)
-  (*                                     ; c_heap    := rec_u.(c_heap) *)
-  (*                                     ; from_nons := rec_u.(from_nons) *)
-  (*                                     ; sent_nons := rec_u.(sent_nons) *)
-  (*                                     ; cur_nonce := rec_u.(cur_nonce) |}) *)
-  (*     -> adv' =  *)
-  (*       {| key_heap  := adv.(key_heap) $k++ newkeys *)
-  (*          ; protocol  := adv.(protocol) *)
-  (*          ; msg_heap  := adv.(msg_heap) ++ [existT _ _ msg] *)
-  (*          ; c_heap    := adv.(c_heap) *)
-  (*          ; from_nons := adv.(from_nons) *)
-  (*          ; sent_nons := adv.(sent_nons) *)
-  (*          ; cur_nonce := adv.(cur_nonce) |} *)
-  (*     -> honest_party_step (Action (Output msg suid (Some rec_u_id) sents)) suid *)
-  (*                 (usrs , adv , cs, gks, ks, qmsgs, mycs, froms, sents,  cur_n, Send rec_u_id msg) *)
-  (*                 (usrs', adv', cs, gks, ks, qmsgs, mycs, froms, sents', cur_n, Return tt) *)
-
-  (* (* Encryption / Decryption *) *)
-  (* | HonestEncrypt : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs cs' u_id gks ks qmsgs mycs mycs' froms sents *)
-  (*                   cur_n cur_n' (msg : message t) k__signid k__encid kp__enc kt__enc kt__sign c_id cipherMsg msg_to, *)
-  (*     gks $? k__encid  = Some (MkCryptoKey k__encid Encryption kt__enc) *)
-  (*     -> gks $? k__signid = Some (MkCryptoKey k__signid Signing kt__sign) *)
-  (*     -> ks $? k__encid   = Some kp__enc *)
-  (*     -> ks $? k__signid  = Some true *)
-  (*     -> ~ In c_id cs *)
-  (*     -> keys_mine ks (findKeysMessage msg) *)
-  (*     -> cur_n' = 1 + cur_n *)
-  (*     -> cipherMsg = SigEncCipher k__signid k__encid msg_to (u_id, cur_n) msg *)
-  (*     -> cs' = cs $+ (c_id, cipherMsg) *)
-  (*     -> mycs' = c_id :: mycs *)
-  (*     (* Extra condition *) *)
-  (*     -> findUserKeys usrs $? k__encid = Some true *)
-  (*     -> honest_party_step Silent u_id *)
-  (*                 (usrs, adv, cs , gks, ks, qmsgs, mycs,  froms, sents, cur_n,  SignEncrypt k__signid k__encid msg_to msg) *)
-  (*                 (usrs, adv, cs', gks, ks, qmsgs, mycs', froms, sents, cur_n', Return (SignedCiphertext c_id)) *)
-
-  (* | HonestDecrypt : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks ks' qmsgs mycs mycs' *)
-  (*                   (msg : message t) k__signid kp__sign k__encid c_id nonce newkeys kt__sign kt__enc msg_to froms sents cur_n, *)
-  (*     cs $? c_id     = Some (SigEncCipher k__signid k__encid msg_to nonce msg) *)
-  (*     -> gks $? k__encid  = Some (MkCryptoKey k__encid Encryption kt__enc) *)
-  (*     -> gks $? k__signid = Some (MkCryptoKey k__signid Signing kt__sign) *)
-  (*     -> ks  $? k__encid  = Some true *)
-  (*     -> ks  $? k__signid = Some kp__sign *)
-  (*     -> findKeysMessage msg = newkeys *)
-  (*     -> ks' = ks $k++ newkeys *)
-  (*     -> mycs' = (* newcs ++  *)mycs *)
-  (*     -> List.In c_id mycs *)
-  (*     -> honest_party_step Silent u_id *)
-  (*                 (usrs, adv, cs, gks, ks , qmsgs, mycs,  froms, sents, cur_n, Decrypt (SignedCiphertext c_id)) *)
-  (*                 (usrs, adv, cs, gks, ks', qmsgs, mycs', froms, sents, cur_n, Return msg) *)
-
-  (* (* Signing / Verification *) *)
-  (* | HonestSign : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs cs' u_id gks ks qmsgs mycs mycs' froms sents cur_n cur_n' *)
-  (*                (msg : message t) k_id kt c_id cipherMsg msg_to, *)
-  (*     gks $? k_id = Some (MkCryptoKey k_id Signing kt) *)
-  (*     -> ks  $? k_id = Some true *)
-  (*     -> ~ In c_id cs *)
-  (*     -> cur_n' = 1 + cur_n *)
-  (*     -> cipherMsg = SigCipher k_id msg_to (u_id, cur_n) msg *)
-  (*     -> cs' = cs $+ (c_id, cipherMsg) *)
-  (*     -> mycs' = c_id :: mycs *)
-  (*     -> honest_party_step Silent u_id *)
-  (*                 (usrs, adv, cs , gks, ks, qmsgs, mycs,  froms, sents, cur_n,  Sign k_id msg_to msg) *)
-  (*                 (usrs, adv, cs', gks, ks, qmsgs, mycs', froms, sents, cur_n', Return (SignedCiphertext c_id)) *)
-
-  (* | HonestVerify : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks qmsgs mycs froms sents cur_n *)
-  (*                  (msg : message t) k_id kp kt c_id nonce msg_to, *)
-  (*     gks $? k_id = Some (MkCryptoKey k_id Signing kt) *)
-  (*     -> ks  $? k_id = Some kp *)
-  (*     -> cs $? c_id = Some (SigCipher k_id msg_to nonce msg) *)
-  (*     -> List.In c_id mycs *)
-  (*     -> honest_party_step Silent u_id *)
-  (*                 (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Verify k_id (SignedCiphertext c_id)) *)
-  (*                 (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Return (true, msg)) *)
-  (* | HonestGenerateSymKey: forall {A B} (usrs : honest_users A) (adv : user_data B) *)
-  (*                         cs u_id gks gks' ks ks' qmsgs mycs froms sents cur_n *)
-  (*                         (k_id : key_identifier) k usage, *)
-  (*     gks $? k_id = None *)
-  (*     -> k = MkCryptoKey k_id usage SymKey *)
-  (*     -> gks' = gks $+ (k_id, k) *)
-  (*     -> ks' = add_key_perm k_id true ks *)
-  (*     -> honest_party_step Silent u_id *)
-  (*                 (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, GenerateSymKey usage) *)
-  (*                 (usrs, adv, cs, gks', ks', qmsgs, mycs, froms, sents, cur_n, Return (k_id, true)) *)
-  (* | HonestGenerateAsymKey: forall {A B} (usrs : honest_users A) (adv : user_data B) *)
-  (*                          cs u_id gks gks' ks ks' qmsgs mycs froms sents cur_n *)
-  (*                          (k_id : key_identifier) k usage, *)
-  (*     gks $? k_id = None *)
-  (*     -> k = MkCryptoKey k_id usage AsymKey *)
-  (*     -> gks' = gks $+ (k_id, k) *)
-  (*     -> ks' = add_key_perm k_id true ks *)
-  (*     -> honest_party_step Silent u_id *)
-  (*                 (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, GenerateAsymKey usage) *)
-  (*                 (usrs, adv, cs, gks', ks', qmsgs, mycs, froms, sents, cur_n, Return (k_id, true)) *)
-  (* . *)
-
-  (* Inductive honest_party_universe_step {A B} : universe A B -> rlabel -> universe A B -> Prop := *)
-  (* | HonestUser  : forall U U' (u_id : user_id) userData usrs adv *)
-  (*                   cs gks ks qmsgs mycs froms sents cur_n lbl (cmd : user_cmd A), *)
-  (*     U.(users) $? u_id = Some userData *)
-  (*     -> honest_party_step *)
-  (*         lbl (Some u_id) *)
-  (*         (build_data_step U userData) *)
-  (*         (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
-  (*     -> U' = buildUniverse usrs adv cs gks u_id {| key_heap  := ks *)
-  (*                                                ; msg_heap  := qmsgs *)
-  (*                                                ; protocol  := cmd *)
-  (*                                                ; c_heap    := mycs *)
-  (*                                                ; from_nons := froms *)
-  (*                                                ; sent_nons := sents *)
-  (*                                                ; cur_nonce := cur_n |} *)
-  (*     -> honest_party_universe_step U lbl U'. *)
-
-End OperationalSemanticsPredicates.
-
 Section Simulation.
   Variable A B : Type.
   Variable advP : RealWorld.user_data B -> Prop.
@@ -441,8 +293,8 @@ Section Simulation.
     -> universe_ok U__r
     -> adv_universe_ok U__r
     -> advP U__r.(RealWorld.adversary)
-    -> forall U__r',
-        rstepSilent U__r U__r'
+    -> forall U__r' sa,
+        RealWorld.step_universe U__r (Silent sa) U__r'
         -> exists U__i',
           istepSilent ^* U__i U__i'
         /\ R (RealWorld.peel_adv U__r') U__i'.
@@ -461,42 +313,45 @@ Section Simulation.
         /\ action_matches a1 U__r a2 U__i'
         /\ R (RealWorld.peel_adv U__r') U__i''.
 
-  (* Definition simulates_universe_ok' := *)
-  (*   forall (U__r : RealWorld.universe A B) U__i, *)
-  (*       R (RealWorld.peel_adv U__r) U__i *)
-  (*     -> universe_ok U__r *)
-  (*     -> adv_universe_ok U__r *)
-  (*     -> advP U__r.(RealWorld.adversary) *)
-  (*     -> forall U__r' lbl, *)
-  (*           RealWorld.step_universe U__r lbl U__r' *)
-  (*         -> honest_party_universe_step U__r lbl U__r'. *)
-
-  Definition simulates_universe_ok :=
-    forall B (U__r : RealWorld.universe A B) U__i,
-        R (strip_adversary U__r) U__i
+  Definition honest_actions_safe :=
+    forall (U__ra U__r : RealWorld.universe A B) b U__i,
+        R (RealWorld.peel_adv U__r) U__i
       -> universe_ok U__r
       -> adv_universe_ok U__r
-      -> forall U__r' lbl,
-        RealWorld.step_universe U__r lbl U__r'
-        -> universe_ok U__r'.
+      -> U__r = strip_adversary_univ U__ra b
+      -> forall U__ra' lbl,
+        RealWorld.step_universe U__ra lbl U__ra'
+        -> label_safe (RealWorld.findUserKeys U__r.(RealWorld.users))
+                     U__r.(RealWorld.all_ciphers)
+                     lbl.
 
-  Definition simulates_labeled_step_safe :=
-    forall B (U__r : RealWorld.universe A B) U__i,
-      R (strip_adversary U__r) U__i
-      -> forall U__r' a,
-        RealWorld.step_universe U__r (Messages.Action a) U__r' (* excludes adversary steps *)
-        -> RealWorld.action_adversary_safe
-            (RealWorld.findUserKeys U__r.(RealWorld.users))
-            U__r.(RealWorld.all_ciphers)
-            a.
+  (* Definition simulates_universe_ok := *)
+  (*   forall B (U__r : RealWorld.universe A B) U__i, *)
+  (*       R (strip_adversary U__r) U__i *)
+  (*     -> universe_ok U__r *)
+  (*     -> adv_universe_ok U__r *)
+  (*     -> forall U__r' lbl, *)
+  (*       RealWorld.step_universe U__r lbl U__r' *)
+  (*       -> universe_ok U__r'. *)
+
+  (* Definition simulates_labeled_step_safe := *)
+  (*   forall B (U__r : RealWorld.universe A B) U__i, *)
+  (*     R (strip_adversary U__r) U__i *)
+  (*     -> forall U__r' a, *)
+  (*       RealWorld.step_universe U__r (Messages.Action a) U__r' (* excludes adversary steps *) *)
+  (*       -> action_adversary_safe *)
+  (*           (RealWorld.findUserKeys U__r.(RealWorld.users)) *)
+  (*           U__r.(RealWorld.all_ciphers) *)
+  (*           a. *)
 
   Definition simulates (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A) :=
 
     (* conditions for simulation steps *)
     simulates_silent_step
   /\ simulates_labeled_step
-  /\ simulates_universe_ok
-  /\ simulates_labeled_step_safe
+  /\ honest_actions_safe
+  (* /\ simulates_universe_ok *)
+  (* /\ simulates_labeled_step_safe *)
 
   (* conditions for start *)
   /\ R (RealWorld.peel_adv U__r) U__i

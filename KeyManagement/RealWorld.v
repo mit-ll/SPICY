@@ -395,8 +395,8 @@ Definition msg_not_replayed {t} (to_usr : option user_id) (cs : ciphers) (froms 
 
 Inductive silentAction : Set :=
 | NoData
-| EncAction
-| SignAction
+| EncAction t (msg : message t) (k__enc : key_identifier)
+| SignAction t (msg : message t)
 .
 
 Inductive action : Type :=
@@ -407,22 +407,6 @@ Inductive action : Type :=
 Definition rlabel := @label silentAction action.
 
 Definition silent : rlabel := Silent NoData.
-
-Definition action_adversary_safe (honestk : key_perms) (cs : ciphers) (a : action) : Prop :=
-  match a with
-  | Input  msg pat froms    => msg_pattern_safe honestk pat
-                            /\ exists c_id c, msg = SignedCiphertext c_id
-                                      /\ cs $? c_id = Some c
-                                      /\ ~ List.In (cipher_nonce c) froms
-  | Output msg msg_from msg_to sents => msg_contains_only_honest_public_keys honestk cs msg
-                                     /\ msg_honestly_signed honestk cs msg = true
-                                     /\ msg_to_this_user cs msg_to msg = true
-                                     /\ msgCiphersSignedOk honestk cs msg
-                                     /\ exists c_id c, msg = SignedCiphertext c_id
-                                               /\ cs $? c_id = Some c
-                                               /\ fst (cipher_nonce c) = msg_from  (* only send my messages *)
-                                               /\ ~ List.In (cipher_nonce c) sents
-  end.
 
 Definition data_step0 (A B C : Type) : Type :=
   honest_users A * user_data B * ciphers * keys * key_perms * queued_messages * my_ciphers * recv_nonces * sent_nonces * nat * user_cmd C.
@@ -521,7 +505,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> cipherMsg = SigEncCipher k__signid k__encid msg_to (u_id, cur_n) msg
     -> cs' = cs $+ (c_id, cipherMsg)
     -> mycs' = c_id :: mycs
-    -> step_user (Silent EncAction) u_id
+    -> step_user (Silent (EncAction msg k__encid)) u_id
                 (usrs, adv, cs , gks, ks, qmsgs, mycs,  froms, sents, cur_n,  SignEncrypt k__signid k__encid msg_to msg)
                 (usrs, adv, cs', gks, ks, qmsgs, mycs', froms, sents, cur_n', Return (SignedCiphertext c_id))
 
@@ -550,7 +534,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> cipherMsg = SigCipher k_id msg_to (u_id, cur_n) msg
     -> cs' = cs $+ (c_id, cipherMsg)
     -> mycs' = c_id :: mycs
-    -> step_user (Silent SignAction) u_id
+    -> step_user (Silent (SignAction msg)) u_id
                 (usrs, adv, cs , gks, ks, qmsgs, mycs,  froms, sents, cur_n,  Sign k_id msg_to msg)
                 (usrs, adv, cs', gks, ks, qmsgs, mycs', froms, sents, cur_n', Return (SignedCiphertext c_id))
 
