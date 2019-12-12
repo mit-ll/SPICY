@@ -95,32 +95,6 @@ Section SafeMessages.
     | _ => false
     end.
 
-  Inductive content_only_honest_public_keys : forall {t}, message t -> Prop :=
-  | ContentHPK : forall txt,
-      content_only_honest_public_keys (message.Content txt)
-  | AccessHPK : forall kp,
-      honestk $? fst kp = Some true
-      -> snd kp = false
-      -> content_only_honest_public_keys (message.Permission kp)
-  | PairHPK : forall t1 t2 (m1 : message t1) (m2 : message t2),
-      content_only_honest_public_keys m1
-      -> content_only_honest_public_keys m2
-      -> content_only_honest_public_keys (message.MsgPair m1 m2).
-
-  Inductive msg_contains_only_honest_public_keys (cs : ciphers) : forall {t}, crypto t -> Prop :=
-  | PlaintextHPK : forall {t} (txt : message t),
-      content_only_honest_public_keys txt
-      -> msg_contains_only_honest_public_keys cs (Content txt)
-  | HonestlyEncryptedHPK : forall t (m : message t) c_id msg_to nonce k__sign k__enc,
-      cs $? c_id = Some (SigEncCipher k__sign k__enc msg_to nonce m)
-      -> content_only_honest_public_keys m
-      -> honest_key k__enc
-      -> msg_contains_only_honest_public_keys cs (@SignedCiphertext t c_id)
-  | SignedPayloadHPK : forall {t} (m : message t) c_id msg_to nonce k__sign,
-      cs $? c_id = Some (SigCipher k__sign msg_to nonce m)
-      -> content_only_honest_public_keys m
-      -> msg_contains_only_honest_public_keys cs (@SignedCiphertext t c_id).
-
   Definition msg_cipher_id {t} (msg : crypto t) : option cipher_id :=
     match msg with
     | SignedCiphertext c_id => Some c_id

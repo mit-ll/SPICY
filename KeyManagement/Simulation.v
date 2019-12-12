@@ -237,8 +237,7 @@ Section RealWorldUniverseProperties.
                               /\ exists c_id c, msg = SignedCiphertext c_id
                                         /\ cs $? c_id = Some c
                                         /\ ~ List.In (cipher_nonce c) froms
-    | Output msg msg_from msg_to sents => msg_contains_only_honest_public_keys honestk cs msg
-                                       /\ msg_honestly_signed honestk cs msg = true
+    | Output msg msg_from msg_to sents => msg_honestly_signed honestk cs msg = true
                                        /\ msg_to_this_user cs msg_to msg = true
                                        /\ msgCiphersSignedOk honestk cs msg
                                        /\ exists c_id c, msg = SignedCiphertext c_id

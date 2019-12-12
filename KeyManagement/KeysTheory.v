@@ -21,7 +21,6 @@ Section FindKeysLemmas.
 
   Hint Constructors
        honest_key
-       msg_contains_only_honest_public_keys
        msg_pattern_safe.
 
   Lemma findUserKeys_foldfn_proper :
@@ -306,48 +305,6 @@ Section FindKeysLemmas.
   Qed.
 
   Hint Extern 1 (Some _ = Some _) => f_equal.
-
-  Lemma safe_messages_have_only_honest_public_keys :
-  forall {t} (msg : message t) honestk,
-    content_only_honest_public_keys honestk msg
-    -> forall k_id,
-      findKeysMessage msg $? k_id = None
-      \/ (honestk $? k_id = Some true /\ findKeysMessage msg $? k_id = Some false).
-  Proof.
-    induction 1; intros; subst; simpl in *; eauto;
-      solve_perm_merges; eauto.
-
-    repeat
-      match goal with
-      | [ H : ?arg -> _, ARG : ?arg |- _ ] => specialize (H ARG)
-      end; split_ors; solve_perm_merges; eauto.
-  Qed.
-
-  Hint Resolve safe_messages_have_only_honest_public_keys.
-
-  Lemma safe_cryptos_have_only_honest_public_keys :
-    forall {t} (msg : crypto t) honestk cs,
-      msg_contains_only_honest_public_keys honestk cs msg
-      -> forall k_id,
-        findKeysCrypto cs msg $? k_id = None
-        \/ (honestk $? k_id = Some true /\ findKeysCrypto cs msg $? k_id = Some false).
-  Proof.
-    intros * H **.
-    unfold findKeysCrypto; invert H; eauto;
-      context_map_rewrites; eauto.
-  Qed.
-
-  Lemma safe_messages_perm_merge_honestk_idempotent :
-    forall {t} (msg : crypto t) honestk cs,
-      msg_contains_only_honest_public_keys honestk cs msg
-      -> honestk $k++ findKeysCrypto cs msg = honestk.
-  Proof.
-    intros * H.
-    apply map_eq_Equal; unfold Equal; intros y.
-    apply safe_cryptos_have_only_honest_public_keys with (k_id := y) in H;
-      split_ors; split_ands;
-      solve_perm_merges; eauto.
-  Qed.
 
 End FindKeysLemmas.
 
