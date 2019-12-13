@@ -67,6 +67,6 @@ Section trc_tri.
 End trc_tri.
 
 Notation "R ^*" := (trc R) (at level 0).
-Notation "R / P ^*" := (trc3 R P) (at level 0).
+(* Notation "< R | P >*" := (trc3 R P) (at level 0). *)
 
 Hint Constructors trc trc3.

@@ -22,9 +22,6 @@ Import IdealWorld.IdealNotations
 
 Set Implicit Arguments.
 
-Definition rstepSilent {A B : Type} (U1 U2 : RealWorld.universe A B) :=
-  forall sa, RealWorld.step_universe U1 (Silent sa) U2.
-
 Definition istepSilent {A : Type} (U1 U2 : IdealWorld.universe A) :=
   IdealWorld.lstep_universe U1 IdealWorld.silent U2.
 
@@ -313,16 +310,17 @@ Section Simulation.
         /\ R (RealWorld.peel_adv U__r') U__i''.
 
   Definition honest_actions_safe :=
-    forall (U__ra U__r : RealWorld.universe A B) b U__i,
+    forall (U__r : RealWorld.universe A B) U__i,
         R (RealWorld.peel_adv U__r) U__i
       -> universe_ok U__r
       -> adv_universe_ok U__r
-      -> U__r = strip_adversary_univ U__ra b
-      -> forall U__ra' lbl,
-        RealWorld.step_universe U__ra lbl U__ra'
-        -> label_safe (RealWorld.findUserKeys U__r.(RealWorld.users))
-                     U__r.(RealWorld.all_ciphers)
-                     lbl.
+      -> forall U__ra b,
+          U__r = strip_adversary_univ U__ra b
+          -> forall U__ra' lbl,
+            RealWorld.step_universe U__ra lbl U__ra'
+            -> label_safe (RealWorld.findUserKeys U__r.(RealWorld.users))
+                         U__r.(RealWorld.all_ciphers)
+                         lbl.
 
   (* Definition simulates_universe_ok := *)
   (*   forall B (U__r : RealWorld.universe A B) U__i, *)

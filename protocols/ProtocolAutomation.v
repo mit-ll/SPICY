@@ -27,7 +27,6 @@ Definition quiet (lbl : rlabel) :=
   | _ => False
   end.
 
-Notation "< R | P >*" := (trc3 R P) (at level 0).
 Notation "~^*" := (trc3 step_universe quiet) (at level 0).
 
 Section RealWorldLemmas.

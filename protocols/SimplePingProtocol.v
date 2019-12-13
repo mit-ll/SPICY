@@ -355,6 +355,19 @@ Section FeebleSimulates.
 
   Qed.
 
+
+  Lemma rsimpleping_honest_actions_safe :
+    honest_actions_safe unit RSimplePing.
+  Proof.
+    unfold honest_actions_safe; intros.
+    inversion H; clear H;
+      destruct U__r0; destruct U__r; simpl in *; subst.
+
+    - destruct U__ra; unfold strip_adversary_univ in *; simpl in *.
+      invert H2.
+      churn.
+  
+
   Lemma rsimpleping_univere_ok :
     simulates_universe_ok RSimplePing.
   Proof.
