@@ -337,7 +337,7 @@ Ltac m_equal :=
            rewrite add_neq_o by ( (unfold not; intros ?SIMPLEQ; invert SIMPLEQ) || intuition idtac )
          | [ |- context[$0 $++ _ ] ] => rewrite empty_add_idempotent
          | [ |- context[_ $++ $0 ] ] => rewrite add_empty_idempotent
-         | [ |- (add _ _ _) = _ ] => normalize_set
+         (* | [ |- (add _ _ _) = _ ] => normalize_set *)
          | [ |- (add _ _ _) = _ ] => unfold add, Raw.add; simpl
          | [ |- {| this := _ ; sorted := _ |} = _ ] => eapply map_eq_fields_eq
          | [ H : Empty ?m |- $0 = ?m ] => eapply Empty_eq_empty; exact H

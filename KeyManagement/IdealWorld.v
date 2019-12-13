@@ -2,8 +2,8 @@ From Coq Require Import String Bool.Sumbool Logic.
 
 Require Import MyPrelude.
 
-Module Foo <: EMPTY. End Foo.
-Module Import SN := SetNotations(Foo).
+(* Module Foo <: EMPTY. End Foo. *)
+(* Module Import SN := SetNotations(Foo). *)
 
 Require Import Common Maps Messages.
 Require Messages.

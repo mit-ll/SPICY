@@ -21,16 +21,25 @@ Require IdealWorld RealWorld.
 
 Set Implicit Arguments.
 
+Definition quiet (lbl : rlabel) :=
+  match lbl with
+  | Silent _ => True
+  | _ => False
+  end.
+
+Notation "< R | P >*" := (trc3 R P) (at level 0).
+Notation "~^*" := (trc3 step_universe quiet) (at level 0).
+
 Section RealWorldLemmas.
   Import RealWorld.
 
   Lemma multiStepSilentInv :
     forall {A B} (U__r U__r': universe A B) b,
-        rstepSilent ^* U__r U__r'
+        ~^* U__r U__r'
       -> U__r.(adversary).(protocol) = Return b
       -> U__r = U__r'
-      \/ exists usrs adv cs u_id userData gks ks cmd qmsgs mycs froms tos cur_n,
-          rstepSilent ^* (buildUniverse usrs adv cs gks u_id
+      \/ exists usrs adv cs u_id userData gks ks cmd qmsgs mycs froms tos cur_n sa,
+          ~^* (buildUniverse usrs adv cs gks u_id
                                         {| key_heap := ks
                                          ; protocol := cmd
                                          ; msg_heap := qmsgs
@@ -39,15 +48,17 @@ Section RealWorldLemmas.
                                          ; sent_nons := tos
                                          ; cur_nonce := cur_n |}) U__r'
           /\ users U__r $? u_id = Some userData
-          /\ step_user Silent
+          /\ step_user (Silent sa)
                       (Some u_id)
                       (RealWorld.build_data_step U__r userData)
                       (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cur_n, cmd).
   Proof.
     intros * H ADV.
     invert H; intuition idtac.
-    right. invert H0.
-    - repeat eexists; intuition; eauto.
+    right.
+    invert H1; unfold quiet in H0.
+    - unfold quiet in H0; destruct b0; try contradiction.
+      repeat eexists; intuition; eauto.
     - exfalso.
       destruct U__r; destruct adversary; simpl in *; subst.
       unfold build_data_step in H; simpl in *.
@@ -140,7 +151,7 @@ Module SimulationAutomation.
         /\ froms = froms'
         /\ tos = tos'
         /\ cur_n = cur_n'
-        /\ lbl = Silent
+        /\ lbl = Silent NoData
         /\ exists n, cmd = Return n.
     Proof.
       intros * H.
@@ -170,7 +181,7 @@ Module SimulationAutomation.
           /\ froms = froms'
           /\ tos = tos'
           /\ cur_n = cur_n'
-          /\ lbl = Silent
+          /\ lbl = Silent NoData
           /\ exists c, cmd1 = Return c
                /\ cmd' = cmd c).
     Proof.
@@ -205,7 +216,7 @@ Module SimulationAutomation.
               /\froms' = (if msg_signed_addressed (findUserKeys usrs) cs u_id msg
                          then updateTrackedNonce u_id froms cs msg
                          else froms)
-              /\ lbl = Silent
+              /\ lbl = Silent NoData
               /\ cmd = Recv pat
               )).
     Proof.
@@ -267,14 +278,14 @@ Module SimulationAutomation.
         /\ froms = froms'
         /\ tos = tos'
         /\ cur_n' = 1 + cur_n
-        /\ lbl = Silent
         /\ keys_mine ks (findKeysMessage msg)
         (* /\ incl (findCiphers msg) mycs *)
         /\ (exists kt__enc kt__sign kp__enc,
                 gks $? k__enc  = Some (MkCryptoKey k__enc Encryption kt__enc)
               /\ gks $? k__sign = Some (MkCryptoKey k__sign Signing kt__sign)
               /\ ks $? k__enc   = Some kp__enc
-              /\ ks $? k__sign  = Some true)
+              /\ ks $? k__sign  = Some true
+              /\ lbl = Silent (EncAction msg k__enc))
         /\ (exists c_id,
               ~ In c_id cs
               /\ cs' = cs $+ (c_id, SigEncCipher k__sign k__enc msg_to (u_id, cur_n) msg)
@@ -300,7 +311,7 @@ Module SimulationAutomation.
         /\ froms = froms'
         /\ tos = tos'
         /\ cur_n = cur_n'
-        /\ lbl = Silent
+        /\ lbl = Silent NoData
         /\ List.In c_id mycs
         /\ exists (msg : message t) k__sign k__enc kt__enc kt__sign kp__sign msg_to nonce,
             cs $? c_id     = Some (SigEncCipher k__sign k__enc msg_to nonce msg)
@@ -331,7 +342,7 @@ Module SimulationAutomation.
         /\ froms = froms'
         /\ tos = tos'
         /\ cur_n' = 1 + cur_n
-        /\ lbl = Silent
+        /\ lbl = Silent (SignAction msg)
         /\ (exists kt__sign,
                 gks $? k__sign = Some (MkCryptoKey k__sign Signing kt__sign)
               /\ ks $? k__sign  = Some true)
@@ -362,7 +373,7 @@ Module SimulationAutomation.
         /\ froms = froms'
         /\ tos = tos'
         /\ cur_n = cur_n'
-        /\ lbl = Silent
+        /\ lbl = Silent NoData
         /\ List.In c_id mycs
         /\ exists (msg : message t) kt__sign kp__sign msg_to nonce,
             cs $? c_id     = Some (SigCipher k__sign msg_to nonce msg)
@@ -425,19 +436,19 @@ Module SimulationAutomation.
 
       | [ H : RealWorld.step_user _ _ (build_data_step _ _) _ |- _ ] => unfold build_data_step in H; simpl in H
 
-      | [ H :rstepSilent ^* (RealWorld.buildUniverse _ _ _ _ _ _ ) _ |- _] =>
+      | [ H : ~^* (RealWorld.buildUniverse _ _ _ _ _ _ ) _ |- _] =>
         unfold RealWorld.buildUniverse in H; autorewrite with simpl_univ in H
       | [ |- context [RealWorld.buildUniverse _ _ _ _ _ _] ] =>
         unfold RealWorld.buildUniverse
 
-      | [ S: rstepSilent ^* ?U _ |- _ ] => 
+      | [ S: ~^* ?U _ |- _ ] => 
         (* Don't actually multiStep unless we know the state of the starting universe
          * meaning it is not some unknown hypothesis in the context...
          *)
         is_not_var U; eapply multiStepSilentInv in S; split_ors; split_ex; intuition idtac; subst
 
-      | [ H: rstepSilent ?U _ |- _ ] => is_not_var U; invert H
-      | [ H: RealWorld.step_universe _ _ _ |- _ ] => invert H
+      | [ H: step_universe ?U (Silent _) _ |- _ ] => is_not_var U; invert H
+      | [ H: step_universe _ _ _ |- _ ] => invert H
 
       end.
 
@@ -489,8 +500,9 @@ Module SimulationAutomation.
       ((eapply RealWorld.StepBindRecur; r_single_silent_step) || r_single_silent_step).
 
   Ltac single_silent_multistep usr_step := eapply TrcFront; [usr_step |]; simpl.
-
-  Ltac real_single_silent_multistep uid := single_silent_multistep ltac:(rsilent_step_univ uid).
+  Ltac single_silent_multistep3 usr_step := eapply Trc3Front; swap 1 2; [usr_step |..]; simpl; trivial.
+  
+  Ltac real_single_silent_multistep uid := single_silent_multistep3 ltac:(rsilent_step_univ uid).
   Ltac ideal_single_silent_multistep uid := single_silent_multistep ltac:(isilent_step_univ uid).
 
   Ltac figure_out_user_step step_tac U1 U2 :=
@@ -502,8 +514,9 @@ Module SimulationAutomation.
       end
     end.
 
-  Remove Hints TrcRefl TrcFront.
+  Remove Hints TrcRefl TrcFront Trc3Refl Trc3Front.
   Hint Extern 1 (_ ^* ?U ?U) => apply TrcRefl.
+  Hint Extern 1 (~^* ?U ?U) => apply Trc3Refl.
 
   Remove Hints eq_sym (* includes_lookup *).
   Remove Hints trans_eq_bool mult_n_O plus_n_O eq_add_S f_equal_nat.
@@ -519,10 +532,23 @@ Module SimulationAutomation.
     intros. subst. apply TrcRefl.
   Qed.
 
+  Lemma Trc3Refl' :
+    forall {A B} (R : A -> B -> A -> Prop) x1 x2 P,
+      x1 = x2 ->
+      trc3 R P x1 x2.
+  Proof.
+    intros. subst. apply Trc3Refl.
+  Qed.
+  
   Ltac solve_refl :=
     solve [
         eapply TrcRefl
-      | eapply TrcRefl'; simpl; smash_universe ].
+      | eapply TrcRefl'; simpl; eauto ].
+
+  Ltac solve_refl3 :=
+    solve [
+        eapply Trc3Refl
+      | eapply Trc3Refl'; simpl; smash_universe ].
 
   Ltac simpl_real_users_context :=
     repeat
@@ -542,9 +568,9 @@ Module SimulationAutomation.
   Ltac real_silent_multistep :=
     simpl_real_users_context;
     match goal with
-    | [ |- rstepSilent ^* ?U1 ?U2 ] =>
+    | [ |- ~^* ?U1 ?U2 ] =>
       first [
-          solve_refl
+          solve_refl3
         | figure_out_user_step rss_clean U1 U2 ]
     end.
 
@@ -571,13 +597,13 @@ Module SimulationAutomation.
       end
     end.
 
-  Hint Extern 1 (rstepSilent ^* _ _) => real_silent_multistep.
+  Hint Extern 1 (~^* _ _) => real_silent_multistep.
   Hint Extern 1 (istepSilent ^* _ _) => ideal_silent_multistep.
   Hint Extern 1 (IdealWorld.lstep_universe _ _ _) => single_step_ideal_universe.
 
   Hint Extern 1 (List.In _ _) => progress simpl.
 
-  Hint Extern 1 (RealWorld.action_adversary_safe _ _ _ = _) => unfold RealWorld.action_adversary_safe; simplify.
+  Hint Extern 1 (action_adversary_safe _ _ _ = _) => unfold action_adversary_safe; simpl.
   Hint Extern 1 (IdealWorld.msg_permissions_valid _ _) => progress simpl.
 
   Hint Extern 1 (_ = RealWorld.addUserKeys _ _) => unfold RealWorld.addUserKeys, map; simpl.

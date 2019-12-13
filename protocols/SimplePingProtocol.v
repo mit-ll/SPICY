@@ -2,11 +2,6 @@ From Coq Require Import
      List.
      (* Logic.ProofIrrelevance. *)
 
-(* Require Import MyPrelude. *)
-
-(* Module Foo <: EMPTY. End Foo. *)
-(* Module Import SN := SetNotations(Foo). *)
-
 Require Import
         MyPrelude
         Maps
@@ -186,15 +181,15 @@ Section RealProtocol.
 
   Inductive RSimplePing : RealWorld.simpl_universe nat -> IdealWorld.universe nat -> Prop :=
   | Start : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 adv,
-      rstepSilent^* (real_univ_start cs mycs1 mycs2 cur_n1 cur_n2 adv) U__r
+      ~^* (real_univ_start cs mycs1 mycs2 cur_n1 cur_n2 adv) U__r
       -> lameAdv tt adv
       -> RSimplePing (peel_adv U__r) ideal_univ_start
   | Sent1 : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 n cid1 non1 adv,
-      rstepSilent^* (real_univ_sent1 n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
+      ~^* (real_univ_sent1 n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
       -> lameAdv tt adv
       -> RSimplePing (peel_adv U__r) (ideal_univ_sent1 n)
   | Recd1 : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 n cid1 non1 adv,
-      rstepSilent^* (real_univ_recd1 n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
+      ~^* (real_univ_recd1 n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
       -> lameAdv tt adv
       -> RSimplePing (peel_adv U__r) (ideal_univ_recd1 n)
   (* | Done : forall U__r cs mycs1 mycs2 froms1 froms2 sents1 sents2 cur_n1 cur_n2 n cid1 seq1 adv, *)
@@ -215,7 +210,7 @@ Hint Unfold
      real_univ_start real_univ_sent1 real_univ_recd1 real_univ_done mkrU
      ideal_univ_start ideal_univ_sent1 ideal_univ_recd1 ideal_univ_done mkiU : constants.
 
-Hint Extern 0 (rstepSilent ^* _ _) =>
+Hint Extern 0 (~^* _ _) =>
  progress(unfold real_univ_start, real_univ_sent1, real_univ_recd1, real_univ_done, mkrU; simpl).
 Hint Extern 1 (RSimplePing (RealWorld.buildUniverse _ _ _ _ _ _) _) => unfold RealWorld.buildUniverse; simpl.
 Hint Extern 1 (RSimplePing (RealWorld.peel_adv _) _) => unfold RealWorld.peel_adv; simpl.
@@ -244,7 +239,7 @@ Section FeebleSimulates.
   Proof.
     unfold simulates_silent_step.
 
-    Time (
+    time (
         intros * R UOK AOK LAME * STEP;
         clear UOK AOK;
         invert R;

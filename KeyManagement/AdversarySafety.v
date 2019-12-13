@@ -5,6 +5,8 @@ From Coq Require Import
      Program.Equality (* for dependent induction *)
 .
 
+From Coq Require Classical_Prop.
+
 Require Import
         MyPrelude
         Maps
