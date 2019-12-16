@@ -243,6 +243,43 @@ Section RealWorldUniverseProperties.
                                                  /\ ~ List.In (cipher_nonce c) sents
     end.
 
+
+  Inductive next_cmd_safe (honestk : key_perms) (cs : ciphers) (u_id : user_id) (sents : sent_nonces) :
+    forall {A}, user_cmd A -> Prop :=
+
+  | SafeBind : forall {r A} (cmd1 : user_cmd r) (cmd2 : r -> user_cmd A),
+      next_cmd_safe honestk cs u_id sents cmd1
+      -> next_cmd_safe honestk cs u_id sents (Bind cmd1 cmd2)
+  | SafeEncrypt : forall {t} (msg : message t) k__sign k__enc msg_to,
+      honestk $? k__enc = Some true
+      -> (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true)
+      -> next_cmd_safe honestk cs u_id sents (SignEncrypt k__sign k__enc msg_to msg)
+  | SafeSign : forall {t} (msg : message t) k msg_to,
+      (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true /\ kp = false)
+      -> next_cmd_safe honestk cs u_id sents (Sign k msg_to msg)
+  | SafeRecv : forall t pat,
+      msg_pattern_safe honestk pat
+      (* /\ exists c_id c, msg = SignedCiphertext c_id *)
+      (*           /\ cs $? c_id = Some c *)
+      (*           /\ ~ List.In (cipher_nonce c) froms *)
+      -> next_cmd_safe honestk cs u_id sents (@Recv t pat)
+  | SafeSend : forall {t} (msg : crypto t) msg_to,
+        msg_honestly_signed honestk cs msg = true
+      -> msg_to_this_user cs (Some msg_to) msg = true
+      -> msgCiphersSignedOk honestk cs msg
+      -> (exists c_id c, msg = SignedCiphertext c_id
+                /\ cs $? c_id = Some c
+                /\ fst (cipher_nonce c) = (Some u_id)  (* only send my messages *)
+                /\ ~ List.In (cipher_nonce c) sents)
+      -> next_cmd_safe honestk cs u_id sents (Send msg_to msg)
+  .
+
+  Definition honest_cmds_safe {A B} (U : universe A B) : Prop :=
+    forall u_id u honestk,
+      honestk = findUserKeys U.(users)
+      -> U.(users) $? u_id = Some u
+      -> next_cmd_safe (findUserKeys U.(users)) U.(all_ciphers) u_id u.(sent_nons) u.(protocol).
+
   Definition label_safe (honestk : key_perms) (cs : ciphers) (lbl : label) : Prop :=
     match lbl with
     | Silent ca => cipher_action_adversary_safe honestk ca
@@ -322,6 +359,13 @@ Section Simulation.
                          U__r.(RealWorld.all_ciphers)
                          lbl.
 
+  Definition honest_actions_safe' :=
+    forall (U__r : RealWorld.universe A B) U__i,
+        R (RealWorld.peel_adv U__r) U__i
+      -> universe_ok U__r
+      -> adv_universe_ok U__r
+      -> honest_cmds_safe U__r.
+
   (* Definition simulates_universe_ok := *)
   (*   forall B (U__r : RealWorld.universe A B) U__i, *)
   (*       R (strip_adversary U__r) U__i *)
@@ -346,7 +390,7 @@ Section Simulation.
     (* conditions for simulation steps *)
     simulates_silent_step
   /\ simulates_labeled_step
-  /\ honest_actions_safe
+  /\ honest_actions_safe'
   (* /\ simulates_universe_ok *)
   (* /\ simulates_labeled_step_safe *)
 
