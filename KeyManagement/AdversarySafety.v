@@ -6981,11 +6981,54 @@ Section SingleAdversarySimulates.
 
     Hint Resolve msg_accepted_by_pattern_after_cleaning_honest_key.
 
+    Lemma honest_labeled_step_implies_cleaned_cmd_sents_froms_non_same :
+      forall {A B C} (usrs usrs': honest_users A) (adv adv' : user_data B) bd bd' lbl a
+        cs cs' gks gks' suid u_id ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n  cur_n',
+          step_user lbl suid bd bd'
+        -> suid = Some u_id
+        -> forall (cmd : user_cmd C),
+            bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+          -> lbl = Action a
+          -> forall cmd' honestk,
+              bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+              -> (forall (U U' U__s : universe A B) lbl b,
+                    U__s = strip_adversary_univ U b
+                    -> step_universe U__s lbl U'
+                    -> label_safe (findUserKeys U__s.(users)) U__s.(all_ciphers) lbl)
+              -> honestk = findUserKeys usrs
+              -> action_adversary_safe (findUserKeys (clean_users honestk cs usrs)) (clean_ciphers honestk cs) a.
+    Proof.
+      induction 1; inversion 2; inversion 2; try discriminate;
+        subst; clean_context; intros; eauto.
+
+
+
+                               
+    (*     -> message_queue_ok honestk cs (existT _ _ msg :: qmsgs) gks *)
+    (*     -> step_user (Action (Input msg pat froms)) (Some u_id) *)
+    (*                 (clean_users honestk cs usrs, *)
+    (*                  clean_adv adv honestk cs b, *)
+    (*                  clean_ciphers honestk cs, *)
+    (*                  clean_keys honestk gks, *)
+    (*                  clean_key_permissions honestk ks, *)
+    (*                  clean_messages honestk cs (Some u_id) froms (existT _ _ msg :: qmsgs), *)
+    (*                  mycs, froms, sents, cur_n, @Recv t pat) *)
+    (*                 (clean_users honestk' cs usrs, *)
+    (*                  clean_adv adv honestk' cs b, *)
+    (*                  clean_ciphers honestk' cs, *)
+    (*                  clean_keys honestk' gks, *)
+    (*                  clean_key_permissions honestk' (ks $k++ pubk), *)
+    (*                  clean_messages honestk' cs (Some u_id) froms' qmsgs, *)
+    (*                  findCiphers msg ++ mycs, *)
+    (*                  updateTrackedNonce (Some u_id) froms cs msg, sents, cur_n, Return msg) *)
+
+
     Lemma honest_labeled_recv_implies_honest_or_no_step_origuniv :
       forall {t A B} (msg : crypto t) (usrs: honest_users A) (adv : user_data B) usrs__s cs__s
         cs gks u_id honestk honestk' pat ks qmsgs mycs froms froms' sents cur_n pubk b,
           msg_accepted_by_pattern cs (Some u_id) pat msg
         -> honestk = findUserKeys usrs
+        -> msg_pattern_safe honestk pat
         -> froms' = (if msg_signed_addressed honestk cs (Some u_id) msg
                    then updateTrackedNonce (Some u_id) froms cs msg
                    else froms)
@@ -7006,22 +7049,19 @@ Section SingleAdversarySimulates.
                      clean_key_permissions honestk' (ks $k++ pubk),
                      clean_messages honestk' cs (Some u_id) froms' qmsgs,
                      findCiphers msg ++ mycs,
-                     updateTrackedNonce (Some u_id) froms cs msg, sents, cur_n, Return msg)
-          \/ (usrs__s, clean_adv adv honestk cs b, cs__s, clean_keys honestk gks,
-             clean_key_permissions honestk ks,
-             clean_messages honestk cs (Some u_id) froms (existT _ _ msg :: qmsgs), mycs, froms, sents, cur_n, @Recv t pat)
-            = (clean_users honestk cs usrs, clean_adv adv honestk cs b, cs__s, clean_keys honestk gks,
-               clean_key_permissions honestk ks,
-               clean_messages honestk cs (Some u_id) froms' qmsgs, mycs, froms', sents, cur_n, Recv pat).
+                     updateTrackedNonce (Some u_id) froms cs msg, sents, cur_n, Return msg).
     Proof.
       intros; subst.
-      unfold clean_messages at 1 3.
+      assert (msg_signed_addressed (findUserKeys usrs) cs (Some u_id) msg = true)
+        as MSA by (unfold msg_signed_addressed; eauto using accepted_safe_msg_pattern_honestly_signed
+                                                          , accepted_safe_msg_pattern_to_this_user).
+      unfold clean_messages at 1.
       unfold clean_messages', msg_filter; simpl.
-      cases (msg_signed_addressed (findUserKeys usrs) cs (Some u_id) msg).
+      rewrite !MSA.
 
-      - generalize Heq; intros MSA; unfold msg_signed_addressed in MSA; apply andb_true_iff in MSA; split_ands.
-        pose proof (msg_honestly_signed_has_signing_key_cipher_id _ _ _ H0); split_ands; split_ex.
-        eapply msg_honestly_signed_signing_key_honest in H0; eauto.
+      generalize MSA; intros MSA'; unfold msg_signed_addressed in MSA'; apply andb_true_iff in MSA; split_ands.
+      pose proof (msg_honestly_signed_has_signing_key_cipher_id _ _ _ H0); split_ands; split_ex.
+      eapply msg_honestly_signed_signing_key_honest in H0; eauto.
 
         cases (msg_nonce_ok cs froms msg).
 
@@ -7089,6 +7129,229 @@ Section SingleAdversarySimulates.
         right; simpl; f_equal.
     Qed.
 
+    (* Lemma honest_labeled_recv_implies_honest_or_no_step_origuniv : *)
+    (*   forall {t A B} (msg : crypto t) (usrs: honest_users A) (adv : user_data B) usrs__s cs__s *)
+    (*     cs gks u_id honestk honestk' pat ks qmsgs mycs froms froms' sents cur_n pubk b, *)
+    (*       msg_accepted_by_pattern cs (Some u_id) pat msg *)
+    (*     -> honestk = findUserKeys usrs *)
+    (*     -> froms' = (if msg_signed_addressed honestk cs (Some u_id) msg *)
+    (*                then updateTrackedNonce (Some u_id) froms cs msg *)
+    (*                else froms) *)
+    (*     -> cs__s = clean_ciphers honestk cs *)
+    (*     -> usrs__s = clean_users honestk cs usrs *)
+    (*     -> pubk = findKeysCrypto cs msg *)
+    (*     -> honestk' = findUserKeys usrs $k++ pubk *)
+    (*     -> message_queue_ok honestk cs (existT _ _ msg :: qmsgs) gks *)
+    (*     -> step_user (Action (Input msg pat froms)) (Some u_id) *)
+    (*                 (usrs__s, clean_adv adv honestk cs b, cs__s, clean_keys honestk gks, *)
+    (*                  clean_key_permissions honestk ks, *)
+    (*                  clean_messages honestk cs (Some u_id) froms (existT _ _ msg :: qmsgs), *)
+    (*                  mycs, froms, sents, cur_n, @Recv t pat) *)
+    (*                 (clean_users honestk' cs usrs, *)
+    (*                  clean_adv adv honestk' cs b, *)
+    (*                  clean_ciphers honestk' cs, *)
+    (*                  clean_keys honestk' gks, *)
+    (*                  clean_key_permissions honestk' (ks $k++ pubk), *)
+    (*                  clean_messages honestk' cs (Some u_id) froms' qmsgs, *)
+    (*                  findCiphers msg ++ mycs, *)
+    (*                  updateTrackedNonce (Some u_id) froms cs msg, sents, cur_n, Return msg) *)
+    (*       \/ (usrs__s, clean_adv adv honestk cs b, cs__s, clean_keys honestk gks, *)
+    (*          clean_key_permissions honestk ks, *)
+    (*          clean_messages honestk cs (Some u_id) froms (existT _ _ msg :: qmsgs), mycs, froms, sents, cur_n, @Recv t pat) *)
+    (*         = (clean_users honestk cs usrs, clean_adv adv honestk cs b, cs__s, clean_keys honestk gks, *)
+    (*            clean_key_permissions honestk ks, *)
+    (*            clean_messages honestk cs (Some u_id) froms' qmsgs, mycs, froms', sents, cur_n, Recv pat). *)
+    (* Proof. *)
+    (*   intros; subst. *)
+    (*   unfold clean_messages at 1 3. *)
+    (*   unfold clean_messages', msg_filter; simpl. *)
+    (*   cases (msg_signed_addressed (findUserKeys usrs) cs (Some u_id) msg). *)
+
+    (*   - generalize Heq; intros MSA; unfold msg_signed_addressed in MSA; apply andb_true_iff in MSA; split_ands. *)
+    (*     pose proof (msg_honestly_signed_has_signing_key_cipher_id _ _ _ H0); split_ands; split_ex. *)
+    (*     eapply msg_honestly_signed_signing_key_honest in H0; eauto. *)
+
+    (*     cases (msg_nonce_ok cs froms msg). *)
+
+    (*     + left; rewrite fold_clean_messages1', clean_messages'_fst_pull, fold_clean_messages. *)
+    (*       invert H6; split_ands. *)
+    (*       unfold msg_nonce_ok, msg_cipher_id in *. *)
+    (*       destruct msg; try discriminate; clean_context. *)
+    (*       cases (cs $? x); try discriminate. *)
+    (*       cases (count_occ msg_seq_eq froms (cipher_nonce c)); try discriminate; clean_context. *)
+
+    (*       specialize (H6 _ H2); split_ands. *)
+    (*       specialize (H6 H0); split_ands. *)
+    (*       unfold message_no_adv_private in H6. *)
+    (*       match goal with *)
+    (*       | [ |- context [ findUserKeys usrs $k++ ?pubk ]] =>  *)
+    (*         assert (findUserKeys usrs $k++ pubk = findUserKeys usrs) as MKRW *)
+    (*       end. *)
+    (*       maps_equal; solve_perm_merges; *)
+    (*         repeat *)
+    (*         match goal with *)
+    (*         | [ H : (forall _ _, findKeysCrypto _ _ $? _ = Some _ -> _), ARG : findKeysCrypto _ _ $? _ = Some _ |- _ ] => *)
+    (*           specialize (H _ _ ARG); split_ands; subst *)
+    (*         end; clean_map_lookups; eauto. *)
+
+    (*       rewrite MKRW. *)
+    (*       eapply StepRecv; eauto. *)
+    (*       * unfold updateTrackedNonce; context_map_rewrites. *)
+    (*         unfold msg_to_this_user, msg_destination_user in H1; context_map_rewrites. *)
+    (*         destruct (cipher_to_user c ==n u_id); subst; try discriminate. *)
+    (*         destruct (cipher_to_user c ==n cipher_to_user c); try contradiction. *)
+    (*         rewrite Heq2; trivial. *)
+    (*       * rewrite clean_key_permissions_distributes_merge_key_permissions. *)
+    (*         match goal with *)
+    (*         | [ |- context [ ?same $k++ ?fst = ?same $k++ ?snd ]] => assert (fst = snd) *)
+    (*         end. *)
+    (*         maps_equal. *)
+    (*         cases (@findKeysCrypto t0 cs (SignedCiphertext x) $? y). *)
+    (*         ** specialize (H6 _ _ Heq3); split_ands; subst. *)
+    (*            erewrite clean_key_permissions_keeps_honest_permission; eauto; symmetry. *)
+    (*            unfold findKeysCrypto. unfold findKeysCrypto in Heq3; context_map_rewrites. *)
+    (*            erewrite clean_ciphers_keeps_honest_cipher; eauto. *)
+    (*            unfold msg_signed_addressed in Heq; apply andb_true_iff in Heq; split_ands. *)
+    (*            eapply msg_honestly_signed_cipher_honestly_signed in H6; eauto; trivial. *)
+    (*         ** rewrite clean_key_permissions_adds_no_permissions; eauto; symmetry. *)
+    (*            unfold findKeysCrypto. unfold findKeysCrypto in Heq3; context_map_rewrites. *)
+    (*            erewrite clean_ciphers_keeps_honest_cipher; eauto. *)
+    (*            unfold msg_signed_addressed in Heq; apply andb_true_iff in Heq; split_ands. *)
+    (*            eapply msg_honestly_signed_cipher_honestly_signed in H3; eauto; trivial. *)
+    (*         ** rewrite H9; trivial. *)
+
+    (*     + rewrite fold_clean_messages1', fold_clean_messages; right. *)
+    (*       assert (froms = updateTrackedNonce (Some u_id) froms cs msg) as FROMSEQ. *)
+    (*       unfold updateTrackedNonce, msg_cipher_id in *; *)
+    (*         destruct msg; try discriminate; clean_context. *)
+    (*       unfold msg_to_this_user, msg_destination_user in H1. *)
+    (*       cases (cs $? x); try discriminate. *)
+    (*       destruct (cipher_to_user c ==n u_id); subst; try discriminate. *)
+    (*       destruct (cipher_to_user c ==n cipher_to_user c); try contradiction. *)
+    (*       unfold msg_nonce_ok in Heq0; context_map_rewrites. *)
+    (*       cases (count_occ msg_seq_eq froms (cipher_nonce c)); try discriminate; trivial. *)
+    (*       rewrite <- FROMSEQ. *)
+    (*       f_equal. *)
+
+    (*   - rewrite fold_clean_messages1', fold_clean_messages. *)
+    (*     right; simpl; f_equal. *)
+    (* Qed. *)
+
+    
+    Lemma honest_labeled_send_implies_step_origuniv :
+      forall {t A B} (msg : crypto t) (usrs: honest_users A) (adv : user_data B) rec_u
+        cs gks u_id rec_u_id honestk ks qmsgs mycs froms sents cur_n b,
+        keys_mine ks (findKeysCrypto cs msg)
+        -> incl (findCiphers msg) mycs
+        -> usrs $? rec_u_id = Some rec_u
+        -> Some rec_u_id <> Some u_id
+        -> honestk = findUserKeys usrs
+  (* H12 : encrypted_ciphers_ok (findUserKeys usrs) cs' gks' *)
+  (* H25 : message_queues_ok cs' usrs gks' *)
+        -> user_cipher_queues_ok cs honestk usrs
+  (* H27 : adv_message_queue_ok usrs cs' gks' (msg_heap adv) *)
+  (* H26 : keys_and_permissions_good gks' usrs (key_heap adv) *)
+        -> honest_users_only_honest_keys usrs
+        -> forall cmdc,
+            usrs $? u_id =
+            Some
+              {|
+                key_heap := ks;
+                protocol := cmdc;
+                msg_heap := qmsgs;
+                c_heap := mycs;
+                from_nons := froms;
+                sent_nons := sents;
+                cur_nonce := cur_n |}
+            -> step_user (Action (Output msg (Some u_id) (Some rec_u_id) sents))
+                    (Some u_id)
+                    (clean_users honestk cs usrs,
+                     clean_adv adv honestk cs b,
+                     clean_ciphers honestk cs,
+                     clean_keys honestk gks,
+                     clean_key_permissions honestk ks,
+                     clean_messages honestk cs (Some u_id) froms qmsgs, mycs,
+                     froms, sents, cur_n, Send rec_u_id msg)
+                    (clean_users honestk cs
+                                 (usrs $+ (rec_u_id,
+                                           {|
+                                             key_heap := key_heap rec_u;
+                                             protocol := protocol rec_u;
+                                             msg_heap := msg_heap rec_u ++ [existT _ _ msg];
+                                             c_heap := c_heap rec_u;
+                                             from_nons := from_nons rec_u;
+                                             sent_nons := sent_nons rec_u;
+                                             cur_nonce := cur_nonce rec_u |})),
+                     clean_adv
+                       {| key_heap := key_heap adv $k++ findKeysCrypto cs msg;
+                          protocol := protocol adv;
+                          msg_heap := msg_heap adv ++ [existT _ _ msg];
+                          c_heap := c_heap adv;
+                          from_nons := from_nons adv;
+                          sent_nons := sent_nons adv;
+                          cur_nonce := cur_nonce adv |} honestk cs b,
+                     clean_ciphers honestk cs,
+                     clean_keys honestk gks,
+                     clean_key_permissions honestk ks,
+                     clean_messages honestk cs (Some u_id) froms qmsgs,
+                     mycs, froms,
+                     updateTrackedNonce (Some rec_u_id) sents cs msg, cur_n, Return tt).
+    Proof.
+      intros; subst; eauto.
+      econstructor; eauto using clean_users_cleans_user; simpl.
+
+      - unfold keys_mine in *; intros.
+        destruct msg; eauto.
+        + simpl in *.
+          specialize (H _ _ H3); split_ors; subst.
+          left; eapply clean_key_permissions_keeps_honest_permission; eauto.
+          unfold honest_perm_filter_fn.
+          specialize (H5 _ _ H6 _ _ H); simpl in H5; context_map_rewrites; trivial.
+
+          right; split; eauto; eapply clean_key_permissions_keeps_honest_permission; eauto.
+          unfold honest_perm_filter_fn.
+          specialize (H5 _ _ H6 _ _ H); simpl in H5; context_map_rewrites; trivial.
+
+        + cases (cs $? c_id).
+          * simpl in H0; assert (List.In c_id mycs) by eauto; user_cipher_queues_prop.
+            rewrite <- honest_message_findKeysCrypto_same_after_cleaning in H3; simpl.
+            specialize (H _ _ H3); split_ors; subst;
+              specialize (H5 _ _ H6 _ _ H); eauto.
+            unfold cipher_honestly_signed, msg_honestly_signed, msg_signing_key in *;
+              context_map_rewrites; destruct x; eauto.
+
+          * simpl in H3.
+            rewrite clean_ciphers_no_new_ciphers in H3; clean_map_lookups; trivial.
+
+      - unfold updateTrackedNonce; intros.
+        destruct msg; eauto.
+        cases (cs $? c_id).
+        + eapply clean_ciphers_keeps_honest_cipher with (honestk := findUserKeys usrs) in Heq; eauto.
+          context_map_rewrites; trivial.
+          simpl in *; assert (List.In c_id mycs) by eauto; user_cipher_queues_prop.
+          unfold honest_cipher_filter_fn; trivial.
+
+        + eapply clean_ciphers_no_new_ciphers with (honestk := findUserKeys usrs) in Heq;
+            context_map_rewrites; eauto.
+
+      - rewrite clean_users_add_pull; simpl.
+        erewrite clean_messages_keeps_hon_signed; eauto.
+        all: admit.
+      - unfold clean_adv; simpl.
+        unfold clean_adv_msgs.
+        
+    Qed.
+
+    Hint Resolve updateTrackedNonce_clean_ciphers_idempotent_honest_msg.
+
+
+
+
+
+        eapply updateTrackedNonce_clean_ciphers_idempotent_honest_msg; eauto.
+          
+    Admitted.
+
     Lemma honest_silent_step_advuniv_implies_honest_or_no_step_origuniv'' :
       forall {A B C} u_id suid cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
                 gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd' (b: B),
@@ -7147,12 +7410,14 @@ Section SingleAdversarySimulates.
                     try solve_clean_keys_clean_key_permissions ];
         eauto 12 using honest_silent_recv_implies_honest_or_no_step_origuniv
                      , honest_labeled_recv_implies_honest_or_no_step_origuniv
+                     , honest_labeled_send_implies_step_origuniv
                      , honest_silent_new_cipher_implies_honest_or_no_step_origuniv'
                      , honest_silent_new_key_implies_honest_or_no_step_origuniv
                      , honest_silent_decrypt_implies_honest_or_no_step_origuniv.
 
       - admit.
-      - eapply honest_labeled_recv_implies_honest_or_no_step_origuniv.
+      - admit.
+      - 
 
       remember (findUserKeys usrs) as honestk.
       remember (usrs' $+ (u_id, {| key_heap := ks'
