@@ -192,6 +192,13 @@ Section RealWorldUniverseProperties.
       \/ (honestk $? k_id = Some true /\ advk $? k_id <> Some true)
       ).
 
+  Definition honest_users_only_honest_keys {A} (usrs : honest_users A) :=
+    forall u_id u,
+      usrs $? u_id = Some u
+      -> forall k_id kp,
+        u.(key_heap) $? k_id = Some kp
+        -> findUserKeys usrs $? k_id = Some true.
+
   Definition honest_nonce_tracking_ok (cs : ciphers)
              (me : option user_id) (my_sents : sent_nonces) (my_cur_n : nat)
              (to_usr : user_id) (to_froms : recv_nonces) (to_msgs : queued_messages) :=
@@ -313,7 +320,8 @@ Definition adv_universe_ok {A B} (U : RealWorld.universe A B) : Prop :=
     /\ adv_cipher_queue_ok U.(RealWorld.all_ciphers) U.(RealWorld.users) U.(RealWorld.adversary).(RealWorld.c_heap)
     /\ adv_message_queue_ok U.(RealWorld.users) U.(RealWorld.all_ciphers) U.(RealWorld.all_keys) U.(RealWorld.adversary).(RealWorld.msg_heap)
     /\ adv_no_honest_keys honestk U.(RealWorld.adversary).(RealWorld.key_heap)
-    /\ honest_nonces_ok U.(RealWorld.all_ciphers) U.(RealWorld.users).
+    /\ honest_nonces_ok U.(RealWorld.all_ciphers) U.(RealWorld.users)
+    /\ honest_users_only_honest_keys U.(RealWorld.users).
 
 Section Simulation.
   Variable A B : Type.
