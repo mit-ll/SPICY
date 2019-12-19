@@ -19,9 +19,9 @@ Require Import
 Set Implicit Arguments.
 
 Lemma accepted_safe_msg_pattern_msg_filter_true :
-  forall {t} (msg : RealWorld.crypto t) honestk cs msg_to pat,
+  forall {t} (msg : RealWorld.crypto t) honestk cs msg_to froms pat,
     RealWorld.msg_pattern_safe honestk pat
-    -> RealWorld.msg_accepted_by_pattern cs msg_to pat msg
+    -> RealWorld.msg_accepted_by_pattern cs msg_to froms pat msg
     -> RealWorld.msg_honestly_signed honestk cs msg = true
     /\ RealWorld.msg_to_this_user cs msg_to msg = true.
 Proof.
@@ -29,7 +29,7 @@ Proof.
   destruct msg;
     repeat match goal with
            | [ H : RealWorld.msg_pattern_safe _ _ |- _] => invert H
-           | [ H : RealWorld.msg_accepted_by_pattern _ _ _ _ |- _] => invert H
+           | [ H : RealWorld.msg_accepted_by_pattern _ _ _ _ _ |- _] => invert H
            end;
     unfold RealWorld.msg_honestly_signed, RealWorld.msg_to_this_user;
     simpl; context_map_rewrites; unfold RealWorld.cipher_to_user;
@@ -38,9 +38,9 @@ Proof.
 Qed.
 
 Lemma accepted_safe_msg_pattern_honestly_signed :
-  forall {t} (msg : RealWorld.crypto t) honestk cs msg_to pat,
+  forall {t} (msg : RealWorld.crypto t) honestk cs msg_to froms pat,
     RealWorld.msg_pattern_safe honestk pat
-    -> RealWorld.msg_accepted_by_pattern cs msg_to pat msg
+    -> RealWorld.msg_accepted_by_pattern cs msg_to froms pat msg
     -> RealWorld.msg_honestly_signed honestk cs msg = true.
 Proof.
   intros;
@@ -48,18 +48,36 @@ Proof.
 Qed.
 
 Lemma accepted_safe_msg_pattern_to_this_user :
-  forall {t} (msg : RealWorld.crypto t) honestk cs msg_to pat,
+  forall {t} (msg : RealWorld.crypto t) honestk cs msg_to froms pat,
     RealWorld.msg_pattern_safe honestk pat
-    -> RealWorld.msg_accepted_by_pattern cs msg_to pat msg
+    -> RealWorld.msg_accepted_by_pattern cs msg_to froms pat msg
     -> RealWorld.msg_to_this_user cs msg_to msg = true.
 Proof.
   intros;
     pose proof (accepted_safe_msg_pattern_msg_filter_true H H0); split_ands; assumption.
 Qed.
 
+Lemma accepted_safe_msg_pattern_replay_safe :
+  forall {t} (msg : RealWorld.crypto t) honestk cs msg_to froms pat,
+    RealWorld.msg_pattern_safe honestk pat
+    -> RealWorld.msg_accepted_by_pattern cs msg_to froms pat msg
+    -> exists c_id c, msg = SignedCiphertext c_id
+              /\ cs $? c_id = Some c
+              /\ ~ List.In (cipher_nonce c) froms.
+Proof.
+  intros.
+  destruct msg;
+    repeat match goal with
+           | [ H : RealWorld.msg_pattern_safe _ _ |- _] => invert H
+           | [ H : RealWorld.msg_accepted_by_pattern _ _ _ _ _ |- _] => invert H
+           | [ H : count_occ _ _ _ = 0 |- _] => rewrite <- count_occ_not_In in H
+           end; eauto.
+Qed.
+
 Hint Resolve
      accepted_safe_msg_pattern_honestly_signed
-     accepted_safe_msg_pattern_to_this_user.
+     accepted_safe_msg_pattern_to_this_user
+     accepted_safe_msg_pattern_replay_safe.
 
 Section CleanMessages.
 

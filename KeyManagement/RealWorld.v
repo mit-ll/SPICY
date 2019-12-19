@@ -27,8 +27,8 @@ Inductive crypto : type -> Type :=
 (* We need to handle non-deterministic message  -- external choice on ordering *)
 Inductive msg_pat :=
 | Accept
-| Signed (k : key_identifier)
-| SignedEncrypted (k__sign k__enc : key_identifier)
+| Signed (k : key_identifier) (chk_replay : bool)
+| SignedEncrypted (k__sign k__enc : key_identifier) (chk_replay : bool)
 .
 
 Definition msg_seq : Set := (option user_id) * nat.
@@ -66,17 +66,20 @@ Definition my_ciphers      := list cipher_id.
 Definition recv_nonces     := list msg_seq.
 Definition sent_nonces     := list msg_seq.
 
-Inductive msg_accepted_by_pattern (cs : ciphers) (opt_uid_to : option user_id) : forall {t : type}, msg_pat -> crypto t -> Prop :=
+Inductive msg_accepted_by_pattern (cs : ciphers) (opt_uid_to : option user_id) (froms : recv_nonces)
+  : forall {t : type}, msg_pat -> crypto t -> Prop :=
 | MsgAccept : forall {t} (m : crypto t),
-    msg_accepted_by_pattern cs opt_uid_to Accept m
-| ProperlySigned : forall {t} c_id k (m : message t) msg_to nonce,
+    msg_accepted_by_pattern cs opt_uid_to froms Accept m
+| ProperlySigned : forall {t} c_id k (m : message t) msg_to nonce (chk : bool),
     cs $? c_id = Some (@SigCipher t k msg_to nonce m)
+    -> (if chk then (count_occ msg_seq_eq froms nonce = 0) else True)
     -> opt_uid_to = Some msg_to
-    -> msg_accepted_by_pattern cs opt_uid_to (Signed k) (@SignedCiphertext t c_id)
-| ProperlyEncrypted : forall {t} c_id k__sign k__enc (m : message t) msg_to nonce,
+    -> msg_accepted_by_pattern cs opt_uid_to froms (Signed k chk) (@SignedCiphertext t c_id)
+| ProperlyEncrypted : forall {t} c_id k__sign k__enc (m : message t) msg_to nonce (chk : bool),
     cs $? c_id = Some (SigEncCipher k__sign k__enc msg_to nonce m)
+    -> (if chk then (count_occ msg_seq_eq froms nonce = 0) else True)
     -> opt_uid_to = Some msg_to
-    -> msg_accepted_by_pattern cs opt_uid_to (SignedEncrypted k__sign k__enc) (@SignedCiphertext t c_id).
+    -> msg_accepted_by_pattern cs opt_uid_to froms (SignedEncrypted k__sign k__enc chk) (@SignedCiphertext t c_id).
 
 Hint Extern 1 (~ In _ _) => rewrite not_find_in_iff.
 
@@ -157,10 +160,10 @@ Section SafeMessages.
   Inductive msg_pattern_safe : msg_pat -> Prop :=
   | HonestlySignedSafe : forall k,
         honest_key k
-      -> msg_pattern_safe (Signed k)
+      -> msg_pattern_safe (Signed k true)
   | HonestlySignedEncryptedSafe : forall k__sign k__enc,
         honest_key k__sign
-      -> msg_pattern_safe (SignedEncrypted k__sign k__enc).
+      -> msg_pattern_safe (SignedEncrypted k__sign k__enc true).
 
 End SafeMessages.
 
@@ -419,7 +422,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> ks' = ks $k++ newkeys
     -> mycs' = newcs ++ mycs
     -> froms' = updateTrackedNonce u_id froms cs msg
-    -> msg_accepted_by_pattern cs u_id pat msg
+    -> msg_accepted_by_pattern cs u_id froms pat msg
     -> step_user (Action (Input msg pat froms)) u_id
                 (usrs, adv, cs, gks, ks , qmsgs , mycs, froms, sents, cur_n,  Recv pat)
                 (usrs, adv, cs, gks, ks', qmsgs', mycs', froms', sents, cur_n, Return msg)
@@ -431,7 +434,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> froms' = (if msg_signed_addressed (findUserKeys usrs) cs suid msg
                then updateTrackedNonce suid froms cs msg
                else froms)
-    -> ~ msg_accepted_by_pattern cs suid pat msg
+    -> ~ msg_accepted_by_pattern cs suid froms pat msg
     -> step_user silent suid (* Error label ... *)
                 (usrs, adv, cs, gks, ks, qmsgs , mycs, froms,  sents, cur_n, Recv pat)
                 (usrs, adv, cs, gks, ks, qmsgs', mycs, froms', sents, cur_n, @Recv t pat)

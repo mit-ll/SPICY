@@ -266,9 +266,9 @@ Section RealWorldUniverseProperties.
       -> next_cmd_safe honestk cs u_id froms sents (Sign k msg_to msg)
   | SafeRecv : forall t pat,
       msg_pattern_safe honestk pat
-      (* /\ exists c_id c, msg = SignedCiphertext c_id *)
+      (* /\ (exists c_id c, msg = SignedCiphertext c_id *)
       (*           /\ cs $? c_id = Some c *)
-      (*           /\ ~ List.In (cipher_nonce c) froms *)
+      (*           /\ ~ List.In (cipher_nonce c) froms) *)
       -> next_cmd_safe honestk cs u_id froms sents (@Recv t pat)
   | SafeSend : forall {t} (msg : crypto t) msg_to,
         msg_honestly_signed honestk cs msg = true
