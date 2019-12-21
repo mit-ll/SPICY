@@ -5979,6 +5979,57 @@ Section SingleAdversarySimulates.
 
     Hint Resolve honest_users_only_honest_keys_nochange_keys.
 
+    Lemma merge_perms_true_either_true :
+      forall ks1 ks2 k_id,
+        ks1 $? k_id = Some true \/ ks2 $? k_id = Some true
+        -> ks1 $k++ ks2 $? k_id = Some true.
+    Proof.
+      intros; split_ors; solve_perm_merges.
+    Qed.
+
+    Hint Resolve merge_perms_true_either_true.
+
+    Lemma honest_users_only_honest_keys_gen_key :
+      forall {A} u_id (usrs : honest_users A) (cmd cmd' : user_cmd A) k_id
+                 ks qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n',
+
+        honest_users_only_honest_keys usrs
+        -> usrs $? u_id = Some {| key_heap := ks;
+                                 protocol := cmd;
+                                 msg_heap := qmsgs;
+                                 c_heap := mycs;
+                                 from_nons := froms;
+                                 sent_nons := sents;
+                                 cur_nonce := cur_n |}
+        -> honest_users_only_honest_keys
+            (usrs $+ (u_id, {| key_heap := add_key_perm k_id true ks;
+                               protocol := cmd';
+                               msg_heap := qmsgs';
+                               c_heap := mycs';
+                               from_nons := froms';
+                               sent_nons := sents';
+                               cur_nonce := cur_n' |})).
+    Proof.
+      intros.
+      unfold honest_users_only_honest_keys in *; intros.
+      assert (add_key_perm k_id true ks = ks $+ (k_id,true))
+        as RW1 by (unfold add_key_perm; cases (ks $? k_id); eauto).
+      assert (ks $+ (k_id,true) = ks $k++ ($0 $+ (k_id,true))) as RW2 by eauto.
+      rewrite RW1, RW2; clear RW1 RW2.
+      rewrite findUserKeys_readd_user_addnl_keys; eauto.
+
+      destruct (u_id ==n u_id0);
+        destruct (k_id ==n k_id0); subst;
+          clean_map_lookups; simpl in *;
+            eauto.
+
+      specialize (H _ _ H0); simpl in H.
+      unfold add_key_perm in *.
+      cases (ks $? k_id); clean_map_lookups; eauto.
+    Qed.
+
+    Hint Resolve honest_users_only_honest_keys_gen_key.
+
     Lemma honest_users_only_honest_keys_honest_steps :
       forall {A B C} u_id suid cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
                 gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd',
@@ -5990,6 +6041,7 @@ Section SingleAdversarySimulates.
           -> honest_users_only_honest_keys usrs
           -> next_cmd_safe (findUserKeys usrs) cs u_id froms sents cmd
           -> encrypted_ciphers_ok honestk cs gks
+          -> user_cipher_queues_ok  cs honestk usrs
           -> forall cmd',
               bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
               -> forall cmdc cmdc' usrs'',
@@ -6009,7 +6061,7 @@ Section SingleAdversarySimulates.
                                               ; cur_nonce := cur_n' |})
                   -> honest_users_only_honest_keys usrs''.
     Proof.
-      induction 1; inversion 3; inversion 4; intros;
+      induction 1; inversion 3; inversion 5; intros;
         subst;
         autorewrite with find_user_keys;
         match goal with
@@ -6023,15 +6075,15 @@ Section SingleAdversarySimulates.
           simpl in *;
           rewrite findUserKeys_readd_user_addnl_keys; eauto.
 
-        + specialize (H10 _ _ H25); simpl in *;
-            solve_perm_merges;
-            try
-              match goal with
-              | [ H : (forall _ _, ?ks $? _ = Some _ -> _), ARG : ?ks $? _ = Some _ |- _ ] => specialize (H _ _ ARG)
-              end; clean_map_lookups; eauto;
-              assert (msg_honestly_signed (findUserKeys usrs') cs' msg = true) as MHS by eauto.
+        specialize (H10 _ _ H26); simpl in *.
+        solve_perm_merges;
+          try
+            match goal with
+            | [ H : (forall _ _, ?ks $? _ = Some _ -> _), ARG : ?ks $? _ = Some _ |- _ ] => specialize (H _ _ ARG)
+            end; clean_map_lookups; eauto;
+            assert (msg_honestly_signed (findUserKeys usrs') cs' msg = true) as MHS by eauto.
 
-          generalize (msg_honestly_signed_has_signing_key_cipher_id _ _ _ MHS); intros; split_ands; split_ex.
+        + generalize (msg_honestly_signed_has_signing_key_cipher_id _ _ _ MHS); intros; split_ands; split_ex.
           eapply msg_honestly_signed_signing_key_honest in MHS; eauto.
           unfold msg_cipher_id in H3; destruct msg; try discriminate;
             clean_context; simpl in *.
@@ -6041,7 +6093,7 @@ Section SingleAdversarySimulates.
           encrypted_ciphers_prop; eauto.
           specialize (H13 _ _ H0); split_ands; subst; clean_map_lookups; eauto.
 
-          generalize (msg_honestly_signed_has_signing_key_cipher_id _ _ _ MHS); intros; split_ands; split_ex.
+        + generalize (msg_honestly_signed_has_signing_key_cipher_id _ _ _ MHS); intros; split_ands; split_ex.
           eapply msg_honestly_signed_signing_key_honest in MHS; eauto.
           unfold msg_cipher_id in H3; destruct msg; try discriminate;
             clean_context; simpl in *.
@@ -6050,15 +6102,6 @@ Section SingleAdversarySimulates.
           destruct c; simpl in *; clean_map_lookups; eauto.
           encrypted_ciphers_prop; eauto.
           specialize (H13 _ _ H0); split_ands; subst; clean_map_lookups; eauto.
-
-        + specialize (H10 _ _ H); simpl in *;
-            solve_perm_merges;
-            try
-              match goal with
-              | [ H : (forall _ _, ?ks $? _ = Some _ -> _), ARG : ?ks $? _ = Some _ |- _ ] => specialize (H _ _ ARG)
-              | [ H : (forall _ _, key_heap ?u $? _ = Some _ -> _), ARG : key_heap ?u $? _ = Some _ |- _ ] => specialize (H _ _ ARG)
-              end; clean_map_lookups; eauto;
-              assert (msg_honestly_signed (findUserKeys usrs') cs' msg = true) as MHS by eauto.
 
       - unfold honest_users_only_honest_keys in *; intros.
         assert (rec_u_id <> u_id) by eauto.
@@ -6068,13 +6111,30 @@ Section SingleAdversarySimulates.
           clean_map_lookups;
           eauto.
 
-        + specialize (H10 _ _ H25 _ _ H4).
+        + specialize (H10 _ _ H26 _ _ H4).
           autorewrite with find_user_keys; eauto.
 
         + destruct (u_id0 ==n rec_u_id); subst;
             clean_map_lookups;
             autorewrite with find_user_keys;
             eauto 2.
+
+      - user_cipher_queues_prop.
+        encrypted_ciphers_prop.
+        unfold honest_users_only_honest_keys in *; intros.
+        rewrite findUserKeys_readd_user_addnl_keys; eauto.
+        destruct (u_id ==n u_id0);
+          subst;
+          try contradiction;
+          clean_map_lookups;
+          simpl in *;
+          eauto.
+
+        apply merge_perms_split in H6; split_ors;
+          match goal with
+          | [ H : (forall _ _, ?ks $? _ = Some _ -> _), ARG : ?ks $? _ = Some _ |- _ ] => specialize (H _ _ ARG)
+          end; eauto.
+
     Qed.
 
     Lemma honest_users_only_honest_keys_adv_steps :

@@ -266,9 +266,6 @@ Section RealWorldUniverseProperties.
       -> next_cmd_safe honestk cs u_id froms sents (Sign k msg_to msg)
   | SafeRecv : forall t pat,
       msg_pattern_safe honestk pat
-      (* /\ (exists c_id c, msg = SignedCiphertext c_id *)
-      (*           /\ cs $? c_id = Some c *)
-      (*           /\ ~ List.In (cipher_nonce c) froms) *)
       -> next_cmd_safe honestk cs u_id froms sents (@Recv t pat)
   | SafeSend : forall {t} (msg : crypto t) msg_to,
         msg_honestly_signed honestk cs msg = true
@@ -279,6 +276,14 @@ Section RealWorldUniverseProperties.
                 /\ fst (cipher_nonce c) = (Some u_id)  (* only send my messages *)
                 /\ ~ List.In (cipher_nonce c) sents)
       -> next_cmd_safe honestk cs u_id froms sents (Send msg_to msg)
+
+  (* Boring Commands *)
+  | SafeReturn : forall {A} (a : A), next_cmd_safe honestk cs u_id froms sents (Return a)
+  | SafeGen : next_cmd_safe honestk cs u_id froms sents Gen
+  | SafeDecrypt : forall {t} (c : crypto t), next_cmd_safe honestk cs u_id froms sents (Decrypt c)
+  | SafeVerify : forall {t} k (c : crypto t), next_cmd_safe honestk cs u_id froms sents (Verify k c)
+  | SafeGenerateSymKey : forall usage, next_cmd_safe honestk cs u_id froms sents (GenerateSymKey usage)
+  | SafeGenerateAsymKey : forall usage, next_cmd_safe honestk cs u_id froms sents (GenerateAsymKey usage)
   .
 
   Definition honest_cmds_safe {A B} (U : universe A B) : Prop :=

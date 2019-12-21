@@ -63,7 +63,7 @@ Section RealWorldLemmas.
       unfold build_data_step in H; simpl in *.
       invert H.
   Qed.
-
+  
 End RealWorldLemmas.
 
 Ltac equality1 :=
@@ -203,13 +203,13 @@ Module SimulationAutomation.
         /\ exists msg msgs,
             qmsgs = (existT crypto t msg) :: msgs
           /\ qmsgs' = msgs
-          /\ ( ( msg_accepted_by_pattern cs u_id pat msg
+          /\ ( ( msg_accepted_by_pattern cs u_id froms pat msg
               /\ ks' = ks $k++ findKeysCrypto cs msg
               /\ mycs' = findCiphers msg ++ mycs
               /\ froms' = updateTrackedNonce u_id froms cs msg
               /\ lbl = Action (Input msg pat froms)
               /\ cmd = Return msg)
-            \/ ( ~ msg_accepted_by_pattern cs u_id pat msg
+            \/ ( ~ msg_accepted_by_pattern cs u_id froms pat msg
               /\ ks = ks'
               /\ mycs = mycs'
               /\froms' = (if msg_signed_addressed (findUserKeys usrs) cs u_id msg
@@ -407,11 +407,11 @@ Module SimulationAutomation.
     Ltac churn1 :=
       match goal with
 
-      | [ H : ~ RealWorld.msg_accepted_by_pattern ?cs ?suid ?pat ?msg |- _ ] =>
-        assert ( RealWorld.msg_accepted_by_pattern cs suid pat msg ) by (econstructor; eauto); contradiction
+      | [ H : ~ RealWorld.msg_accepted_by_pattern ?cs ?suid ?froms ?pat ?msg |- _ ] =>
+        assert ( RealWorld.msg_accepted_by_pattern cs suid froms pat msg ) by (econstructor; eauto); contradiction
 
-      | [ H : RealWorld.msg_accepted_by_pattern ?cs ?suid ?pat ?msg -> False |- _ ] =>
-        assert ( RealWorld.msg_accepted_by_pattern cs suid pat msg ) by (econstructor; eauto); contradiction
+      | [ H : RealWorld.msg_accepted_by_pattern ?cs ?suid ?froms ?pat ?msg -> False |- _ ] =>
+        assert ( RealWorld.msg_accepted_by_pattern cs suid froms pat msg ) by (econstructor; eauto); contradiction
 
       (* Only take a user step if we have chosen a user *)
       | [ H : RealWorld.step_user _ (Some ?u) _ _ |- _ ] => progress simpl in H
