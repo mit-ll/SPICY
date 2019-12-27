@@ -1,3 +1,20 @@
+(* DISTRIBUTION STATEMENT A. Approved for public release. Distribution is unlimited.
+ *
+ * This material is based upon work supported by the Department of the Air Force under Air Force 
+ * Contract No. FA8702-15-D-0001. Any opinions, findings, conclusions or recommendations expressed 
+ * in this material are those of the author(s) and do not necessarily reflect the views of the 
+ * Department of the Air Force.
+ * 
+ * © 2019 Massachusetts Institute of Technology.
+ * 
+ * MIT Proprietary, Subject to FAR52.227-11 Patent Rights - Ownership by the contractor (May 2014)
+ * 
+ * The software/firmware is provided to you on an As-Is basis
+ * 
+ * Delivered to the U.S. Government with Unlimited Rights, as defined in DFARS Part 252.227-7013
+ * or 7014 (Feb 2014). Notwithstanding any copyright notice, U.S. Government rights in this work are
+ * defined by DFARS 252.227-7013 or DFARS 252.227-7014 as detailed above. Use of this work other than
+ *  as specifically authorized by the U.S. Government may violate any copyrights that exist in this work. *)
 From Coq Require Import String Sumbool Morphisms.
 
 Require Import
@@ -27,8 +44,8 @@ Inductive crypto : type -> Type :=
 (* We need to handle non-deterministic message  -- external choice on ordering *)
 Inductive msg_pat :=
 | Accept
-| Signed (k : key_identifier)
-| SignedEncrypted (k__sign k__enc : key_identifier)
+| Signed (k : key_identifier) (chk_replay : bool)
+| SignedEncrypted (k__sign k__enc : key_identifier) (chk_replay : bool)
 .
 
 Definition msg_seq : Set := (option user_id) * nat.
@@ -66,17 +83,20 @@ Definition my_ciphers      := list cipher_id.
 Definition recv_nonces     := list msg_seq.
 Definition sent_nonces     := list msg_seq.
 
-Inductive msg_accepted_by_pattern (cs : ciphers) (opt_uid_to : option user_id) : forall {t : type}, msg_pat -> crypto t -> Prop :=
+Inductive msg_accepted_by_pattern (cs : ciphers) (opt_uid_to : option user_id) (froms : recv_nonces)
+  : forall {t : type}, msg_pat -> crypto t -> Prop :=
 | MsgAccept : forall {t} (m : crypto t),
-    msg_accepted_by_pattern cs opt_uid_to Accept m
-| ProperlySigned : forall {t} c_id k (m : message t) msg_to nonce,
+    msg_accepted_by_pattern cs opt_uid_to froms Accept m
+| ProperlySigned : forall {t} c_id k (m : message t) msg_to nonce (chk : bool),
     cs $? c_id = Some (@SigCipher t k msg_to nonce m)
+    -> (if chk then (count_occ msg_seq_eq froms nonce = 0) else True)
     -> opt_uid_to = Some msg_to
-    -> msg_accepted_by_pattern cs opt_uid_to (Signed k) (@SignedCiphertext t c_id)
-| ProperlyEncrypted : forall {t} c_id k__sign k__enc (m : message t) msg_to nonce,
+    -> msg_accepted_by_pattern cs opt_uid_to froms (Signed k chk) (@SignedCiphertext t c_id)
+| ProperlyEncrypted : forall {t} c_id k__sign k__enc (m : message t) msg_to nonce (chk : bool),
     cs $? c_id = Some (SigEncCipher k__sign k__enc msg_to nonce m)
+    -> (if chk then (count_occ msg_seq_eq froms nonce = 0) else True)
     -> opt_uid_to = Some msg_to
-    -> msg_accepted_by_pattern cs opt_uid_to (SignedEncrypted k__sign k__enc) (@SignedCiphertext t c_id).
+    -> msg_accepted_by_pattern cs opt_uid_to froms (SignedEncrypted k__sign k__enc chk) (@SignedCiphertext t c_id).
 
 Hint Extern 1 (~ In _ _) => rewrite not_find_in_iff.
 
@@ -94,32 +114,6 @@ Section SafeMessages.
     | Some true => true
     | _ => false
     end.
-
-  Inductive content_only_honest_public_keys : forall {t}, message t -> Prop :=
-  | ContentHPK : forall txt,
-      content_only_honest_public_keys (message.Content txt)
-  | AccessHPK : forall kp,
-      honestk $? fst kp = Some true
-      -> snd kp = false
-      -> content_only_honest_public_keys (message.Permission kp)
-  | PairHPK : forall t1 t2 (m1 : message t1) (m2 : message t2),
-      content_only_honest_public_keys m1
-      -> content_only_honest_public_keys m2
-      -> content_only_honest_public_keys (message.MsgPair m1 m2).
-
-  Inductive msg_contains_only_honest_public_keys (cs : ciphers) : forall {t}, crypto t -> Prop :=
-  | PlaintextHPK : forall {t} (txt : message t),
-      content_only_honest_public_keys txt
-      -> msg_contains_only_honest_public_keys cs (Content txt)
-  | HonestlyEncryptedHPK : forall t (m : message t) c_id msg_to nonce k__sign k__enc,
-      cs $? c_id = Some (SigEncCipher k__sign k__enc msg_to nonce m)
-      -> content_only_honest_public_keys m
-      -> honest_key k__enc
-      -> msg_contains_only_honest_public_keys cs (@SignedCiphertext t c_id)
-  | SignedPayloadHPK : forall {t} (m : message t) c_id msg_to nonce k__sign,
-      cs $? c_id = Some (SigCipher k__sign msg_to nonce m)
-      -> content_only_honest_public_keys m
-      -> msg_contains_only_honest_public_keys cs (@SignedCiphertext t c_id).
 
   Definition msg_cipher_id {t} (msg : crypto t) : option cipher_id :=
     match msg with
@@ -183,10 +177,10 @@ Section SafeMessages.
   Inductive msg_pattern_safe : msg_pat -> Prop :=
   | HonestlySignedSafe : forall k,
         honest_key k
-      -> msg_pattern_safe (Signed k)
+      -> msg_pattern_safe (Signed k true)
   | HonestlySignedEncryptedSafe : forall k__sign k__enc,
         honest_key k__sign
-      -> msg_pattern_safe (SignedEncrypted k__sign k__enc).
+      -> msg_pattern_safe (SignedEncrypted k__sign k__enc true).
 
 End SafeMessages.
 
@@ -393,28 +387,20 @@ Definition msg_not_replayed {t} (to_usr : option user_id) (cs : ciphers) (froms 
                                         -> msg_nonce_not_same c cs m
                        end) msgs.
 
+Inductive silentAction : Set :=
+| NoData
+| EncAction t (msg : message t) (k__enc : key_identifier)
+| SignAction t (msg : message t)
+.
+
 Inductive action : Type :=
 | Input  t (msg : crypto t) (pat : msg_pat) (froms : recv_nonces)
 | Output t (msg : crypto t) (from_user : option user_id) (to_user : option user_id) (sents : sent_nonces)
 .
 
-Definition rlabel := @label action.
+Definition rlabel := @label silentAction action.
 
-Definition action_adversary_safe (honestk : key_perms) (cs : ciphers) (a : action) : Prop :=
-  match a with
-  | Input  msg pat froms    => msg_pattern_safe honestk pat
-                            /\ exists c_id c, msg = SignedCiphertext c_id
-                                      /\ cs $? c_id = Some c
-                                      /\ ~ List.In (cipher_nonce c) froms
-  | Output msg msg_from msg_to sents => msg_contains_only_honest_public_keys honestk cs msg
-                                     /\ msg_honestly_signed honestk cs msg = true
-                                     /\ msg_to_this_user cs msg_to msg = true
-                                     /\ msgCiphersSignedOk honestk cs msg
-                                     /\ exists c_id c, msg = SignedCiphertext c_id
-                                               /\ cs $? c_id = Some c
-                                               /\ fst (cipher_nonce c) = msg_from  (* only send my messages *)
-                                               /\ ~ List.In (cipher_nonce c) sents
-  end.
+Definition silent : rlabel := Silent NoData.
 
 Definition data_step0 (A B C : Type) : Type :=
   honest_users A * user_data B * ciphers * keys * key_perms * queued_messages * my_ciphers * recv_nonces * sent_nonces * nat * user_cmd C.
@@ -435,12 +421,12 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
                          (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', Bind cmd1' cmd2)
 | StepBindProceed : forall {B r r'} (usrs : honest_users r) (adv : user_data B) cs u_id gks ks qmsgs mycs froms sents cur_n
                       (v : r') (cmd : r' -> user_cmd r),
-    step_user Silent u_id
+    step_user silent u_id
               (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Bind (Return v) cmd)
               (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd v)
 
 | StepGen : forall {A B} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks qmsgs mycs froms sents cur_n n,
-    step_user Silent u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Gen)
+    step_user silent u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Gen)
               (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Return n)
 
 (* Comms  *)
@@ -453,7 +439,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> ks' = ks $k++ newkeys
     -> mycs' = newcs ++ mycs
     -> froms' = updateTrackedNonce u_id froms cs msg
-    -> msg_accepted_by_pattern cs u_id pat msg
+    -> msg_accepted_by_pattern cs u_id froms pat msg
     -> step_user (Action (Input msg pat froms)) u_id
                 (usrs, adv, cs, gks, ks , qmsgs , mycs, froms, sents, cur_n,  Recv pat)
                 (usrs, adv, cs, gks, ks', qmsgs', mycs', froms', sents, cur_n, Return msg)
@@ -465,8 +451,8 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> froms' = (if msg_signed_addressed (findUserKeys usrs) cs suid msg
                then updateTrackedNonce suid froms cs msg
                else froms)
-    -> ~ msg_accepted_by_pattern cs suid pat msg
-    -> step_user Silent suid (* Error label ... *)
+    -> ~ msg_accepted_by_pattern cs suid froms pat msg
+    -> step_user silent suid (* Error label ... *)
                 (usrs, adv, cs, gks, ks, qmsgs , mycs, froms,  sents, cur_n, Recv pat)
                 (usrs, adv, cs, gks, ks, qmsgs', mycs, froms', sents, cur_n, @Recv t pat)
 
@@ -513,7 +499,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> cipherMsg = SigEncCipher k__signid k__encid msg_to (u_id, cur_n) msg
     -> cs' = cs $+ (c_id, cipherMsg)
     -> mycs' = c_id :: mycs
-    -> step_user Silent u_id
+    -> step_user (Silent (EncAction msg k__encid)) u_id
                 (usrs, adv, cs , gks, ks, qmsgs, mycs,  froms, sents, cur_n,  SignEncrypt k__signid k__encid msg_to msg)
                 (usrs, adv, cs', gks, ks, qmsgs, mycs', froms, sents, cur_n', Return (SignedCiphertext c_id))
 
@@ -528,7 +514,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> ks' = ks $k++ newkeys
     -> mycs' = (* newcs ++  *)mycs
     -> List.In c_id mycs
-    -> step_user Silent u_id
+    -> step_user silent u_id
                 (usrs, adv, cs, gks, ks , qmsgs, mycs,  froms, sents, cur_n, Decrypt (SignedCiphertext c_id))
                 (usrs, adv, cs, gks, ks', qmsgs, mycs', froms, sents, cur_n, Return msg)
 
@@ -542,7 +528,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> cipherMsg = SigCipher k_id msg_to (u_id, cur_n) msg
     -> cs' = cs $+ (c_id, cipherMsg)
     -> mycs' = c_id :: mycs
-    -> step_user Silent u_id
+    -> step_user (Silent (SignAction msg)) u_id
                 (usrs, adv, cs , gks, ks, qmsgs, mycs,  froms, sents, cur_n,  Sign k_id msg_to msg)
                 (usrs, adv, cs', gks, ks, qmsgs, mycs', froms, sents, cur_n', Return (SignedCiphertext c_id))
 
@@ -552,7 +538,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> ks  $? k_id = Some kp
     -> cs $? c_id = Some (SigCipher k_id msg_to nonce msg)
     -> List.In c_id mycs
-    -> step_user Silent u_id
+    -> step_user silent u_id
                 (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Verify k_id (SignedCiphertext c_id))
                 (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Return (true, msg))
 | StepGenerateSymKey: forall {A B} (usrs : honest_users A) (adv : user_data B)
@@ -562,7 +548,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> k = MkCryptoKey k_id usage SymKey
     -> gks' = gks $+ (k_id, k)
     -> ks' = add_key_perm k_id true ks
-    -> step_user Silent u_id
+    -> step_user silent u_id
                 (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, GenerateSymKey usage)
                 (usrs, adv, cs, gks', ks', qmsgs, mycs, froms, sents, cur_n, Return (k_id, true))
 | StepGenerateAsymKey: forall {A B} (usrs : honest_users A) (adv : user_data B)
@@ -572,7 +558,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> k = MkCryptoKey k_id usage AsymKey
     -> gks' = gks $+ (k_id, k)
     -> ks' = add_key_perm k_id true ks
-    -> step_user Silent u_id
+    -> step_user silent u_id
                 (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, GenerateAsymKey usage)
                 (usrs, adv, cs, gks', ks', qmsgs, mycs, froms, sents, cur_n, Return (k_id, true))
 .
@@ -602,5 +588,5 @@ Inductive step_universe {A B} : universe A B -> rlabel -> universe A B -> Prop :
                                          ; from_nons := froms
                                          ; sent_nons := sents
                                          ; cur_nonce := cur_n |}
-    -> step_universe U Silent U'
+    -> step_universe U silent U'
 .

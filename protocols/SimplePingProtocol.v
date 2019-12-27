@@ -1,11 +1,23 @@
+(* DISTRIBUTION STATEMENT A. Approved for public release. Distribution is unlimited.
+ *
+ * This material is based upon work supported by the Department of the Air Force under Air Force 
+ * Contract No. FA8702-15-D-0001. Any opinions, findings, conclusions or recommendations expressed 
+ * in this material are those of the author(s) and do not necessarily reflect the views of the 
+ * Department of the Air Force.
+ * 
+ * © 2019 Massachusetts Institute of Technology.
+ * 
+ * MIT Proprietary, Subject to FAR52.227-11 Patent Rights - Ownership by the contractor (May 2014)
+ * 
+ * The software/firmware is provided to you on an As-Is basis
+ * 
+ * Delivered to the U.S. Government with Unlimited Rights, as defined in DFARS Part 252.227-7013
+ * or 7014 (Feb 2014). Notwithstanding any copyright notice, U.S. Government rights in this work are
+ * defined by DFARS 252.227-7013 or DFARS 252.227-7014 as detailed above. Use of this work other than
+ *  as specifically authorized by the U.S. Government may violate any copyrights that exist in this work. *)
 From Coq Require Import
      List.
      (* Logic.ProofIrrelevance. *)
-
-(* Require Import MyPrelude. *)
-
-(* Module Foo <: EMPTY. End Foo. *)
-(* Module Import SN := SetNotations(Foo). *)
 
 Require Import
         MyPrelude
@@ -132,7 +144,7 @@ Section RealProtocol.
          ; Return n)
 
          (* user B *)
-         ( c  <- @Recv Nat (Signed KID1)
+         ( c  <- @Recv Nat (Signed KID1 true)
          ; v  <- Verify KID1 c
          ; Return (if fst v
                    then match snd v with
@@ -149,7 +161,7 @@ Section RealProtocol.
          ; Return n)
 
          (* user B *)
-         ( c  <- @Recv Nat (Signed KID1)
+         ( c  <- @Recv Nat (Signed KID1 true)
          ; v  <- Verify KID1 c
          ; Return (if fst v
                    then match snd v with
@@ -186,15 +198,15 @@ Section RealProtocol.
 
   Inductive RSimplePing : RealWorld.simpl_universe nat -> IdealWorld.universe nat -> Prop :=
   | Start : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 adv,
-      rstepSilent^* (real_univ_start cs mycs1 mycs2 cur_n1 cur_n2 adv) U__r
+      ~^* (real_univ_start cs mycs1 mycs2 cur_n1 cur_n2 adv) U__r
       -> lameAdv tt adv
       -> RSimplePing (peel_adv U__r) ideal_univ_start
   | Sent1 : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 n cid1 non1 adv,
-      rstepSilent^* (real_univ_sent1 n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
+      ~^* (real_univ_sent1 n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
       -> lameAdv tt adv
       -> RSimplePing (peel_adv U__r) (ideal_univ_sent1 n)
   | Recd1 : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 n cid1 non1 adv,
-      rstepSilent^* (real_univ_recd1 n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
+      ~^* (real_univ_recd1 n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
       -> lameAdv tt adv
       -> RSimplePing (peel_adv U__r) (ideal_univ_recd1 n)
   (* | Done : forall U__r cs mycs1 mycs2 froms1 froms2 sents1 sents2 cur_n1 cur_n2 n cid1 seq1 adv, *)
@@ -215,7 +227,7 @@ Hint Unfold
      real_univ_start real_univ_sent1 real_univ_recd1 real_univ_done mkrU
      ideal_univ_start ideal_univ_sent1 ideal_univ_recd1 ideal_univ_done mkiU : constants.
 
-Hint Extern 0 (rstepSilent ^* _ _) =>
+Hint Extern 0 (~^* _ _) =>
  progress(unfold real_univ_start, real_univ_sent1, real_univ_recd1, real_univ_done, mkrU; simpl).
 Hint Extern 1 (RSimplePing (RealWorld.buildUniverse _ _ _ _ _ _) _) => unfold RealWorld.buildUniverse; simpl.
 Hint Extern 1 (RSimplePing (RealWorld.peel_adv _) _) => unfold RealWorld.peel_adv; simpl.
@@ -244,7 +256,7 @@ Section FeebleSimulates.
   Proof.
     unfold simulates_silent_step.
 
-    Time (
+    time (
         intros * R UOK AOK LAME * STEP;
         clear UOK AOK;
         invert R;
@@ -360,35 +372,71 @@ Section FeebleSimulates.
 
   Qed.
 
-  Lemma rsimpleping_univere_ok :
-    simulates_universe_ok RSimplePing.
+  Require Import KeysTheory.
+  Hint Resolve findUserKeys_foldfn_proper findUserKeys_foldfn_transpose.
+
+  Lemma findUserKeys_add_reduce :
+    forall {A} (usrs : RealWorld.honest_users A) u_id ks p qmsgs mycs froms sents cur_n,
+      ~ In u_id usrs
+      -> RealWorld.findUserKeys (usrs $+ (u_id, {| RealWorld.key_heap := ks;
+                                      RealWorld.protocol := p;
+                                      RealWorld.msg_heap := qmsgs;
+                                      RealWorld.c_heap := mycs;
+                                      RealWorld.from_nons := froms;
+                                      RealWorld.sent_nons := sents;
+                                      RealWorld.cur_nonce := cur_n |})) = RealWorld.findUserKeys usrs $k++ ks.
   Proof.
-    unfold simulates_universe_ok; intros.
-
-    (* time ( *)
-    (*     inversion H; clear H; churn; solve_uok; eauto *)
-    (*   ). *)
-
-  Admitted.
-
-  Lemma rsimpleping_labeled_simulates_safe :
-    simulates_labeled_step_safe RSimplePing.
-  Proof.
-    unfold simulates_labeled_step_safe.
     intros.
+    unfold RealWorld.findUserKeys.
+    rewrite fold_add; eauto.
+  Qed.
 
-    (* assert (RealWorld.findUserKeys U__r.(RealWorld.users) = *)
-    (*         RealWorld.findUserKeys (clean_users (RealWorld.findUserKeys U__r.(RealWorld.users)) U__r.(RealWorld.users))) *)
-    (*   by (symmetry; eapply clean_users_no_change_findUserKeys). *)
-    (* remember (RealWorld.findUserKeys U__r.(RealWorld.users)) as honestk. *)
+  Lemma findUserKeys_empty_is_empty :
+    forall A, @RealWorld.findUserKeys A $0 = $0.
+  Proof. trivial. Qed.
+  
+  Hint Constructors RealWorld.honest_key RealWorld.msg_pattern_safe.
+  (* Hint Constructors next_cmd_safe RealWorld.honest_key RealWorld.msg_pattern_safe. *)
+  (* Hint Unfold RealWorld.msg_honestly_signed RealWorld.honest_keyb RealWorld.msg_to_this_user. *)
+  
+  Ltac solve_honest_actions_safe :=
+    repeat
+      match goal with
+      | [ H : Silent _ = Silent _ |- _ ] => invert H
+      | [ H : _ = {| RealWorld.users := _;
+                     RealWorld.adversary := _;
+                     RealWorld.all_ciphers := _;
+                     RealWorld.all_keys := _ |} |- _ ] => invert H
+      | [ |- honest_cmds_safe _ ] => unfold honest_cmds_safe; intros; simpl in *
+      | [ H : _ $+ (?id1,_) $? ?id2 = _ |- _ ] => is_var id2; destruct (id1 ==n id2); subst; clean_map_lookups
+      | [ |- (_ -> _) ] => intros
+      | [ H : RealWorld.findKeysMessage _ $? _ = _ |- _ ] => progress (simpl in H)
+      | [ |- context [ _ $+ (_,_) $? _ ] ] => context_map_rewrites
+      | [ |- context [ RealWorld.msg_honestly_signed _ _ _ ]] => unfold RealWorld.msg_honestly_signed
+      | [ |- context [ RealWorld.honest_keyb _ _ ]] => unfold RealWorld.honest_keyb
+      | [ |- context [ RealWorld.msg_to_this_user _ _ _ ]] => unfold RealWorld.msg_to_this_user
+      | [ |- context [ RealWorld.msgCiphersSignedOk _ _ _ ]] => unfold RealWorld.msgCiphersSignedOk
+      | [ |- next_cmd_safe _ _ _ _ _ _ ] => econstructor
+      | [ |- Forall _ _ ] => econstructor
+      end; simpl.
 
-    (* time( *)
-    (*     inversion H; clear H; *)
-    (*     churn; *)
-    (*     [> users_inversion; churn; repeat equality1; solve_adv_safe; eauto .. ] *)
-    (*   ). *)
+  Lemma rsimpleping_honest_actions_safe :
+    honest_actions_safe unit RSimplePing.
+  Proof.
+    unfold honest_actions_safe; intros.
+    clear H0 H1.
+    inversion H; clear H;
+      destruct U__r0; destruct U__r; simpl in *; subst.
 
-  Admitted.
+    - churn;
+        [> solve_honest_actions_safe; clean_map_lookups; eauto 8 .. ].
+
+    - churn;
+        [> solve_honest_actions_safe; clean_map_lookups; eauto 8 .. ].
+      
+    - churn;
+        [> solve_honest_actions_safe; clean_map_lookups; eauto 8 .. ].
+  Qed.
 
   (* Timings:
    *
@@ -399,25 +447,36 @@ Section FeebleSimulates.
   Hint Resolve
        rsimpleping_silent_simulates
        rsimpleping_loud_simulates
-       rsimpleping_univere_ok
-       rsimpleping_labeled_simulates_safe.
+       rsimpleping_honest_actions_safe.
 
   Lemma univ_ok_start :
     forall adv,
       lameAdv tt adv
-      -> universe_ok (real_univ_start $0 [] [] [] [] [] [] 0 0 adv).
+      -> universe_ok (real_univ_start $0 [] [] 0 0 adv).
   Proof.
     unfold real_univ_start; econstructor; eauto.
   Qed.
 
+      Lemma merge_perms_true_either_true :
+      forall ks1 ks2 k_id,
+        ks1 $? k_id = Some true \/ ks2 $? k_id = Some true
+        -> ks1 $k++ ks2 $? k_id = Some true.
+    Proof.
+      intros; split_ors; solve_perm_merges.
+    Qed.
+
+    Hint Resolve merge_perms_true_either_true.
+
+
   Lemma adv_univ_ok_start :
     forall adv U__r honestk,
-      U__r = real_univ_start $0 [] [] [] [] [] [] 0 0 adv
+      U__r = real_univ_start $0 [] [] 0 0 adv
       -> honestk = RealWorld.findUserKeys U__r.(RealWorld.users)
       -> lameAdv tt adv
-      -> adv.(RealWorld.msg_heap) = []
       -> adv.(RealWorld.key_heap) = $0
-      -> adv_universe_ok (real_univ_start $0 [] [] [] [] [] [] 0 0 adv).
+      -> adv.(RealWorld.msg_heap) = []
+      -> adv.(RealWorld.c_heap) = []
+      -> adv_universe_ok (real_univ_start $0 [] [] 0 0 adv).
   Proof.
     intros; unfold lameAdv in *;
     unfold real_univ_start
@@ -433,11 +492,7 @@ Section FeebleSimulates.
         simpl in *; solve_simple_maps;
           simpl in *; solve_simple_maps;
             eauto.
-    - subst.
-
-
-    - unfold keys_good, KEYS, KID1, KID2, KEY1, KEY2; intros.
-      cases (0 ==n k_id); cases (1 ==n k_id); subst; clean_map_lookups; eauto.
+    - rewrite H2 in H5; clean_map_lookups.
 
     - unfold user_cipher_queues_ok.
       rewrite Forall_natmap_forall; intros.
@@ -447,6 +502,42 @@ Section FeebleSimulates.
       rewrite Forall_natmap_forall; intros.
       cases (A ==n k); cases (B ==n k); subst; clean_map_lookups; simpl in *; econstructor; eauto.
 
+    - unfold adv_cipher_queue_ok.
+      rewrite Forall_forall; intros.
+      rewrite H4 in H; simpl in H; contradiction.
+
+    - unfold adv_message_queue_ok.
+      rewrite Forall_forall; intros.
+      rewrite H3 in H; simpl in H; contradiction.
+
+    - unfold adv_no_honest_keys; intros.
+      rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty; eauto.
+      unfold A__keys , B__keys; destruct (k_id ==n KID1); subst; solve_perm_merges.
+      + right; right.
+        rewrite H2; split; clean_map_lookups; eauto.
+      + left; apply merge_perms_adds_no_new_perms; eauto.
+
+    - unfold honest_nonces_ok; intros.
+      unfold honest_nonce_tracking_ok.
+
+      destruct (u_id ==n A); destruct (u_id ==n B);
+        destruct (rec_u_id ==n A); destruct (rec_u_id ==n B);
+          unfold A in *; unfold B in *;
+            subst; try contradiction; try discriminate;
+              clean_map_lookups; eauto; simpl; repeat (apply conj); intros;
+                clean_map_lookups; eauto.
+
+    - unfold honest_users_only_honest_keys; intros.
+      destruct (u_id ==n A); destruct (u_id ==n B);
+        subst;
+        simpl in *;
+        clean_map_lookups;
+        rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty;
+        eauto;
+        simpl in *.
+
+      + unfold A__keys in H0; destruct (KID1 ==n k_id); subst; clean_map_lookups; eauto.
+      + unfold B__keys in H0; destruct (KID1 ==n k_id); subst; clean_map_lookups; eauto.
   Qed.
 
   Hint Resolve
@@ -455,15 +546,18 @@ Section FeebleSimulates.
 
   Theorem base_pingpong_refines_ideal_pingpong :
     forall adv U__r honestk,
-      U__r = real_univ_start $0 [] [] adv
+      U__r = real_univ_start $0 [] [] 0 0 adv
       -> honestk = RealWorld.findUserKeys U__r.(RealWorld.users)
       -> lameAdv tt adv
-      -> adv_message_queue_ok honestk adv.(RealWorld.msg_heap)
+      -> RealWorld.key_heap adv = $0
+      -> RealWorld.msg_heap adv = []
+      -> RealWorld.c_heap adv = []
+      -> adv_message_queue_ok U__r.(RealWorld.users) U__r.(RealWorld.all_ciphers) U__r.(RealWorld.all_keys) adv.(RealWorld.msg_heap)
       -> adv_no_honest_keys honestk adv.(RealWorld.key_heap)
       (* real_univ_start $0 [] [] adv <| ideal_univ_start / lameAdv tt. *)
       -> refines (lameAdv tt) U__r ideal_univ_start.
   Proof.
-    exists RPingPongBase; unfold simulates.
+    exists RSimplePing; unfold simulates.
     intuition (subst; eauto).
   Qed.
 

@@ -1,9 +1,26 @@
+(* DISTRIBUTION STATEMENT A. Approved for public release. Distribution is unlimited.
+ *
+ * This material is based upon work supported by the Department of the Air Force under Air Force 
+ * Contract No. FA8702-15-D-0001. Any opinions, findings, conclusions or recommendations expressed 
+ * in this material are those of the author(s) and do not necessarily reflect the views of the 
+ * Department of the Air Force.
+ * 
+ * © 2019 Massachusetts Institute of Technology.
+ * 
+ * MIT Proprietary, Subject to FAR52.227-11 Patent Rights - Ownership by the contractor (May 2014)
+ * 
+ * The software/firmware is provided to you on an As-Is basis
+ * 
+ * Delivered to the U.S. Government with Unlimited Rights, as defined in DFARS Part 252.227-7013
+ * or 7014 (Feb 2014). Notwithstanding any copyright notice, U.S. Government rights in this work are
+ * defined by DFARS 252.227-7013 or DFARS 252.227-7014 as detailed above. Use of this work other than
+ *  as specifically authorized by the U.S. Government may violate any copyrights that exist in this work. *)
 From Coq Require Import String Bool.Sumbool Logic.
 
 Require Import MyPrelude.
 
-Module Foo <: EMPTY. End Foo.
-Module Import SN := SetNotations(Foo).
+(* Module Foo <: EMPTY. End Foo. *)
+(* Module Import SN := SetNotations(Foo). *)
 
 Require Import Common Maps Messages.
 Require Messages.
@@ -110,19 +127,21 @@ Inductive action : Type :=
 | Output t (msg : message t) (ch_id : channel_id) (cs : channels) (ps : permissions)
 .
 
-Definition ilabel := @label action.
+Definition ilabel := @label unit action.
+
+Definition silent : ilabel := Silent tt.
 
 Inductive lstep_user : forall A, ilabel -> channels * cmd A * permissions -> channels * cmd A * permissions -> Prop :=
 | LStepBindRecur : forall result result' lbl (c1 c1' : cmd result') (c2 : result' -> cmd result) cv cv' ps ps',
     lstep_user lbl (cv, c1, ps) (cv', c1', ps') ->
     lstep_user lbl (cv, (Bind c1 c2), ps) (cv', (Bind c1' c2), ps')
 | LStepBindProceed : forall (result result' : Type) (v : result') (c2 : result' -> cmd result) cv ps,
-    lstep_user Silent (cv, (Bind (Return v) c2), ps) (cv, c2 v, ps)
+    lstep_user silent (cv, (Bind (Return v) c2), ps) (cv, c2 v, ps)
 | LStepGen : forall cv ps n,
-    lstep_user Silent (cv, Gen, ps) (cv, Return n, ps)
+    lstep_user silent (cv, Gen, ps) (cv, Return n, ps)
 | LStepCreateChannel : forall ch_id cv ps,
     ~(In ch_id cv) ->
-    lstep_user Silent
+    lstep_user silent
                (cv, CreateChannel, ps)
                (cv $+ (ch_id, []), Return ch_id, ps $+ (ch_id, creator_permission))
 | LStepSend : forall t cv (m : message t) ch_id ps ch_d b,
