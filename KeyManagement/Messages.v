@@ -18,9 +18,9 @@
 
 (* module that takes access type, either KeyId or Permission *)
 (* Labels for the labeled transition system, a wrapper for messages *)
-Inductive label  {A} {B} : Type :=
-  Silent : A -> label
-| Action : B -> label
+Inductive label {A} : Type :=
+  Silent : label
+| Action : A -> label
 .
 
 Inductive type : Set :=

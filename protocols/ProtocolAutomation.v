@@ -40,7 +40,7 @@ Set Implicit Arguments.
 
 Definition quiet (lbl : rlabel) :=
   match lbl with
-  | Silent _ => True
+  | Silent => True
   | _ => False
   end.
 
@@ -54,7 +54,7 @@ Section RealWorldLemmas.
         ~^* U__r U__r'
       -> U__r.(adversary).(protocol) = Return b
       -> U__r = U__r'
-      \/ exists usrs adv cs u_id userData gks ks cmd qmsgs mycs froms tos cur_n sa,
+      \/ exists usrs adv cs u_id userData gks ks cmd qmsgs mycs froms tos cur_n,
           ~^* (buildUniverse usrs adv cs gks u_id
                                         {| key_heap := ks
                                          ; protocol := cmd
@@ -64,7 +64,7 @@ Section RealWorldLemmas.
                                          ; sent_nons := tos
                                          ; cur_nonce := cur_n |}) U__r'
           /\ users U__r $? u_id = Some userData
-          /\ step_user (Silent sa)
+          /\ step_user Silent
                       (Some u_id)
                       (RealWorld.build_data_step U__r userData)
                       (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cur_n, cmd).
@@ -167,7 +167,7 @@ Module SimulationAutomation.
         /\ froms = froms'
         /\ tos = tos'
         /\ cur_n = cur_n'
-        /\ lbl = Silent NoData
+        /\ lbl = Silent
         /\ exists n, cmd = Return n.
     Proof.
       intros * H.
@@ -197,7 +197,7 @@ Module SimulationAutomation.
           /\ froms = froms'
           /\ tos = tos'
           /\ cur_n = cur_n'
-          /\ lbl = Silent NoData
+          /\ lbl = Silent
           /\ exists c, cmd1 = Return c
                /\ cmd' = cmd c).
     Proof.
@@ -232,7 +232,7 @@ Module SimulationAutomation.
               /\froms' = (if msg_signed_addressed (findUserKeys usrs) cs u_id msg
                          then updateTrackedNonce u_id froms cs msg
                          else froms)
-              /\ lbl = Silent NoData
+              /\ lbl = Silent
               /\ cmd = Recv pat
               )).
     Proof.
@@ -295,13 +295,12 @@ Module SimulationAutomation.
         /\ tos = tos'
         /\ cur_n' = 1 + cur_n
         /\ keys_mine ks (findKeysMessage msg)
-        (* /\ incl (findCiphers msg) mycs *)
         /\ (exists kt__enc kt__sign kp__enc,
                 gks $? k__enc  = Some (MkCryptoKey k__enc Encryption kt__enc)
               /\ gks $? k__sign = Some (MkCryptoKey k__sign Signing kt__sign)
               /\ ks $? k__enc   = Some kp__enc
               /\ ks $? k__sign  = Some true
-              /\ lbl = Silent (EncAction msg k__enc))
+              /\ lbl = Silent)
         /\ (exists c_id,
               ~ In c_id cs
               /\ cs' = cs $+ (c_id, SigEncCipher k__sign k__enc msg_to (u_id, cur_n) msg)
@@ -327,7 +326,7 @@ Module SimulationAutomation.
         /\ froms = froms'
         /\ tos = tos'
         /\ cur_n = cur_n'
-        /\ lbl = Silent NoData
+        /\ lbl = Silent
         /\ List.In c_id mycs
         /\ exists (msg : message t) k__sign k__enc kt__enc kt__sign kp__sign msg_to nonce,
             cs $? c_id     = Some (SigEncCipher k__sign k__enc msg_to nonce msg)
@@ -358,7 +357,7 @@ Module SimulationAutomation.
         /\ froms = froms'
         /\ tos = tos'
         /\ cur_n' = 1 + cur_n
-        /\ lbl = Silent (SignAction msg)
+        /\ lbl = Silent
         /\ (exists kt__sign,
                 gks $? k__sign = Some (MkCryptoKey k__sign Signing kt__sign)
               /\ ks $? k__sign  = Some true)
@@ -389,7 +388,7 @@ Module SimulationAutomation.
         /\ froms = froms'
         /\ tos = tos'
         /\ cur_n = cur_n'
-        /\ lbl = Silent NoData
+        /\ lbl = Silent
         /\ List.In c_id mycs
         /\ exists (msg : message t) kt__sign kp__sign msg_to nonce,
             cs $? c_id     = Some (SigCipher k__sign msg_to nonce msg)
@@ -463,7 +462,7 @@ Module SimulationAutomation.
          *)
         is_not_var U; eapply multiStepSilentInv in S; split_ors; split_ex; intuition idtac; subst
 
-      | [ H: step_universe ?U (Silent _) _ |- _ ] => is_not_var U; invert H
+      | [ H: step_universe ?U Silent _ |- _ ] => is_not_var U; invert H
       | [ H: step_universe _ _ _ |- _ ] => invert H
 
       end.

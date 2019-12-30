@@ -17,7 +17,6 @@
  *  as specifically authorized by the U.S. Government may violate any copyrights that exist in this work. *)
 From Coq Require Import
      List.
-     (* Logic.ProofIrrelevance. *)
 
 Require Import
         MyPrelude
@@ -26,6 +25,7 @@ Require Import
         MessageEq
         Common
         Keys
+        KeysTheory
         Automation
         Tactics
         Simulation
@@ -40,11 +40,11 @@ Import RealWorld.RealWorldNotations.
 
 Set Implicit Arguments.
 
+Hint Resolve findUserKeys_foldfn_proper findUserKeys_foldfn_transpose.
+
 (* User ids *)
 Definition A : user_id   := 0.
 Definition B : user_id   := 1.
-
-Transparent A B.
 
 Section IdealProtocol.
   Import IdealWorld.
@@ -187,15 +187,6 @@ Section RealProtocol.
                         end
                    else 1)).
 
-  Definition real_univ_done n cs mycs1 mycs2 froms1 froms2 sents1 sents2 cur_n1 cur_n2 cid1 seq1 :=
-    mkrU mycs1 mycs2 froms1 froms2 sents1 sents2 cur_n1 cur_n2 [] []
-         (cs $+ (cid1, SigCipher KID1 B seq1 (message.Content n)))
-         (* user A *)
-         ( Return n )
-
-         (* user B *)
-         ( Return n ).
-
   Inductive RSimplePing : RealWorld.simpl_universe nat -> IdealWorld.universe nat -> Prop :=
   | Start : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 adv,
       ~^* (real_univ_start cs mycs1 mycs2 cur_n1 cur_n2 adv) U__r
@@ -209,26 +200,23 @@ Section RealProtocol.
       ~^* (real_univ_recd1 n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
       -> lameAdv tt adv
       -> RSimplePing (peel_adv U__r) (ideal_univ_recd1 n)
-  (* | Done : forall U__r cs mycs1 mycs2 froms1 froms2 sents1 sents2 cur_n1 cur_n2 n cid1 seq1 adv, *)
-  (*     rstepSilent^* (real_univ_done n cs mycs1 mycs2 froms1 froms2 sents1 sents2 cur_n1 cur_n2 cid1 seq1 adv) U__r *)
-  (*     -> lameAdv tt adv *)
-  (*     -> RSimplePing (peel_adv U__r) (ideal_univ_done n) *)
   .
 
 End RealProtocol.
 
-Hint Constructors RealWorld.msg_accepted_by_pattern.
-Hint Constructors RSimplePing.
-
-Import SimulationAutomation.
+Hint Constructors
+     RealWorld.msg_accepted_by_pattern
+     RSimplePing.
 
 Hint Unfold
      A B PERMS__a PERMS__b
-     real_univ_start real_univ_sent1 real_univ_recd1 real_univ_done mkrU
+     real_univ_start real_univ_sent1 real_univ_recd1 mkrU
      ideal_univ_start ideal_univ_sent1 ideal_univ_recd1 ideal_univ_done mkiU : constants.
 
+Import SimulationAutomation.
+
 Hint Extern 0 (~^* _ _) =>
- progress(unfold real_univ_start, real_univ_sent1, real_univ_recd1, real_univ_done, mkrU; simpl).
+ progress(unfold real_univ_start, real_univ_sent1, real_univ_recd1, mkrU; simpl).
 Hint Extern 1 (RSimplePing (RealWorld.buildUniverse _ _ _ _ _ _) _) => unfold RealWorld.buildUniverse; simpl.
 Hint Extern 1 (RSimplePing (RealWorld.peel_adv _) _) => unfold RealWorld.peel_adv; simpl.
 
@@ -236,10 +224,6 @@ Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
  progress(unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, ideal_univ_done, mkiU; simpl).
 
 Hint Extern 1 (IdealWorld.lstep_universe _ _ _) => single_step_ideal_universe; eauto 2; econstructor.
-
-(* Hint Extern 1 (KEYS $? _ = _) => unfold KEYS, A__keys, B__keys, KEY1, KEY2, KID1, KID2. *)
-(* Hint Extern 1 (A__keys $? _ = _) => unfold A__keys, B__keys, KEY1, KEY2, KID1, KID2. *)
-(* Hint Extern 1 (B__keys $? _ = _) => unfold A__keys, B__keys, KEY1, KEY2, KID1, KID2. *)
 Hint Extern 1 (PERMS__a $? _ = _) => unfold PERMS__a.
 Hint Extern 1 (PERMS__b $? _ = _) => unfold PERMS__b.
 
@@ -372,9 +356,6 @@ Section FeebleSimulates.
 
   Qed.
 
-  Require Import KeysTheory.
-  Hint Resolve findUserKeys_foldfn_proper findUserKeys_foldfn_transpose.
-
   Lemma findUserKeys_add_reduce :
     forall {A} (usrs : RealWorld.honest_users A) u_id ks p qmsgs mycs froms sents cur_n,
       ~ In u_id usrs
@@ -396,13 +377,10 @@ Section FeebleSimulates.
   Proof. trivial. Qed.
   
   Hint Constructors RealWorld.honest_key RealWorld.msg_pattern_safe.
-  (* Hint Constructors next_cmd_safe RealWorld.honest_key RealWorld.msg_pattern_safe. *)
-  (* Hint Unfold RealWorld.msg_honestly_signed RealWorld.honest_keyb RealWorld.msg_to_this_user. *)
   
   Ltac solve_honest_actions_safe :=
     repeat
       match goal with
-      | [ H : Silent _ = Silent _ |- _ ] => invert H
       | [ H : _ = {| RealWorld.users := _;
                      RealWorld.adversary := _;
                      RealWorld.all_ciphers := _;
@@ -554,7 +532,6 @@ Section FeebleSimulates.
       -> RealWorld.c_heap adv = []
       -> adv_message_queue_ok U__r.(RealWorld.users) U__r.(RealWorld.all_ciphers) U__r.(RealWorld.all_keys) adv.(RealWorld.msg_heap)
       -> adv_no_honest_keys honestk adv.(RealWorld.key_heap)
-      (* real_univ_start $0 [] [] adv <| ideal_univ_start / lameAdv tt. *)
       -> refines (lameAdv tt) U__r ideal_univ_start.
   Proof.
     exists RSimplePing; unfold simulates.

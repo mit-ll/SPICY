@@ -165,7 +165,7 @@ Definition strip_action (honestk : key_perms) (cs : ciphers) (act : action) :=
 
 Definition strip_label (honestk : key_perms) (cs : ciphers) (lbl : rlabel) :=
   match lbl with
-  | Silent ca => Silent ca
+  | Silent => lbl
   | Action a => Action (strip_action honestk cs a)
   end.
 

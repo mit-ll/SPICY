@@ -40,7 +40,7 @@ Import IdealWorld.IdealNotations
 Set Implicit Arguments.
 
 Definition istepSilent {A : Type} (U1 U2 : IdealWorld.universe A) :=
-  IdealWorld.lstep_universe U1 IdealWorld.silent U2.
+  IdealWorld.lstep_universe U1 Silent U2.
 
 Inductive chan_key : Set :=
 | Public (ch_id : IdealWorld.channel_id)
@@ -242,16 +242,6 @@ Section RealWorldUniverseProperties.
                                | (existT _ _ msg) => msg_to_this_user cs (Some to_usr) msg = false
                                                     \/ msg_nonce_not_same c cs msg end) to_msgs).
 
-  Definition cipher_action_adversary_safe (honestk : key_perms) (a : silentAction) : Prop :=
-    match a with
-    | NoData => True
-    | EncAction msg k__enc =>
-        honestk $? k__enc = Some true
-      /\ (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true)
-    | SignAction msg =>
-        (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true /\ kp = false)
-    end.
-
   Definition action_adversary_safe (honestk : key_perms) (cs : ciphers) (a : action) : Prop :=
     match a with
     | Input  msg pat froms    => msg_pattern_safe honestk pat
@@ -266,7 +256,6 @@ Section RealWorldUniverseProperties.
                                                  /\ fst (cipher_nonce c) = msg_from  (* only send my messages *)
                                                  /\ ~ List.In (cipher_nonce c) sents
     end.
-
 
   Inductive next_cmd_safe (honestk : key_perms) (cs : ciphers) (u_id : user_id) (froms : recv_nonces) (sents : sent_nonces) :
     forall {A}, user_cmd A -> Prop :=
@@ -311,8 +300,8 @@ Section RealWorldUniverseProperties.
 
   Definition label_safe (honestk : key_perms) (cs : ciphers) (lbl : label) : Prop :=
     match lbl with
-    | Silent ca => cipher_action_adversary_safe honestk ca
-    | Action  a => action_adversary_safe honestk cs a
+    | Silent   => True
+    | Action a => action_adversary_safe honestk cs a
     end.
   
 End RealWorldUniverseProperties.
@@ -356,8 +345,8 @@ Section Simulation.
     -> universe_ok U__r
     -> adv_universe_ok U__r
     -> advP U__r.(RealWorld.adversary)
-    -> forall U__r' sa,
-        RealWorld.step_universe U__r (Silent sa) U__r'
+    -> forall U__r',
+        RealWorld.step_universe U__r Silent U__r'
         -> exists U__i',
           istepSilent ^* U__i U__i'
         /\ R (RealWorld.peel_adv U__r') U__i'.
