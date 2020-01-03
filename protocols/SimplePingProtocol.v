@@ -22,10 +22,10 @@ Require Import
         MyPrelude
         Maps
         Messages
-        MessageEq
+        (* MessageEq *)
         Common
         Keys
-        KeysTheory
+        (* KeysTheory *)
         Automation
         Tactics
         Simulation
@@ -39,8 +39,6 @@ Import IdealWorld.IdealNotations.
 Import RealWorld.RealWorldNotations.
 
 Set Implicit Arguments.
-
-Hint Resolve findUserKeys_foldfn_proper findUserKeys_foldfn_transpose.
 
 (* User ids *)
 Definition A : user_id   := 0.
@@ -205,7 +203,6 @@ Section RealProtocol.
 End RealProtocol.
 
 Hint Constructors
-     RealWorld.msg_accepted_by_pattern
      RSimplePing.
 
 Hint Unfold
@@ -223,7 +220,7 @@ Hint Extern 1 (RSimplePing (RealWorld.peel_adv _) _) => unfold RealWorld.peel_ad
 Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
  progress(unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, ideal_univ_done, mkiU; simpl).
 
-Hint Extern 1 (IdealWorld.lstep_universe _ _ _) => single_step_ideal_universe; eauto 2; econstructor.
+(* Hint Extern 1 (IdealWorld.lstep_universe _ _ _) => single_step_ideal_universe; eauto 2; econstructor. *)
 Hint Extern 1 (PERMS__a $? _ = _) => unfold PERMS__a.
 Hint Extern 1 (PERMS__b $? _ = _) => unfold PERMS__b.
 
@@ -232,6 +229,7 @@ Section FeebleSimulates.
   Hint Extern 0 (istepSilent ^* _ _) =>
     progress(unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, ideal_univ_done, mkiU; simpl).
   Hint Extern 1 (istepSilent ^* _ _) =>
+    unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, ideal_univ_done, mkiU; simpl;
     repeat (ideal_single_silent_multistep A);
     repeat (ideal_single_silent_multistep B); solve_refl.
 
@@ -255,148 +253,20 @@ Section FeebleSimulates.
   Proof.
     unfold simulates_labeled_step.
 
-    intros * R UOK AOK LAME * STEP;
-      clear UOK AOK;
-      invert R;
-      destruct U__r0; destruct U__r; simpl in *; subst.
-
-    - churn.
-      
-      do 3 eexists;
-        repeat (apply conj);
-        swap 3 4; swap 2 3; swap 1 2;
-       simpl; clean_map_lookups;
-         eauto; eauto 12.
-
-      simpl_real_users_context.
-      simpl_ideal_users_context.
-      eapply Out; simpl; auto.
-      eapply CryptoSigCase; simpl; eauto.
-      econstructor.
-      intros.
-      split; intros; eauto.
-
-      apply lookup_some_implies_in in H1; simpl in H1; split_ors; try contradiction;
-        invert H1; clean_map_lookups; eauto.
-      simpl. unfold PERMS__a; clean_map_lookups; eauto.
-
-      apply lookup_some_implies_in in H1; simpl in H1; split_ors; try contradiction;
-        invert H1; clean_map_lookups; simpl; eauto.
-
-    - churn.
-      + do 3 eexists;
+    time (
+        intros * R UOK AOK LAME * STEP;
+        clear UOK AOK;
+        invert R;
+        destruct U__r0; destruct U__r; simpl in *; subst;
+        churn;
+        [> do 3 eexists;
          repeat (apply conj);
          swap 3 4; swap 2 3; swap 1 2;
-           simpl; clean_map_lookups; simpl.
-
-        eapply Recd1; eauto.
-        unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, ideal_univ_done, mkiU; simpl.
-        eapply TrcFront; simpl.
-        eapply IdealWorld.LStepUser'; simpl; swap 2 3; [ pick_user A | ..]; (try simple eapply @eq_refl).
-        unfold A , B; clean_map_lookups; eauto.
-        ((eapply IdealWorld.LStepBindRecur; i_single_silent_step) || i_single_silent_step); simpl.
-        solve_refl.
-
-        unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, ideal_univ_done, mkiU; simpl; eauto 9.
-        
-      simpl_real_users_context.
-      simpl_ideal_users_context.
-      eapply Inp; simpl; auto.
-      eapply CryptoSigCase; simpl; eauto.
-      econstructor.
-      intros.
-      split; intros; eauto.
-
-      apply lookup_some_implies_in in H0; simpl in H0; split_ors; try contradiction;
-        invert H0; clean_map_lookups; eauto.
-      simpl. unfold PERMS__a; clean_map_lookups; eauto.
-
-      apply lookup_some_implies_in in H0; simpl in H0; split_ors; try contradiction;
-        invert H0; clean_map_lookups; simpl; eauto.
-
-      unfold A , B in *; clean_map_lookups; simpl.
-      unfold A__keys; eauto.
-
-      + do 3 eexists;
-          repeat (apply conj);
-          swap 3 4; swap 2 3; swap 1 2;
-            simpl; clean_map_lookups;
-              eauto 9.
-        
-      simpl_real_users_context.
-      simpl_ideal_users_context.
-      eapply Inp; simpl; auto.
-      eapply CryptoSigCase; simpl; eauto.
-      econstructor.
-      intros.
-      split; intros; eauto.
-
-      apply lookup_some_implies_in in H1; simpl in H1; split_ors; try contradiction;
-        invert H1; clean_map_lookups; eauto.
-      simpl. unfold PERMS__a; clean_map_lookups; eauto.
-
-      apply lookup_some_implies_in in H2; simpl in H2; split_ors; try contradiction;
-        invert H2; clean_map_lookups; simpl; eauto.
-
-    - churn.
-
-    (* time *)
-    (*   (intros; *)
-    (*    invert H; *)
-    (*    try destruct U__r0; try destruct U__r; simpl in *; subst; *)
-    (*    churn; *)
-    (*    simpl_real_users_context; *)
-    (*    (* autorewrite with simpl_univ; *) *)
-    (*    (* simpl; *) *)
-    (*    (do 3 eexists; *)
-    (*     repeat (apply conj); *)
-    (*     swap 3 4; swap 2 3; swap 1 2; [ .. | admit (* action matches predicate *)]; *)
-    (*     simpl; clean_map_lookups; *)
-    (*     eauto; eauto 12)). *)
+         simpl; clean_map_lookups;
+         eauto; eauto 12 ..]
+      ).
 
   Qed.
-
-  Lemma findUserKeys_add_reduce :
-    forall {A} (usrs : RealWorld.honest_users A) u_id ks p qmsgs mycs froms sents cur_n,
-      ~ In u_id usrs
-      -> RealWorld.findUserKeys (usrs $+ (u_id, {| RealWorld.key_heap := ks;
-                                      RealWorld.protocol := p;
-                                      RealWorld.msg_heap := qmsgs;
-                                      RealWorld.c_heap := mycs;
-                                      RealWorld.from_nons := froms;
-                                      RealWorld.sent_nons := sents;
-                                      RealWorld.cur_nonce := cur_n |})) = RealWorld.findUserKeys usrs $k++ ks.
-  Proof.
-    intros.
-    unfold RealWorld.findUserKeys.
-    rewrite fold_add; eauto.
-  Qed.
-
-  Lemma findUserKeys_empty_is_empty :
-    forall A, @RealWorld.findUserKeys A $0 = $0.
-  Proof. trivial. Qed.
-  
-  Hint Constructors RealWorld.honest_key RealWorld.msg_pattern_safe.
-  
-  Ltac solve_honest_actions_safe :=
-    repeat
-      match goal with
-      | [ H : _ = {| RealWorld.users := _;
-                     RealWorld.adversary := _;
-                     RealWorld.all_ciphers := _;
-                     RealWorld.all_keys := _ |} |- _ ] => invert H
-      | [ |- honest_cmds_safe _ ] => unfold honest_cmds_safe; intros; simpl in *
-      | [ H : _ $+ (?id1,_) $? ?id2 = _ |- _ ] => is_var id2; destruct (id1 ==n id2); subst; clean_map_lookups
-      | [ |- (_ -> _) ] => intros
-      | [ H : RealWorld.findKeysMessage _ $? _ = _ |- _ ] => progress (simpl in H)
-      | [ |- context [ _ $+ (_,_) $? _ ] ] => context_map_rewrites
-      | [ |- context [ RealWorld.msg_honestly_signed _ _ _ ]] => unfold RealWorld.msg_honestly_signed
-      | [ |- context [ RealWorld.honest_keyb _ _ ]] => unfold RealWorld.honest_keyb
-      | [ |- context [ RealWorld.msg_to_this_user _ _ _ ]] => unfold RealWorld.msg_to_this_user
-      | [ |- context [ RealWorld.msgCiphersSignedOk _ _ _ ]] => unfold RealWorld.msgCiphersSignedOk
-      | [ |- next_cmd_safe _ _ _ _ _ _ ] => econstructor
-      | [ |- Forall _ _ ] => econstructor
-      end; simpl.
 
   Lemma rsimpleping_honest_actions_safe :
     honest_actions_safe unit RSimplePing.

@@ -25,8 +25,10 @@ Require Import
         MyPrelude
         Maps
         Messages
+        MessageEq
         Common
         Keys
+        KeysTheory
         Automation
         Tactics
         RealWorld
@@ -499,7 +501,12 @@ Module SimulationAutomation.
   Ltac pick_user uid :=
     match goal with
     | [ |- _ $? ?euid = Some _ ] => unify euid uid
-    end; clean_map_lookups; trivial.
+    end; reflexivity.
+
+  (* Ltac pick_user uid := *)
+  (*   match goal with *)
+  (*   | [ |- _ $? ?euid = Some _ ] => unify euid uid *)
+  (*   end; clean_map_lookups; trivial. *)
 
   Ltac istep_univ uid :=
     eapply IdealWorld.LStepUser'; simpl; swap 2 3; [ pick_user uid | ..];
@@ -614,8 +621,9 @@ Module SimulationAutomation.
 
   Hint Extern 1 (~^* _ _) => real_silent_multistep.
   Hint Extern 1 (istepSilent ^* _ _) => ideal_silent_multistep.
-  Hint Extern 1 (IdealWorld.lstep_universe _ _ _) => single_step_ideal_universe.
-
+  (* Hint Extern 1 (IdealWorld.lstep_universe _ _ _) => single_step_ideal_universe. *)
+  Hint Extern 1 (IdealWorld.lstep_universe _ _ _) => single_step_ideal_universe; eauto 2; econstructor.
+  
   Hint Extern 1 (List.In _ _) => progress simpl.
 
   Hint Extern 1 (action_adversary_safe _ _ _ = _) => unfold action_adversary_safe; simpl.
@@ -625,6 +633,81 @@ Module SimulationAutomation.
   Hint Extern 1 (add _ _ _ = _) => (progress m_equal) || (progress clean_map_lookups).
   Hint Extern 1 (find _ _ = _) => (progress m_equal) || (progress clean_map_lookups).
   (* Hint Extern 1 (_ \in _) => sets. *)
+
+
+  Ltac solve_action_matches1 :=
+    match goal with
+    | [ |- content_eq _ _ ] => progress simpl
+    | [ |- action_matches _ _ _ _ ] => progress simpl_real_users_context
+    | [ |- action_matches _ _ _ _ ] => progress simpl_ideal_users_context
+    | [ |- action_matches (RealWorld.Output _ _ _ _) _ _ _ ] => eapply Out
+    | [ |- action_matches (RealWorld.Input _ _ _) _ _ _ ] => eapply Inp
+    | [ |- message_eq (RealWorld.Content _) _ _ _ _ ] => eapply ContentCase
+    | [ |- message_eq (RealWorld.SignedCiphertext ?cid)
+                     {| RealWorld.users := _;
+                        RealWorld.adversary := _;
+                        RealWorld.all_ciphers := _ $+ (?cid, RealWorld.SigCipher _ _ _ _);
+                        RealWorld.all_keys := _ |}
+                     _ _ _ ] => eapply CryptoSigCase
+    | [ |- message_eq (RealWorld.SignedCiphertext ?cid)
+                     {| RealWorld.users := _;
+                        RealWorld.adversary := _;
+                        RealWorld.all_ciphers := _ $+ (?cid, RealWorld.SigEncCipher _ _ _ _ _);
+                        RealWorld.all_keys := _ |}
+                     _ _ _ ] => eapply CryptoSigEncCase
+    | [ |- _ <-> _ ] => split
+    | [ |- _ -> _ ] => intros
+    | [ H : _ $+ (_,_) $? ?uid = Some ?data |- (_ ?data) $? _ = Some _] =>
+      apply lookup_some_implies_in in H; simpl in H; split_ors; repeat equality1; subst; try contradiction; simpl in *
+    end.
+
+  Hint Extern 1 (action_matches _ _ _ _) => repeat (solve_action_matches1; simpl; eauto 3).
+
+  Hint Resolve
+       findUserKeys_foldfn_proper
+       findUserKeys_foldfn_transpose.
+  
+  Lemma findUserKeys_add_reduce :
+    forall {A} (usrs : RealWorld.honest_users A) u_id ks p qmsgs mycs froms sents cur_n,
+      ~ In u_id usrs
+      -> RealWorld.findUserKeys (usrs $+ (u_id, {| RealWorld.key_heap := ks;
+                                      RealWorld.protocol := p;
+                                      RealWorld.msg_heap := qmsgs;
+                                      RealWorld.c_heap := mycs;
+                                      RealWorld.from_nons := froms;
+                                      RealWorld.sent_nons := sents;
+                                      RealWorld.cur_nonce := cur_n |})) = RealWorld.findUserKeys usrs $k++ ks.
+  Proof.
+    intros.
+    unfold RealWorld.findUserKeys.
+    rewrite fold_add; eauto.
+  Qed.
+
+  Lemma findUserKeys_empty_is_empty :
+    forall A, @RealWorld.findUserKeys A $0 = $0.
+  Proof. trivial. Qed.
+  
+  Hint Constructors RealWorld.honest_key RealWorld.msg_pattern_safe.
+  
+  Ltac solve_honest_actions_safe :=
+    repeat
+      match goal with
+      | [ H : _ = {| RealWorld.users := _;
+                     RealWorld.adversary := _;
+                     RealWorld.all_ciphers := _;
+                     RealWorld.all_keys := _ |} |- _ ] => invert H
+      | [ |- honest_cmds_safe _ ] => unfold honest_cmds_safe; intros; simpl in *
+      | [ H : _ $+ (?id1,_) $? ?id2 = _ |- _ ] => is_var id2; destruct (id1 ==n id2); subst; clean_map_lookups
+      | [ |- (_ -> _) ] => intros
+      | [ H : RealWorld.findKeysMessage _ $? _ = _ |- _ ] => progress (simpl in H)
+      | [ |- context [ _ $+ (_,_) $? _ ] ] => context_map_rewrites
+      | [ |- context [ RealWorld.msg_honestly_signed _ _ _ ]] => unfold RealWorld.msg_honestly_signed
+      | [ |- context [ RealWorld.honest_keyb _ _ ]] => unfold RealWorld.honest_keyb
+      | [ |- context [ RealWorld.msg_to_this_user _ _ _ ]] => unfold RealWorld.msg_to_this_user
+      | [ |- context [ RealWorld.msgCiphersSignedOk _ _ _ ]] => unfold RealWorld.msgCiphersSignedOk
+      | [ |- next_cmd_safe _ _ _ _ _ _ ] => econstructor
+      | [ |- Forall _ _ ] => econstructor
+      end; simpl.
 
 End SimulationAutomation.
 
@@ -643,26 +726,6 @@ Section UniverseStep.
      ; cur_nonce := usr.(cur_nonce)
     |}.
 
-  (* Lemma invert_users : *)
-  (*   forall {A} (usrs__ra usrs__r : honest_users A) u_id u cs, *)
-  (*       usrs__r = clean_users (findUserKeys usrs__ra) cs usrs__ra *)
-  (*     -> usrs__ra $? u_id = Some u *)
-  (*     -> exists msgs u', usrs__r $? u_id = Some u' *)
-  (*                /\ u = rewrite_messages u' msgs *)
-  (*                /\ Forall (fun m => msg_filter (findUserKeys usrs__ra) cs m = false \/ List.In m u'.(msg_heap)) msgs. *)
-  (* Proof. *)
-  (*   intros. *)
-  (*   subst; destruct u; simpl in *. *)
-  (*   repeat eexists. *)
-
-  (*   (* eapply clean_users_cleans_user; eauto. *) *)
-  (*   (* unfold rewrite_messages; simpl; reflexivity. *) *)
-  (*   (* rewrite Forall_forall; intros. *) *)
-  (*   (* cases (msg_filter (findUserKeys usrs__ra) x); auto. *) *)
-  (*   (* right; simpl. *) *)
-  (*   (* unfold clean_messages; rewrite filter_In; auto. *) *)
-  (* Admitted. *)
-
   (* Lemma might_as_well_step_til_done : *)
   (*   forall {A B} (U__ra U__ra' U__r U__r' : universe A B) act b, *)
   (*     (rstepSilent U__r U__r' -> False) *)
@@ -675,76 +738,12 @@ Section UniverseStep.
   (*         -> action_adversary_safe (findUserKeys U__ra0.(users)) U__ra0.(all_ciphers) act. *)
   (* Proof. *)
   (*   intros. *)
-
   (* Admitted. *)
 
 End UniverseStep.
 
-(* Ltac solve_adv_safe := *)
-(*   repeat *)
-(*     match goal with *)
-(*     | [ |- RealWorld.action_adversary_safe _ _ _] => unfold RealWorld.action_adversary_safe *)
-(*     | [ |- RealWorld.msg_pattern_safe _ _ ] => econstructor *)
-(*     | [ |- RealWorld.honest_key _ _ ] => econstructor *)
-(*     | [ |- RealWorld.honest_keyb _ _ = true ] => rewrite <- RealWorld.honest_key_honest_keyb *)
-(*     | [ H : RealWorld.findUserKeys ?usrs = _ |- RealWorld.findUserKeys ?usrs $? _ = Some _ ] => rewrite H *)
-(*     | [ H : _ = clean_users ?honestk ?usrs |- context [ clean_users ?honestk ?usrs ] ] => rewrite <- H *)
-(*     | [ |- RealWorld.msg_contains_only_honest_public_keys _ _ _ ] => econstructor *)
-(*     | [ |- RealWorld.msgCiphersSignedOk _ _ _ ] => econstructor *)
-(*     (* | [ |- RealWorld.msgCipherOk _ _ _ ] => unfold RealWorld.msgCipherOk *) *)
-(*     | [ |- RealWorld.msg_honestly_signed _ _ _ = true] => unfold RealWorld.msg_honestly_signed *)
-(*     | [ |- _ /\ _ ] => split *)
-(*     | [ H : _ = clean_ciphers ?honk ?cs |- ?cs $? ?cid = Some ?c ] => *)
-(*       assert (clean_ciphers honk cs $? cid = Some c) by (rewrite <- H; clean_map_lookups; trivial); clear H *)
-(*     | [ H : clean_ciphers _ ?cs $? ?cid = Some ?c |- ?cs $? ?cid = Some ?c ] => *)
-(*       rewrite <- find_mapsto_iff in H; rewrite clean_ciphers_mapsto_iff in H; split_ands; *)
-(*       rewrite <- find_mapsto_iff; assumption *)
-(*     end. *)
-
-(* Ltac users_inversion := *)
-(*   match goal with *)
-(*   | [ H : ?usrs $? _ = Some ?u *)
-(*     , E : _ = clean_users _ _ *)
-(*       |- _ ] => *)
-(*     generalize (invert_users _ E H); intros *)
-(*   end; split_ex; split_ands; subst; simpl in *. *)
-
-(* Ltac solve_uok := *)
-(*   try match goal with *)
-(*       | [ |- universe_ok (RealWorld.buildUniverseAdv _ _ _ _ ) ] => solve [ eapply universe_ok_adv_step; eauto ] *)
-(*       end; *)
-(*   users_inversion; churn; repeat equality1; *)
-(*   unfold universe_ok in *; *)
-(*   simpl; *)
-(*   autorewrite with find_user_keys; *)
-(*   try assumption; simpl in *; *)
-(*   repeat *)
-(*     match goal with *)
-(*     | [ H : Forall _ (existT _ _ _ :: _) |- encrypted_ciphers_ok _ _ ] => *)
-(*       invert H; split_ors; try contradiction *)
-(*     | [ H : RealWorld.msg_accepted_by_pattern _ (RealWorld.Signed _) _ |- _ ] => invert H; simpl in * *)
-(*     | [ H : RealWorld.honest_keyb ?findUsers _ = false |- _ ] => unfold RealWorld.honest_keyb in H *)
-(*     (* | [ H : ?cusrs = clean_users (RealWorld.findUserKeys ?usrs) ?usrs |- _ ] => *) *)
-(*     (*   assert (RealWorld.findUserKeys usrs = RealWorld.findUserKeys (clean_users (RealWorld.findUserKeys usrs) usrs)) *) *)
-(*     (*     as UKS by (symmetry; eapply clean_users_no_change_findUserKeys); *) *)
-(*     (*   rewrite <- H in UKS; *) *)
-(*     (*   clear H *) *)
-(*     | [ M : match RealWorld.findUserKeys ?usrs $? _ with _ => _ end = _ *)
-(*             , H : RealWorld.findUserKeys ?usrs = _ |- _ ] => rewrite H in M; clear H; simpl in M; try discriminate *)
-(*     (* | [ H : RealWorld.Signature _ _ _ = RealWorld.Signature _ _ _ |- _ ] => invert H *) *)
-(*     | [ H : RealWorld.SignedCiphertext _ = RealWorld.SignedCiphertext _ |- _ ] => invert H *)
-(*     | [ |- encrypted_ciphers_ok _ _ ] => econstructor *)
-(*     | [ |- encrypted_cipher_ok _ _ _ ] => econstructor *)
-(*     | [ |- RealWorld.msgCiphersSignedOk _ _ _ ] => econstructor *)
-(*     | [ |- forall k, RealWorld.findKeysMessage _ $? _ = Some true -> False ] => intros *)
-(*     | [ H : RealWorld.findKeysMessage _ $? _ = Some true |- False ] => progress simpl in H; invert H *)
-(*     | [ |- RealWorld.findUserKeys _ $? _ = Some true ] => eapply RealWorld.findUserKeys_has_private_key_of_user *)
-(*     end. *)
 
 (* Hint Resolve encrypted_ciphers_ok_addnl_cipher. *)
 
-(* Hint Resolve *)
-(*      RealWorld.findUserKeys_foldfn_proper *)
-(*      RealWorld.findUserKeys_foldfn_transpose *)
-(*      RealWorld.findUserKeys_foldfn_proper_Equal *)
-(*      RealWorld.findUserKeys_foldfn_transpose_Equal. *)
+Hint Constructors
+     RealWorld.msg_accepted_by_pattern.
