@@ -39,7 +39,7 @@ Section IdealProtocol.
 
   Definition CH__A2B : channel_id := 0.
 
-  Definition PERMS__a := $0 $+ (CH__A2B, {| read := true; write := true |}). (* writer *)
+  Definition PERMS__a := $0 $+ (CH__A2B, {| read := false; write := true |}). (* writer *)
   Definition PERMS__b := $0 $+ (CH__A2B, {| read := true; write := false |}). (* reader *)
 
   Definition mkiU (cv : channels) (p__a p__b : cmd nat): universe nat :=
@@ -97,13 +97,15 @@ End IdealProtocol.
 Section RealProtocolParams.
   Import RealWorld.
 
-  Definition KID1 : key_identifier := 0.
+  Definition KID__A : key_identifier := 0.
+  Definition KID__B : key_identifier := 1.
 
-  Definition KEY1  := MkCryptoKey KID1 Signing AsymKey.
-  Definition KEYS  := $0 $+ (KID1, KEY1).
+  Definition KEY__A  := MkCryptoKey KID__A Signing AsymKey.
+  Definition KEY__B := MkCryptoKey KID__B Encryption AsymKey.
+  Definition KEYS  := $0 $+ (KID__A, KEY__A) $+ (KID__B, KEY__B).
 
-  Definition A__keys := $0 $+ (KID1, true).
-  Definition B__keys := $0 $+ (KID1, false).
+  Definition A__keys := $0 $+ (KID__A, true) $+ (KID__B, false).
+  Definition B__keys := $0 $+ (KID__A, false) $+ (KID__B, true).
 End RealProtocolParams.
 
 Section RealProtocol.
@@ -127,62 +129,47 @@ Section RealProtocol.
     mkrU mycs1 mycs2 [] [] [] [] cur_n1 cur_n2 [] [] cs
          (* user A *)
          ( n  <- Gen
-         ; c  <- Sign KID1 B (message.Content n)
+         ; c  <- SignEncrypt KID__A KID__B B (message.Content n)
          ; _  <- Send B c
          ; Return n)
 
          (* user B *)
-         ( c  <- @Recv Nat (Signed KID1)
-         ; v  <- Verify KID1 c
-         ; Return (if fst v
-                   then match snd v with
+         ( c  <- @Recv Nat (SignedEncrypted KID__A KID__B)
+         ; v  <- Decrypt c
+         ; Return match v with
                         | message.Content p => p
                         | _                 => 0
-                        end
-                   else 1)).
+                        end).
   
   Definition real_univ_sent1 n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 :=
     mkrU mycs1 mycs2 [] [] [non1] [] cur_n1 cur_n2 [] [existT _ Nat (SignedCiphertext cid1)]
-         (cs $+ (cid1, SigCipher KID1 B non1 (message.Content n)))
+         (cs $+ (cid1, SigEncCipher KID__A KID__B B non1 (message.Content n)))
          (* user A *)
          ( _  <- Return tt
          ; Return n)
 
          (* user B *)
-         ( c  <- @Recv Nat (Signed KID1)
-         ; v  <- Verify KID1 c
-         ; Return (if fst v
-                   then match snd v with
+         ( c  <- @Recv Nat (SignedEncrypted KID__A KID__B)
+         ; v  <- Decrypt c
+         ; Return match v with
                         | message.Content p => p
                         | _                 => 0
-                        end
-                   else 1)).
+                        end).
 
   Definition real_univ_recd1 n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 :=
     mkrU mycs1 mycs2 [] [non1] [non1] [] cur_n1 cur_n2 [] []
-         (cs $+ (cid1, SigCipher KID1 B non1 (message.Content n)))
+         (cs $+ (cid1, SigEncCipher KID__A KID__B B non1 (message.Content n)))
          (* user A *)
          ( _  <- Return tt
          ; Return n)
 
          (* user B *)
          ( c  <- (Return (SignedCiphertext cid1))
-         ; v  <- @Verify Nat KID1 c
-         ; Return (if fst v
-                   then match snd v with
+         ; v  <- @Decrypt Nat  c
+         ; Return match v with
                         | message.Content p => p
                         | _                 => 0
-                        end
-                   else 1)).
-
-  Definition real_univ_done n cs mycs1 mycs2 froms1 froms2 sents1 sents2 cur_n1 cur_n2 cid1 seq1 :=
-    mkrU mycs1 mycs2 froms1 froms2 sents1 sents2 cur_n1 cur_n2 [] []
-         (cs $+ (cid1, SigCipher KID1 B seq1 (message.Content n)))
-         (* user A *)
-         ( Return n )
-
-         (* user B *)
-         ( Return n ).
+                        end).
 
   Inductive RSimplePing : RealWorld.simpl_universe nat -> IdealWorld.universe nat -> Prop :=
   | Start : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 adv,
@@ -212,11 +199,11 @@ Import SimulationAutomation.
 
 Hint Unfold
      A B PERMS__a PERMS__b
-     real_univ_start real_univ_sent1 real_univ_recd1 real_univ_done mkrU
+     real_univ_start real_univ_sent1 real_univ_recd1  mkrU
      ideal_univ_start ideal_univ_sent1 ideal_univ_recd1 ideal_univ_done mkiU : constants.
 
 Hint Extern 0 (rstepSilent ^* _ _) =>
- progress(unfold real_univ_start, real_univ_sent1, real_univ_recd1, real_univ_done, mkrU; simpl).
+ progress(unfold real_univ_start, real_univ_sent1, real_univ_recd1, mkrU; simpl).
 Hint Extern 1 (RSimplePing (RealWorld.buildUniverse _ _ _ _ _ _) _) => unfold RealWorld.buildUniverse; simpl.
 Hint Extern 1 (RSimplePing (RealWorld.peel_adv _) _) => unfold RealWorld.peel_adv; simpl.
 
@@ -275,7 +262,7 @@ Section FeebleSimulates.
       simpl_real_users_context.
       simpl_ideal_users_context.
       eapply Out; simpl; auto.
-      eapply CryptoSigCase; simpl; eauto.
+      eapply CryptoSigEncCase; simpl; eauto.
       econstructor.
       intros.
       split; intros; eauto.
@@ -284,8 +271,16 @@ Section FeebleSimulates.
         invert H1; clean_map_lookups; eauto.
       simpl. unfold PERMS__a; clean_map_lookups; eauto.
 
+      
+      shelve. split.
+
       apply lookup_some_implies_in in H1; simpl in H1; split_ors; try contradiction;
         invert H1; clean_map_lookups; simpl; eauto.
+      
+      apply lookup_some_implies_in in H1; simpl in H1; split_ors; try contradiction;
+        invert H1; clean_map_lookups; simpl; eauto.
+
+      simpl in *. shelve. 
 
     - churn.
       + do 3 eexists;

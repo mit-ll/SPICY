@@ -45,7 +45,7 @@ Inductive  message_eq : forall {A B} {t : type},
     U__rw.(RealWorld.all_ciphers) $? c_id = Some (RealWorld.SigEncCipher k__sign k__enc u_id msg_seq m__rw)
     -> content_eq m__rw m__iw
     -> honestk = RealWorld.findUserKeys (U__rw.(RealWorld.users))
-    -> (forall u data__rw data__iw b__rwenc,
+    -> (forall u data__rw data__iw, exists b__rwenc,
 	                     U__rw.(RealWorld.users) $? u = Some data__rw
                           -> U__iw.(IdealWorld.users) $? u = Some data__iw
                           -> RealWorld.honest_key honestk k__sign

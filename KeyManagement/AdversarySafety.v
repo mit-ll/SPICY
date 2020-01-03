@@ -6936,7 +6936,7 @@ Section SingleAdversarySimulates.
       assumption. eapply honest_key_is_honest_clean_key in H1. eapply H1.
     - unfold strip_adversary_univ in H10, H7; simpl in *. unfold clean_ciphers in *; apply clean_ciphers_inv in H7.
       eapply MessageEq.CryptoSigEncCase with (honestk := (RealWorld.findUserKeys U__ra.(RealWorld.users))).
-      eapply H7. assumption. reflexivity. intros. specialize (H10 u).
+      eapply H7. assumption. reflexivity. eexists. intros. specialize (H10 u).
       eapply clean_users_cleans_user with (honestk := (RealWorld.findUserKeys U__ra.(RealWorld.users))) (cs := U__ra.(RealWorld.all_ciphers)) in H.
       2: reflexivity. eapply H10 in H. simpl in H. intuition (eauto using clean_key_permissions_inv', clean_key_permissions_keeps_honest_permission).
       eapply clean_key_permissions_keeps_honest_permission in H5. eapply clean_key_permissions_keeps_honest_permission in H6. eauto.
