@@ -402,6 +402,60 @@ Module SimulationAutomation.
       invert H; intuition eauto 12.
     Qed.
 
+    Lemma step_user_inv_gensym :
+      forall {A B} (usrs usrs' : honest_users A) (adv adv' : user_data B) usage
+        lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' tos tos' cur_n cur_n' cmd,
+        step_user lbl
+                  u_id
+                  (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cur_n, GenerateSymKey usage)
+                  (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cur_n', cmd)
+        -> usrs = usrs'
+        /\ adv = adv'
+        /\ cs = cs'
+        /\ qmsgs = qmsgs'
+        /\ mycs = mycs'
+        /\ froms = froms'
+        /\ tos = tos'
+        /\ cur_n = cur_n'
+        /\ lbl = Silent
+        /\ exists k_id k,
+            gks $? k_id = None
+          /\ k = MkCryptoKey k_id usage SymKey
+          /\ gks' = gks $+ (k_id, k)
+          /\ ks' = add_key_perm k_id true ks
+          /\ cmd = Return (k_id,true).
+    Proof.
+      intros * H.
+      invert H; intuition eauto 12.
+    Qed.
+
+    Lemma step_user_inv_genasym :
+      forall {A B} (usrs usrs' : honest_users A) (adv adv' : user_data B) usage
+        lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' tos tos' cur_n cur_n' cmd,
+        step_user lbl
+                  u_id
+                  (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cur_n, GenerateAsymKey usage)
+                  (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cur_n', cmd)
+        -> usrs = usrs'
+        /\ adv = adv'
+        /\ cs = cs'
+        /\ qmsgs = qmsgs'
+        /\ mycs = mycs'
+        /\ froms = froms'
+        /\ tos = tos'
+        /\ cur_n = cur_n'
+        /\ lbl = Silent
+        /\ exists k_id k,
+            gks $? k_id = None
+          /\ k = MkCryptoKey k_id usage AsymKey
+          /\ gks' = gks $+ (k_id, k)
+          /\ ks' = add_key_perm k_id true ks
+          /\ cmd = Return (k_id,true).
+    Proof.
+      intros * H.
+      invert H; intuition eauto 12.
+    Qed.
+
     Lemma adv_no_step :
       forall {A B} (usrs usrs' : honest_users A) (adv adv' : user_data B) b
         lbl cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' tos tos' cur_n cur_n' cmd,
@@ -445,6 +499,8 @@ Module SimulationAutomation.
         | Decrypt _ => apply step_user_inv_dec in H
         | Sign _ _ _ => apply step_user_inv_sign in H
         | Verify _ _ => apply step_user_inv_verify in H
+        | GenerateSymKey _ => apply step_user_inv_gensym in H
+        | GenerateAsymKey _ => apply step_user_inv_genasym in H
         | _ => idtac "***Missing inversion: " cmd; intuition idtac; subst; (progress (simpl in H) || invert H)
         end
 
@@ -474,8 +530,56 @@ Module SimulationAutomation.
   Import T.
   Export T.
 
+  Local Ltac fill_unification_var_ineq uni v :=
+    match goal with
+    | [ H : ?uni' = v -> False |- _ ] => unify uni uni'
+    | [ H : v = ?uni' -> False |- _ ] => unify uni uni'
+    end.
+
+  Local Ltac solve_simple_ineq :=
+    match goal with
+    | [ |- ?kid1 <> ?kid2 ] =>
+      (is_evar kid1; fill_unification_var_ineq kid1 kid2)
+      || (is_evar kid2; fill_unification_var_ineq kid2 kid1)
+    end; unfold not; intro; congruence.
+
+  Ltac solve_concrete_maps :=
+    repeat
+      match goal with
+      | [ H : context [ $0 $? _ ] |- _ ] => rewrite lookup_empty_none in H
+      | [ H : Some _ = Some _ |- _ ] => invert H
+      | [ H : Some _ = None |- _ ] => discriminate
+      | [ H : None = Some _ |- _ ] => discriminate
+                                      
+      | [ H : ?m $? ?k = _ |- _ ] => progress (unfold m in H)
+      | [ H : ?m $+ (?k1,_) $? ?k1 = _ |- _ ] => rewrite add_eq_o in H by trivial
+      | [ H : ?m $+ (?k1,_) $? ?k2 = _ |- _ ] => rewrite add_neq_o in H by eauto 2
+                                                                               
+      | [ H : In ?k ?m -> False |- _ ] =>
+        is_not_var k; assert (In k m) by (clear H; rewrite in_find_iff; unfold not; intros; solve_concrete_maps); contradiction
+      | [ H : In _ _ |- _ ] => rewrite in_find_iff in H
+      | [ |- ~ In _ _ ] => unfold not; intros
+
+      | [ |- ?m $+ (?kid1,_) $? ?kid1 = _ ] => rewrite add_eq_o
+      | [ |- ?m $+ (?kid2,_) $? ?kid1 = _ ] =>
+          rewrite add_neq_o by solve_concrete_maps
+        || rewrite add_eq_o by (unify kid1 kid2; solve_concrete_maps)
+
+      | [ |- ?m $? ?kid1 = _ ] => progress (unfold m)
+
+      | [ H : ?m $? ?k <> _ |- _ ] => cases (m $? k); try contradiction; clear H
+
+      | [ |- _ = _ ] => reflexivity
+      | [ |- ?kid1 <> ?kid2 ] =>
+          ( (is_evar kid1; fill_unification_var_ineq kid1 kid2)
+          || (is_evar kid2; fill_unification_var_ineq kid2 kid1));
+          unfold not; intro; congruence
+      | [ |- _ $? _ = _ ] => eassumption
+      end.
+
   Ltac churn2 :=
-    (repeat equality1); subst; churn1; intuition idtac; split_ex; intuition idtac; subst; try discriminate; clean_map_lookups.
+    (* (repeat equality1); subst; churn1; intuition idtac; split_ex; intuition idtac; subst; try discriminate; clean_map_lookups. *)
+    (repeat equality1); subst; churn1; intuition idtac; split_ex; intuition idtac; subst; try discriminate; solve_concrete_maps.
 
   Ltac churn :=
     repeat churn2.
@@ -625,15 +729,17 @@ Module SimulationAutomation.
   Hint Extern 1 (IdealWorld.lstep_universe _ _ _) => single_step_ideal_universe; eauto 2; econstructor.
   
   Hint Extern 1 (List.In _ _) => progress simpl.
+  Hint Extern 1 (~ In _ _) => solve_concrete_maps.
 
   Hint Extern 1 (action_adversary_safe _ _ _ = _) => unfold action_adversary_safe; simpl.
   Hint Extern 1 (IdealWorld.msg_permissions_valid _ _) => progress simpl.
 
   Hint Extern 1 (_ = RealWorld.addUserKeys _ _) => unfold RealWorld.addUserKeys, map; simpl.
-  Hint Extern 1 (add _ _ _ = _) => (progress m_equal) || (progress clean_map_lookups).
-  Hint Extern 1 (find _ _ = _) => (progress m_equal) || (progress clean_map_lookups).
-  (* Hint Extern 1 (_ \in _) => sets. *)
+  (* Hint Extern 1 (add _ _ _ = _) => (progress m_equal) || (progress clean_map_lookups). *)
+  (* Hint Extern 1 (find _ _ = _) => (progress m_equal) || (progress clean_map_lookups). *)
 
+  Hint Extern 1 (add _ _ _ = _) => reflexivity || (solve [ solve_concrete_maps ] ) || (progress m_equal) || (progress clean_map_lookups).
+  Hint Extern 1 (find _ _ = _) => reflexivity || (solve [ solve_concrete_maps ] ) || (progress m_equal) || (progress clean_map_lookups).
 
   Ltac solve_action_matches1 :=
     match goal with

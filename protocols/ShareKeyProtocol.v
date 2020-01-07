@@ -1,3 +1,20 @@
+(* DISTRIBUTION STATEMENT A. Approved for public release. Distribution is unlimited.
+ *
+ * This material is based upon work supported by the Department of the Air Force under Air Force 
+ * Contract No. FA8702-15-D-0001. Any opinions, findings, conclusions or recommendations expressed 
+ * in this material are those of the author(s) and do not necessarily reflect the views of the 
+ * Department of the Air Force.
+ * 
+ * © 2019 Massachusetts Institute of Technology.
+ * 
+ * MIT Proprietary, Subject to FAR52.227-11 Patent Rights - Ownership by the contractor (May 2014)
+ * 
+ * The software/firmware is provided to you on an As-Is basis
+ * 
+ * Delivered to the U.S. Government with Unlimited Rights, as defined in DFARS Part 252.227-7013
+ * or 7014 (Feb 2014). Notwithstanding any copyright notice, U.S. Government rights in this work are
+ * defined by DFARS 252.227-7013 or DFARS 252.227-7014 as detailed above. Use of this work other than
+ *  as specifically authorized by the U.S. Government may violate any copyrights that exist in this work. *)
 From Coq Require Import
      List.
 
@@ -5,7 +22,6 @@ Require Import
         MyPrelude
         Maps
         Messages
-        MessageEq
         Common
         Keys
         Automation
@@ -36,15 +52,15 @@ Section IdealProtocol.
   Definition PERMS__a := $0 $+ (CH__A2B, {| read := true; write := true |}). (* writer *)
   Definition PERMS__b := $0 $+ (CH__A2B, {| read := true; write := false |}). (* reader *)
 
-  Definition mkiU (cv : channels) (p__a p__b : cmd nat): universe nat :=
+  Definition mkiU (cv : channels) (perm__a perm__b : permissions) (p__a p__b : cmd nat): universe nat :=
     {| channel_vector := cv
      ; users := $0
-         $+ (A,   {| perms    := PERMS__a ; protocol := p__a |})
-         $+ (B,   {| perms    := PERMS__b ; protocol := p__b |})
+         $+ (A,   {| perms    := perm__a ; protocol := p__a |})
+         $+ (B,   {| perms    := perm__b ; protocol := p__b |})
     |}.
 
   Definition ideal_univ_start :=
-    mkiU ($0 $+ (CH__A2B, []))
+    mkiU ($0 $+ (CH__A2B, [])) PERMS__a PERMS__b
          (* user A *)
          ( chid <- CreateChannel
          ; _ <- Send (Permission {| ch_perm := {| read := false; write := true |} ; ch_id := chid |}) CH__A2B
@@ -56,8 +72,9 @@ Section IdealProtocol.
                   | Some p => ch_id p
                   end).
 
-  Definition ideal_univ_sent1 chid :=
+  Definition ideal_univ_sent1 chid perms__a perms__b :=
     mkiU ($0 $+ (CH__A2B, [existT _ _ (Permission {| ch_perm := {| read := false; write := true |} ; ch_id := chid |})]) $+ (chid, []))
+         perms__a perms__b
          (* user A *)
          ( _ <- Return tt
          ; Return chid)
@@ -68,8 +85,9 @@ Section IdealProtocol.
                   | Some p => ch_id p
                   end).
 
-  Definition ideal_univ_recd1 chid :=
+  Definition ideal_univ_recd1 chid perms__a perms__b :=
     mkiU ($0 $+ (CH__A2B, []) $+ (chid, []))
+         perms__a perms__b
          (* user A *)
          (Return chid)
          (* user B *)
@@ -79,8 +97,8 @@ Section IdealProtocol.
                   | Some p => ch_id p
                   end).
 
-  Definition ideal_univ_done chid :=
-    mkiU ($0 $+ (CH__A2B, []) $+ (chid, []))
+  Definition ideal_univ_done chid perms__a perms__b :=
+    mkiU ($0 $+ (CH__A2B, []) $+ (chid, [])) perms__a perms__b
          (* user A *)
          (Return chid)
          (* user B *)
@@ -128,7 +146,7 @@ Section RealProtocol.
          ; Return (fst kp))
 
          (* user B *)
-         ( c  <- @Recv Access (Signed KID1)
+         ( c  <- @Recv Access (Signed KID1 true)
          ; v  <- Verify KID1 c
          ; Return (if fst v
                    then match snd v with
@@ -147,7 +165,7 @@ Section RealProtocol.
          ; Return k_id)
 
          (* user B *)
-         ( c  <- @Recv Access (Signed KID1)
+         ( c  <- @Recv Access (Signed KID1 true)
          ; v  <- Verify KID1 c
          ; Return (if fst v
                    then match snd v with
@@ -186,17 +204,21 @@ Section RealProtocol.
 
   Inductive RSimplePing : RealWorld.simpl_universe nat -> IdealWorld.universe nat -> Prop :=
   | Start : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 adv,
-      rstepSilent^* (real_univ_start cs mycs1 mycs2 cur_n1 cur_n2 adv) U__r
+      ~^* (real_univ_start cs mycs1 mycs2 cur_n1 cur_n2 adv) U__r
       -> lameAdv tt adv
       -> RSimplePing (peel_adv U__r) ideal_univ_start
-  | Sent1 : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 k k_id chid cid1 non1 adv,
-      rstepSilent^* (real_univ_sent1 k_id k cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
+  | Sent1 : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 k k_id chid cid1 non1 adv perms__a perms__b,
+      ~^* (real_univ_sent1 k_id k cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
       -> lameAdv tt adv
-      -> RSimplePing (peel_adv U__r) (ideal_univ_sent1 chid)
-  | Recd1 : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 k k_id chid cid1 non1 adv,
-      rstepSilent^* (real_univ_recd1 k_id k cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
+      -> ~ In k_id KEYS
+      -> chid <> CH__A2B
+      -> RSimplePing (peel_adv U__r) (ideal_univ_sent1 chid perms__a perms__b)
+  | Recd1 : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 k k_id chid cid1 non1 adv perms__a perms__b,
+      ~^* (real_univ_recd1 k_id k cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
       -> lameAdv tt adv
-      -> RSimplePing (peel_adv U__r) (ideal_univ_recd1 chid)
+      -> ~ In k_id KEYS
+      -> chid <> CH__A2B
+      -> RSimplePing (peel_adv U__r) (ideal_univ_recd1 chid perms__a perms__b)
   (* | Done : forall U__r cs mycs1 mycs2 froms1 froms2 sents1 sents2 cur_n1 cur_n2 n cid1 seq1 adv, *)
   (*     rstepSilent^* (real_univ_done n cs mycs1 mycs2 froms1 froms2 sents1 sents2 cur_n1 cur_n2 cid1 seq1 adv) U__r *)
   (*     -> lameAdv tt adv *)
@@ -215,8 +237,8 @@ Hint Unfold
      real_univ_start real_univ_sent1 real_univ_recd1 real_univ_done mkrU
      ideal_univ_start ideal_univ_sent1 ideal_univ_recd1 ideal_univ_done mkiU : constants.
 
-Hint Extern 0 (rstepSilent ^* _ _) =>
- progress(unfold real_univ_start, real_univ_sent1, real_univ_recd1, real_univ_done, mkrU; simpl).
+Hint Extern 0 (~^* _ _) =>
+ progress(unfold real_univ_start, real_univ_sent1, real_univ_recd1, mkrU; simpl).
 Hint Extern 1 (RSimplePing (RealWorld.buildUniverse _ _ _ _ _ _) _) => unfold RealWorld.buildUniverse; simpl.
 Hint Extern 1 (RSimplePing (RealWorld.peel_adv _) _) => unfold RealWorld.peel_adv; simpl.
 
@@ -231,154 +253,87 @@ Hint Extern 1 (IdealWorld.lstep_universe _ _ _) => single_step_ideal_universe; e
 Hint Extern 1 (PERMS__a $? _ = _) => unfold PERMS__a.
 Hint Extern 1 (PERMS__b $? _ = _) => unfold PERMS__b.
 
+
 Section FeebleSimulates.
 
-  Hint Extern 0 (istepSilent ^* _ _) =>
-    progress(unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, ideal_univ_done, mkiU; simpl).
+  (* Hint Extern 0 (istepSilent ^* _ _) => *)
+  (*   progress(unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, ideal_univ_done, mkiU; simpl). *)
   Hint Extern 1 (istepSilent ^* _ _) =>
+    unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, ideal_univ_done, mkiU; simpl;
     repeat (ideal_single_silent_multistep A);
     repeat (ideal_single_silent_multistep B); solve_refl.
 
-  Lemma rsimpleping_silent_simulates :
-    simulates_silent_step (lameAdv tt) RSimplePing.
-  Proof.
-    unfold simulates_silent_step.
 
-    intros * R UOK AOK LAME * STEP;
-      clear UOK AOK;
-      invert R;
-      destruct U__r0; destruct U__r; simpl in *; subst.
+  Ltac clear_extra_adversary :=
+    match goal with
+    | [ |- context [ RSimplePing
+                      (RealWorld.peel_adv {| RealWorld.users := _;
+                                             RealWorld.adversary := ?a;
+                                             RealWorld.all_ciphers := _;
+                                             RealWorld.all_keys := _ |}) _ ]] =>
+      repeat match goal with
+             | [ H : lameAdv _ ?bada |- _ ] =>
+               does_not_unify bada a; clear H bada
+             end
+    end.
 
-    - churn; simpl_real_users_context.
-      + eexists; split; swap 1 2; eauto 12.
-      + eexists; split; swap 1 2; eauto 12.
-      + eexists; split; swap 1 2; eauto 12.
-      + eexists; split; swap 1 2; eauto 12.
+  (* Lemma rsimpleping_silent_simulates : *)
+  (*   simulates_silent_step (lameAdv tt) RSimplePing. *)
+  (* Proof. *)
+  (*   unfold simulates_silent_step. *)
 
-    - churn; simpl_real_users_context.
-      + eexists; split; swap 1 2; eauto 12.
+  (*   (* time ( *) *)
+  (*   (*     intros * R UOK AOK LAME * STEP; *) *)
+  (*   (*     clear UOK AOK; *) *)
+  (*   (*     invert R; *) *)
+  (*   (*     destruct U__r0; destruct U__r; simpl in *; subst; *) *)
+  (*   (*     churn; simpl_real_users_context; *) *)
+  (*   (*     [> eexists; split; swap 1 2; eauto 12 ..] *) *)
+  (*   (*   ). *) *)
 
-    - churn; simpl_real_users_context.
-      + eexists; split; swap 1 2; eauto 12.
-      + eexists; split; swap 1 2; eauto 12.
-      + eexists; split; swap 1 2; eauto 12.
-      + eexists; split; swap 1 2.
-        eapply Recd1.
-        progress (unfold real_univ_start, real_univ_sent1, real_univ_recd1, real_univ_done, mkrU; simpl).
-        real_silent_multistep. simpl_real_users_context.
 
-        simpl_real_users_context.
-        match goal with
-        | |- (rstepSilent) ^* ?U1 ?U2 =>
-          match U1 with
-          | context [ _ $+ (?u, ?usr1) ] =>
-            match U2 with
-            | context [ _ $+ (u, ?usr2) ] => 
-              does_not_unify usr1 usr2; idtac u usr1 usr2
-            end
-          end
-          (* figure_out_user_step ltac:(rss_clean) U1 U2 *)
-        end.
+  (*   intros * R UOK AOK LAME * STEP; *)
+  (*     clear UOK AOK; *)
+  (*     invert R; *)
+  (*     destruct U__r0; destruct U__r; simpl in *; subst. *)
 
-        real_single_silent_multistep B.
-        rewrite add_neq_o; swap 1 2.
+  (*   - churn; simpl_real_users_context; clear_extra_adversary. *)
+  (*     + eexists; split; swap 1 2; eauto 12. *)
+  (*     + eexists; split; swap 1 2; eauto 12. *)
+  (*     + eexists; split; swap 1 2; eauto 12. *)
+  (*     + eexists; split; swap 1 2; eauto 12. *)
+
+  (*   - churn; simpl_real_users_context; clear_extra_adversary. *)
+  (*     + eexists; split; swap 1 2; eauto 12. *)
         
-        
-        2: debug eauto 2.
+  (*   - churn; simpl_real_users_context; clear_extra_adversary. *)
 
-        2: apply not_eq_sym. 2: trivial.
-          by debug auto 2.
+  (*     + eexists; split; swap 1 2; eauto 12. *)
+  (*     + eexists; split; swap 1 2; eauto 12. *)
+  (*     + eexists; split; swap 1 2; eauto 12. *)
+  (*     + eexists; split; swap 1 2; eauto 12. *)
+  (*     + eexists; split; swap 1 2; eauto 12. *)
+  (*     + eexists; split; swap 1 2; eauto 12. *)
+  (*     + eexists; split; swap 1 2; eauto 12. *)
+  (*     + eexists; split; swap 1 2; eauto 12. *)
+  (*     + eexists; split; swap 1 2; eauto 12. *)
+  (*     + eexists; split; swap 1 2; eauto 12. *)
+  (*     + eexists; split; swap 1 2; eauto 12. *)
+  (*     + eexists; split; swap 1 2; eauto 12. *)
+  (*     + eexists; split; swap 1 2; eauto 12. *)
 
-        match goal with
-        | [ H : context [ $0 $? _ ] |- _ ] => idtac 1; rewrite lookup_empty_none in H
-        | [ H : _ $+ (?k,_) $? ?k = _ |- _ ] => idtac 2; rewrite add_eq_o in H by trivial
-        | [ H : _ $+ (?k1,_) $? ?k2 = _ |- _ ] => idtac 3; rewrite add_neq_o in H by auto 2
-        | [ H : _ $+ (?k1,_) $? ?k2 = _ |- _ ] => idtac 4; rewrite add_eq_o in H by auto 2
-        | [ H : context [ match _ $+ (?k,_) $? ?k with _ => _ end ] |- _ ] => idtac 5; rewrite add_eq_o in H by trivial
-        | [ H : context [ match _ $+ (?k1,_) $? ?k2 with _ => _ end ] |- _ ] => idtac 6; rewrite add_neq_o in H by auto 2
-        | [ H : context [ match _ $+ (?k1,_) $? ?k2 with _ => _ end ] |- _ ] => idtac 7; rewrite add_eq_o in H by auto 2
-        | [ |- context[_ $+ (?k,_) $? ?k] ] => idtac 8; rewrite add_eq_o by trivial
-        | [ |- context[_ $+ (?k1,_) $? ?k2] ] => idtac 9; rewrite add_neq_o by auto 2
-        | [ |- context[_ $+ (?k1,_) $? ?k2] ] => idtac 10; rewrite add_eq_o by auto 2
-        | [ |- context[_ $- ?k $? ?k] ] => rewrite remove_eq_o by trivial
-        | [ |- context[_ $- ?k1 $? ?k2] ] => rewrite remove_neq_o by auto 2
-        | [ |- context[_ $- ?k1 $? ?k2] ] => rewrite remove_eq_o by auto 2
-        | [ H : ~ In _ _ |- _ ] => rewrite not_find_in_iff in H
-        | [ |- ~ In _ _ ] => rewrite not_find_in_iff
-        | [ H : In _ _ |- _ ] => rewrite in_find_iff in H
-        | [ H1 : ?m $? ?k = _ , H2 : ?m $? ?k = _ |- _] => rewrite H1 in H2
-        | [ H1 : ?m $? ?k1 = _ , H2 : ?m $? ?k2 = _ |- _] => assert (k1 = k2) as RW by auto 2; rewrite RW in H1; clear RW; rewrite H1 in H2
-        | [ H : ?m $? ?k <> None |- _ ] => cases (m $? k); try contradiction; clear H
-        | [ H : MapsTo _ _ _ |- _ ] => rewrite find_mapsto_iff in H
-        | [ |- context [ MapsTo _ _ _ ] ] => rewrite find_mapsto_iff
-        end.
+  (*       Unshelve. *)
+  (*       all:apply tt. *)
 
-
-        
-        rewrite add_neq_o by eauto 2.
-        
-        real_silent_multistep.
-        real_silent_multistep.
-        simpl_real_users_context.
-        match goal with
-        | |- (rstepSilent) ^* ?U1 ?U2 =>
-          match U1 with
-          | context [ _ $+ (?u, ?usr1) ] =>
-            match U2 with
-            | context [ _ $+ (u, ?usr2) ] => 
-              does_not_unify usr1 usr2; idtac u usr1 usr2
-            end
-          end
-          (* figure_out_user_step ltac:(rss_clean) U1 U2 *)
-        end.
-
-
-        
-      + match goal with
-        | [ H : ?m $? _ = _ |- _ ] => unfold m in H
-        end; equality1.
-               
-      + eexists; split; swap 1 2; eauto 12.
-      + eexists; split; swap 1 2; eauto 12.
-      + eexists; split; swap 1 2; eauto 12.
-
-        
-        eapply Sent1.
-        progress (unfold real_univ_start, real_univ_sent1, real_univ_recd1, real_univ_done, mkrU; simpl).
-        real_silent_multistep.
-        real_silent_multistep.
-
-        simpl_real_users_context.
-        match goal with
-        | |- (rstepSilent) ^* ?U1 ?U2 =>
-          match U1 with
-          | context [ _ $+ (?u, ?usr1) ] =>
-            match U2 with
-            | context [ _ $+ (u, ?usr2) ] => 
-              does_not_unify usr1 usr2; idtac u usr1 usr2
-            end
-          end
-          (* figure_out_user_step ltac:(rss_clean) U1 U2 *)
-        end.
-
-        real_single_silent_multistep A.
-        clean_map_lookups.
-        solve [ eauto 3 ].
-
-        ; [ solve [ eauto  3 ].. | idtac ].
-
-        rss_clean A.
-
-
-    Time (
-        intros * R UOK AOK LAME * STEP;
-        clear UOK AOK;
-        invert R;
-        destruct U__r0; destruct U__r; simpl in *; subst;
-        churn; simpl_real_users_context;
-        [> eexists; split; swap 1 2; eauto 12 ..]
-      ).
-  Qed.
+  (*   (* Time ( *) *)
+  (*   (*     intros * R UOK AOK LAME * STEP; *) *)
+  (*   (*     clear UOK AOK; *) *)
+  (*   (*     invert R; *) *)
+  (*   (*     destruct U__r0; destruct U__r; simpl in *; subst; *) *)
+  (*   (*     churn; simpl_real_users_context; *) *)
+  (*   (*     [> eexists; split; swap 1 2; eauto 12 ..] *) *)
+  (*   (*   ). *) *)
+  (* Qed. *)
 
   Lemma rsimpleping_loud_simulates :
     simulates_labeled_step (lameAdv tt) RSimplePing.
@@ -390,16 +345,60 @@ Section FeebleSimulates.
       invert R;
       destruct U__r0; destruct U__r; simpl in *; subst.
 
-    - churn.
+    - churn; simpl_real_users_context; clear_extra_adversary.
       
       do 3 eexists;
-        repeat (apply conj);
+        repeat (apply conj).
+
+      unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, ideal_univ_done, mkiU; simpl;
+        repeat (ideal_single_silent_multistep A);
+        repeat (ideal_single_silent_multistep B).
+
+
+      
         swap 3 4; swap 2 3; swap 1 2;
-       simpl; clean_map_lookups;
-         eauto; eauto 12.
+          simpl.
+
+      eapply Sent1.
+      eauto 12.
+      eauto.
+      eauto.
+
+      unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, ideal_univ_done, mkiU; simpl;
+        repeat (ideal_single_silent_multistep A);
+        repeat (ideal_single_silent_multistep B).
+
+      progress (unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, ideal_univ_done, mkiU; simpl).
+      single_step_ideal_universe; eauto 2; econstructor.
+      eapply IdealWorld.LStepSend'.
+
+
+      
+      debug eauto.
+
+
+      progress (unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, ideal_univ_done, mkiU; simpl).
+
+      
+      debug eauto 6.
 
       simpl_real_users_context.
       simpl_ideal_users_context.
+      eapply Sent1; eauto 12.
+      debug eauto.
+      unfold not; intros; solve_concrete_maps.
+
+      rewrite in_find_iff in H.
+      cases (KEYS $? x3); try contradiction.
+      unfold KEYS in H.
+      rewrite find_neq_o in H.
+
+      
+      unfold real_univ_sent1, mkrU.
+      simpl_real_users_context.
+      eauto.
+
+      
       eapply Out; simpl; auto.
       eapply CryptoSigCase; simpl; eauto.
       econstructor.
