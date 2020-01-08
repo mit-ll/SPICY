@@ -32,11 +32,11 @@ coq: Makefile.coq frap
 protocols: coq
 	$(MAKE) -f Makefile.coq $(filter protocols%,$(VOFILES))
 
-pingpong: coq
-	$(MAKE) -f Makefile.coq protocols/EncPingProtocol.vo
-
 simpleping: coq
 	$(MAKE) -f Makefile.coq protocols/SimplePingProtocol.vo
+
+sharepublickey: coq
+	$(MAKE) -f Makefile.coq protocols/ShareKeyProtocol.vo
 
 Makefile.coq.conf: _CoqProject
 	coq_makefile -f _CoqProject -o Makefile.coq

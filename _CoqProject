@@ -43,3 +43,4 @@ protocols/ProtocolAutomation.v
 protocols/UniverseEqAutomation.v
 
 protocols/SimplePingProtocol.v
+protocols/ShareKeyProtocol.v
