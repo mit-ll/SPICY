@@ -147,8 +147,7 @@ Section CleanCiphers.
   Qed.
 
   Hint Constructors
-       msg_accepted_by_pattern
-       msg_contains_only_honest_public_keys.
+       msg_accepted_by_pattern.
 
   Hint Extern 1 (_ $+ (?k, _) $? ?k = Some _) => rewrite add_eq_o.
   Hint Extern 1 (_ $+ (?k, _) $? ?v = _) => rewrite add_neq_o.

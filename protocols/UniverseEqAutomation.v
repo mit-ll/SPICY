@@ -66,6 +66,26 @@ Section RealLemmas.
 
 End RealLemmas.
 
+Section IdealLemmas.
+  Import IdealWorld.
+
+  Lemma ideal_univ_eq_fields_eq :
+    forall {A} (us us' : user_list (user A)) cv cv',
+      us = us'
+      -> cv = cv'
+      -> {| channel_vector := cv; users := us |}
+        = {| channel_vector := cv'; users := us' |}.
+    intros; subst; reflexivity. Qed.
+                               
+  Lemma ideal_universe_same_as_fields :
+    forall {A} (U : universe A) us cv,
+      us = U.(users)
+      -> cv = U.(channel_vector)
+      -> {| channel_vector := cv; users := us |} = U.
+    intros; destruct U; subst; trivial. Qed.
+
+End IdealLemmas.
+
 Hint Rewrite add_empty_idempotent empty_add_idempotent : maps.
 
 Ltac smash_universe :=
@@ -73,106 +93,41 @@ Ltac smash_universe :=
   repeat (match goal with
           | [ |- {| RealWorld.users := _
                  ; RealWorld.adversary := _
-                 ; RealWorld.all_ciphers := _ |} = _
+                 ; RealWorld.all_ciphers := _
+                 ; RealWorld.all_keys := _ |} = _
             ] => eapply real_univ_eq_fields_eq
+          | [ |- {| IdealWorld.users := _;
+                   IdealWorld.channel_vector := _ |} = _
+            ] => eapply ideal_univ_eq_fields_eq
           | [ |- _ = _ ] => reflexivity
           end; m_equal).
 
 Section ExamplarProofs.
 
-  (* User ids *)
-  Definition A : user_id   := 0.
-  Definition B : user_id   := 1.
+  Definition uid1 := 1.
+  Definition uid2 := 2.
 
-  (* Section RealProtocolParams. *)
-  (*   Import RealWorld. *)
+  Section Ideal.
+    Import IdealWorld.
 
-  (*   Definition KID1 : key_identifier := 0. *)
-  (*   Definition KID2 : key_identifier := 1. *)
+    Definition ch1 := 10.
+    Definition ch2 := 11.
+    
+    Lemma ideal_test1 :
+      forall {A} msgs1 msgs2 msgs3 perms1 perms2 (proto1 proto2 : cmd A),
+      exists perms1' perms2',
+        {| channel_vector := $0 $+ (ch1, msgs1) $+ (ch2, msgs2) $+ (ch1, msgs3);
+           users := $0 $+ (uid2, {| protocol := proto2; perms := perms2 |})
+                     $+ (uid1, {| protocol := proto1; perms := perms1 |}) |}
+        =
+        {| channel_vector := $0 $+ (ch1, msgs3) $+ (ch2, msgs2);
+           users := $0 $+ (uid1, {| protocol := proto1; perms := perms1' |})
+                     $+ (uid2, {| protocol := proto2; perms := perms2' |}) |}.
+    Proof.
+      intros; do 2 eexists; smash_universe.
+    Qed.
 
-  (*   Definition KEY1  := MkCryptoKey KID1 Signing. *)
-  (*   Definition KEY2  := MkCryptoKey KID2 Signing. *)
-  (*   Definition KEY__A  := AsymKey KEY1 true. *)
-  (*   Definition KEY__B  := AsymKey KEY2 true. *)
-  (*   Definition KEYS  := $0 $+ (KID1, AsymKey KEY1 true) $+ (KID2, AsymKey KEY2 true). *)
+  End Ideal.
 
-  (*   Definition A__keys := $0 $+ (KID1, AsymKey KEY1 true)  $+ (KID2, AsymKey KEY2 false). *)
-  (*   Definition B__keys := $0 $+ (KID1, AsymKey KEY1 false) $+ (KID2, AsymKey KEY2 true). *)
-  (* End RealProtocolParams. *)
-
-  (* Lemma ex1: forall {AT : Type} cid1 (n : nat) cs, exists qn qcid1 qcs, *)
-  (*   (RealWorld.updateUniverse *)
-  (*      {| RealWorld.users := $0 $+ (A, *)
-  (*         {| RealWorld.key_heap := A__keys; *)
-  (*            RealWorld.protocol := *)
-  (*              (_  <- RealWorld.Return tt; *)
-  (*               m' <- @RealWorld.Recv (RealWorld.Pair RealWorld.Nat RealWorld.CipherId) (RealWorld.Signed KID2 RealWorld.Accept); *)
-  (*               RealWorld.Return *)
-  (*                 match RealWorld.unPair m' with *)
-  (*                 | Some (RealWorld.Plaintext n', _) => *)
-  (*                   if qn ==n n' then true else false *)
-  (*                 | _ => false *)
-  (*                 end)%realworld |}) $+ (B, *)
-  (*         {| RealWorld.key_heap := B__keys; *)
-  (*            RealWorld.protocol := *)
-  (*              (m  <- RealWorld.Return (RealWorld.Signature (RealWorld.Plaintext qn) qcid1); *)
-  (*               v  <- RealWorld.Verify (RealWorld.AsymKey KEY1 false) m; *)
-  (*               m' <- match RealWorld.unPair m with *)
-  (*                    | Some (p, _) => RealWorld.Sign KEY__B p *)
-  (*                    | None => RealWorld.Sign KEY__B (RealWorld.Plaintext 1) *)
-  (*                    end; _ <- RealWorld.Send A m'; RealWorld.Return v)%realworld |}); *)
-  (*         RealWorld.adversary := ($0 : RealWorld.adversaries AT); *)
-  (*         RealWorld.univ_data := *)
-  (*           {| *)
-  (*             RealWorld.users_msg_buffer := $0; *)
-  (*             RealWorld.all_keys := KEYS; *)
-  (*             RealWorld.all_ciphers := *)
-  (*               qcs $+ (qcid1, *)
-  (*                       RealWorld.Cipher qcid1 KID1 (RealWorld.Plaintext qn)) |} |} *)
-  (*      {| RealWorld.users_msg_buffer := $0; *)
-  (*         RealWorld.all_keys := KEYS; *)
-  (*         RealWorld.all_ciphers := qcs $+ (qcid1, RealWorld.Cipher qcid1 KID1 (RealWorld.Plaintext qn)) |} $0 A A__keys *)
-  (*      (m' <- @RealWorld.Recv (RealWorld.Pair RealWorld.Nat RealWorld.CipherId) (RealWorld.Signed KID2 RealWorld.Accept); *)
-  (*       RealWorld.Return *)
-  (*         match RealWorld.unPair m' with *)
-  (*         | Some (RealWorld.Plaintext n', _) => if qn ==n n' then true else false *)
-  (*         | _ => false *)
-  (*         end)%realworld) =  *)
-  (*      {| RealWorld.users := $0 $+ (A, *)
-  (*         {| RealWorld.key_heap := A__keys; *)
-  (*            RealWorld.protocol := *)
-  (*              (m' <- @RealWorld.Recv (RealWorld.Pair RealWorld.Nat RealWorld.CipherId) (RealWorld.Signed KID2 RealWorld.Accept); *)
-  (*               RealWorld.Return *)
-  (*                 match RealWorld.unPair m' with *)
-  (*                 | Some (RealWorld.Plaintext n', _) => if n ==n n' then true else false *)
-  (*                 | _ => false *)
-  (*                 end)%realworld |}) $+ (B, *)
-  (*         {| RealWorld.key_heap := B__keys; *)
-  (*            RealWorld.protocol := *)
-  (*              (m <- RealWorld.Recv (RealWorld.Signed KID1 RealWorld.Accept); *)
-  (*               v <- RealWorld.Verify (RealWorld.AsymKey KEY1 false) m; *)
-  (*               m' <- match RealWorld.unPair m with *)
-  (*                    | Some (p, _) => RealWorld.Sign KEY__B p *)
-  (*                    | None => RealWorld.Sign KEY__B (RealWorld.Plaintext 1) *)
-  (*                    end; _ <- RealWorld.Send A m'; RealWorld.Return v)%realworld |}) $+ (B, *)
-  (*         {| RealWorld.key_heap := B__keys $++ $0; *)
-  (*            RealWorld.protocol := *)
-  (*              (m <- RealWorld.Return (RealWorld.Signature (RealWorld.Plaintext n) cid1); *)
-  (*               v <- RealWorld.Verify (RealWorld.AsymKey KEY1 false) m; *)
-  (*               m' <- match RealWorld.unPair m with *)
-  (*                    | Some (p, _) => RealWorld.Sign KEY__B p *)
-  (*                    | None => RealWorld.Sign KEY__B (RealWorld.Plaintext 1) *)
-  (*                    end; _ <- RealWorld.Send A m'; RealWorld.Return v)%realworld |}); *)
-  (*         RealWorld.adversary := $0; *)
-  (*         RealWorld.univ_data := *)
-  (*           {| RealWorld.users_msg_buffer := *)
-  (*                $0 $+ (B, [Exm (RealWorld.Signature (RealWorld.Plaintext n) cid1)]) $- B; *)
-  (*              RealWorld.all_keys := KEYS; *)
-  (*              RealWorld.all_ciphers := cs $+ (cid1, RealWorld.Cipher cid1 KID1 (RealWorld.Plaintext n)) |} *)
-  (*      |} *)
-  (* . *)
-  (* Proof. *)
-  (*   intros; do 3 eexists. smash_universe. *)
-  (* Qed. *)
-
+  
 End ExamplarProofs.

@@ -26,6 +26,7 @@ Require Import
         Common
         Maps
         Keys
+        Messages
         RealWorld
         Simulation.
 
@@ -41,7 +42,8 @@ Ltac clean_context :=
     | [ H : ?X = ?X |- _ ] => clear H
     | [ H : Some _ = Some _ |- _ ] => invert H
     | [ H : SignedCiphertext _ = SignedCiphertext _ |- _ ] => invert H
-    | [ H : Messages.Action _ = Messages.Action _ |- _ ] => invert H; simpl in *; split_ands
+    | [ H : Action _ = Action _ |- _ ] => invert H; simpl in *; split_ands
+    | [ H : Silent _ = Silent _ |- _ ] => invert H
     | [ H : ?x = ?y |- _] => assert (x = y) as EQ by (clear H; trivial); clear H; clear EQ
     end.
 

@@ -19,8 +19,8 @@ Require Import Maps Messages.
 Require RealWorld IdealWorld Common Keys MyPrelude.
 From Coq Require Import List.
 
-Module Foo <: EMPTY. End Foo.
-Module Import SN := SetNotations(Foo).
+(* Module Foo <: EMPTY. End Foo. *)
+(* Module Import SN := SetNotations(Foo). *)
 
 Import RealWorld.RealWorldNotations.
 Import IdealWorld.IdealNotations.
