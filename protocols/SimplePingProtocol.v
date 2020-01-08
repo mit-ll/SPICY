@@ -284,6 +284,9 @@ Section FeebleSimulates.
       
     - churn;
         [> solve_honest_actions_safe; clean_map_lookups; eauto 8 .. ].
+
+      Unshelve.
+      all: eauto.
   Qed.
 
   (* Timings:

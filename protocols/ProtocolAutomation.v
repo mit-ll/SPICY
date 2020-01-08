@@ -794,26 +794,64 @@ Module SimulationAutomation.
   Proof. trivial. Qed.
   
   Hint Constructors RealWorld.honest_key RealWorld.msg_pattern_safe.
+
+  Lemma reduce_merge_perms :
+    forall perms1 perms2 kid perm1 perm2,
+        perm1 = match perms1 $? kid with
+                | Some p => p
+                | None => false
+                end
+      -> perm2 = match perms2 $? kid with
+                | Some p => p
+                | None => false
+                end
+      -> (perms1 $? kid = None -> perms2 $? kid = None -> False)
+      -> perms1 $k++ perms2 $? kid = Some (perm1 || perm2).
+  Proof.
+    intros; solve_perm_merges; subst; eauto.
+    - rewrite orb_false_r; auto.
+    - exfalso; eauto.
+  Qed.
   
+  Ltac solve_concrete_perm_merges :=
+    repeat 
+      match goal with
+      | [ |- context [true || _]  ] => rewrite orb_true_l
+      | [ |- context [_ || true]  ] => rewrite orb_true_r
+      | [ |- context [$0 $k++ _] ] => rewrite merge_perms_left_identity
+      | [ |- context [_ $k++ $0] ] => rewrite merge_perms_right_identity
+      | [ |- context [_ $k++ _]  ] => erewrite reduce_merge_perms; clean_map_lookups; eauto
+      end; trivial.
+
   Ltac solve_honest_actions_safe :=
     repeat
-      match goal with
-      | [ H : _ = {| RealWorld.users := _;
-                     RealWorld.adversary := _;
-                     RealWorld.all_ciphers := _;
-                     RealWorld.all_keys := _ |} |- _ ] => invert H
-      | [ |- honest_cmds_safe _ ] => unfold honest_cmds_safe; intros; simpl in *
-      | [ H : _ $+ (?id1,_) $? ?id2 = _ |- _ ] => is_var id2; destruct (id1 ==n id2); subst; clean_map_lookups
-      | [ |- (_ -> _) ] => intros
-      | [ H : RealWorld.findKeysMessage _ $? _ = _ |- _ ] => progress (simpl in H)
-      | [ |- context [ _ $+ (_,_) $? _ ] ] => context_map_rewrites
-      | [ |- context [ RealWorld.msg_honestly_signed _ _ _ ]] => unfold RealWorld.msg_honestly_signed
-      | [ |- context [ RealWorld.honest_keyb _ _ ]] => unfold RealWorld.honest_keyb
-      | [ |- context [ RealWorld.msg_to_this_user _ _ _ ]] => unfold RealWorld.msg_to_this_user
-      | [ |- context [ RealWorld.msgCiphersSignedOk _ _ _ ]] => unfold RealWorld.msgCiphersSignedOk
-      | [ |- next_cmd_safe _ _ _ _ _ _ ] => econstructor
-      | [ |- Forall _ _ ] => econstructor
-      end; simpl.
+      ( match goal with
+        | [ H : _ = {| RealWorld.users := _;
+                       RealWorld.adversary := _;
+                       RealWorld.all_ciphers := _;
+                       RealWorld.all_keys := _ |} |- _ ] => invert H
+                                                                 
+        | [ |- honest_cmds_safe _ ] => unfold honest_cmds_safe; intros; simpl in *
+        | [ |- context [ RealWorld.findUserKeys ?usrs ] ] => canonicalize_map usrs
+        | [ |- context [ RealWorld.findUserKeys _ ] ] => rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty by eauto
+        | [ H : RealWorld.findKeysMessage _ $? _ = _ |- _ ] => progress (simpl in H)
+        | [ H : _ $+ (?id1,_) $? ?id2 = _ |- _ ] => is_var id2; destruct (id1 ==n id2); subst; clean_map_lookups
+        | [ |- (_ -> _) ] => intros
+        | [ |- context [ _ $+ (_,_) $? _ ] ] => progress clean_map_lookups
+        | [ |- context [ RealWorld.msg_honestly_signed _ _ _ ]] => unfold RealWorld.msg_honestly_signed
+        | [ |- context [ RealWorld.honest_keyb _ _ ]] => unfold RealWorld.honest_keyb
+        | [ |- context [ RealWorld.msg_to_this_user _ _ _ ]] => unfold RealWorld.msg_to_this_user
+        | [ |- context [ RealWorld.msgCiphersSignedOk _ _ _ ]] => unfold RealWorld.msgCiphersSignedOk
+        | [ |- context [ add_key_perm _ _ _ ] ] => unfold add_key_perm
+        | [ |- RealWorld.msg_pattern_safe _ _ ] => econstructor
+        | [ |- RealWorld.honest_key _ _ ] => econstructor
+        | [ |- context [_ $k++ _ $? _ ] ] => progress solve_concrete_perm_merges
+        | [ |- context [ ?m $? _ ] ] => unfold m
+                                             
+        | [ |- next_cmd_safe _ _ _ _ _ _ ] => econstructor
+        | [ |- Forall _ _ ] => econstructor
+        | [ |- _ /\ _ ] => split
+        end; simpl).
 
 End SimulationAutomation.
 
