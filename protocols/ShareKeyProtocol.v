@@ -72,9 +72,10 @@ Section IdealProtocol.
                   | Some p => ch_id p
                   end).
 
-  Definition ideal_univ_sent1 chid perms__a perms__b :=
-    mkiU ($0 $+ (CH__A2B, [existT _ _ (Permission {| ch_perm := {| read := false; write := true |} ; ch_id := chid |})]) $+ (chid, []))
-         perms__a perms__b
+  Definition ideal_univ_sent1 chid :=
+    mkiU ($0 $+ (CH__A2B, [existT _ _ (Permission {| ch_perm := {| read := false; write := true |} ; ch_id := chid |})])
+           $+ (chid, []))
+         (PERMS__a $+ (chid, creator_permission)) PERMS__b
          (* user A *)
          ( _ <- Return tt
          ; Return chid)
@@ -85,9 +86,10 @@ Section IdealProtocol.
                   | Some p => ch_id p
                   end).
 
-  Definition ideal_univ_recd1 chid perms__a perms__b :=
+  Definition ideal_univ_recd1 chid :=
     mkiU ($0 $+ (CH__A2B, []) $+ (chid, []))
-         perms__a perms__b
+         (PERMS__a $+ (chid, creator_permission))
+         (PERMS__b $+ (chid, {| read := false; write := true |}))
          (* user A *)
          (Return chid)
          (* user B *)
@@ -176,7 +178,7 @@ Section RealProtocol.
 
   Definition real_univ_recd1 k_id k cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 :=
     mkrU mycs1 mycs2 [] [non1] [non1] [] cur_n1 cur_n2
-         (add_key_perm k_id true A__keys) B__keys (KEYS $+ (k_id,k)) [] []
+         (add_key_perm k_id true A__keys) (B__keys $+ (k_id,false)) (KEYS $+ (k_id,k)) [] []
          (cs $+ (cid1, SigCipher KID1 B non1 (Permission (k_id,false))))
          (* user A *)
          ( _  <- Return tt
@@ -207,18 +209,18 @@ Section RealProtocol.
       ~^* (real_univ_start cs mycs1 mycs2 cur_n1 cur_n2 adv) U__r
       -> lameAdv tt adv
       -> RSimplePing (peel_adv U__r) ideal_univ_start
-  | Sent1 : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 k k_id chid cid1 non1 adv perms__a perms__b,
+  | Sent1 : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 k k_id chid cid1 non1 adv,
       ~^* (real_univ_sent1 k_id k cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
       -> lameAdv tt adv
       -> ~ In k_id KEYS
       -> chid <> CH__A2B
-      -> RSimplePing (peel_adv U__r) (ideal_univ_sent1 chid perms__a perms__b)
-  | Recd1 : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 k k_id chid cid1 non1 adv perms__a perms__b,
+      -> RSimplePing (peel_adv U__r) (ideal_univ_sent1 chid)
+  | Recd1 : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 k k_id chid cid1 non1 adv,
       ~^* (real_univ_recd1 k_id k cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
       -> lameAdv tt adv
       -> ~ In k_id KEYS
       -> chid <> CH__A2B
-      -> RSimplePing (peel_adv U__r) (ideal_univ_recd1 chid perms__a perms__b)
+      -> RSimplePing (peel_adv U__r) (ideal_univ_recd1 chid)
   (* | Done : forall U__r cs mycs1 mycs2 froms1 froms2 sents1 sents2 cur_n1 cur_n2 n cid1 seq1 adv, *)
   (*     rstepSilent^* (real_univ_done n cs mycs1 mycs2 froms1 froms2 sents1 sents2 cur_n1 cur_n2 cid1 seq1 adv) U__r *)
   (*     -> lameAdv tt adv *)
@@ -228,7 +230,29 @@ Section RealProtocol.
 End RealProtocol.
 
 Hint Constructors RealWorld.msg_accepted_by_pattern.
+
 Hint Constructors RSimplePing.
+
+Lemma Sent1' :
+  forall U__r U__i cs mycs1 mycs2 cur_n1 cur_n2 k k_id chid cid1 non1 adv,
+      ~^* (real_univ_sent1 k_id k cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
+      -> lameAdv tt adv
+      -> ~ In k_id KEYS
+      -> chid <> CH__A2B
+      -> U__i = (ideal_univ_sent1 chid)
+      -> RSimplePing (RealWorld.peel_adv U__r) U__i.
+Proof. intros; subst; eauto. Qed.
+
+Lemma Recd1' :
+  forall U__r U__i cs mycs1 mycs2 cur_n1 cur_n2 k k_id chid cid1 non1 adv,
+    ~^* (real_univ_recd1 k_id k cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
+    -> lameAdv tt adv
+    -> ~ In k_id KEYS
+    -> chid <> CH__A2B
+    -> U__i = ideal_univ_recd1 chid
+    -> RSimplePing (RealWorld.peel_adv U__r) U__i.
+Proof. intros; subst; eauto. Qed.
+
 
 Import SimulationAutomation.
 
@@ -350,10 +374,149 @@ Section FeebleSimulates.
       do 3 eexists;
         repeat (apply conj).
 
+      simpl.
+
       unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, ideal_univ_done, mkiU; simpl;
         repeat (ideal_single_silent_multistep A);
         repeat (ideal_single_silent_multistep B).
+      2: solve_refl.
+      shelve.
+      + eapply IdealWorld.LStepUser' with (u_id := A); simpl; eauto.
+        simpl; econstructor; eauto.
+        econstructor; eauto.
+        simpl; eauto.
+        econstructor; eauto.
+        clean_map_lookups.
+        econstructor; eauto.
 
+      + eauto.
+      + simpl_real_users_context. simpl_ideal_users_context.
+        simpl.
+
+        eapply Sent1' with (chid := S CH__A2B); simpl; eauto.
+        unfold ideal_univ_sent1, mkiU; smash_universe.
+
+        Unshelve.
+        solve_concrete_maps.
+
+    - churn; simpl_real_users_context; clear_extra_adversary.
+      
+      + do 3 eexists;
+          repeat (apply conj).
+
+        unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, ideal_univ_done, mkiU; simpl;
+          repeat (ideal_single_silent_multistep A);
+          repeat (ideal_single_silent_multistep B).
+        solve_refl.
+
+        * eapply IdealWorld.LStepUser' with (u_id := B); simpl; eauto.
+          simpl.
+          simpl; econstructor; eauto.
+
+        * simpl. simpl_real_users_context. simpl_ideal_users_context.
+          econstructor; eauto.
+          simpl.
+          clean_map_lookups.
+          reflexivity.
+          econstructor; simpl; eauto.
+          econstructor; eauto.
+          intros; simpl in *.
+          apply lookup_some_implies_in in H; simpl in H.
+          split_ors; subst; try contradiction;
+            repeat equality1; subst; try congruence; simpl in *; eauto.
+          unfold add_key_perm, A__keys; eauto.
+          change (In k_id KEYS -> False) with (~ In k_id KEYS) in H5.
+          rewrite not_find_in_iff in H5.
+          solve_concrete_maps.
+          destruct (KID1 ==n k_id); subst; clean_map_lookups; try discriminate.
+          rewrite lookup_empty_none; clean_map_lookups; trivial.
+
+        * simpl_real_users_context.
+          simpl_ideal_users_context.
+          eapply Recd1'; simpl; eauto.
+
+          unfold ideal_univ_recd1, mkiU; simpl.
+          eapply ideal_univ_eq_fields_eq; maps_equal.
+
+      + do 3 eexists;
+          repeat (apply conj).
+
+        unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, ideal_univ_done, mkiU; simpl;
+          repeat (ideal_single_silent_multistep A);
+          repeat (ideal_single_silent_multistep B).
+        solve_refl.
+
+        * eapply IdealWorld.LStepUser' with (u_id := B); simpl; eauto.
+          simpl.
+          simpl; econstructor; eauto.
+
+        * simpl.
+          simpl_real_users_context. simpl_ideal_users_context.
+          econstructor; eauto.
+          simpl.
+          clean_map_lookups.
+          reflexivity.
+          econstructor; simpl; eauto.
+          econstructor; eauto.
+          intros; simpl in *.
+          apply lookup_some_implies_in in H1; simpl in H1.
+          split_ors; subst; try contradiction;
+            repeat equality1; subst; try congruence; simpl in *; eauto.
+          unfold add_key_perm, A__keys; eauto.
+          change (In k_id KEYS -> False) with (~ In k_id KEYS) in H5.
+          rewrite not_find_in_iff in H5.
+          solve_concrete_maps.
+          destruct (KID1 ==n k_id); subst; clean_map_lookups; try discriminate.
+          rewrite lookup_empty_none; clean_map_lookups; trivial.
+
+        * simpl_real_users_context.
+          simpl_ideal_users_context.
+          eapply Recd1' with (chid := chid); simpl; eauto 12.
+
+          ** unfold real_univ_recd1, mkrU; simpl.
+             simpl_real_users_context. real_silent_multistep.
+             simpl_real_users_context. real_silent_multistep.
+             simpl_real_users_context. context_map_rewrites.
+             simpl_real_users_context. simpl.
+             simpl_real_users_context.
+             simpl.
+             match goal with
+             | |- ~^* ?U1 ?U2 =>
+               match U1 with
+               | context [ _ $+ (?u, ?usr1) ] =>
+                 match U2 with
+                 | context [ _ $+ (u, ?usr2) ] =>
+                   idtac u usr1 usr2; does_not_unify usr1 usr2
+                   (* does_not_unify usr1 usr2; rss_clean u *)
+                 end
+               end
+               (* figure_out_user_step ltac:(rss_clean) U1 U2 *)
+             (* | |- ~^* ?U1 ?U2 => first [ solve_refl3 *)
+             (*                         | figure_out_user_step ltac:(rss_clean) U1 U2 ] *)
+             end.
+
+             change (In k_id KEYS -> False) with (~ In k_id KEYS) in H5.
+             rewrite not_find_in_iff in H5.
+             solve_concrete_maps;
+               destruct (KID1 ==n k_id); subst; clean_map_lookups; try discriminate.
+
+             real_single_silent_multistep B; eauto.
+             unfold B__keys.
+
+             
+             rss_clean B.
+
+             
+             real_silent_multistep.
+
+
+          unfold ideal_univ_recd1, mkiU; simpl.
+          eapply ideal_univ_eq_fields_eq; maps_equal.
+          
+
+
+
+        
 
       
         swap 3 4; swap 2 3; swap 1 2;

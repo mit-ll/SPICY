@@ -87,11 +87,11 @@ Fixpoint chs_search {A} (m : message A) : list (channel_id * permission) :=
 
 Inductive permission_subset : permission -> permission -> Prop :=
 | ReadWriteCase : forall p2,
-    permission_subset (construct_permission true true) p2
+    permission_subset p2 (construct_permission true true)
 | WriteCase : forall b,
-    permission_subset (construct_permission false true) (construct_permission false b)
+    permission_subset (construct_permission false b) (construct_permission false true)
 | ReadCase : forall b,
-    permission_subset (construct_permission true false) (construct_permission b false).
+    permission_subset (construct_permission b false) (construct_permission true false).
 
 Fixpoint msg_permissions_valid {A} (m : message A) ps : Prop :=
   List.Forall
