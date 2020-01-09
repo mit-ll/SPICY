@@ -262,10 +262,10 @@ Section FeebleSimulates.
       simpl_real_users_context.
       simpl_ideal_users_context.
       eapply Out; simpl; auto.
-      eapply CryptoSigEncCase; simpl; eauto.
-      econstructor.
-      intros.
-      split; intros; eauto.
+      eapply CryptoSigEncCase; simpl; eauto. reflexivity.
+      econstructor.  (* pull in master*)
+      intros. unfold PERMS__b in H1. unfold PERMS__a in H1. churn.
+      split_ands. in H7; intros; eauto.
 
       apply lookup_some_implies_in in H1; simpl in H1; split_ors; try contradiction;
         invert H1; clean_map_lookups; eauto.
@@ -301,7 +301,7 @@ Section FeebleSimulates.
       simpl_real_users_context.
       simpl_ideal_users_context.
       eapply Inp; simpl; auto.
-      eapply CryptoSigCase; simpl; eauto.
+      eapply CryptoSigCase; simpl; eauto
       econstructor.
       intros.
       split; intros; eauto.
