@@ -39,7 +39,7 @@ Import IdealWorld.IdealNotations
 
 Set Implicit Arguments.
 
-Definition istepSilent {A : Type} (U1 U2 : IdealWorld.universe A) :=
+Definition istepSilent {A} (U1 U2 : IdealWorld.universe A) :=
   IdealWorld.lstep_universe U1 Silent U2.
 
 Inductive chan_key : Set :=
@@ -54,7 +54,7 @@ Inductive chan_key : Set :=
     -> chan_key
 .
 
-Inductive action_matches : forall {A B : Type},
+Inductive action_matches : forall {A B : type},
                            RealWorld.action -> RealWorld.universe A B ->
                            IdealWorld.action -> IdealWorld.universe A -> Prop :=
 | Inp : forall A B t (m__rw : RealWorld.crypto t) (m__iw m__expected : IdealWorld.message.message t)
@@ -260,7 +260,7 @@ Section RealWorldUniverseProperties.
   Inductive next_cmd_safe (honestk : key_perms) (cs : ciphers) (u_id : user_id) (froms : recv_nonces) (sents : sent_nonces) :
     forall {A}, user_cmd A -> Prop :=
 
-  | SafeBind : forall {r A} (cmd1 : user_cmd r) (cmd2 : r -> user_cmd A),
+  | SafeBind : forall {r A} (cmd1 : user_cmd r) (cmd2 : <<r>> -> user_cmd A),
       next_cmd_safe honestk cs u_id froms sents cmd1
       -> next_cmd_safe honestk cs u_id froms sents (Bind cmd1 cmd2)
   | SafeEncrypt : forall {t} (msg : message t) k__sign k__enc msg_to,
@@ -284,7 +284,7 @@ Section RealWorldUniverseProperties.
       -> next_cmd_safe honestk cs u_id froms sents (Send msg_to msg)
 
   (* Boring Commands *)
-  | SafeReturn : forall {A} (a : A), next_cmd_safe honestk cs u_id froms sents (Return a)
+  | SafeReturn : forall {A} (a : <<A>>), next_cmd_safe honestk cs u_id froms sents (Return a)
   | SafeGen : next_cmd_safe honestk cs u_id froms sents Gen
   | SafeDecrypt : forall {t} (c : crypto t), next_cmd_safe honestk cs u_id froms sents (Decrypt c)
   | SafeVerify : forall {t} k (c : crypto t), next_cmd_safe honestk cs u_id froms sents (Verify k c)
@@ -335,7 +335,7 @@ Definition adv_universe_ok {A B} (U : RealWorld.universe A B) : Prop :=
     /\ honest_users_only_honest_keys U.(RealWorld.users).
 
 Section Simulation.
-  Variable A B : Type.
+  Variable A B : type.
   Variable advP : RealWorld.user_data B -> Prop.
   Variable R : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop.
 
@@ -386,13 +386,13 @@ Section Simulation.
 
 End Simulation.
 
-Definition refines {A B : Type} (advP : RealWorld.user_data B -> Prop) (U1 : RealWorld.universe A B) (U2 : IdealWorld.universe A) :=
+Definition refines {A B} (advP : RealWorld.user_data B -> Prop) (U1 : RealWorld.universe A B) (U2 : IdealWorld.universe A) :=
   exists R, simulates advP R U1 U2.
 
 Notation "u1 <| u2 \ p " := (refines p u1 u2) (no associativity, at level 70).
 
-Definition lameAdv {B} (b : B) :=
-  fun adv => adv.(RealWorld.protocol) = RealWorld.Return b.
+Definition lameAdv {B} (b : RealWorld.denote (RealWorld.Base B)) :=
+  fun adv => adv.(RealWorld.protocol) = @RealWorld.Return (RealWorld.Base B) b.
 
 Definition awesomeAdv : forall B, RealWorld.user_data B -> Prop :=
   fun _ _ => True.
