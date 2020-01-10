@@ -161,10 +161,10 @@ Inductive action : Type :=
 Definition ilabel := @label action.
 
 Inductive lstep_user : forall A, ilabel -> channels * cmd A * permissions -> channels * cmd A * permissions -> Prop :=
-| LStepBindRecur : forall result result' lbl (c1 c1' : cmd result') (c2 : <<result'>> -> cmd result) cv cv' ps ps',
+| LStepBindRecur : forall {result result'} lbl (c1 c1' : cmd result') (c2 : <<result'>> -> cmd result) cv cv' ps ps',
     lstep_user lbl (cv, c1, ps) (cv', c1', ps') ->
     lstep_user lbl (cv, (Bind c1 c2), ps) (cv', (Bind c1' c2), ps')
-| LStepBindProceed : forall result result' (v : <<result'>>) (c2 : <<result'>> -> cmd result) cv ps,
+| LStepBindProceed : forall {result result'} (v : <<result'>>) (c2 : <<result'>> -> cmd result) cv ps,
     lstep_user Silent (cv, (Bind (Return v) c2), ps) (cv, c2 v, ps)
 | LStepGen : forall cv ps n,
     lstep_user Silent (cv, Gen, ps) (cv, Return n, ps)
