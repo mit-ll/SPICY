@@ -82,11 +82,17 @@ Section RealWorldLemmas.
       unfold build_data_step in H; simpl in *.
       invert H.
   Qed.
+
+  Lemma invert_return :
+    forall (t : user_cmd_type) (r1 r2 : denote t),
+      Return r1 = Return r2 -> r1 = r2.
+  Proof. intros * H; invert H; trivial. Qed.
   
 End RealWorldLemmas.
 
 Ltac equality1 :=
   match goal with
+  | [ H : ?x = ?x |- _ ] => clear H
   | [ H : List.In _ _ |- _ ] => progress (simpl in H); intuition idtac
 
   | [ H : _ $+ (_,_) $? _ = _ |- _ ] => progress clean_map_lookups
@@ -95,9 +101,13 @@ Ltac equality1 :=
 
   | [ H : add _ _ _ $? _ = Some ?UD |- _ ] =>
     match type of UD with
-    | RealWorld.user_data bool => apply lookup_some_implies_in in H; simpl in H
+    | RealWorld.user_data _ => apply lookup_some_implies_in in H; simpl in H
     | _ => apply lookup_split in H; intuition idtac
     end
+    (* match type of UD with *)
+    (* | RealWorld.user_data bool => apply lookup_some_implies_in in H; simpl in H *)
+    (* | _ => apply lookup_split in H; intuition idtac *)
+    (* end *)
 
   | [ H : _ = {| RealWorld.users := _ ; RealWorld.adversary := _ ; RealWorld.all_ciphers := _ ; RealWorld.all_keys := _ |} |- _ ]
     => inversion H; clear H; subst
@@ -112,7 +122,8 @@ Ltac equality1 :=
   | [ H : _ = (_ :: _) |- _ ] => inversion H; clear H
   | [ H : (_,_) = (_,_) |- _ ] => inversion H; clear H
   | [ H : Action _ = Action _ |- _ ] => inversion H; clear H
-  | [ H : RealWorld.Return _ = RealWorld.Return _ |- _ ] => inversion H; clear H
+  (* | [ H : RealWorld.Return _ = RealWorld.Return _ |- _ ] => inversion H; clear H *)
+  | [ H : RealWorld.Return _ = RealWorld.Return _ |- _ ] => apply invert_return in H
   | [ H : existT _ _ _ = existT _ _ _ |- _ ] => apply inj_pair2 in H
   (* | [ H : existT _ ?x _ = existT _ ?x _ |- _ ] => apply inj_pair2 in H *)
 
@@ -179,7 +190,7 @@ Module SimulationAutomation.
     Lemma step_user_inv_bind :
       forall {A B C C'} (usrs usrs' : honest_users A) (adv adv' : user_data B)
         lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' tos tos' cur_n cur_n'
-        (cmd1 : user_cmd C) (cmd : C -> user_cmd C') (cmd' : user_cmd C'),
+        (cmd1 : user_cmd C) (cmd : <<C>> -> user_cmd C') (cmd' : user_cmd C'),
         step_user lbl u_id
                   (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cur_n, Bind cmd1 cmd)
                   (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cur_n', cmd')
@@ -209,7 +220,7 @@ Module SimulationAutomation.
 
     Lemma step_user_inv_recv :
       forall {A B t} (usrs usrs' : honest_users A) (adv adv' : user_data B)
-        lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' tos tos' cur_n cur_n' (cmd : user_cmd (crypto t)) pat,
+        lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' tos tos' cur_n cur_n' (cmd : user_cmd (Crypto t)) pat,
         step_user lbl u_id
                   (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cur_n, Recv pat)
                   (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cur_n', cmd)
@@ -227,7 +238,7 @@ Module SimulationAutomation.
               /\ mycs' = findCiphers msg ++ mycs
               /\ froms' = updateTrackedNonce u_id froms cs msg
               /\ lbl = Action (Input msg pat froms)
-              /\ cmd = Return msg)
+              /\ cmd = @Return (Crypto t) msg)
             \/ ( ~ msg_accepted_by_pattern cs u_id froms pat msg
               /\ ks = ks'
               /\ mycs = mycs'
@@ -266,7 +277,7 @@ Module SimulationAutomation.
            ; cur_nonce := adv.(cur_nonce) |}
         /\ rec_u_id <> u_id
         /\ lbl = Action (Output msg (Some u_id) (Some rec_u_id) tos)
-        /\ cmd = Return tt
+        /\ cmd = @Return (Base Unit) tt
         /\ exists rec_u,
             usrs $? rec_u_id = Some rec_u
             /\ usrs' = usrs $+ (rec_u_id, {| key_heap  := rec_u.(key_heap)
@@ -307,7 +318,7 @@ Module SimulationAutomation.
               ~ In c_id cs
               /\ cs' = cs $+ (c_id, SigEncCipher k__sign k__enc msg_to (u_id, cur_n) msg)
               /\ mycs' = c_id :: mycs
-              /\ cmd = Return (SignedCiphertext c_id)).
+              /\ cmd = @Return (Crypto t) (SignedCiphertext c_id)).
     Proof.
       intros * H.
       invert H; intuition eauto 12.
@@ -315,7 +326,7 @@ Module SimulationAutomation.
 
     Lemma step_user_inv_dec :
       forall {A B t} (usrs usrs' : honest_users A) (adv adv' : user_data B) c_id
-        lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' tos tos' cur_n cur_n' (cmd : user_cmd (message t)),
+        lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' tos tos' cur_n cur_n' (cmd : user_cmd (Message t)),
         step_user lbl
                   u_id
                   (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cur_n, Decrypt (SignedCiphertext c_id))
@@ -338,7 +349,7 @@ Module SimulationAutomation.
           /\ ks  $? k__sign = Some kp__sign
           /\ ks' = ks $k++ findKeysMessage msg
           /\ mycs' = (* findCiphers msg ++ *) mycs
-          /\ cmd = Return msg.
+          /\ cmd = @Return (Message t) msg.
     Proof.
       intros * H.
       invert H; intuition eauto 20.
@@ -367,7 +378,7 @@ Module SimulationAutomation.
               ~ In c_id cs
               /\ cs' = cs $+ (c_id, SigCipher k__sign msg_to (u_id, cur_n) msg)
               /\ mycs' = c_id :: mycs
-              /\ cmd = Return (SignedCiphertext c_id)).
+              /\ cmd = @Return (Crypto t) (SignedCiphertext c_id)).
     Proof.
       intros * H.
       invert H; intuition eauto 12.
@@ -394,7 +405,7 @@ Module SimulationAutomation.
         /\ List.In c_id mycs
         /\ exists (msg : message t) kt__sign kp__sign msg_to nonce,
             cs $? c_id     = Some (SigCipher k__sign msg_to nonce msg)
-          /\ cmd = Return (true,msg)
+          /\ cmd = @Return (UPair (Base Bool) (Message t)) (true,msg)
           /\ gks $? k__sign = Some (MkCryptoKey k__sign Signing kt__sign)
           /\ ks  $? k__sign = Some kp__sign.
     Proof.
@@ -423,7 +434,7 @@ Module SimulationAutomation.
           /\ k = MkCryptoKey k_id usage SymKey
           /\ gks' = gks $+ (k_id, k)
           /\ ks' = add_key_perm k_id true ks
-          /\ cmd = Return (k_id,true).
+          /\ cmd = @Return (Base Access) (k_id,true).
     Proof.
       intros * H.
       invert H; intuition eauto 12.
@@ -450,7 +461,7 @@ Module SimulationAutomation.
           /\ k = MkCryptoKey k_id usage AsymKey
           /\ gks' = gks $+ (k_id, k)
           /\ ks' = add_key_perm k_id true ks
-          /\ cmd = Return (k_id,true).
+          /\ cmd = @Return (Base Access) (k_id,true).
     Proof.
       intros * H.
       invert H; intuition eauto 12.
@@ -763,8 +774,12 @@ Module SimulationAutomation.
                      _ _ _ ] => eapply CryptoSigEncCase
     | [ |- _ <-> _ ] => split
     | [ |- _ -> _ ] => intros
-    | [ H : _ $+ (_,_) $? ?uid = Some ?data |- (_ ?data) $? _ = Some _] =>
-      apply lookup_some_implies_in in H; simpl in H; split_ors; repeat equality1; subst; try contradiction; simpl in *
+        | [ H : _ $+ (_,_) $? ?uid = Some ?data , H2 : _ $? ?uid = Some _ |- (_ ?data) $? _ = Some _] =>
+          apply lookup_some_implies_in in H; simpl in H;
+            apply lookup_some_implies_in in H2; simpl in H2;
+              split_ors; repeat equality1; subst; try contradiction; simpl in *
+    (* | [ H : _ $+ (_,_) $? ?uid = Some ?data |- (_ ?data) $? _ = Some _] => *)
+    (*   apply lookup_some_implies_in in H; simpl in H; split_ors; repeat equality1; subst; try contradiction; simpl in * *)
     end.
 
   Hint Extern 1 (action_matches _ _ _ _) => repeat (solve_action_matches1; simpl; eauto 3).

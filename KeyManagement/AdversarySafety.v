@@ -365,7 +365,7 @@ Import Automation.
 Section UniverseLemmas.
   Import RealWorld.
 
-  Definition add_adversary {A B} (U__r : universe A B) (advcode : user_cmd B) :=
+  Definition add_adversary {A B} (U__r : universe A B) (advcode : user_cmd (Base B)) :=
     {| users       := U__r.(users)
      ; adversary   := {| key_heap := U__r.(adversary).(key_heap)
                        ; msg_heap := U__r.(adversary).(msg_heap)
@@ -4632,7 +4632,7 @@ Section SingleAdversarySimulates.
     Qed.
 
     Lemma ok_adv_universe_strip_adversary_still_ok :
-      forall {A B} (U__ra U__r: universe A B) (b : B),
+      forall {A B} (U__ra U__r: universe A B) (b : <<(Base B)>>),
           U__r = strip_adversary_univ U__ra b
         -> universe_ok U__ra
         -> adv_universe_ok U__ra
@@ -5122,6 +5122,7 @@ Section SingleAdversarySimulates.
          clean_key_permissions_keeps_honest_permission
          msg_nonce_ok_none_updateTrackedNonce_idempotent
          updateRecvNonce_clean_ciphers_honestly_signed.
+(* <<<<<<< HEAD *)
 
     Lemma honest_silent_recv_implies_honest_or_no_step_origuniv :
       forall {t A B} (msg : crypto t) (usrs : honest_users A) (adv : user_data B) usrs__s cs__s
@@ -5135,6 +5136,54 @@ Section SingleAdversarySimulates.
         -> usrs__s = clean_users honestk cs usrs
         -> step_user Silent (Some u_id)
                     (usrs__s, clean_adv adv honestk cs b, cs__s, clean_keys honestk gks,
+(* ======= *)
+    
+(*     Lemma honest_silent_step_advuniv_implies_honest_or_no_step_origuniv : *)
+(*       forall {A B C} u_id suid cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B) *)
+(*                 gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd' (b: <<(Base B)>>), *)
+(*         step_user lbl suid bd bd' *)
+(*         -> suid = Some u_id *)
+(*         -> forall (cmd : user_cmd C) cs__s usrs__s honestk, *)
+(*           honestk = findUserKeys usrs *)
+(*           -> cs__s = clean_ciphers honestk cs *)
+(*           -> usrs__s = clean_users honestk cs usrs *)
+(*           -> bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
+(*           -> encrypted_ciphers_ok honestk cs gks *)
+(*           -> user_cipher_queues_ok cs honestk usrs *)
+(*           -> message_queues_ok cs usrs gks *)
+(*           -> keys_and_permissions_good gks usrs adv.(key_heap) *)
+(*           -> adv_message_queue_ok usrs cs gks adv.(msg_heap) *)
+(*           -> forall cmd' cs__s' usrs__s' honestk', *)
+(*                  bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd') *)
+(*               -> lbl = Silent *)
+(*               -> forall cmdc cmdc' usrs'', *)
+(*                   usrs $? u_id = Some {| key_heap := ks *)
+(*                                        ; msg_heap := qmsgs *)
+(*                                        ; protocol := cmdc *)
+(*                                        ; c_heap := mycs *)
+(*                                        ; from_nons := froms *)
+(*                                        ; sent_nons := sents *)
+(*                                        ; cur_nonce := cur_n |} *)
+(*                   -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' *)
+(*                                               ; msg_heap := qmsgs' *)
+(*                                               ; protocol := cmdc' *)
+(*                                               ; c_heap := mycs' *)
+(*                                               ; from_nons := froms' *)
+(*                                               ; sent_nons := sents' *)
+(*                                               ; cur_nonce := cur_n' |}) *)
+(*                   -> honestk' = findUserKeys usrs'' *)
+(*                   -> cs__s' = clean_ciphers honestk' cs' *)
+(*                   -> usrs__s' = clean_users honestk' cs' usrs' *)
+(*                   -> encrypted_ciphers_ok honestk' cs' gks' *)
+(*                   -> step_user lbl suid *)
+(*                               (usrs__s, clean_adv adv honestk cs b, cs__s, clean_keys honestk gks, *)
+(*                                clean_key_permissions honestk ks, *)
+(*                                clean_messages honestk cs suid froms qmsgs, mycs, froms, sents, cur_n, cmd) *)
+(*                               (usrs__s', clean_adv adv' honestk' cs b, cs__s', clean_keys honestk' gks', *)
+(*                                clean_key_permissions honestk' ks', *)
+(*                                clean_messages honestk' cs' suid froms' qmsgs', mycs', froms', sents', cur_n', cmd') *)
+(*                   \/ (usrs__s, clean_adv adv honestk cs b, cs__s, clean_keys honestk gks, *)
+(* >>>>>>> type-codes *)
                      clean_key_permissions honestk ks,
                      clean_messages honestk cs (Some u_id) froms (existT _ _ msg :: qmsgs),
                      mycs, froms, sents, cur_n, @Recv t pat)
@@ -5229,7 +5278,7 @@ Section SingleAdversarySimulates.
                      , clean_keys honestk' gks'
                      , clean_key_permissions honestk' (add_key_perm k_id true ks)
                      , clean_messages honestk' cs (Some u_id) froms qmsgs
-                     , mycs, froms, sents, cur_n, Return (k_id,true) ).
+                     , mycs, froms, sents, cur_n, @Return (Base Access) (k_id,true) ).
     Proof.
       intros; split_ors; subst;
         msg_queue_prop;
@@ -5284,7 +5333,7 @@ Section SingleAdversarySimulates.
                      , clean_keys honestk' gks
                      , clean_key_permissions honestk' (ks $k++ findKeysMessage msg)
                      , clean_messages honestk' cs (Some u_id) froms qmsgs
-                     , mycs, froms, sents, cur_n, Return msg ).
+                     , mycs, froms, sents, cur_n, @Return (Message t) msg ).
     Proof.
       intros; subst.
 
@@ -5710,7 +5759,7 @@ Section SingleAdversarySimulates.
 
     Lemma honest_labeled_step_advuniv_implies_honest_step_origuniv :
       forall {A B C} cs cs' lbl u_id (usrs usrs' : honest_users A) (adv adv' : user_data B)
-                gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd' a (b : B) suid,
+                gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd' a (b : <<(Base B)>>) suid,
         step_user lbl suid bd bd'
         -> suid = Some u_id
         -> action_adversary_safe (findUserKeys usrs) cs a
@@ -5829,7 +5878,11 @@ Section SingleAdversarySimulates.
 
     Lemma honest_labeled_step_advuniv_implies_honest_step_origuniv' :
       forall {A B C} cs cs' lbl u_id suid (usrs usrs' : honest_users A) (adv adv' : user_data B)
-                gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd' a a' (b : B) honestk,
+(* <<<<<<< HEAD *)
+(*                 gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd' a a' (b : B) honestk, *)
+(* ======= *)
+                gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd' a a' (b : <<(Base B)>>) honestk,
+(* >>>>>>> type-codes *)
         step_user lbl suid bd bd'
         -> suid = Some u_id
         -> honestk = findUserKeys usrs
@@ -5963,7 +6016,7 @@ Section SingleAdversarySimulates.
     Qed.
 
     Lemma honest_users_only_honest_keys_nochange_keys :
-      forall {A} u_id (usrs : honest_users A) (cmd cmd' : user_cmd A)
+      forall {A} u_id (usrs : honest_users A) (cmd cmd' : user_cmd (Base A))
                 ks qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n',
 
         honest_users_only_honest_keys usrs
@@ -6005,7 +6058,7 @@ Section SingleAdversarySimulates.
     Hint Resolve merge_perms_true_either_true.
 
     Lemma honest_users_only_honest_keys_gen_key :
-      forall {A} u_id (usrs : honest_users A) (cmd cmd' : user_cmd A) k_id
+      forall {A} u_id (usrs : honest_users A) (cmd cmd' : user_cmd (Base A)) k_id
                  ks qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n',
 
         honest_users_only_honest_keys usrs
@@ -6656,7 +6709,7 @@ Section SingleAdversarySimulates.
     
     Lemma adv_step_stays_in_R :
       forall {A B} (U__i : IdealWorld.universe A) (U__r : universe A B) (R : simpl_universe A -> IdealWorld.universe A -> Prop)
-        (cmd : user_cmd B) lbl (usrs : honest_users A) (adv : user_data B) cs gks ks qmsgs mycs froms sents cur_n,
+        (cmd : user_cmd (Base B)) lbl (usrs : honest_users A) (adv : user_data B) cs gks ks qmsgs mycs froms sents cur_n,
         step_user lbl None
                   (build_data_step U__r U__r.(adversary))
                   (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
@@ -6873,7 +6926,7 @@ Section SingleAdversarySimulates.
                      , clean_keys honestk gks
                      , clean_key_permissions honestk ks
                      , clean_messages honestk cs' (Some u_id) froms qmsgs
-                     , (c_id :: mycs), froms, sents, 1+cur_n, Return msg_c ).
+                     , (c_id :: mycs), froms, sents, 1+cur_n, @Return (Crypto t) msg_c ).
     Proof.
       intros; split_ex; subst.
       assert (findUserKeys usrs $? k__signid = Some true) by eauto 2.
@@ -6942,7 +6995,7 @@ Section SingleAdversarySimulates.
                      clean_key_permissions honestk' (ks $k++ pubk),
                      clean_messages honestk' cs (Some u_id) froms' qmsgs,
                      findCiphers msg ++ mycs,
-                     updateTrackedNonce (Some u_id) froms cs msg, sents, cur_n, Return msg).
+                     updateTrackedNonce (Some u_id) froms cs msg, sents, cur_n, @Return (Crypto t) msg).
     Proof.
       intros;
         match goal with
@@ -6968,7 +7021,6 @@ Section SingleAdversarySimulates.
       rewrite fold_clean_messages1' , clean_messages'_fst_pull, fold_clean_messages.
       invert H6; split_ands.
 
-
       (* unfold msg_cipher_id in *; destruct msg; try discriminate; clean_context. *)
       (* assert (exists c, cs $? x = Some c /\ ~ List.In (cipher_nonce c) froms) by admit. *)
       (* split_ex. *)
@@ -6978,9 +7030,9 @@ Section SingleAdversarySimulates.
       (* rewrite fold_clean_messages1' , clean_messages'_fst_pull, fold_clean_messages. *)
       (* invert H6; split_ands. *)
 
-      specialize (H11 _ H2); split_ands.
-      specialize (H12 H0); split_ands.
-      unfold message_no_adv_private in H12.
+      specialize (H8 _ H2); split_ands.
+      specialize (H9 H0); split_ands.
+      unfold message_no_adv_private in H9.
 
       match goal with
       | [ |- context [ findUserKeys usrs $k++ ?pubk ]] => 
@@ -7007,7 +7059,7 @@ Section SingleAdversarySimulates.
         end.
         maps_equal.
         cases (@findKeysCrypto t0 cs (SignedCiphertext x1) $? y).
-        ** specialize (H12 _ _ Heq0); split_ands; subst.
+        ** specialize (H9 _ _ Heq0); split_ands; subst.
            erewrite clean_key_permissions_keeps_honest_permission; eauto; symmetry.
            unfold findKeysCrypto. unfold findKeysCrypto in Heq0; context_map_rewrites.
            erewrite clean_ciphers_keeps_honest_cipher; eauto.
@@ -7021,7 +7073,7 @@ Section SingleAdversarySimulates.
            erewrite clean_ciphers_keeps_honest_cipher; eauto.
            unfold msg_signing_key in H2; context_map_rewrites; clean_context.
            eapply honest_cipher_filter_fn_true_honest_signing_key; eauto.
-        ** rewrite H15; trivial.
+        ** rewrite H13; trivial.
            
     Qed.
 
@@ -7096,7 +7148,7 @@ Section SingleAdversarySimulates.
                      clean_key_permissions honestk ks,
                      clean_messages honestk cs (Some u_id) froms qmsgs,
                      mycs, froms,
-                     updateTrackedNonce (Some rec_u_id) sents cs msg, cur_n, Return tt).
+                     updateTrackedNonce (Some rec_u_id) sents cs msg, cur_n, ret tt).
     Proof.
       intros; subst; eauto.
       match goal with
@@ -7137,7 +7189,7 @@ Section SingleAdversarySimulates.
 
     Lemma honest_silent_step_advuniv_implies_honest_or_no_step_origuniv'' :
       forall {A B C} u_id suid cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-                gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd' (b: B),
+                gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd' (b: <<Base B>>),
         step_user lbl suid bd bd'
         -> suid = Some u_id
         -> forall (cmd : user_cmd C) cs__s usrs__s honestk,
@@ -7402,7 +7454,7 @@ Section SingleAdversarySimulates.
     Hint Resolve honest_cmds_safe_advuniv.
     
     Lemma silent_step_advuniv_implies_univ_ok :
-      forall {A B} (U U' : universe A B) (U__i : IdealWorld.universe A) (R : simpl_universe A -> IdealWorld.universe A -> Prop) lbl (b:B),
+      forall {A B} (U U' : universe A B) (U__i : IdealWorld.universe A) (R : simpl_universe A -> IdealWorld.universe A -> Prop) lbl (b : <<(Base B)>>),
         step_universe U lbl U'
         -> lbl = Silent
         -> adv_universe_ok U
@@ -7471,7 +7523,7 @@ Section SingleAdversarySimulates.
 
   Lemma simulates_with_adversary_silent :
     forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A)
-            (R : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop) (b : B),
+            (R : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop) (b : RealWorld.denote (RealWorld.Base B)),
       simulates_silent_step (lameAdv b) R
       -> honest_actions_safe B R
       (* -> honest_users_only_honest_keys U__ra.(RealWorld.users) *)
@@ -7600,7 +7652,7 @@ Section SingleAdversarySimulates.
 
   Lemma simulates_with_adversary_labeled :
     forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A)
-            (R : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop) (b : B),
+            (R : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop) (b : RealWorld.denote (RealWorld.Base B)),
       simulates_labeled_step (lameAdv b) R
       -> honest_actions_safe B R
       (* -> simulates_labeled_step_safe R *)
@@ -7779,7 +7831,7 @@ Section SingleAdversarySimulates.
 
   Theorem simulates_ok_with_adversary :
     forall {A B} (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A)
-      (R : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop) (b : B),
+      (R : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop) (b : RealWorld.denote (RealWorld.Base B)),
       simulates (lameAdv b) R U__r U__i
       -> lameAdv b U__r.(RealWorld.adversary)
       -> universe_starts_ok U__r
@@ -7822,7 +7874,7 @@ Section SingleAdversarySimulates.
   Qed.
 
   Theorem simulates_ok_with_adversary' :
-    forall {A B} (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A) (b : B),
+    forall {A B} (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A) (b : RealWorld.denote (RealWorld.Base B)),
         U__r <| U__i \ lameAdv b
       -> lameAdv b U__r.(RealWorld.adversary)
       -> universe_starts_ok U__r
@@ -7922,7 +7974,7 @@ Proof.
 Qed.
 
 Lemma simulates_could_generate :
-  forall A B (R R' : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop) (b:B),
+  forall A B (R R' : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop) (b : RealWorld.denote (RealWorld.Base B)),
     R' = (fun ur ui => R (strip_adversary_simpl ur) ui)
     -> simulates_silent_step (awesomeAdv (B:=B)) R'
     -> simulates_labeled_step (awesomeAdv (B:=B)) R'
@@ -8012,7 +8064,7 @@ Proof.
 Qed.
 
 Theorem refines_could_generate :
-  forall A B (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A) (b : B),
+  forall A B (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A) (b : RealWorld.denote (RealWorld.Base B)),
     U__r <| U__i \ lameAdv b
     -> lameAdv b U__r.(RealWorld.adversary)
     -> universe_starts_ok U__r

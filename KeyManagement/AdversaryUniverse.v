@@ -126,7 +126,7 @@ Definition clean_adv_msgs (honestk : key_perms) (cs : ciphers) (msgs : queued_me
                         | existT _ _ msg => msg_honestly_signed honestk cs msg
                         end) msgs.
 
-Definition clean_adv {B} (adv : user_data B) (honestk : key_perms) (cs : ciphers) (b : B) :=
+Definition clean_adv {B} (adv : user_data B) (honestk : key_perms) (cs : ciphers) (b : <<(Base B)>>) :=
   {| key_heap := clean_key_permissions honestk adv.(key_heap)
    ; protocol := Return b
    ; msg_heap := clean_adv_msgs honestk cs adv.(msg_heap)
@@ -135,7 +135,7 @@ Definition clean_adv {B} (adv : user_data B) (honestk : key_perms) (cs : ciphers
    ; sent_nons := []
    ; cur_nonce := adv.(cur_nonce) |}.
 
-Definition strip_adversary_univ {A B} (U__r : universe A B) (b : B) : universe A B :=
+Definition strip_adversary_univ {A B} (U__r : universe A B) (b : <<(Base B)>>) : universe A B :=
   let honestk := findUserKeys U__r.(users)
   in {| users       := clean_users honestk U__r.(all_ciphers) U__r.(users)
       ; adversary   := clean_adv U__r.(adversary) honestk U__r.(all_ciphers) b

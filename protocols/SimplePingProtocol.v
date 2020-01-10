@@ -52,7 +52,7 @@ Section IdealProtocol.
   Definition PERMS__a := $0 $+ (CH__A2B, {| read := true; write := true |}). (* writer *)
   Definition PERMS__b := $0 $+ (CH__A2B, {| read := true; write := false |}). (* reader *)
 
-  Definition mkiU (cv : channels) (p__a p__b : cmd nat): universe nat :=
+  Definition mkiU (cv : channels) (p__a p__b : cmd (Base Nat)): universe Nat :=
     {| channel_vector := cv
      ; users := $0
          $+ (A,   {| perms    := PERMS__a ; protocol := p__a |})
@@ -67,33 +67,24 @@ Section IdealProtocol.
          ; Return n)
          (* user B *)
          ( m <- @Recv Nat CH__A2B
-         ; Return match extractContent m with
-                  | None =>    0
-                  | Some n' => n'
-                  end).
+         ; ret (extractContent m)).
 
   Definition ideal_univ_sent1 n :=
     mkiU ($0 $+ (CH__A2B, [existT _ _ (Content n)]))
          (* user A *)
-         ( _ <- Return tt
-         ; Return n)
+         ( _ <- ret tt
+         ; ret n)
          (* user B *)
          ( m <- @Recv Nat CH__A2B
-         ; Return match extractContent m with
-                  | None =>    0
-                  | Some n' => n'
-                  end).
+         ; ret (extractContent m)).
 
   Definition ideal_univ_recd1 n :=
     mkiU ($0 $+ (CH__A2B, []))
          (* user A *)
          (Return n)
          (* user B *)
-         ( m <- Return (Content n)
-         ; Return match extractContent m with
-                  | None =>    0
-                  | Some n' => n'
-                  end).
+         ( m <- @Return (Message Nat) (Content n)
+         ; ret (extractContent m)).
 
   Definition ideal_univ_done n :=
     mkiU ($0 $+ (CH__A2B, []))
@@ -122,7 +113,7 @@ Section RealProtocol.
   Definition mkrU (mycs1 mycs2 : my_ciphers) (froms1 froms2 : recv_nonces)
                   (sents1 sents2 : sent_nonces) (cur_n1 cur_n2 : nat)
                   (msgs1 msgs2 : queued_messages) (cs : ciphers)
-                  (p__a p__b : user_cmd nat) (adv : user_data unit) : universe nat unit :=
+                  (p__a p__b : user_cmd (Base Nat)) (adv : user_data Unit) : universe Nat Unit :=
     {| users := $0
          $+ (A, {| key_heap := A__keys ; protocol := p__a ; msg_heap := msgs1 ; c_heap := mycs1
                  ; from_nons := froms1 ; sent_nons := sents1 ; cur_nonce := cur_n1 |})
@@ -144,59 +135,59 @@ Section RealProtocol.
          (* user B *)
          ( c  <- @Recv Nat (Signed KID1 true)
          ; v  <- Verify KID1 c
-         ; Return (if fst v
-                   then match snd v with
-                        | message.Content p => p
-                        | _                 => 0
-                        end
-                   else 1)).
+         ; ret (if fst v
+                then match snd v with
+                     | message.Content p => p
+                     | _                 => 0
+                     end
+                else 1)).
   
   Definition real_univ_sent1 n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 :=
     mkrU mycs1 mycs2 [] [] [non1] [] cur_n1 cur_n2 [] [existT _ Nat (SignedCiphertext cid1)]
          (cs $+ (cid1, SigCipher KID1 B non1 (message.Content n)))
          (* user A *)
-         ( _  <- Return tt
-         ; Return n)
+         ( _  <- ret tt
+         ; ret n)
 
          (* user B *)
          ( c  <- @Recv Nat (Signed KID1 true)
          ; v  <- Verify KID1 c
-         ; Return (if fst v
-                   then match snd v with
-                        | message.Content p => p
-                        | _                 => 0
-                        end
-                   else 1)).
+         ; ret (if fst v
+                then match snd v with
+                     | message.Content p => p
+                     | _                 => 0
+                     end
+                else 1)).
 
   Definition real_univ_recd1 n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 :=
     mkrU mycs1 mycs2 [] [non1] [non1] [] cur_n1 cur_n2 [] []
          (cs $+ (cid1, SigCipher KID1 B non1 (message.Content n)))
          (* user A *)
-         ( _  <- Return tt
-         ; Return n)
+         ( _  <- ret tt
+         ; ret n)
 
          (* user B *)
-         ( c  <- (Return (SignedCiphertext cid1))
+         ( c  <- (@Return (Crypto Nat) (SignedCiphertext cid1))
          ; v  <- @Verify Nat KID1 c
-         ; Return (if fst v
-                   then match snd v with
-                        | message.Content p => p
-                        | _                 => 0
-                        end
-                   else 1)).
+         ; ret (if fst v
+                then match snd v with
+                     | message.Content p => p
+                     | _                 => 0
+                     end
+                else 1)).
 
-  Inductive RSimplePing : RealWorld.simpl_universe nat -> IdealWorld.universe nat -> Prop :=
+  Inductive RSimplePing : RealWorld.simpl_universe Nat -> IdealWorld.universe Nat -> Prop :=
   | Start : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 adv,
       ~^* (real_univ_start cs mycs1 mycs2 cur_n1 cur_n2 adv) U__r
-      -> lameAdv tt adv
+      -> @lameAdv Unit tt adv
       -> RSimplePing (peel_adv U__r) ideal_univ_start
   | Sent1 : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 n cid1 non1 adv,
       ~^* (real_univ_sent1 n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
-      -> lameAdv tt adv
+      -> @lameAdv Unit tt adv
       -> RSimplePing (peel_adv U__r) (ideal_univ_sent1 n)
   | Recd1 : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 n cid1 non1 adv,
       ~^* (real_univ_recd1 n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
-      -> lameAdv tt adv
+      -> @lameAdv Unit tt adv
       -> RSimplePing (peel_adv U__r) (ideal_univ_recd1 n)
   .
 
@@ -233,8 +224,9 @@ Section FeebleSimulates.
     repeat (ideal_single_silent_multistep A);
     repeat (ideal_single_silent_multistep B); solve_refl.
 
+  
   Lemma rsimpleping_silent_simulates :
-    simulates_silent_step (lameAdv tt) RSimplePing.
+    simulates_silent_step (@lameAdv Unit tt) RSimplePing.
   Proof.
     unfold simulates_silent_step.
 
@@ -249,7 +241,7 @@ Section FeebleSimulates.
   Qed.
 
   Lemma rsimpleping_loud_simulates :
-    simulates_labeled_step (lameAdv tt) RSimplePing.
+    simulates_labeled_step (@lameAdv Unit tt) RSimplePing.
   Proof.
     unfold simulates_labeled_step.
 
@@ -262,14 +254,13 @@ Section FeebleSimulates.
         [> do 3 eexists;
          repeat (apply conj);
          swap 3 4; swap 2 3; swap 1 2;
-         simpl; clean_map_lookups;
-         eauto; eauto 12 ..]
+         simpl; clean_map_lookups; eauto 12 ..]
       ).
 
   Qed.
 
   Lemma rsimpleping_honest_actions_safe :
-    honest_actions_safe unit RSimplePing.
+    honest_actions_safe Unit RSimplePing.
   Proof.
     unfold honest_actions_safe; intros.
     clear H0 H1.
@@ -302,7 +293,7 @@ Section FeebleSimulates.
 
   Lemma univ_ok_start :
     forall adv,
-      lameAdv tt adv
+      @lameAdv Unit tt adv
       -> universe_ok (real_univ_start $0 [] [] 0 0 adv).
   Proof.
     unfold real_univ_start; econstructor; eauto.
@@ -323,7 +314,7 @@ Section FeebleSimulates.
     forall adv U__r honestk,
       U__r = real_univ_start $0 [] [] 0 0 adv
       -> honestk = RealWorld.findUserKeys U__r.(RealWorld.users)
-      -> lameAdv tt adv
+      -> @lameAdv Unit tt adv
       -> adv.(RealWorld.key_heap) = $0
       -> adv.(RealWorld.msg_heap) = []
       -> adv.(RealWorld.c_heap) = []
@@ -399,13 +390,13 @@ Section FeebleSimulates.
     forall adv U__r honestk,
       U__r = real_univ_start $0 [] [] 0 0 adv
       -> honestk = RealWorld.findUserKeys U__r.(RealWorld.users)
-      -> lameAdv tt adv
+      -> @lameAdv Unit tt adv
       -> RealWorld.key_heap adv = $0
       -> RealWorld.msg_heap adv = []
       -> RealWorld.c_heap adv = []
       -> adv_message_queue_ok U__r.(RealWorld.users) U__r.(RealWorld.all_ciphers) U__r.(RealWorld.all_keys) adv.(RealWorld.msg_heap)
       -> adv_no_honest_keys honestk adv.(RealWorld.key_heap)
-      -> refines (lameAdv tt) U__r ideal_univ_start.
+      -> refines (@lameAdv Unit tt) U__r ideal_univ_start.
   Proof.
     exists RSimplePing; unfold simulates.
     intuition (subst; eauto).

@@ -36,7 +36,7 @@ Fixpoint content_eq  {t__rw t__iw} (m__rw : RealWorld.message.message t__rw) (m_
   | _ => False
   end.
 
-Inductive  message_eq : forall {A B} {t : type}, 
+Inductive  message_eq : forall {A B t},
   RealWorld.crypto t -> RealWorld.universe A B ->
   IdealWorld.message.message t -> IdealWorld.universe A -> IdealWorld.channel_id -> Prop :=
 | ContentCase : forall {A B t}  (U__rw : RealWorld.universe A B) U__iw (m__rw : RealWorld.message.message t) m__iw ch_id user_data,

@@ -52,7 +52,7 @@ Section IdealProtocol.
   Definition PERMS__a := $0 $+ (CH__A2B, {| read := true; write := true |}). (* writer *)
   Definition PERMS__b := $0 $+ (CH__A2B, {| read := true; write := false |}). (* reader *)
 
-  Definition mkiU (cv : channels) (perm__a perm__b : permissions) (p__a p__b : cmd nat): universe nat :=
+  Definition mkiU (cv : channels) (perm__a perm__b : permissions) (p__a p__b : cmd (Base Nat)): universe Nat :=
     {| channel_vector := cv
      ; users := $0
          $+ (A,   {| perms    := perm__a ; protocol := p__a |})
@@ -62,49 +62,43 @@ Section IdealProtocol.
   Definition ideal_univ_start :=
     mkiU ($0 $+ (CH__A2B, [])) PERMS__a PERMS__b
          (* user A *)
-         ( chid <- CreateChannel
-         ; _ <- Send (Permission {| ch_perm := {| read := false; write := true |} ; ch_id := chid |}) CH__A2B
-         ; Return chid)
+         ( n <- Gen
+         ; chid <- CreateChannel
+         ; _ <- Send (MsgPair (Content n) (Permission {| ch_perm := {| read := false; write := true |} ; ch_id := chid |})) CH__A2B
+         ; Return n)
          (* user B *)
-         ( m <- @Recv Access CH__A2B
-         ; Return match extractPermission m with
-                  | None =>   0
-                  | Some p => ch_id p
-                  end).
+         ( m <- @Recv (TPair Nat Access) CH__A2B
+         ; ret (extractContent (msgFst m))).
 
-  Definition ideal_univ_sent1 chid :=
-    mkiU ($0 $+ (CH__A2B, [existT _ _ (Permission {| ch_perm := {| read := false; write := true |} ; ch_id := chid |})])
+  Definition ideal_univ_sent1 chid n :=
+    mkiU ($0 $+ (CH__A2B,
+                 [existT _ _ (MsgPair (Content n) (Permission {| ch_perm := {| read := false; write := true |} ; ch_id := chid |})) ])
            $+ (chid, []))
          (PERMS__a $+ (chid, creator_permission)) PERMS__b
          (* user A *)
-         ( _ <- Return tt
-         ; Return chid)
+         ( _ <- ret tt
+         ; ret n)
          (* user B *)
-         ( m <- @Recv Access CH__A2B
-         ; Return match extractPermission m with
-                  | None =>   0
-                  | Some p => ch_id p
-                  end).
+         ( m <- @Recv (TPair Nat Access) CH__A2B
+         ; ret (extractContent (msgFst m))).
 
-  Definition ideal_univ_recd1 chid :=
+  Definition ideal_univ_recd1 chid n :=
     mkiU ($0 $+ (CH__A2B, []) $+ (chid, []))
          (PERMS__a $+ (chid, creator_permission))
          (PERMS__b $+ (chid, {| read := false; write := true |}))
          (* user A *)
-         (Return chid)
+         (Return n)
          (* user B *)
-         ( m <- Return (Permission {| ch_perm := {| read := false; write := true |} ; ch_id := chid |})
-         ; Return match extractPermission m with
-                  | None =>   0
-                  | Some p => ch_id p
-                  end).
+         ( m <- @Return (Message (TPair Nat Access))
+                       (MsgPair (Content n) (Permission {| ch_perm := {| read := false; write := true |} ; ch_id := chid |}))
+         ; ret (extractContent (msgFst m))).
 
-  Definition ideal_univ_done chid perms__a perms__b :=
+  Definition ideal_univ_done chid n perms__a perms__b :=
     mkiU ($0 $+ (CH__A2B, []) $+ (chid, [])) perms__a perms__b
          (* user A *)
-         (Return chid)
+         (Return n)
          (* user B *)
-         (Return chid).
+         (Return n).
 
 End IdealProtocol.
 
@@ -128,7 +122,7 @@ Section RealProtocol.
              (ks1 ks2 : key_perms)
              (gks : keys)
              (msgs1 msgs2 : queued_messages) (cs : ciphers)
-             (p__a p__b : user_cmd nat) (adv : user_data unit) : universe nat unit :=
+             (p__a p__b : user_cmd (Base Nat)) (adv : user_data Unit) : universe Nat Unit :=
     {| users := $0
          $+ (A, {| key_heap := ks1 ; protocol := p__a ; msg_heap := msgs1 ; c_heap := mycs1
                  ; from_nons := froms1 ; sent_nons := sents1 ; cur_nonce := cur_n1 |})
@@ -142,89 +136,67 @@ Section RealProtocol.
   Definition real_univ_start cs mycs1 mycs2 cur_n1 cur_n2 :=
     mkrU mycs1 mycs2 [] [] [] [] cur_n1 cur_n2 A__keys B__keys KEYS [] [] cs
          (* user A *)
-         ( kp <- GenerateAsymKey Encryption
-         ; c  <- Sign KID1 B (Permission (fst kp, false))
+         ( n <- Gen
+         ; kp <- GenerateAsymKey Encryption
+         ; c  <- Sign KID1 B (MsgPair (message.Content n) (Permission (fst kp, false)))
          ; _  <- Send B c
-         ; Return (fst kp))
+         ; Return n)
 
          (* user B *)
-         ( c  <- @Recv Access (Signed KID1 true)
+         ( c  <- @Recv (TPair Nat Access) (Signed KID1 true)
          ; v  <- Verify KID1 c
-         ; Return (if fst v
-                   then match snd v with
-                        | message.Permission p => fst p
-                        | _                    => 0
-                        end
-                   else 1)).
+         ; ret (if fst v
+                then (extractContent (msgFst (snd v)))
+                else 1)).
   
-  Definition real_univ_sent1 k_id k cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 :=
+  Definition real_univ_sent1 k_id k n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 :=
     mkrU mycs1 mycs2 [] [] [non1] [] cur_n1 cur_n2
          (add_key_perm k_id true A__keys) B__keys (KEYS $+ (k_id, k))
-         [] [existT _ Access (SignedCiphertext cid1)]
-         (cs $+ (cid1, SigCipher KID1 B non1 (Permission (k_id,false))))
+         [] [existT _ (TPair Nat Access) (SignedCiphertext cid1)]
+         (cs $+ (cid1, SigCipher KID1 B non1 (MsgPair (message.Content n) (Permission (k_id, false)))))
          (* user A *)
-         ( _  <- Return tt
-         ; Return k_id)
+         ( _  <- ret tt
+         ; ret n)
 
          (* user B *)
-         ( c  <- @Recv Access (Signed KID1 true)
+         ( c  <- @Recv (TPair Nat Access) (Signed KID1 true)
          ; v  <- Verify KID1 c
-         ; Return (if fst v
-                   then match snd v with
-                        | message.Permission p => fst p
-                        | _                    => 0
-                        end
-                   else 1)).
+         ; ret (if fst v
+                then (extractContent (msgFst (snd v)))
+                else 1)).
 
-  Definition real_univ_recd1 k_id k cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 :=
+  Definition real_univ_recd1 k_id k n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 :=
     mkrU mycs1 mycs2 [] [non1] [non1] [] cur_n1 cur_n2
          (add_key_perm k_id true A__keys) (B__keys $k++ ($0 $+ (k_id,false))) (KEYS $+ (k_id,k)) [] []
-         (cs $+ (cid1, SigCipher KID1 B non1 (Permission (k_id,false))))
+         (cs $+ (cid1, SigCipher KID1 B non1 (MsgPair (message.Content n) (Permission (k_id, false)))))
          (* user A *)
-         ( _  <- Return tt
-         ; Return k_id)
+         ( _  <- ret tt
+         ; ret n)
 
          (* user B *)
-         ( c  <- (Return (SignedCiphertext cid1))
-         ; v  <- @Verify Access KID1 c
-         ; Return (if fst v
-                   then match snd v with
-                        | message.Permission p => fst p
-                        | _                    => 0
-                        end
-                   else 1)).
+         ( c  <- (@Return (Crypto (TPair Nat Access)) (SignedCiphertext cid1))
+         ; v  <- @Verify (TPair Nat Access) KID1 c
+         ; ret (if fst v
+                then (extractContent (msgFst (snd v)))
+                else 1)).
 
-  Definition real_univ_done k_id k cs mycs1 mycs2 froms1 froms2 sents1 sents2 cur_n1 cur_n2 cid1 seq1 :=
-    mkrU mycs1 mycs2 froms1 froms2 sents1 sents2 cur_n1 cur_n2
-         (add_key_perm k_id true A__keys) B__keys (KEYS $+ (k_id, k))  [] []
-         (cs $+ (cid1, SigCipher KID1 B seq1 (Permission (k_id,false))))
-         (* user A *)
-         (Return k_id)
-
-         (* user B *)
-         (Return k_id).
-
-  Inductive RSimplePing : RealWorld.simpl_universe nat -> IdealWorld.universe nat -> Prop :=
+  Inductive RSimplePing : RealWorld.simpl_universe Nat -> IdealWorld.universe Nat -> Prop :=
   | Start : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 adv,
       ~^* (real_univ_start cs mycs1 mycs2 cur_n1 cur_n2 adv) U__r
-      -> lameAdv tt adv
+      -> @lameAdv Unit tt adv
       -> RSimplePing (peel_adv U__r) ideal_univ_start
-  | Sent1 : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 k k_id chid cid1 non1 adv,
-      ~^* (real_univ_sent1 k_id k cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
-      -> lameAdv tt adv
+  | Sent1 : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 k k_id n chid cid1 non1 adv,
+      ~^* (real_univ_sent1 k_id k n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
+      -> @lameAdv Unit tt adv
       -> ~ In k_id KEYS
       -> chid <> CH__A2B
-      -> RSimplePing (peel_adv U__r) (ideal_univ_sent1 chid)
-  | Recd1 : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 k k_id chid cid1 non1 adv,
-      ~^* (real_univ_recd1 k_id k cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
-      -> lameAdv tt adv
+      -> RSimplePing (peel_adv U__r) (ideal_univ_sent1 chid n)
+  | Recd1 : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 k k_id n chid cid1 non1 adv,
+      ~^* (real_univ_recd1 k_id k n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
+      -> @lameAdv Unit tt adv
       -> ~ In k_id KEYS
       -> chid <> CH__A2B
-      -> RSimplePing (peel_adv U__r) (ideal_univ_recd1 chid)
-  (* | Done : forall U__r cs mycs1 mycs2 froms1 froms2 sents1 sents2 cur_n1 cur_n2 n cid1 seq1 adv, *)
-  (*     rstepSilent^* (real_univ_done n cs mycs1 mycs2 froms1 froms2 sents1 sents2 cur_n1 cur_n2 cid1 seq1 adv) U__r *)
-  (*     -> lameAdv tt adv *)
-  (*     -> RSimplePing (peel_adv U__r) (ideal_univ_done n) *)
+      -> RSimplePing (peel_adv U__r) (ideal_univ_recd1 chid n)
   .
 
 End RealProtocol.
@@ -234,22 +206,22 @@ Hint Constructors RealWorld.msg_accepted_by_pattern.
 Hint Constructors RSimplePing.
 
 Lemma Sent1' :
-  forall U__r U__i cs mycs1 mycs2 cur_n1 cur_n2 k k_id chid cid1 non1 adv,
-      ~^* (real_univ_sent1 k_id k cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
-      -> lameAdv tt adv
+  forall U__r U__i cs mycs1 mycs2 cur_n1 cur_n2 k n k_id chid cid1 non1 adv,
+      ~^* (real_univ_sent1 k_id k n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
+      -> @lameAdv Unit tt adv
       -> ~ In k_id KEYS
       -> chid <> CH__A2B
-      -> U__i = (ideal_univ_sent1 chid)
+      -> U__i = (ideal_univ_sent1 chid n)
       -> RSimplePing (RealWorld.peel_adv U__r) U__i.
 Proof. intros; subst; eauto. Qed.
 
 Lemma Recd1' :
-  forall U__r U__i cs mycs1 mycs2 cur_n1 cur_n2 k k_id chid cid1 non1 adv,
-    ~^* (real_univ_recd1 k_id k cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
-    -> lameAdv tt adv
+  forall U__r U__i cs mycs1 mycs2 cur_n1 cur_n2 k k_id n chid cid1 non1 adv,
+    ~^* (real_univ_recd1 k_id k n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
+    -> @lameAdv Unit tt adv
     -> ~ In k_id KEYS
     -> chid <> CH__A2B
-    -> U__i = ideal_univ_recd1 chid
+    -> U__i = ideal_univ_recd1 chid n
     -> RSimplePing (RealWorld.peel_adv U__r) U__i.
 Proof. intros; subst; eauto. Qed.
 
@@ -258,7 +230,7 @@ Import SimulationAutomation.
 
 Hint Unfold
      A B PERMS__a PERMS__b
-     real_univ_start real_univ_sent1 real_univ_recd1 real_univ_done mkrU
+     real_univ_start real_univ_sent1 real_univ_recd1 mkrU
      ideal_univ_start ideal_univ_sent1 ideal_univ_recd1 ideal_univ_done mkiU : constants.
 
 Hint Extern 0 (~^* _ _) =>
@@ -302,7 +274,7 @@ Section FeebleSimulates.
     end.
 
   Lemma rsimpleping_silent_simulates :
-    simulates_silent_step (lameAdv tt) RSimplePing.
+    simulates_silent_step (@lameAdv Unit tt) RSimplePing.
   Proof.
     unfold simulates_silent_step.
 
@@ -326,12 +298,14 @@ Section FeebleSimulates.
       + eexists; split; [ solve_refl | ]; eauto 12.
       + eexists; split; [ solve_refl | ]; eauto 12.
       + eexists; split; [ solve_refl | ]; eauto 12.
+      + eexists; split; [ solve_refl | ]; eauto 12.
+      + eexists; split; [ solve_refl | ]; eauto 12.
 
     - churn; simpl_real_users_context; clear_extra_adversary.
       + eexists; split; [ solve_refl | ]; eauto 12.
         
     - churn; simpl_real_users_context; clear_extra_adversary.
-
+ 
       + eexists; split; [ solve_refl | ]; eauto 12.
       + eexists; split; [ solve_refl | ]; eauto 12.
       + eexists; split; [ solve_refl | ]; eauto 12.
@@ -360,7 +334,7 @@ Section FeebleSimulates.
   Qed.
 
   Lemma rsimpleping_loud_simulates :
-    simulates_labeled_step (lameAdv tt) RSimplePing.
+    simulates_labeled_step (@lameAdv Unit tt) RSimplePing.
   Proof.
     unfold simulates_labeled_step.
 
@@ -382,11 +356,10 @@ Section FeebleSimulates.
       2: solve_refl.
       shelve.
       + eapply IdealWorld.LStepUser' with (u_id := A); simpl; eauto.
-        simpl; econstructor; eauto.
+        eapply IdealWorld.LStepBindRecur; simpl.
+        econstructor; eauto.
         econstructor; eauto.
         simpl; eauto.
-        econstructor; eauto.
-        clean_map_lookups.
         econstructor; eauto.
 
       + eauto.
@@ -411,6 +384,7 @@ Section FeebleSimulates.
 
         * eapply IdealWorld.LStepUser' with (u_id := B); simpl; eauto.
           simpl.
+          eapply IdealWorld.LStepBindRecur; simpl.
           simpl; econstructor; eauto.
 
         * simpl. simpl_real_users_context. simpl_ideal_users_context.
@@ -419,7 +393,7 @@ Section FeebleSimulates.
           clean_map_lookups.
           reflexivity.
           econstructor; simpl; eauto.
-          econstructor; eauto.
+          econstructor; econstructor; eauto.
           intros; simpl in *.
           apply lookup_some_implies_in in H; simpl in H.
           split_ors; subst; try contradiction;
@@ -448,7 +422,7 @@ Section FeebleSimulates.
 
         * eapply IdealWorld.LStepUser' with (u_id := B); simpl; eauto.
           simpl.
-          simpl; econstructor; eauto.
+          eapply IdealWorld.LStepBindRecur; eauto.
 
         * simpl.
           simpl_real_users_context. simpl_ideal_users_context.
@@ -457,11 +431,9 @@ Section FeebleSimulates.
           clean_map_lookups.
           reflexivity.
           econstructor; simpl; eauto.
-          econstructor; eauto.
+          econstructor; econstructor; eauto.
           intros; simpl in *.
-          apply lookup_some_implies_in in H1; simpl in H1.
-          split_ors; subst; try contradiction;
-            repeat equality1; subst; try congruence; simpl in *; eauto.
+          repeat (solve_action_matches1; simpl; eauto).
           unfold add_key_perm, A__keys; eauto.
           change (In k_id KEYS -> False) with (~ In k_id KEYS) in H5.
           rewrite not_find_in_iff in H5.
@@ -504,7 +476,7 @@ Section FeebleSimulates.
   Qed.
 
   Lemma rsimpleping_honest_actions_safe :
-    honest_actions_safe unit RSimplePing.
+    honest_actions_safe Unit RSimplePing.
   Proof.
     unfold honest_actions_safe; intros.
     clear H0 H1.
@@ -522,6 +494,11 @@ Section FeebleSimulates.
       + solve_honest_actions_safe; eauto 8.
       + solve_honest_actions_safe; eauto 8.
       + solve_honest_actions_safe; eauto 8.
+      + solve_honest_actions_safe; eauto 8.
+      + solve_honest_actions_safe; eauto 8.
+        solve_perm_merges.
+        solve_perm_merges; eauto.
+        solve_perm_merges.
       + solve_honest_actions_safe; eauto 8.
       + solve_honest_actions_safe; eauto 8.
 
@@ -561,7 +538,7 @@ Section FeebleSimulates.
 
   Lemma univ_ok_start :
     forall adv,
-      lameAdv tt adv
+      @lameAdv Unit tt adv
       -> universe_ok (real_univ_start $0 [] [] 0 0 adv).
   Proof.
     unfold real_univ_start; econstructor; eauto.
@@ -582,7 +559,7 @@ Section FeebleSimulates.
     forall adv U__r honestk,
       U__r = real_univ_start $0 [] [] 0 0 adv
       -> honestk = RealWorld.findUserKeys U__r.(RealWorld.users)
-      -> lameAdv tt adv
+      -> @lameAdv Unit tt adv
       -> adv.(RealWorld.key_heap) = $0
       -> adv.(RealWorld.msg_heap) = []
       -> adv.(RealWorld.c_heap) = []
@@ -658,13 +635,13 @@ Section FeebleSimulates.
     forall adv U__r honestk,
       U__r = real_univ_start $0 [] [] 0 0 adv
       -> honestk = RealWorld.findUserKeys U__r.(RealWorld.users)
-      -> lameAdv tt adv
+      -> @lameAdv Unit tt adv
       -> RealWorld.key_heap adv = $0
       -> RealWorld.msg_heap adv = []
       -> RealWorld.c_heap adv = []
       -> adv_message_queue_ok U__r.(RealWorld.users) U__r.(RealWorld.all_ciphers) U__r.(RealWorld.all_keys) adv.(RealWorld.msg_heap)
       -> adv_no_honest_keys honestk adv.(RealWorld.key_heap)
-      -> refines (lameAdv tt) U__r ideal_univ_start.
+      -> refines (@lameAdv Unit tt) U__r ideal_univ_start.
   Proof.
     exists RSimplePing; unfold simulates.
     intuition (subst; eauto).

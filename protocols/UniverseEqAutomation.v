@@ -114,7 +114,7 @@ Section ExamplarProofs.
     Definition ch2 := 11.
     
     Lemma ideal_test1 :
-      forall {A} msgs1 msgs2 msgs3 perms1 perms2 (proto1 proto2 : cmd A),
+      forall {A} msgs1 msgs2 msgs3 perms1 perms2 (proto1 proto2 : cmd (Base A)),
       exists perms1' perms2',
         {| channel_vector := $0 $+ (ch1, msgs1) $+ (ch2, msgs2) $+ (ch1, msgs3);
            users := $0 $+ (uid2, {| protocol := proto2; perms := perms2 |})
