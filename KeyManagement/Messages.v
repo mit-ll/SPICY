@@ -53,4 +53,24 @@ Module Messages (GA : GRANT_ACCESS).
     end
   .
 
+  Definition extractContent (msg : message Nat) : nat :=
+    match msg with
+    | Content t => t
+    end.
+
+  Definition extractPermission (msg : message Access) : GA.access :=
+    match msg with
+    | Permission a => a
+    end.
+
+  Definition msgFst {t1 t2} (msg : message (TPair t1 t2)) : (message t1) :=
+    match msg with
+    | MsgPair m1 _ => m1
+    end.
+
+  Definition msgSnd {t1 t2} (msg : message (TPair t1 t2)) : (message t2) :=
+    match msg with
+    | MsgPair _ m2 => m2
+    end.
+
 End Messages.

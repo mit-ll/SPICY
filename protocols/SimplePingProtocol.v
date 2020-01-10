@@ -67,10 +67,7 @@ Section IdealProtocol.
          ; Return n)
          (* user B *)
          ( m <- @Recv Nat CH__A2B
-         ; ret match  extractContent m with
-               | None =>    0
-               | Some n' => n'
-               end).
+         ; ret (extractContent m)).
 
   Definition ideal_univ_sent1 n :=
     mkiU ($0 $+ (CH__A2B, [existT _ _ (Content n)]))
@@ -79,10 +76,7 @@ Section IdealProtocol.
          ; ret n)
          (* user B *)
          ( m <- @Recv Nat CH__A2B
-         ; ret match extractContent m with
-               | None =>    0
-               | Some n' => n'
-               end).
+         ; ret (extractContent m)).
 
   Definition ideal_univ_recd1 n :=
     mkiU ($0 $+ (CH__A2B, []))
@@ -90,10 +84,7 @@ Section IdealProtocol.
          (Return n)
          (* user B *)
          ( m <- @Return (Message Nat) (Content n)
-         ; ret match  extractContent m with
-               | None =>    0
-               | Some n' => n'
-               end).
+         ; ret (extractContent m)).
 
   Definition ideal_univ_done n :=
     mkiU ($0 $+ (CH__A2B, []))

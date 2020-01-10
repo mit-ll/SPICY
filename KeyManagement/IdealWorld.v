@@ -140,19 +140,6 @@ Fixpoint add_chs_to_set (ks : list (channel_id * permission)) (ps : permissions)
   | (id, perm) :: ks' => (add_chs_to_set ks' ps) $+ (id, perm)
   end.
 
-
-Definition extractContent {t} (msg : message t) : option nat :=
-  match msg with
-  | Content t => Some t
-  | _         => None
-  end.
-
-Definition extractPermission {t} (msg : message t) : option access :=
-  match msg with
-  | Permission a => Some a
-  | _            => None
-  end.
-
 Inductive action : Type :=
 | Input  t (msg : message t) (ch_id : channel_id) (cs : channels) (ps : permissions)
 | Output t (msg : message t) (ch_id : channel_id) (cs : channels) (ps : permissions)
