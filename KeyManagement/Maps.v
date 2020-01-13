@@ -30,8 +30,9 @@ Require Import
 Module Import NatMap := FMapList.Make(Nat_as_OT).
 Module P := WProperties_fun Nat_as_OT NatMap.
 Module F := P.F.
+Module O := OrdProperties NatMap.
 
-Export NatMap P F.
+Export NatMap P F O.
 
 From Coq Require List.
 
@@ -518,3 +519,87 @@ Section MapPredicates.
   Qed.
 
 End MapPredicates.
+
+
+Section ConcreteMaps.
+
+  Definition next_key {V} (m : NatMap.t V) : nat :=
+    match max_elt m with
+    | None => 0
+    | Some (k,v) => S k
+    end.
+
+  Lemma max_elt_add_ne_recur :
+    forall {V} (m : NatMap.t V) k1 k2 v1 v2,
+      m $? k1 = None
+      -> k1 <> k2
+      -> max_elt (m $+ (k1,v1)) = Some (k2,v2)
+      -> max_elt m = Some (k2,v2).
+  Proof.
+    induction m using map_induction_bis; intros;
+      Equal_eq; eauto.
+
+    - unfold max_elt, max_elt_aux in H1; simpl in H1;
+        clean_map_lookups.
+
+    - destruct (x ==n k1); clean_map_lookups; eauto.
+    
+  Admitted.
+
+  Lemma max_elt_ge_elements :
+    forall {V} (m : NatMap.t V) k v,
+      max_elt m = Some (k,v)
+      -> forall k' v', m $? k' = Some v'
+                 -> le k' k.
+  Proof.
+    induction m using map_induction_bis; intros;
+      Equal_eq; clean_map_lookups; eauto.
+
+    destruct (x ==n k'); subst; clean_map_lookups; eauto.
+    - clear IHm.
+      generalize (max_elt_Above H0); intros MEA.
+      specialize (MEA k').
+      destruct (k ==n k'); subst; clean_map_lookups; eauto.
+      apply Nat.lt_le_incl.
+      apply MEA.
+      rewrite in_find_iff; unfold not; clean_map_lookups.
+      
+    - destruct (x ==n k); subst; eauto using max_elt_add_ne_recur.
+      apply Nat.lt_le_incl.
+      generalize (max_elt_Above H0); intros MEA.
+      apply MEA.
+      rewrite in_find_iff; unfold not; clean_map_lookups.
+  Qed.
+
+
+  Lemma next_key_not_in :
+    forall {V} (m : NatMap.t V) k,
+      k = next_key m
+      -> m $? k = None.
+  Proof.
+    unfold next_key; intros.
+    cases (max_elt m); subst.
+    - destruct p; simpl.
+      cases (m $? S k); eauto.
+      exfalso.
+
+      assert (Above k (m $- k)) by eauto using max_elt_Above.
+      specialize (H (S k)).
+
+      assert (In (S k) (m $- k)).
+      rewrite in_find_iff; unfold not; intros.
+      rewrite remove_neq_o in H0 by eauto; contra_map_lookup.
+      specialize (H H0).
+      SearchAbout (_ < _).
+      assert (k < S k) by eauto using Nat.lt_succ_diag_r.
+      assert (S k < S k) by eauto using Nat.lt_trans.
+      SearchAbout (_ < _).
+      assert (~ (S k < S k)) by eauto using lt_antirefl.
+      contradiction.
+
+    - apply max_elt_Empty in Heq.
+      apply Empty_eq_empty in Heq; subst.
+      apply lookup_empty_none.
+  Qed.
+
+End ConcreteMaps.
