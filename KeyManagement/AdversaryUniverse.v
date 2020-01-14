@@ -1,3 +1,20 @@
+(* DISTRIBUTION STATEMENT A. Approved for public release. Distribution is unlimited.
+ *
+ * This material is based upon work supported by the Department of the Air Force under Air Force 
+ * Contract No. FA8702-15-D-0001. Any opinions, findings, conclusions or recommendations expressed 
+ * in this material are those of the author(s) and do not necessarily reflect the views of the 
+ * Department of the Air Force.
+ * 
+ * © 2019 Massachusetts Institute of Technology.
+ * 
+ * MIT Proprietary, Subject to FAR52.227-11 Patent Rights - Ownership by the contractor (May 2014)
+ * 
+ * The software/firmware is provided to you on an As-Is basis
+ * 
+ * Delivered to the U.S. Government with Unlimited Rights, as defined in DFARS Part 252.227-7013
+ * or 7014 (Feb 2014). Notwithstanding any copyright notice, U.S. Government rights in this work are
+ * defined by DFARS 252.227-7013 or DFARS 252.227-7014 as detailed above. Use of this work other than
+ *  as specifically authorized by the U.S. Government may violate any copyrights that exist in this work. *)
 From Coq Require Import
      List
      Morphisms
@@ -109,7 +126,7 @@ Definition clean_adv_msgs (honestk : key_perms) (cs : ciphers) (msgs : queued_me
                         | existT _ _ msg => msg_honestly_signed honestk cs msg
                         end) msgs.
 
-Definition clean_adv {B} (adv : user_data B) (honestk : key_perms) (cs : ciphers) (b : B) :=
+Definition clean_adv {B} (adv : user_data B) (honestk : key_perms) (cs : ciphers) (b : <<(Base B)>>) :=
   {| key_heap := clean_key_permissions honestk adv.(key_heap)
    ; protocol := Return b
    ; msg_heap := clean_adv_msgs honestk cs adv.(msg_heap)
@@ -118,7 +135,7 @@ Definition clean_adv {B} (adv : user_data B) (honestk : key_perms) (cs : ciphers
    ; sent_nons := []
    ; cur_nonce := adv.(cur_nonce) |}.
 
-Definition strip_adversary_univ {A B} (U__r : universe A B) (b : B) : universe A B :=
+Definition strip_adversary_univ {A B} (U__r : universe A B) (b : <<(Base B)>>) : universe A B :=
   let honestk := findUserKeys U__r.(users)
   in {| users       := clean_users honestk U__r.(all_ciphers) U__r.(users)
       ; adversary   := clean_adv U__r.(adversary) honestk U__r.(all_ciphers) b
@@ -146,9 +163,9 @@ Definition strip_action (honestk : key_perms) (cs : ciphers) (act : action) :=
   | Output msg msg_from msg_to sents => Output msg msg_from msg_to sents
   end.
 
-Definition strip_label (honestk : key_perms) (cs : ciphers) (lbl : label) :=
+Definition strip_label (honestk : key_perms) (cs : ciphers) (lbl : rlabel) :=
   match lbl with
-  | Silent => Silent
+  | Silent => lbl
   | Action a => Action (strip_action honestk cs a)
   end.
 

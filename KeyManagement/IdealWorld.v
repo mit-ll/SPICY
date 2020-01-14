@@ -1,9 +1,26 @@
+(* DISTRIBUTION STATEMENT A. Approved for public release. Distribution is unlimited.
+ *
+ * This material is based upon work supported by the Department of the Air Force under Air Force 
+ * Contract No. FA8702-15-D-0001. Any opinions, findings, conclusions or recommendations expressed 
+ * in this material are those of the author(s) and do not necessarily reflect the views of the 
+ * Department of the Air Force.
+ * 
+ * © 2019 Massachusetts Institute of Technology.
+ * 
+ * MIT Proprietary, Subject to FAR52.227-11 Patent Rights - Ownership by the contractor (May 2014)
+ * 
+ * The software/firmware is provided to you on an As-Is basis
+ * 
+ * Delivered to the U.S. Government with Unlimited Rights, as defined in DFARS Part 252.227-7013
+ * or 7014 (Feb 2014). Notwithstanding any copyright notice, U.S. Government rights in this work are
+ * defined by DFARS 252.227-7013 or DFARS 252.227-7014 as detailed above. Use of this work other than
+ *  as specifically authorized by the U.S. Government may violate any copyrights that exist in this work. *)
 From Coq Require Import String Bool.Sumbool Logic.
 
 Require Import MyPrelude.
 
-Module Foo <: EMPTY. End Foo.
-Module Import SN := SetNotations(Foo).
+(* Module Foo <: EMPTY. End Foo. *)
+(* Module Import SN := SetNotations(Foo). *)
 
 Require Import Common Maps Messages.
 Require Messages.
@@ -34,24 +51,55 @@ Export message.
 (* shouldn't this be just Permissions ? *)
 Definition channels := NatMap.t (list (sigT message)).
 
-Inductive cmd : Type -> Type :=
-| Return {result : Type} (r : result) : cmd result
-| Bind {result' result} (c1 : cmd result') (c2 : result' -> cmd result) : cmd result
-| Gen : cmd nat
-| Send {t} (m : message t) (ch_id : channel_id) : cmd unit
-| Recv {t} (ch_id : channel_id) : cmd (message t)
-| CreateChannel : cmd channel_id.
-
-Module IdealNotations.
-  Notation "x <- c1 ; c2" := (Bind c1 (fun x => c2)) (right associativity, at level 75) : idealworld_scope.
-  Delimit Scope idealworld_scope with idealworld.
-End IdealNotations.
-
-Import IdealNotations.
+Inductive cmd_type :=
+| ChannelId
+| Base (t : type)
+| Message (t : type)
+.
+Definition denote (t : cmd_type) :=
+  match t with
+  | ChannelId => channel_id
+  | Base t' => typeDenote t'
+  | Message t' => message t'
+  end
+.
+Notation "<< t >>" := (denote t) (at level 75) : idealworld_scope.
+Delimit Scope idealworld_scope with idealworld.
 Open Scope idealworld_scope.
 
+Inductive cmd : cmd_type -> Type :=
+| Return {result : cmd_type} (r : <<result>>) : cmd result
+| Bind {result' result} (c1 : cmd result') (c2 : <<result'>> -> cmd result) : cmd result
+| Gen : cmd (Base Nat)
+| Send {t} (m : message t) (ch_id : channel_id) : cmd (Base Unit)
+| Recv {t} (ch_id : channel_id) : cmd (Message t)
+| CreateChannel : cmd (ChannelId)
+.
+
+Module IdealNotations.
+  Ltac denoteInvert T :=
+    match T with
+      | channel_id => exact ChannelId
+      | bool => exact (Base Bool)
+      | nat => exact (Base Nat)
+      | unit => exact (Base Unit)
+      | (?T1 * ?T2)%type =>
+        exact (TPair ltac:(denoteInvert T1) ltac:(denoteInvert T2))
+      end
+  .
+  Ltac typeOf x :=
+    match type of x with
+    | ?T => denoteInvert T
+    end
+  .
+  Notation "x <- c1 ; c2" := (Bind c1 (fun x => c2)) (right associativity, at level 75) : idealworld_scope.
+  Notation "'ret' x" := (@Return ltac:(typeOf x) x) (at level 75, only parsing) : idealworld_scope.
+  Delimit Scope idealworld_scope with idealworld.
+End IdealNotations.
+Import IdealNotations.
+
 Record user A :=
-  { protocol : cmd A ;
+  { protocol : cmd (Base A) ;
     perms : permissions }.
 
 Record universe A :=
@@ -70,11 +118,11 @@ Fixpoint chs_search {A} (m : message A) : list (channel_id * permission) :=
 
 Inductive permission_subset : permission -> permission -> Prop :=
 | ReadWriteCase : forall p2,
-    permission_subset (construct_permission true true) p2
+    permission_subset p2 (construct_permission true true)
 | WriteCase : forall b,
-    permission_subset (construct_permission false true) (construct_permission false b)
+    permission_subset (construct_permission false b) (construct_permission false true)
 | ReadCase : forall b,
-    permission_subset (construct_permission true false) (construct_permission b false).
+    permission_subset (construct_permission b false) (construct_permission true false).
 
 Fixpoint msg_permissions_valid {A} (m : message A) ps : Prop :=
   List.Forall
@@ -92,13 +140,6 @@ Fixpoint add_chs_to_set (ks : list (channel_id * permission)) (ps : permissions)
   | (id, perm) :: ks' => (add_chs_to_set ks' ps) $+ (id, perm)
   end.
 
-
-Definition extractContent {t} (msg : message t) : option nat :=
-  match msg with
-  | Content t => Some t
-  | _         => None
-  end.
-
 Inductive action : Type :=
 | Input  t (msg : message t) (ch_id : channel_id) (cs : channels) (ps : permissions)
 | Output t (msg : message t) (ch_id : channel_id) (cs : channels) (ps : permissions)
@@ -107,10 +148,10 @@ Inductive action : Type :=
 Definition ilabel := @label action.
 
 Inductive lstep_user : forall A, ilabel -> channels * cmd A * permissions -> channels * cmd A * permissions -> Prop :=
-| LStepBindRecur : forall result result' lbl (c1 c1' : cmd result') (c2 : result' -> cmd result) cv cv' ps ps',
+| LStepBindRecur : forall {result result'} lbl (c1 c1' : cmd result') (c2 : <<result'>> -> cmd result) cv cv' ps ps',
     lstep_user lbl (cv, c1, ps) (cv', c1', ps') ->
     lstep_user lbl (cv, (Bind c1 c2), ps) (cv', (Bind c1' c2), ps')
-| LStepBindProceed : forall (result result' : Type) (v : result') (c2 : result' -> cmd result) cv ps,
+| LStepBindProceed : forall {result result'} (v : <<result'>>) (c2 : <<result'>> -> cmd result) cv ps,
     lstep_user Silent (cv, (Bind (Return v) c2), ps) (cv, c2 v, ps)
 | LStepGen : forall cv ps n,
     lstep_user Silent (cv, Gen, ps) (cv, Return n, ps)
@@ -118,7 +159,7 @@ Inductive lstep_user : forall A, ilabel -> channels * cmd A * permissions -> cha
     ~(In ch_id cv) ->
     lstep_user Silent
                (cv, CreateChannel, ps)
-               (cv $+ (ch_id, []), Return ch_id, ps $+ (ch_id, creator_permission))
+               (cv $+ (ch_id, []), @Return ChannelId ch_id, ps $+ (ch_id, creator_permission))
 | LStepSend : forall t cv (m : message t) ch_id ps ch_d b,
     ps $? ch_id = Some {| read := b ; write := true |} ->
     cv $? ch_id = Some ch_d ->
@@ -126,7 +167,7 @@ Inductive lstep_user : forall A, ilabel -> channels * cmd A * permissions -> cha
     lstep_user
       (Action (Output m ch_id cv ps))
       (cv, Send m ch_id, ps)
-      (cv $+ (ch_id, ch_d ++ [existT _ _ m]), Return tt, ps)
+      (cv $+ (ch_id, ch_d ++ [existT _ _ m]), @Return (Base Unit) tt, ps)
 | LStepRecv : forall t (cv cv' : channels) ch_d ch_d' ps (m : message t) ch_id b,
     cv $? ch_id = Some ch_d ->
     ps $? ch_id = Some {| read := true ; write := b |} ->
@@ -135,7 +176,7 @@ Inductive lstep_user : forall A, ilabel -> channels * cmd A * permissions -> cha
     lstep_user
       (Action (Input m ch_id cv ps))
       (cv, Recv ch_id, ps)
-      (cv', Return m, add_chs_to_set (chs_search m) ps)
+      (cv', @Return (Message t) m, add_chs_to_set (chs_search m) ps)
 .
 
 Lemma LStepSend' : forall t cv cv' (m : message t) ch_id ps ch_d b,
@@ -143,7 +184,7 @@ Lemma LStepSend' : forall t cv cv' (m : message t) ch_id ps ch_d b,
     -> cv $? ch_id = Some ch_d
     -> msg_permissions_valid m ps
     -> cv' = cv $+ (ch_id, ch_d ++ [existT _ _ m])
-    -> lstep_user (Action (Output m ch_id cv ps)) (cv, Send m ch_id, ps) (cv', Return tt, ps).
+    -> lstep_user (Action (Output m ch_id cv ps)) (cv, Send m ch_id, ps) (cv', @Return (Base Unit) tt, ps).
 Proof.
   intros; subst; econstructor; eauto.
 Qed.
@@ -157,12 +198,12 @@ Lemma LStepRecv' : forall t (cv cv' : channels) ch_d ch_d' ps ps' (m : message t
     -> lstep_user
         (Action (Input m ch_id cv ps))
         (cv, Recv ch_id, ps)
-        (cv', Return m, ps').
+        (cv', @Return (Message t) m, ps').
 Proof.
   intros; subst; econstructor; eauto.
 Qed.
 
-Inductive lstep_universe : forall {A : Type}, universe A -> ilabel -> universe A -> Prop :=
+Inductive lstep_universe : forall {A}, universe A -> ilabel -> universe A -> Prop :=
 | LStepUser : forall A (U : universe A) u_id u proto chans perms' lbl,
     U.(users) $? u_id = Some u
     -> lstep_user lbl (U.(channel_vector), u.(protocol), u.(perms)) (chans, proto, perms')

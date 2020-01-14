@@ -1,31 +1,46 @@
--R ./frap Frap
+# DISTRIBUTION STATEMENT A. Approved for public release. Distribution is unlimited.
+#
+# This material is based upon work supported by the Department of the Air Force under Air Force 
+# Contract No. FA8702-15-D-0001. Any opinions, findings, conclusions or recommendations expressed 
+# in this material are those of the author(s) and do not necessarily reflect the views of the 
+# Department of the Air Force.
+# 
+# © 2019 Massachusetts Institute of Technology.
+# 
+# MIT Proprietary, Subject to FAR52.227-11 Patent Rights - Ownership by the contractor (May 2014)
+# 
+# The software/firmware is provided to you on an As-Is basis
+# 
+# Delivered to the U.S. Government with Unlimited Rights, as defined in DFARS Part 252.227-7013
+# or 7014 (Feb 2014). Notwithstanding any copyright notice, U.S. Government rights in this work are
+# defined by DFARS 252.227-7013 or DFARS 252.227-7014 as detailed above. Use of this work other than
+#  as specifically authorized by the U.S. Government may violate any copyrights that exist in this work.
+# -R ./frap Frap
 -R ./KeyManagement KeyManagement
 -R ./protocols protocols
 
-KeyManagement/MyPrelude.v
-KeyManagement/Tactics.v
-
-KeyManagement/Common.v
-KeyManagement/Keys.v
-KeyManagement/Messages.v
-KeyManagement/Maps.v
-KeyManagement/IdealWorld.v
-KeyManagement/RealWorld.v
-KeyManagement/MessageEq.v
-
-KeyManagement/AdversaryUniverse.v
-KeyManagement/Simulation.v
-KeyManagement/Automation.v
-
-KeyManagement/KeysTheory.v
+KeyManagement/StepRelations.v
 KeyManagement/CipherTheory.v
 KeyManagement/MessagesTheory.v
+KeyManagement/KeysTheory.v
 KeyManagement/UsersTheory.v
 KeyManagement/InvariantsTheory.v
-
+KeyManagement/Common.v
+KeyManagement/MyPrelude.v
+KeyManagement/Maps.v
+KeyManagement/MessageEq.v
+KeyManagement/Automation.v
+KeyManagement/Keys.v
+KeyManagement/IdealWorld.v
+KeyManagement/RealWorld.v
+KeyManagement/Simulation.v
+KeyManagement/AdversaryUniverse.v
 KeyManagement/AdversarySafety.v
+KeyManagement/Tactics.v
+KeyManagement/Messages.v
 
-protocols/UniverseEqAutomation.v
 protocols/ProtocolAutomation.v
+protocols/UniverseEqAutomation.v
 
-protocols/SimpleEncProtocol.v
+protocols/SimplePingProtocol.v
+protocols/ShareKeyProtocol.v
