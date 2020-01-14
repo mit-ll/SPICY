@@ -100,7 +100,7 @@ Ltac smash_universe :=
                    IdealWorld.channel_vector := _ |} = _
             ] => eapply ideal_univ_eq_fields_eq
           | [ |- _ = _ ] => reflexivity
-          end; m_equal).
+          end).
 
 Section ExamplarProofs.
 
@@ -124,7 +124,7 @@ Section ExamplarProofs.
            users := $0 $+ (uid1, {| protocol := proto1; perms := perms1' |})
                      $+ (uid2, {| protocol := proto2; perms := perms2' |}) |}.
     Proof.
-      intros; do 2 eexists; smash_universe.
+      intros; do 2 eexists; smash_universe; m_equal; eauto.
     Qed.
 
   End Ideal.

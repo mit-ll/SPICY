@@ -541,13 +541,13 @@ Module SimulationAutomation.
   Import T.
   Export T.
 
-  Local Ltac fill_unification_var_ineq uni v :=
+  Ltac fill_unification_var_ineq uni v :=
     match goal with
     | [ H : ?uni' = v -> False |- _ ] => unify uni uni'
     | [ H : v = ?uni' -> False |- _ ] => unify uni uni'
     end.
 
-  Local Ltac solve_simple_ineq :=
+  Ltac solve_simple_ineq :=
     match goal with
     | [ |- ?kid1 <> ?kid2 ] =>
       (is_evar kid1; fill_unification_var_ineq kid1 kid2)
@@ -558,35 +558,152 @@ Module SimulationAutomation.
     repeat
       match goal with
       | [ H : context [ $0 $? _ ] |- _ ] => rewrite lookup_empty_none in H
+      | [ |- context [ $0 $? _ ]] => rewrite lookup_empty_none
+
       | [ H : Some _ = Some _ |- _ ] => invert H
       | [ H : Some _ = None |- _ ] => discriminate
       | [ H : None = Some _ |- _ ] => discriminate
-                                      
+                                              
       | [ H : ?m $? ?k = _ |- _ ] => progress (unfold m in H)
       | [ H : ?m $+ (?k1,_) $? ?k1 = _ |- _ ] => rewrite add_eq_o in H by trivial
       | [ H : ?m $+ (?k1,_) $? ?k2 = _ |- _ ] => rewrite add_neq_o in H by eauto 2
-                                                                               
+                                                                                       
       | [ H : In ?k ?m -> False |- _ ] =>
         is_not_var k; assert (In k m) by (clear H; rewrite in_find_iff; unfold not; intros; solve_concrete_maps); contradiction
       | [ H : In _ _ |- _ ] => rewrite in_find_iff in H
       | [ |- ~ In _ _ ] => unfold not; intros
-
-      | [ |- ?m $+ (?kid1,_) $? ?kid1 = _ ] => rewrite add_eq_o
-      | [ |- ?m $+ (?kid2,_) $? ?kid1 = _ ] =>
-          rewrite add_neq_o by solve_concrete_maps
-        || rewrite add_eq_o by (unify kid1 kid2; solve_concrete_maps)
-
-      | [ |- ?m $? ?kid1 = _ ] => progress (unfold m)
+      | [ H : In ?x ?xs -> False |- _ ] => change (In x xs -> False) with (~ In x xs) in H
+      | [ H : ~ In ?x ?xs |- _ ] => rewrite not_find_in_iff in H
+                                                               
+      | [ |- context [ next_key ] ] => progress (unfold next_key; simpl)
+      | [ |- ?m $+ (?kid1,_) $? ?kid1 = _ ] => rewrite add_eq_o by trivial
+      | [ |- ?m $+ (?kid2,_) $? ?kid1 = _ ] => rewrite add_neq_o by auto 2
+      (*   rewrite add_neq_o by solve_concrete_maps *)
+      (* || rewrite add_eq_o by (unify kid1 kid2; solve_concrete_maps) *)
+      | [ |- (match ?m $+ (?kid1,_) $? ?kid1 with _ => _ end) = _ ] => rewrite add_eq_o by trivial
+      | [ |- (match ?m $+ (?kid2,_) $? ?kid1 with _ => _ end) = _ ] => rewrite add_neq_o by auto 2
+      | [ |- (match ?m $+ (?kid1,_) $? ?kid1 with _ => _ end) $? _ = _ ] => rewrite add_eq_o by trivial
+      | [ |- (match ?m $+ (?kid2,_) $? ?kid1 with _ => _ end) $? _ = _ ] => rewrite add_neq_o by auto 2
+      | [ |- _ $+ (?k1,_) $? ?k2 = _ ] =>
+        is_not_evar k2; is_not_evar k2; (is_var k1 || is_var k2);
+          destruct (k1 ==n k2); subst; try contradiction
+      | [ |- _ = ?m $+ (?kid2,_) $? ?kid1 ] => symmetry
+                                           
+      | [ |- context [ add_key_perm _ _ _ ]] => progress (unfold add_key_perm)
+      | [ |- context [ ?m $? ?kid1 ] ] => progress (unfold m)
 
       | [ H : ?m $? ?k <> _ |- _ ] => cases (m $? k); try contradiction; clear H
 
       | [ |- _ = _ ] => reflexivity
-      | [ |- ?kid1 <> ?kid2 ] =>
-          ( (is_evar kid1; fill_unification_var_ineq kid1 kid2)
-          || (is_evar kid2; fill_unification_var_ineq kid2 kid1));
-          unfold not; intro; congruence
+      | [ |- _ $+ (_,_) = _ ] => apply map_eq_Equal; unfold Equal; intros
+
+      | [ |- Some _ = Some _ ] => f_equal
+      | [ |- {| RealWorld.key_heap := _ |} = _ ] => f_equal
+      (* | [ |- ?kid1 <> ?kid2 ] => *)
+      (*   ( (is_evar kid1; fill_unification_var_ineq kid1 kid2) *)
+      (*     || (is_evar kid2; fill_unification_var_ineq kid2 kid1)); *)
+      (*   unfold not; intro; congruence *)
       | [ |- _ $? _ = _ ] => eassumption
+
+                             
+      | [ H : ?m $+ (?k1,_) $? ?k2 = _ |- _ $+ (_,_) $? _ = _ ] =>
+        (is_var k1 || is_var k2); idtac "destructing1 " k1 k2; destruct (k1 ==n k2); subst
+      | [ H : ?m $+ (?k1,_) $? ?k2 = _ |- (match _ $+ (_,_) $? _ with _ => _ end) $? _ = _ ] =>
+        (is_var k1 || is_var k2); idtac "destructing2 " k1 k2; destruct (k1 ==n k2); subst
+      (* | [ H : ?m $+ (?k1,_) $? ?k2 = _ |- context [ _ $? _ ] ] => *)
+      (*   (is_var k1 || is_var k2); idtac "destructing " k1 k2; destruct (k1 ==n k2); subst *)
       end.
+      (* match goal with *)
+      (* | [ H : context [ $0 $? _ ] |- _ ] => rewrite lookup_empty_none in H *)
+      (* | [ H : Some _ = Some _ |- _ ] => invert H *)
+      (* | [ H : Some _ = None |- _ ] => discriminate *)
+      (* | [ H : None = Some _ |- _ ] => discriminate *)
+                                              
+      (* | [ H : ?m $? ?k = _ |- _ ] => progress (unfold m in H) *)
+      (* | [ H : ?m $+ (?k1,_) $? ?k1 = _ |- _ ] => rewrite add_eq_o in H by trivial *)
+      (* | [ H : ?m $+ (?k1,_) $? ?k2 = _ |- _ ] => rewrite add_neq_o in H by eauto 2 *)
+                                                                                       
+      (* | [ H : In ?k ?m -> False |- _ ] => *)
+      (*   is_not_var k; assert (In k m) by (clear H; rewrite in_find_iff; unfold not; intros; solve_concrete_maps); contradiction *)
+      (* | [ H : In _ _ |- _ ] => rewrite in_find_iff in H *)
+      (* | [ |- ~ In _ _ ] => unfold not; intros *)
+      (* | [ H : In ?x ?xs -> False |- _ ] => change (In x xs -> False) with (~ In x xs) in H *)
+      (* | [ H : ~ In ?x ?xs |- _ ] => rewrite not_find_in_iff in H *)
+                                                               
+      (* | [ |- context [ next_key ] ] => progress (unfold next_key; simpl) *)
+      (* | [ |- ?m $+ (?kid1,_) $? ?kid1 = _ ] => rewrite add_eq_o by trivial *)
+      (* | [ |- ?m $+ (?kid2,_) $? ?kid1 = _ ] => rewrite add_neq_o by auto 2 *)
+      (* (*   rewrite add_neq_o by solve_concrete_maps *) *)
+      (* (* || rewrite add_eq_o by (unify kid1 kid2; solve_concrete_maps) *) *)
+      (* | [ |- (match ?m $+ (?kid1,_) $? ?kid1 with _ => _ end) = _ ] => rewrite add_eq_o by trivial *)
+      (* | [ |- (match ?m $+ (?kid2,_) $? ?kid1 with _ => _ end) = _ ] => rewrite add_neq_o by auto 2 *)
+      (* | [ |- context [ $0 $? _ ]] => rewrite lookup_empty_none *)
+      (* | [ |- _ $+ (?k1,_) $? ?k2 = _ ] => *)
+      (*   is_not_evar k2; is_not_evar k2; (is_var k1 || is_var k2); *)
+      (*     destruct (k1 ==n k2); subst; try contradiction *)
+      (* | [ |- _ = ?m $+ (?kid2,_) $? ?kid1 ] => symmetry *)
+                                           
+      (* | [ |- context [ add_key_perm _ _ _ ]] => progress (unfold add_key_perm) *)
+      (* | [ |- context [ ?m $? ?kid1 ] ] => progress (unfold m) *)
+
+      (* | [ H : ?m $? ?k <> _ |- _ ] => cases (m $? k); try contradiction; clear H *)
+
+      (* | [ |- _ = _ ] => reflexivity *)
+      (* | [ |- _ $+ (_,_) = _ ] => apply map_eq_Equal; unfold Equal; intros *)
+
+      (* | [ |- Some _ = Some _ ] => f_equal *)
+      (* | [ |- {| RealWorld.key_heap := _ |} = _ ] => f_equal *)
+      (* | [ |- ?kid1 <> ?kid2 ] => *)
+      (*   ( (is_evar kid1; fill_unification_var_ineq kid1 kid2) *)
+      (*     || (is_evar kid2; fill_unification_var_ineq kid2 kid1)); *)
+      (*   unfold not; intro; congruence *)
+      (* | [ |- _ $? _ = _ ] => eassumption *)
+
+                             
+      (* | [ H : ?m $+ (?k1,_) $? ?k2 = _ |- _ $+ (_,_) $? _ = _ ] => *)
+      (*   (is_var k1 || is_var k2); idtac "destructing " k1 k2; destruct (k1 ==n k2); subst *)
+      (* end. *)
+  
+      (* match goal with *)
+      (* | [ H : context [ $0 $? _ ] |- _ ] => rewrite lookup_empty_none in H *)
+      (* | [ H : Some _ = Some _ |- _ ] => invert H *)
+      (* | [ H : Some _ = None |- _ ] => discriminate *)
+      (* | [ H : None = Some _ |- _ ] => discriminate *)
+                                              
+      (* | [ H : ?m $? ?k = _ |- _ ] => progress (unfold m in H) *)
+      (* | [ H : ?m $+ (?k1,_) $? ?k1 = _ |- _ ] => rewrite add_eq_o in H by trivial *)
+      (* | [ H : ?m $+ (?k1,_) $? ?k2 = _ |- _ ] => rewrite add_neq_o in H by eauto 2 *)
+                                                                                       
+      (* | [ H : In ?k ?m -> False |- _ ] => *)
+      (*   is_not_var k; assert (In k m) by (clear H; rewrite in_find_iff; unfold not; intros; solve_concrete_maps); contradiction *)
+      (* | [ H : In _ _ |- _ ] => rewrite in_find_iff in H *)
+      (* | [ |- ~ In _ _ ] => unfold not; intros *)
+      (* | [ H : In ?x ?xs -> False |- _ ] => change (In x xs -> False) with (~ In x xs) in H *)
+      (* | [ H : ~ In ?x ?xs |- _ ] => rewrite not_find_in_iff in H *)
+                                                               
+      (* | [ |- context [ next_key ] ] => progress (unfold next_key; simpl) *)
+      (* | [ |- ?m $+ (?kid1,_) $? ?kid1 ] => rewrite add_eq_o by trivial *)
+      (* | [ |- ?m $+ (?kid2,_) $? ?kid1 ] => *)
+      (*   rewrite add_neq_o by auto 2 *)
+      (* | [ |- context [ $0 $? _ ]] => rewrite lookup_empty_none *)
+      (* (*   rewrite add_neq_o by solve_concrete_maps *) *)
+      (* (* || rewrite add_eq_o by (unify kid1 kid2; solve_concrete_maps) *) *)
+                                           
+      (* | [ |- context [ add_key_perm _ _ _ ]] => progress (unfold add_key_perm) *)
+      (* | [ |- context [ ?m $? ?kid1 ] ] => progress (unfold m) *)
+
+      (* | [ H : ?m $? ?k <> _ |- _ ] => cases (m $? k); try contradiction; clear H *)
+
+      (* | [ |- _ = _ ] => reflexivity *)
+      (* | [ |- ?kid1 <> ?kid2 ] => *)
+      (*   ( (is_evar kid1; fill_unification_var_ineq kid1 kid2) *)
+      (*     || (is_evar kid2; fill_unification_var_ineq kid2 kid1)); *)
+      (*   unfold not; intro; congruence *)
+      (* | [ |- _ $? _ = _ ] => eassumption *)
+                             
+      (* (* | [ H : ?m $+ (?k1,_) $? ?k2 = _ |- context [ _ $? _ ] ] => *) *)
+      (* (*   (is_var k1 || is_var k2); idtac "destructing " k1 k2; destruct (k1 ==n k2); subst *) *)
+      (* end. *)
 
   Ltac churn2 :=
     (* (repeat equality1); subst; churn1; intuition idtac; split_ex; intuition idtac; subst; try discriminate; clean_map_lookups. *)
@@ -629,9 +746,22 @@ Module SimulationAutomation.
   Ltac rstep_univ uid :=
     eapply  RealWorld.StepUser; simpl; swap 2 3; [ pick_user uid | ..]; (try eapply @eq_refl); simpl.
 
+  Ltac solve_ideal_step_stuff :=
+    repeat (
+        match goal with
+        | [ |- Forall _ _ ] => econstructor
+        | [ |- {| IdealWorld.channel_vector := _; IdealWorld.users := _ |} = _] => smash_universe; solve_concrete_maps
+        | [ |- _ = {| IdealWorld.channel_vector := _; IdealWorld.users := _ |}] => smash_universe; solve_concrete_maps
+        | [ |- IdealWorld.msg_permissions_valid _ _ ] => unfold IdealWorld.msg_permissions_valid
+        | [ |- IdealWorld.permission_subset _ _ ] => econstructor
+        | [ |- context [ _ $? _ ] ] => solve_concrete_maps
+        | [ |- ~ In ?k ?m ] => is_evar k; unify k (next_key m); rewrite not_find_in_iff; apply next_key_not_in; trivial
+        end; simpl).
+
   Ltac isilent_step_univ uid :=
     eapply IdealWorld.LStepUser'; simpl; swap 2 3; [ pick_user uid | ..]; (try simple eapply @eq_refl);
-      ((eapply IdealWorld.LStepBindRecur; i_single_silent_step) || i_single_silent_step).
+    ((eapply IdealWorld.LStepBindRecur; i_single_silent_step; solve [ solve_ideal_step_stuff; eauto 2  ])
+     || (i_single_silent_step; solve [ solve_ideal_step_stuff; eauto 2 ])).
   Ltac rsilent_step_univ uid :=
     eapply  RealWorld.StepUser; simpl; swap 2 3; [ pick_user uid | ..]; (try simple eapply @eq_refl);
       ((eapply RealWorld.StepBindRecur; r_single_silent_step) || r_single_silent_step).
@@ -685,7 +815,7 @@ Module SimulationAutomation.
   Ltac solve_refl3 :=
     solve [
         eapply Trc3Refl
-      | eapply Trc3Refl'; simpl; smash_universe ].
+      | eapply Trc3Refl'; simpl; smash_universe; solve_concrete_maps ].
 
   Ltac simpl_real_users_context :=
     repeat
@@ -740,7 +870,9 @@ Module SimulationAutomation.
   Hint Extern 1 (IdealWorld.lstep_universe _ _ _) => single_step_ideal_universe; eauto 2; econstructor.
   
   Hint Extern 1 (List.In _ _) => progress simpl.
-  Hint Extern 1 (~ In _ _) => solve_concrete_maps.
+  Hint Extern 1 (~ In ?k ?m) =>
+      (* (is_evar k; unify k (next_key m); rewrite not_find_in_iff; apply next_key_not_in; trivial) *)
+     solve_concrete_maps : core.
 
   Hint Extern 1 (action_adversary_safe _ _ _ = _) => unfold action_adversary_safe; simpl.
   Hint Extern 1 (IdealWorld.msg_permissions_valid _ _) => progress simpl.

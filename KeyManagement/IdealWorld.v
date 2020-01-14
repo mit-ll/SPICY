@@ -124,7 +124,7 @@ Inductive permission_subset : permission -> permission -> Prop :=
 | ReadCase : forall b,
     permission_subset (construct_permission b false) (construct_permission true false).
 
-Fixpoint msg_permissions_valid {A} (m : message A) ps : Prop :=
+Definition msg_permissions_valid {A} (m : message A) ps : Prop :=
   List.Forall
     (fun '(id, ps_sent) =>
       match ps $? id with
