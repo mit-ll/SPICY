@@ -7700,14 +7700,20 @@ Section SingleAdversarySimulates.
     do 3 eexists; intuition idtac; eauto.
   Qed.
 
+  Definition ciphers_honestly_signed (honestk : key_perms) (cs : RealWorld.ciphers) :=
+    Forall_natmap (fun c => RealWorld.cipher_honestly_signed honestk c = true) cs.
+
+  Definition keys_honest (honestk : key_perms) (ks : keys) :=
+    Forall_natmap (fun k => RealWorld.honest_key honestk k.(keyId)) ks.
+
   Definition universe_starts_ok {A B} (U : RealWorld.universe A B) :=
     let honestk := RealWorld.findUserKeys U.(RealWorld.users)
     in  (forall u_id u,
             U.(RealWorld.users) $? u_id = Some u
             -> u.(RealWorld.msg_heap) = []
             /\ (forall k_id kp, u.(RealWorld.key_heap) $? k_id = Some kp -> honestk $? k_id = Some true))
-      /\ Forall_natmap (fun c => RealWorld.cipher_honestly_signed honestk c = true) U.(RealWorld.all_ciphers)
-      /\ Forall_natmap (fun k => RealWorld.honest_key honestk k.(keyId)) U.(RealWorld.all_keys)
+      /\ ciphers_honestly_signed honestk U.(RealWorld.all_ciphers)
+      /\ keys_honest honestk U.(RealWorld.all_keys)
   .
 
   Lemma universe_starts_ok_clean_ciphers_idempotent :
