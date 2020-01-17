@@ -836,6 +836,7 @@ Module SimulationAutomation.
       | eapply Trc3Refl'; simpl; smash_universe; solve_concrete_maps ].
 
   Ltac simpl_real_users_context :=
+    simpl;
     repeat
       match goal with
       | [ |- context [ RealWorld.buildUniverse ] ] => progress (unfold RealWorld.buildUniverse; simpl)
@@ -843,6 +844,7 @@ Module SimulationAutomation.
       end.
 
   Ltac simpl_ideal_users_context :=
+    simpl;
     repeat
       match goal with
       | [ |- context [ IdealWorld.construct_universe _ ?usrs] ] => canonicalize_map usrs

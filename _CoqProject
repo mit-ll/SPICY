@@ -45,3 +45,4 @@ protocols/SafeProtocol.v
 
 protocols/SimplePingProtocol.v
 protocols/ShareKeyProtocol.v
+protocols/ShareSecretNewKeyProtocol.v
