@@ -20,8 +20,10 @@ From Coq
 
 Require Import StepRelations.
 
-(* From Frap *)
-(*      Require Import Sets Relations. *)
+From Frap
+     Require Import
+     Sets.
+     (* Relations. *)
 (* From Frap *)
 (*      Require Import Map Var Invariant ModelCheck. *)
 (* Export String Arith Sets Relations Map Var Invariant Bool ModelCheck. *)
@@ -192,36 +194,36 @@ Infix "<=?" := le_lt_dec.
 
 (* Ltac first_order := firstorder idtac. *)
 
-(* Lemma eq_iff : forall P Q, *)
-(*     P = Q *)
-(*     -> (P <-> Q). *)
-(* Proof. *)
-(*   equality. *)
-(* Qed. *)
+Lemma eq_iff : forall P Q,
+    P = Q
+    -> (P <-> Q).
+Proof.
+  equality.
+Qed.
 
-(* Ltac sets0 := Sets.sets ltac:(simpl in *; intuition (subst; auto; try equality; try linear_arithmetic)). *)
+Ltac sets0 := Sets.sets ltac:(simpl in *; intuition (subst; auto; try equality; try linear_arithmetic)).
 
-(* Ltac sets := propositional; *)
-(*   try match goal with *)
-(*       | [ |- @eq (?T -> Prop) _ _ ] => *)
-(*         change (T -> Prop) with (set T) *)
-(*       end; *)
-(*   try match goal with *)
-(*       | [ |- @eq (set _) _ _ ] => *)
-(*         let x := fresh "x" in *)
-(*         apply sets_equal; intro x; *)
-(*         repeat match goal with *)
-(*                | [ H : @eq (set _) _ _ |- _ ] => apply (f_equal (fun f => f x)) in H; *)
-(*                                                 apply eq_iff in H *)
-(*                end *)
-(*       end; sets0; *)
-(*   try match goal with *)
-(*       | [ H : @eq (set ?T) _ _, x : ?T |- _ ] => *)
-(*         repeat match goal with *)
-(*                | [ H : @eq (set T) _ _ |- _ ] => apply (f_equal (fun f => f x)) in H; *)
-(*                                                  apply eq_iff in H *)
-(*                end; *)
-(*           solve [ sets0 ] *)
-(*       end. *)
+Ltac sets := propositional;
+  try match goal with
+      | [ |- @eq (?T -> Prop) _ _ ] =>
+        change (T -> Prop) with (set T)
+      end;
+  try match goal with
+      | [ |- @eq (set _) _ _ ] =>
+        let x := fresh "x" in
+        apply sets_equal; intro x;
+        repeat match goal with
+               | [ H : @eq (set _) _ _ |- _ ] => apply (f_equal (fun f => f x)) in H;
+                                                apply eq_iff in H
+               end
+      end; sets0;
+  try match goal with
+      | [ H : @eq (set ?T) _ _, x : ?T |- _ ] =>
+        repeat match goal with
+               | [ H : @eq (set T) _ _ |- _ ] => apply (f_equal (fun f => f x)) in H;
+                                                 apply eq_iff in H
+               end;
+          solve [ sets0 ]
+      end.
 
 Remove Hints absurd_eq_true trans_eq_bool.
