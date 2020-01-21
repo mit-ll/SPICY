@@ -482,6 +482,15 @@ Module SimulationAutomation.
         end.
     Qed.
 
+    (* A nice, boring adversary that can be used for protocol proofs. *)
+    Definition startAdv := {| key_heap := $0;
+                              protocol := @Return (Base Unit) tt;
+                              msg_heap := [];
+                              c_heap   := [];
+                              from_nons := [];
+                              sent_nons := [];
+                              cur_nonce := 0 |}.
+
   End InversionPrinciples.
 
   Module T.
@@ -548,12 +557,15 @@ Module SimulationAutomation.
     end.
 
   Ltac solve_simple_ineq :=
-    match goal with
-    | [ |- ?kid1 <> ?kid2 ] =>
-      congruence
-      || (is_evar kid1; fill_unification_var_ineq kid1 kid2)
-      || (is_evar kid2; fill_unification_var_ineq kid2 kid1)
-    end.
+    repeat
+      match goal with
+      | [ |- ?kid1 <> ?kid2 ] =>
+          congruence
+        || (is_evar kid1; fill_unification_var_ineq kid1 kid2)
+        || (is_evar kid2; fill_unification_var_ineq kid2 kid1)
+        || (is_not_var kid1; progress unfold kid1)
+        || (is_not_var kid2; progress unfold kid2)
+      end.
 
   Ltac solve_concrete_maps1 :=
     match goal with
@@ -566,7 +578,7 @@ Module SimulationAutomation.
                                               
     | [ H : ?m $? ?k = _ |- _ ] => progress (unfold m in H)
     | [ H : ?m $+ (?k1,_) $? ?k1 = _ |- _ ] => rewrite add_eq_o in H by trivial
-    | [ H : ?m $+ (?k1,_) $? ?k2 = _ |- _ ] => rewrite add_neq_o in H by eauto 2
+    | [ H : ?m $+ (?k1,_) $? ?k2 = _ |- _ ] => rewrite add_neq_o in H by solve_simple_ineq (* auto 2 *)
                                                                                        
     | [ H : In ?k ?m -> False |- _ ] =>
       is_not_var k; assert (In k m) by (clear H; rewrite in_find_iff; unfold not; intros; repeat solve_concrete_maps1); contradiction
@@ -577,13 +589,15 @@ Module SimulationAutomation.
                                                                
     | [ |- context [ next_key ] ] => progress (unfold next_key; simpl)
     | [ |- ?m $+ (?kid1,_) $? ?kid1 = _ ] => rewrite add_eq_o by trivial
-    | [ |- ?m $+ (?kid2,_) $? ?kid1 = _ ] => rewrite add_neq_o by auto 2
+    | [ |- ?m $+ (?kid2,_) $? ?kid1 = _ ] => rewrite add_neq_o by solve_simple_ineq (* auto 2 *)
     (*   rewrite add_neq_o by solve_concrete_maps *)
     (* || rewrite add_eq_o by (unify kid1 kid2; solve_concrete_maps) *)
     | [ |- (match ?m $+ (?kid1,_) $? ?kid1 with _ => _ end) = _ ] => rewrite add_eq_o by trivial
-    | [ |- (match ?m $+ (?kid2,_) $? ?kid1 with _ => _ end) = _ ] => rewrite add_neq_o by auto 2
+    | [ |- (match ?m $+ (?kid2,_) $? ?kid1 with _ => _ end) = _ ] => rewrite add_neq_o by solve_simple_ineq (* auto 2 *)
     | [ |- (match ?m $+ (?kid1,_) $? ?kid1 with _ => _ end) $? _ = _ ] => rewrite add_eq_o by trivial
-    | [ |- (match ?m $+ (?kid2,_) $? ?kid1 with _ => _ end) $? _ = _ ] => rewrite add_neq_o by auto 2
+    | [ |- (match ?m $+ (?kid2,_) $? ?kid1 with _ => _ end) $? _ = _ ] => rewrite add_neq_o by solve_simple_ineq (* auto 2 *)
+    | [ |- _ = (match _ $+ (_,_) $? _ with _ => _ end) ] => symmetry
+    | [ |- _ = (match _ $+ (_,_) $? _ with _ => _ end) $? _ ] => symmetry
     | [ |- context [ match ?m $+ (?kid1,_) $? ?kid1 with _ => _ end ] ] => rewrite add_eq_o by trivial
     | [ |- _ $+ (?k1,_) $? ?k2 = _ ] =>
       is_not_evar k2; is_not_evar k2; (is_var k1 || is_var k2);

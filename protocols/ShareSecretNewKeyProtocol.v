@@ -117,13 +117,6 @@ Section RealProtocolParams.
   Definition A__keys := $0 $+ (KID1, true) $+ (KID2, false).
   Definition B__keys := $0 $+ (KID1, false) $+ (KID2, true).
 
-  Definition startAdv := {| key_heap := $0;
-                            protocol := ret tt;
-                            msg_heap := [];
-                            c_heap   := [];
-                            from_nons := [];
-                            sent_nons := [];
-                            cur_nonce := 0 |}.
 End RealProtocolParams.
 
 Section RealProtocol.
@@ -238,8 +231,7 @@ Section RealProtocol.
 
 End RealProtocol.
 
-Hint Constructors RealWorld.msg_accepted_by_pattern.
-
+(* Hint Constructors RealWorld.msg_accepted_by_pattern. *)
 (* Hint Constructors RSimplePing. *)
 
 Import SimulationAutomation.
