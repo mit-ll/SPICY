@@ -506,7 +506,7 @@ Module SimulationAutomation.
         | Gen => apply step_user_inv_gen in H
         | Send _ _ => apply step_user_inv_send in H
         | Recv _ => apply step_user_inv_recv in H
-        | SignEncrypt _ _ _ => apply step_user_inv_enc in H
+        | SignEncrypt _ _ _ _ => apply step_user_inv_enc in H
         | Decrypt _ => apply step_user_inv_dec in H
         | Sign _ _ _ => apply step_user_inv_sign in H
         | Verify _ _ => apply step_user_inv_verify in H
@@ -772,6 +772,9 @@ Module SimulationAutomation.
                         RealWorld.all_ciphers := _ $+ (?cid, RealWorld.SigEncCipher _ _ _ _ _);
                         RealWorld.all_keys := _ |}
                      _ _ _ ] => eapply CryptoSigEncCase
+    | [ H1 : $0 $+ (?A, _) $+ (?B, _) $? ?u = Some _, H2 : ?A = ?B -> False |- RealWorld.key_heap ?d__rw $? _ = Some _ /\ RealWorld.key_heap ?d__rw $? _ = Some _ ] => destruct (u ==n A); destruct (u ==n B); subst; clean_map_lookups; split; simpl in *
+ (*   | [ |- RealWorld.key_heap ?d__rw $? _ = Some _ /\ RealWorld.key_heap ?d__rw $? _ = Some _ ] => destruct (u ==n A); destruct (u ==n B); subst; clean_map_lookups; split; simpl in **)
+    | [ H : ?P $? _ = Some {| IdealWorld.read := _; IdealWorld.write := _ |} |- _ ] => simpl in *; unfold P in H; solve_concrete_maps
     | [ |- _ <-> _ ] => split
     | [ |- _ -> _ ] => intros
         | [ H : _ $+ (_,_) $? ?uid = Some ?data , H2 : _ $? ?uid = Some _ |- (_ ?data) $? _ = Some _] =>
