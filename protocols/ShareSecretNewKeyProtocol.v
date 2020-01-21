@@ -251,13 +251,11 @@ Hint Unfold
 
 Hint Extern 0 (~^* _ _) =>
  progress(unfold real_univ_start, real_univ_sent1, real_univ_recd1, mkrU; simpl).
+
 Hint Extern 1 (RSimplePing (RealWorld.buildUniverse _ _ _ _ _ _) _) => unfold RealWorld.buildUniverse; simpl.
-(* Hint Extern 1 (RSimplePing (RealWorld.peel_adv _) _) => unfold RealWorld.peel_adv; simpl. *)
 
 Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
  progress(unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, mkiU; simpl).
-
-Hint Extern 1 (IdealWorld.lstep_universe _ _ _) => single_step_ideal_universe; eauto 2; econstructor.
 
 Hint Extern 1 (PERMS__a $? _ = _) => unfold PERMS__a.
 Hint Extern 1 (PERMS__b $? _ = _) => unfold PERMS__b.
@@ -281,47 +279,6 @@ Ltac clear_extra_adversary :=
            end
   end.
 
-Hint Extern 1 ({| IdealWorld.channel_vector := _; IdealWorld.users := _ |} = _) => smash_universe; solve_concrete_maps : core.
-Hint Extern 1 (_ = {| IdealWorld.channel_vector := _; IdealWorld.users := _ |}) => smash_universe; solve_concrete_maps : core.
-
-Ltac solve_ideal_step_stuff :=
-  repeat (
-      match goal with
-      | [ |- Forall _ _ ] => econstructor
-      | [ |- {| IdealWorld.channel_vector := _; IdealWorld.users := _ |} = _] => smash_universe; solve_concrete_maps
-      | [ |- _ = {| IdealWorld.channel_vector := _; IdealWorld.users := _ |}] => smash_universe; solve_concrete_maps
-      | [ |- IdealWorld.msg_permissions_valid _ _ ] => unfold IdealWorld.msg_permissions_valid
-      | [ |- IdealWorld.permission_subset _ _ ] => econstructor
-      | [ |- context [ _ $? _ ] ] => solve_concrete_maps
-      | [ |- ~ In ?k ?m ] => is_evar k; unify k (next_key m); rewrite not_find_in_iff; apply next_key_not_in; trivial
-      | [ |- _ = _ ] => reflexivity
-      end; simpl).
-
-Ltac single_labeled_ideal_step uid :=
-  eapply IdealWorld.LStepUser' with (u_id := uid);
-  [ solve [ solve_concrete_maps ] | simpl | reflexivity ];
-  eapply IdealWorld.LStepBindRecur;
-  ( (eapply IdealWorld.LStepRecv; solve [ solve_ideal_step_stuff ])
-    || (eapply IdealWorld.LStepSend; solve [ solve_ideal_step_stuff ])).
-
-Ltac step_each_ideal_user U :=
-  match U with
-  | ?usrs $+ (?AB,_) =>
-    idtac "stepping " AB; (single_labeled_ideal_step AB || step_each_ideal_user usrs)
-  end.
-
-Ltac step_ideal_user :=
-  match goal with
-  | [ |- IdealWorld.lstep_universe _ (Action _) ?U' ] =>
-    is_evar U'; simpl_ideal_users_context;
-    match goal with
-    | |- IdealWorld.lstep_universe
-          {| IdealWorld.users := ?usrs; IdealWorld.channel_vector := _ |} _ _ =>
-      step_each_ideal_user usrs
-    end
-  end.
-
-Hint Extern 1 (IdealWorld.lstep_universe _ _ _) => step_ideal_user : core.
 Hint Extern 1 (RSimplePing (RealWorld.peel_adv _) _) =>
   simpl; simpl_real_users_context; simpl_ideal_users_context; simpl;
    ( (eapply Start  ; solve [ eauto ])
@@ -490,38 +447,6 @@ Module ShareSecretNewKeyProtocolSecure <: SafeProtocol.
     unfold real_univ_start, U__r; econstructor; eauto.
   Qed.
 
-  Section Foo.
-    Import RealWorld.
-
-    Lemma adversary_is_lame_adv_univ_ok_clauses :
-      forall A B (U : universe A B) b,
-        universe_starts_sane b U
-        -> permission_heap_good U.(all_keys) U.(adversary).(key_heap)
-        /\ message_queues_ok U.(all_ciphers) U.(users) U.(all_keys)
-        /\ adv_cipher_queue_ok U.(all_ciphers) U.(users) U.(adversary).(c_heap)
-        /\ adv_message_queue_ok U.(users) U.(all_ciphers) U.(all_keys) U.(adversary).(msg_heap)
-        /\ adv_no_honest_keys (findUserKeys U.(users)) U.(adversary).(key_heap).
-    Proof.
-      unfold universe_starts_sane, adversary_is_lame; intros; split_ands.
-      repeat match goal with
-             | [ H : _ (adversary _) = _ |- _ ] => rewrite H; clear H
-             end.
-      repeat (simple apply conj); try solve [ econstructor; eauto ].
-
-      - unfold message_queues_ok.
-        rewrite Forall_natmap_forall; intros.
-        specialize (H _ _ H2); rewrite H; econstructor.
-      - unfold adv_no_honest_keys; intros.
-        cases (findUserKeys (users U) $? k_id); eauto.
-        destruct b1; eauto.
-        right; right; apply conj; eauto.
-        clean_map_lookups.
-
-        Unshelve.
-        exact (MkCryptoKey 1 Encryption SymKey).
-    Qed.
-  End Foo.
-                                                                                      
   Lemma adv_univ_ok_start : adv_universe_ok U__r.
   Proof.
     unfold adv_universe_ok, U__r; eauto.

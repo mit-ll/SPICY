@@ -22,6 +22,7 @@ From Coq Require Import
 Require Import
         MyPrelude
         Maps
+        Keys
         Messages
         Tactics
         Simulation
@@ -118,3 +119,37 @@ Module AdversarySafeProtocol ( Proto : SafeProtocol ).
   Qed.
   
 End AdversarySafeProtocol.
+
+Section SafeProtocolLemmas.
+
+  Import RealWorld.
+
+  Lemma adversary_is_lame_adv_univ_ok_clauses :
+    forall A B (U : universe A B) b,
+      universe_starts_sane b U
+      -> permission_heap_good U.(all_keys) U.(adversary).(key_heap)
+      /\ message_queues_ok U.(all_ciphers) U.(users) U.(all_keys)
+      /\ adv_cipher_queue_ok U.(all_ciphers) U.(users) U.(adversary).(c_heap)
+      /\ adv_message_queue_ok U.(users) U.(all_ciphers) U.(all_keys) U.(adversary).(msg_heap)
+      /\ adv_no_honest_keys (findUserKeys U.(users)) U.(adversary).(key_heap).
+  Proof.
+    unfold universe_starts_sane, adversary_is_lame; intros; split_ands.
+    repeat match goal with
+           | [ H : _ (adversary _) = _ |- _ ] => rewrite H; clear H
+           end.
+    repeat (simple apply conj); try solve [ econstructor; clean_map_lookups; eauto ].
+
+    - unfold message_queues_ok.
+      rewrite Forall_natmap_forall; intros.
+      specialize (H _ _ H2); rewrite H; econstructor.
+    - unfold adv_no_honest_keys; intros.
+      cases (findUserKeys (users U) $? k_id); eauto.
+      destruct b0; eauto.
+      right; right; apply conj; eauto.
+      clean_map_lookups.
+
+      Unshelve.
+      exact (MkCryptoKey 1 Encryption SymKey).
+  Qed.
+
+End SafeProtocolLemmas.
