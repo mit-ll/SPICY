@@ -36,6 +36,12 @@ Require Import
         AdversaryUniverse
         UniverseEqAutomation.
 
+From Frap Require
+     ModelCheck
+     Sets
+     Relations
+     Invariant.
+
 Require IdealWorld RealWorld.
 
 Set Implicit Arguments.
@@ -970,7 +976,493 @@ Module SimulationAutomation.
 
 End SimulationAutomation.
 
-Import SimulationAutomation.
+Import SimulationAutomation Sets.
+Module Foo <: EMPTY.
+End Foo.
+Module Import SN := SetNotations(Foo).
+Tactic Notation "sets" := MyPrelude.sets.
 
-(* Hint Constructors *)
-(*      RealWorld.msg_accepted_by_pattern. *)
+Module SetLemmas.
+  Lemma setminus_empty_subtr : forall {A} (s : set A),
+      s \setminus {} = s.
+  Proof. sets. Qed.
+
+  Lemma setminus_empty_minu : forall {A} (s : set A),
+      {} \setminus s = {}.
+  Proof. sets. Qed.
+
+  Lemma setminus_self : forall {A} (s : set A),
+      s \setminus s = {}.
+  Proof. sets. Qed.
+
+  Lemma setminus_other : forall {A} (s1 s2 : set A),
+      s1 \cap s2 = {} -> s1 \setminus s2 = s1.
+  Proof. sets. Qed.
+
+  Lemma setminus_distr_subtr : forall {A} (s1 s2 s3 : set A),
+      (s1 \cup s2) \setminus s3 = (s1 \setminus s3) \cup (s2 \setminus s3).
+  Proof. sets. Qed.
+
+  Lemma setminus_distr_minu : forall {A} (s1 s2 s3 : set A),
+      s1 \setminus (s2 \cup s3) = (s1 \setminus s2) \cap (s1 \setminus s3).
+  Proof. sets. Qed.
+
+  Lemma union_self : forall {A} (s : set A),
+      s \cup s = s.
+  Proof. sets. Qed.
+
+  Lemma  union_self_thru : forall {A} (s1 s2 : set A), s1 \cup (s1 \cup s2) = s1 \cup s2.
+  Proof. sets. Qed.
+
+  Lemma union_empty_r : forall {A} (s : set A),
+      s \cup {} = s.
+  Proof. sets. Qed.
+
+  Lemma union_empty_l : forall {A} (s : set A),
+      {} \cup s = s.
+  Proof. sets. Qed.
+
+
+  Lemma intersect_self : forall {A} (s : set A),
+      s \cap s = s.
+  Proof. sets. Qed.
+
+  Lemma intersect_empty_r : forall {A} (s : set A),
+      s \cap {} = {}.
+  Proof. sets. Qed.
+
+  Lemma intersect_empty_l : forall {A} (s : set A),
+      {} \cap s = {}.
+  Proof. sets. Qed.
+End SetLemmas.
+
+Module Tacs.
+  Import SetLemmas.
+
+  Ltac simpl_sets1 disj_tac :=
+    match goal with
+    | [|- context[?s' \cup ?s']] =>
+      rewrite union_self
+        with (s := s')
+    | [|- context[?s1' \cup (?s1' \cup ?s2')]] =>
+      rewrite union_self_thru
+        with (s1 := s1') (s2 := s2')
+    | [|- context[?s' \cup {}]] =>
+      rewrite union_empty_r
+        with (s := s')
+    | [|- context[{} \cup ?s']] =>
+      rewrite union_empty_l
+        with (s := s')
+    | [|- context[?s' \cap ?s']] =>
+      rewrite intersect_self
+        with (s := s')
+    | [|- context[?s' \cap {}]] =>
+      rewrite intersect_empty_r
+        with (s := s')
+    | [|- context[{} \cap ?s']] =>
+      rewrite intersect_empty_l
+        with (s := s')
+    | [|- context[?s' \setminus ?s']] =>
+      rewrite setminus_self
+        with (s := s')
+    | [|- context[?s' \setminus {}]] =>
+      rewrite setminus_empty_subtr
+        with (s := s')
+    | [|- context[{} \setminus ?s']] =>
+      rewrite setminus_empty_minu
+        with (s := s')
+    | [|- context[(?s1' \cup ?s2') \setminus ?s3']] =>
+      rewrite setminus_distr_subtr
+        with (s1 := s1') (s2 := s2') (s3 := s3')
+    | [|- context[?s1' \setminus (?s2' \cup ?s3')]] =>
+      rewrite setminus_distr_minu
+        with (s1 := s1') (s2 := s2') (s3 := s3')
+    | [|- context[?s1' \setminus ?s2']] =>
+      rewrite setminus_other
+        with (s1 := s1') (s2 := s2') by disj_tac
+    end.
+
+  Ltac sets_invert :=
+    repeat match goal with
+           | [H : (_ \cup _) _ |- _] => invert H
+           | [H : (_ \cap _) _ |- _] => invert H
+           | [H : [_ | _] _ |- _] => invert H
+           | [H : (_ \setminus _) _ |- _] => invert H
+           | [H : _ \in _ |- _] => invert H
+           | [H : (complement _) _ |- _] => invert H
+           | [H : { } _ |- _] => invert H
+           | [H : { _ } _ |- _] => invert H
+           end.
+
+  Ltac case_lookup H :=
+    match type of H with
+    | ?m $? ?k = Some ?v =>
+      let t := type of v in
+      repeat match m with
+             | context[add ?k' ?v' _ ] =>
+               let t' := type of v'
+               in unify t t'
+                  ; match goal with
+                    | [e : k = k' |- _] => fail 2
+                    | [n : k <> k' |- _] => fail 2
+                    | _ => destruct (k ==n k')
+                    end
+             end
+      ; subst
+      ; simpl in *
+      ; clean_map_lookups
+      ; simpl in *
+    end.
+
+  Lemma map_sym : forall {v} (m : NatMap.t v) k1 k2 v1 v2,
+      k1 <> k2
+      -> m $+ (k1, v1) $+ (k2, v2) = m $+ (k2, v2) $+ (k1, v1).
+  Proof. intros; maps_equal. Qed.
+
+  Ltac reorder_usrs n :=
+    repeat match n with
+           | context[add ?a ?va (add ?b ?vb ?rest)] =>
+             match eval cbv in (Nat.leb a b) with
+               | true =>
+                 rewrite map_sym
+                   with (m := rest) (k1 := b) (k2 := a) (v1 := vb) (v2 := va)
+                   by auto
+             end
+           end.
+
+  Tactic Notation "simpl_sets" := repeat (simpl_sets1 ltac:(shelve)).
+  Tactic Notation "simpl_sets" tactic(disj_tac) := repeat (simpl_sets1 ltac:(disj_tac)).
+
+  Tactic Notation "ifnot" tactic(t) "at" int_or_var(lvl) := tryif t then fail lvl else idtac.
+  Tactic Notation "ifnot" tactic(t) := ifnot t at 0.
+  Tactic Notation "concrete" constr(x) "at" int_or_var(lvl) :=
+    (ifnot (is_var x) at lvl); (ifnot (is_evar x) at lvl).
+  Tactic Notation "concrete" constr(x) := concrete x at 0.
+  Tactic Notation "concrete" "iuniv" constr(u) :=
+    match u with
+    | {| IdealWorld.channel_vector := ?cv
+         ; IdealWorld.users := ?usrs |} =>
+      concrete cv; concrete usrs
+    end.
+  Tactic Notation "concrete" "iproc" constr(p) :=
+    match p with
+    | (IdealWorld.protocol ?p) => concrete p at 1
+    | _ => concrete p at 1
+    end.
+
+  Tactic Notation "canonicalize" "rusers" :=
+    repeat match goal with
+           | [|- context[{| RealWorld.users := ?usrs
+                           ; RealWorld.adversary := _
+                           ; RealWorld.all_ciphers := _
+                           ; RealWorld.all_keys := _ |}]] =>
+             progress canonicalize_concrete_map usrs
+           end.
+
+  Tactic Notation "canonicalize" "iusers" :=
+    repeat match goal with
+           | [|- context[{| IdealWorld.channel_vector := _
+                           ; IdealWorld.users := ?usrs |}]] =>
+             progress canonicalize_concrete_map usrs
+           end.
+
+  Tactic Notation "canonicalize" "users" :=
+    canonicalize rusers; canonicalize iusers.
+End Tacs.
+
+Import Tacs.
+
+Module Type ProcDef.
+  Parameter t__hon : type.
+  Parameter t__adv : type.
+  Parameter iu0 : IdealWorld.universe t__hon.
+  Parameter ru0 : RealWorld.universe t__hon t__adv.
+End ProcDef.
+
+Module Gen (PD : ProcDef).
+  Import
+    PD
+    SetLemmas
+    ModelCheck
+    Invariant
+    Relations.
+
+  Inductive step :
+    (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon)
+    -> (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon)
+    -> Prop :=
+  | RealSilent : forall ru ru' iu,
+      RealWorld.step_universe ru Silent ru' -> step (ru, iu) (ru', iu)
+  | BothLoud : forall ru ru' ra ia iu iu' iu'',
+      RealWorld.step_universe ru (Action ra) ru'
+      -> istepSilent^* iu iu'
+      -> IdealWorld.lstep_universe iu' (Action ia) iu''
+      -> action_matches ra ru' ia iu''
+      -> step (ru, iu) (ru', iu'').
+
+  Definition S : trsys (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon) :=
+    {| Initial := {(ru0, iu0)}
+       ; Step := step |}.
+
+  Hint Unfold oneStepClosure oneStepClosure_current oneStepClosure_new : osc.
+
+  Lemma oneStepClosure_grow : forall state (sys : trsys state) (inv1 inv2 : state -> Prop),
+      (forall st st', inv1 st -> sys.(Step) st st' -> inv2 st')
+      -> oneStepClosure sys inv1 (inv1 \cup inv2).
+  Proof. sets; repeat autounfold with osc in *; propositional; eauto. Qed.
+
+  Lemma msc_step_alt : forall {state} (sys : trsys state) wl wl' inv inv',
+      oneStepClosure_new sys wl wl'
+      -> wl' \cap (wl \cup inv) = { }
+      -> multiStepClosure sys ((inv \cup wl) \cup wl') wl' inv'
+      -> multiStepClosure sys (inv \cup wl) wl inv'.
+  Proof.
+    Ltac uf := repeat autounfold with osc in *.
+    intros.
+    apply MscStep with (inv'0 := (wl \cup wl')).
+    - uf; sets; firstorder.
+    - replace ((inv \cup wl) \cup (wl \cup wl'))
+        with (inv \cup wl \cup wl') by sets.
+      replace (((wl \cup wl') \setminus (inv \cup wl)))
+        with wl' by sets.
+      assumption.
+  Qed.
+
+  (* Lemma in_empty_map_contra : (forall {t} x, In (elt := t) x $0 -> False). *)
+  (* Proof. propositional. invert H. invert H0. Qed. *)
+
+  Lemma incl_empty_empty : (forall {t}, @incl t [] []).
+  Proof. cbv; auto. Qed.
+
+  Hint Resolve
+       (* in_empty_map_contra *)
+       incl_empty_empty.
+
+  Definition lift_fst {A B C} (f : A -> C) : (A * B) -> C :=
+    fun p => f (fst p).
+
+  Definition universe_oks : (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon) -> Prop :=
+    lift_fst universe_ok.
+  Definition adv_universe_oks : (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon) -> Prop :=
+    lift_fst adv_universe_ok.
+
+  Ltac concrete_isteps :=
+    match goal with
+    | [H : istepSilent^* ?u _ |- _] =>
+      concrete iuniv u; invert H
+    | [H : istepSilent ?u _ |- _] =>
+      concrete iuniv u; invert H
+    | [H : IdealWorld.lstep_universe ?u _ _ |- _] =>
+      concrete iuniv u; invert H
+    | [H : IdealWorld.lstep_user _ (_, ?p, _) _ |- _] =>
+      concrete iproc p; invert H
+    end.
+
+  Ltac infer_istep :=
+    match goal with
+    | [H : IdealWorld.lstep_user _ (_, ?u.(IdealWorld.protocol), _) _,
+           L : ?m $? ?u_id = Some ?u |- _] =>
+      case_lookup L
+    end.
+
+  Ltac istep := repeat ((repeat concrete_isteps); try infer_istep).
+
+  Ltac incorp :=
+    let rec preconditions acc :=
+        (match goal with
+         | [H : ?P |- _] =>
+           match type of P with
+           | Prop =>
+             match eval hnf in acc with
+             | context[P] => fail 1
+             | _ =>
+               let acc' := eval hnf in (P /\ acc)
+                 in preconditions acc'
+             end
+           end
+         | _ => acc
+         end)
+    in let rec existentialize p :=
+           (match goal with
+            | [x : ?A |- _] =>
+              match type of A with
+              | Prop => fail 1
+              | _ =>
+                match A with
+                | ((RealWorld.universe _ _) * (IdealWorld.universe _))%type =>
+                  fail 2
+                | _  =>
+                  match p with
+                  | context[x] =>
+                    match eval pattern x in p with
+                    | ?g _ =>
+                      let p' := (eval hnf in (exists y : A, g y))
+                      in existentialize p'
+                    end
+                  end
+                end
+              end
+            | _ => p
+            end)
+       in let conds := (preconditions True) in
+          match goal with
+          | [|- ?i ?v] =>
+            is_evar i
+            ; let lp := constr:(exists x , conds /\ x = v) in
+              let p := fresh "p" in
+              let p' := fresh "p'" in
+              let x := fresh "x" in
+              assert (p : lp) by (eexists; intuition eauto)
+              ; destruct p as [x p']
+              ; let lp' := type of p'
+                in clear p'
+                   ; let lp'' := existentialize lp'
+                     in match eval pattern x in lp'' with
+                        | ?f _ =>
+                          clear x
+                          ; let scomp := (eval simpl in [e | (f e)])
+                            in instantiate (1 := (scomp \cup _))
+                        end
+          end.
+
+  Ltac tidy :=
+    autounfold
+    ; intros
+    ; sets_invert
+    ; propositional
+    ; subst
+    ; clean_map_lookups
+    ; repeat match goal with
+             | [H : (?x1, ?y1) = ?p |- _] =>
+               match p with
+               | (?x2, ?y2) =>
+                 tryif (concrete x2; concrete y2)
+                 then let H' := fresh H
+                      in assert (H' : (x1, y1) = (x2, y2) -> x1 = x2 /\ y1 = y2)
+                        by equality
+                         ; propositional
+                         ; discriminate
+                 else invert H
+               | _ => invert H
+               end
+             | [H : Step _ _ _ |- _] =>
+               simpl in H
+             | [H : exists _, _ |- _] =>
+               invert H; propositional; subst
+             | [H : step ?st _ |- _] =>
+               concrete st; invert H
+             | [H : In _ $0 |- _] =>
+               invert H
+             | [H : Raw.PX.MapsTo _ _ $0 |- _] =>
+               invert H
+             | [H : (existT _ _ _) = (existT _ _ _) |- _] =>
+               invert H
+             end.
+
+  Ltac rstep :=
+    repeat (autounfold
+            ; match goal with
+              | [H : RealWorld.Output _ = RealWorld.Output _ |- _] =>
+                invert H
+              | [H : RealWorld.Input _ _ = RealWorld.Input _ _ |- _] =>
+                invert H
+              | [H : action_matches _ _ |- _] =>
+                invert H
+              | [H : RealWorld.msg_accepted_by_pattern
+                       (_ ?k1 ?k2)
+                       (RealWorld.SignedCiphertext ?k1 ?k2 ?c) -> False
+                 |- _] =>
+                exfalso
+                ; apply H
+                ; econstructor
+                ; apply (RealWorld.SignedCiphertext k1 k2 c)
+              (* | [H : rstepSilent ?u _ |- _] => *)
+              (*   concrete u; churn *)
+              | [H : RealWorld.step_universe ?u _ _ |- _] =>
+                concrete u; churn
+              | [H : RealWorld.step_user _ None _ _ |- _] =>
+                invert H
+              | [H : RealWorld.step_user _ _ ?u _ |- _] =>
+                concrete u; churn
+              end).
+
+  Ltac close :=
+    match goal with
+    | [|- [_ | _] (?ru, ?iu)] =>
+      concrete ru
+      ; concrete iuniv iu
+      ; tidy
+      ; repeat eexists
+      ; propositional
+      ; solve[ eauto
+             | canonicalize users
+               ; equality ]
+    | [|- (?inv1 \cup ?inv2) (?ru, ?iu)] =>
+      concrete inv1
+      ; concrete ru
+      ; concrete iuniv iu
+      ; solve[ idtac "trying left"; left; close
+             | idtac "left fails; trying right"; right; close ]
+    | [|- ?inv (?ru, ?iu)] =>
+      is_evar inv
+      ; concrete ru
+      ; concrete iuniv iu
+      ; canonicalize users
+      ; clean_context
+      ; clean_map_lookups
+      ; incorp
+      ; solve[ close ]
+    end.
+
+  Ltac gen1' :=
+    simpl
+    ; tidy
+    ; idtac "rstep start"
+    ; rstep
+    ; idtac "rstep done"
+    ; idtac "istep start"
+    ; istep
+    ; idtac "istep done"
+    ; idtac "close start"
+    ; repeat close
+    ; idtac "close done".
+
+  Ltac gen1 :=
+    match goal with
+    | [|- multiStepClosure _ _ { } _] =>
+      eapply MscDone; apply prove_oneStepClosure
+      ; [ solve[ sets ]
+        | solve[ rewrite ?union_assoc; gen1' ]]
+    | [|- multiStepClosure _ {(_, _)} {(_, _)} _] =>
+      eapply MscStep
+      ; [ solve[ apply oneStepClosure_grow; gen1' ]
+        | simpl; simpl_sets (sets; tidy)]
+    | [|- multiStepClosure _ (_ \cup ?wl) ?wl _] =>
+      eapply msc_step_alt
+      ; [ solve[ unfold oneStepClosure_new; gen1' ]
+        | solve[ simpl
+                 ; sets
+                 ; split_ex
+                 ; propositional
+                 ; repeat match goal with
+                          | [H : (?x1, ?y1) = ?p |- _] =>
+                            match p with
+                            | (?x2, ?y2) =>
+                              tryif (concrete x2; concrete y2)
+                              then let H' := fresh H
+                                   in assert (H' : (x1, y1) = (x2, y2) -> x1 = x2 /\ y1 = y2)
+                                     by equality
+                                      ; propositional
+                                      ; discriminate
+                              else invert H
+                            | _ => invert H
+                            end
+                          end
+               | eapply intersect_empty_l]
+        | rewrite ?union_empty_r ]
+    end.
+
+  (* Use this to generate the invariant *)
+  Ltac gen := repeat gen1.
+End Gen.
+
