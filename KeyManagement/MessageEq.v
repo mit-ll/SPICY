@@ -69,5 +69,5 @@ Inductive  message_eq : forall {A B t},
                           -> RealWorld.honest_key honestk k__enc
             -> ((data__rw.(RealWorld.key_heap) $? k__sign = Some true
                 /\ data__rw.(RealWorld.key_heap) $? k__enc = Some b__rwenc)
-               <-> data__iw.(IdealWorld.perms) $? ch_id = Some (IdealWorld.construct_permission true true)))
+               <-> data__iw.(IdealWorld.perms) $? ch_id = Some (IdealWorld.construct_permission b__rwenc true)))
     -> message_eq (RealWorld.SignedCiphertext c_id) U__rw m__iw U__iw ch_id.
