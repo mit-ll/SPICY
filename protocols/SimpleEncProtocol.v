@@ -168,10 +168,21 @@ Section RealProtocol.
       -> RSimpleEnc (peel_adv U__r) (ideal_univ_recd1 n)
   .
 
-End RealProtocol.
+  Lemma Sent1' : forall U__r U__i cs mycs1 mycs2 cur_n1 cur_n2 n cid1 non1 adv,
+      ~^* (real_univ_sent1 n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
+      -> @lameAdv Unit tt adv
+      -> U__i = ideal_univ_sent1 n
+      -> RSimpleEnc (peel_adv U__r) U__i.
+  Proof. intros; subst; eapply Sent1; eauto. Qed.
+  
+  Lemma Recd1' : forall U__r U__i cs mycs1 mycs2 cur_n1 cur_n2 n cid1 non1 adv,
+      ~^* (real_univ_recd1 n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
+      -> @lameAdv Unit tt adv
+      -> U__i = ideal_univ_recd1 n
+      -> RSimpleEnc (peel_adv U__r) U__i.
+  Proof. intros; subst; eapply Recd1; eauto. Qed.
 
-Hint Constructors RealWorld.msg_accepted_by_pattern : core.
-Hint Constructors RSimpleEnc : core.
+End RealProtocol.
 
 Import SimulationAutomation.
 
@@ -180,26 +191,33 @@ Hint Unfold
      real_univ_start real_univ_sent1 real_univ_recd1  mkrU
      ideal_univ_start ideal_univ_sent1 ideal_univ_recd1 ideal_univ_done mkiU : constants.
 
+Hint Constructors RealWorld.msg_accepted_by_pattern : core.
+Hint Extern 1 (RSimpleEnc (RealWorld.peel_adv _) _) =>
+  simpl; simpl_real_users_context; simpl_ideal_users_context; simpl;
+   ( (eapply Start  ; solve [ eauto ])
+   || (eapply Recd1' ; solve [ eauto ])
+   || (eapply Sent1' ; solve [ eauto ]) ).
+(* Hint Constructors RSimpleEnc : core. *)
+
 Hint Extern 0 (~^* _ _) =>
  progress(unfold real_univ_start, real_univ_sent1, real_univ_recd1, mkrU; simpl) : core.
 Hint Extern 1 (RSimpleEnc (RealWorld.buildUniverse _ _ _ _ _ _) _) => unfold RealWorld.buildUniverse; simpl : core.
-Hint Extern 1 (RSimpleEnc (RealWorld.peel_adv _) _) => unfold RealWorld.peel_adv; simpl : core.
+(* Hint Extern 1 (RSimpleEnc (RealWorld.peel_adv _) _) => unfold RealWorld.peel_adv; simpl : core. *)
 
 Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
  progress(unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, ideal_univ_done, mkiU; simpl) : core.
+(* Hint Extern 1 (IdealWorld.lstep_universe _ _ _) => single_step_ideal_universe; eauto 2; econstructor : core. *)
 
-Hint Extern 1 (IdealWorld.lstep_universe _ _ _) => single_step_ideal_universe; eauto 2; econstructor : core.
+Hint Extern 1 (istepSilent ^* _ _) =>
+progress(unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, ideal_univ_done, mkiU; simpl);
+  repeat (ideal_single_silent_multistep A);
+  repeat (ideal_single_silent_multistep B); solve_refl : core.
 
 Hint Extern 1 (PERMS__a $? _ = _) => unfold PERMS__a : core.
 Hint Extern 1 (PERMS__b $? _ = _) => unfold PERMS__b : core.
 
 Section FeebleSimulates.
 
-  Hint Extern 0 (istepSilent ^* _ _) =>
-    progress(unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, ideal_univ_done, mkiU; simpl) : core.
-  Hint Extern 1 (istepSilent ^* _ _) =>
-    repeat (ideal_single_silent_multistep A);
-    repeat (ideal_single_silent_multistep B); solve_refl : core.
 
   Lemma rsimpleenc_silent_simulates :
     simulates_silent_step (@lameAdv Unit tt) RSimpleEnc.
@@ -225,12 +243,12 @@ Section FeebleSimulates.
         clear UOK AOK;
         invert R;
         destruct U__r0; destruct U__r; simpl in *; subst;
-        churn;
+        churn; simpl_real_users_context;
         [> do 3 eexists;
-         repeat (apply conj);
-         swap 3 4; swap 2 3; swap 1 2;
-         simpl; clean_map_lookups; eauto 12 ..]
-      ). 
+         repeat (apply conj); eauto 12 ..]
+         (* swap 3 4; swap 2 3; swap 1 2; *)
+         (* simpl; clean_map_lookups; eauto 12 ..] *)
+      ).
   Qed.
   
   Lemma rsimpleenc_honest_actions_safe :
