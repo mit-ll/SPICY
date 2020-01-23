@@ -771,21 +771,19 @@ Module SimulationAutomation.
                         RealWorld.adversary := _;
                         RealWorld.all_ciphers := _ $+ (?cid, RealWorld.SigEncCipher _ _ _ _ _);
                         RealWorld.all_keys := _ |}
-                     _ _ _ ] => eapply CryptoSigEncCase
-    | [ H1 : $0 $+ (?A, _) $+ (?B, _) $? ?u = Some _, H2 : ?A = ?B -> False |- RealWorld.key_heap ?d__rw $? _ = Some _ /\ RealWorld.key_heap ?d__rw $? _ = Some _ ] => destruct (u ==n A); destruct (u ==n B); subst; clean_map_lookups; split; simpl in *
- (*   | [ |- RealWorld.key_heap ?d__rw $? _ = Some _ /\ RealWorld.key_heap ?d__rw $? _ = Some _ ] => destruct (u ==n A); destruct (u ==n B); subst; clean_map_lookups; split; simpl in **)
+                     _ _ _ ] => eapply CryptoSigEncCase; [ solve [ simpl; eauto ] .. | ]
+    | [ H : _ $+ (?k1,_) $? ?k2 = Some ?d__rw |- context [ RealWorld.key_heap ?d__rw $? _ = Some _ ] ] =>
+      is_var d__rw; is_var k2; is_not_var k1;
+      destruct (k1 ==n k2); subst; clean_map_lookups; simpl
     | [ H : ?P $? _ = Some {| IdealWorld.read := _; IdealWorld.write := _ |} |- _ ] => simpl in *; unfold P in H; solve_concrete_maps
+    | [ |- _ $? _ = Some _ ] => progress solve_concrete_maps
     | [ |- _ <-> _ ] => split
     | [ |- _ -> _ ] => intros
-        | [ H : _ $+ (_,_) $? ?uid = Some ?data , H2 : _ $? ?uid = Some _ |- (_ ?data) $? _ = Some _] =>
-          apply lookup_some_implies_in in H; simpl in H;
-            apply lookup_some_implies_in in H2; simpl in H2;
-              split_ors; repeat equality1; subst; try contradiction; simpl in *
-    (* | [ H : _ $+ (_,_) $? ?uid = Some ?data |- (_ ?data) $? _ = Some _] => *)
-    (*   apply lookup_some_implies_in in H; simpl in H; split_ors; repeat equality1; subst; try contradiction; simpl in * *)
-    end.
+    | [ |- _ = _ ] => reflexivity
+    | [ |- _ /\ _ ] => split
+    end; split_ex; simpl in *.
 
-  Hint Extern 1 (action_matches _ _ _ _) => repeat (solve_action_matches1; simpl; eauto 3).
+  Hint Extern 1 (action_matches _ _ _ _) => repeat (solve_action_matches1); clean_map_lookups.
 
   Hint Resolve
        findUserKeys_foldfn_proper

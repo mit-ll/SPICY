@@ -230,7 +230,7 @@ Section FeebleSimulates.
          repeat (apply conj);
          swap 3 4; swap 2 3; swap 1 2;
          simpl; clean_map_lookups; eauto 12 ..]
-      ). repeat (solve_action_matches1; simpl; eauto).
+      ). 
   Qed.
   
   Lemma rsimpleenc_honest_actions_safe :
