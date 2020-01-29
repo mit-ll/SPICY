@@ -61,41 +61,70 @@ Section RealWorldLemmas.
   | SymbolicVal (* some kind of existential here?? *)
   .
 
-  Inductive syntactically_safe : forall {t}, user_cmd t -> Prop :=
+  Definition my_cipher := sigT crypto.
+  Definition my_ciphers := NatMap.t my_cipher.
+  Definition proto_data := (key_perms * ciphers)%type.
+
+  Inductive syntactically_safe : forall {t}, proto_data -> user_cmd t -> (<<t>> * key_perms * ciphers) -> Prop :=
   (* The crux of the matter: *)
 
-  (* | SafeBind : forall {r A} (cmd1 : user_cmd r) (cmd2 : <<r>> -> user_cmd A), *)
-  (*     next_cmd_safe honestk cs u_id froms sents cmd1 *)
-  (*     -> next_cmd_safe honestk cs u_id froms sents (Bind cmd1 cmd2) *)
-  (* | SafeEncrypt : forall {t} (msg : message t) k__sign k__enc msg_to, *)
-  (*     honestk $? k__enc = Some true *)
-  (*     -> (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true) *)
-  (*     -> next_cmd_safe honestk cs u_id froms sents (SignEncrypt k__sign k__enc msg_to msg) *)
-  (* | SafeSign : forall {t} (msg : message t) k msg_to, *)
-  (*     (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true /\ kp = false) *)
-  (*     -> next_cmd_safe honestk cs u_id froms sents (Sign k msg_to msg) *)
-  (* | SafeRecv : forall t pat, *)
-  (*     msg_pattern_safe honestk pat *)
-  (*     -> next_cmd_safe honestk cs u_id froms sents (@Recv t pat) *)
-  (* | SafeSend : forall {t} (msg : crypto t) msg_to, *)
-  (*       msg_honestly_signed honestk cs msg = true *)
-  (*     -> msg_to_this_user cs (Some msg_to) msg = true *)
-  (*     -> msgCiphersSignedOk honestk cs msg *)
-  (*     -> (exists c_id c, msg = SignedCiphertext c_id *)
-  (*               /\ cs $? c_id = Some c *)
-  (*               /\ fst (cipher_nonce c) = (Some u_id)  (* only send my messages *) *)
-  (*               /\ ~ List.In (cipher_nonce c) sents) *)
-  (*     -> next_cmd_safe honestk cs u_id froms sents (Send msg_to msg) *)
+  | SafeBind : forall {r A} (cmd1 : user_cmd r) (cmd2 : <<r>> -> user_cmd A)
+                 v1 v2 honestk1 honestk2 honestk3 cs1 cs2 cs3,
+      syntactically_safe (honestk1, cs1) cmd1 (v1, honestk2, cs2)
+      -> syntactically_safe (honestk1, cs1) (cmd2 v1) (v2, honestk3, cs3)
+      -> syntactically_safe (honestk1, cs1) (Bind cmd1 cmd2) (v2, honestk3, cs3)
+  | SafeEncrypt : forall {t} (msg : message t) k__sign k__enc msg_to honestk c_id c cs n,
+      ~ In c_id cs
+      -> c = SigEncCipher k__sign k__enc msg_to n msg
+      -> honestk $? k__enc = Some true
+      -> (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true)
+      -> syntactically_safe (honestk, cs)
+                           (SignEncrypt k__sign k__enc msg_to msg)
+                           (SignedCiphertext c_id, honestk, cs $+ (c_id,c))
+  | SafeSign : forall {t} (msg : message t) k msg_to honestk c_id c cs n,
+      ~ In c_id cs
+      -> c = SigCipher k msg_to n msg
+      -> (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true /\ kp = false)
+      -> syntactically_safe (honestk, cs)
+                           (Sign k msg_to msg)
+                           (SignedCiphertext c_id, honestk, cs $+ (c_id,c))
+  | SafeRecv : forall t pat honestk cs c,
+      msg_pattern_safe honestk pat
+      -> syntactically_safe (honestk, cs) (@Recv t pat) (c, honestk, cs)
+  | SafeSend : forall {t} (msg : crypto t) msg_to honestk cs,
+        msg_honestly_signed honestk cs msg = true
+      -> msg_to_this_user cs (Some msg_to) msg = true
+      -> msgCiphersSignedOk honestk cs msg
+      -> (exists c_id c, msg = SignedCiphertext c_id
+                /\ cs $? c_id = Some c
+                (* /\ fst (cipher_nonce c) = (Some u_id)  (* only send my messages *) *)
+                (* /\ ~ List.In (cipher_nonce c) sents *)
+        )
+      -> syntactically_safe (honestk, cs) (Send msg_to msg) (tt, honestk, cs)
 
   (* Boring Terms *)
-  | SafeReturn : forall {A} (a : << A >>), syntactically_safe (Return a)
-  | SafeGen : syntactically_safe Gen
-  | SafeDecrypt : forall {t} (c : crypto t), syntactically_safe (Decrypt c)
-  | SafeVerify : forall {t} k (c : crypto t), syntactically_safe (Verify k c)
-  | SafeGenerateSymKey : forall usage, syntactically_safe (GenerateSymKey usage)
-  | SafeGenerateAsymKey : forall usage, syntactically_safe (GenerateAsymKey usage)
+  | SafeReturn : forall {A} (a : << A >>) honestk cs,
+      syntactically_safe (honestk, cs) (Return a) (a, honestk, cs)
+  | SafeGen : forall honestk cs n,
+      syntactically_safe (honestk, cs) Gen (n, honestk, cs)
+  | SafeDecrypt : forall {t} (c : crypto t) honestk cs msg,
+      syntactically_safe (honestk, cs) (Decrypt c) (msg, honestk, cs)
+  | SafeVerify : forall {t} k (c : crypto t) honestk cs pr,
+      syntactically_safe (honestk, cs) (Verify k c) (pr, honestk, cs)
+  | SafeGenerateSymKey : forall usage k_id honestk cs,
+      ~ In k_id honestk
+      -> syntactically_safe (honestk, cs) (GenerateSymKey usage) ((k_id,true), honestk $+ (k_id,true), cs)
+  | SafeGenerateAsymKey : forall usage k_id honestk cs,
+      ~ In k_id honestk
+      -> syntactically_safe (honestk, cs) (GenerateAsymKey usage) ((k_id,true), honestk $+ (k_id,true), cs)
   .
 
+  Definition U_syntactically_safe {A B} (U : universe A B) :=
+    Forall_natmap (fun u =>
+                     exists v honk cs,
+                       syntactically_safe
+                         (findUserKeys U.(users), U.(all_ciphers)) u.(protocol) (v, honk, cs)
+                  ) U.(users).
 
   (*
    * If we can prove that some simple syntactic symbolic execution implies
@@ -103,7 +132,7 @@ Section RealWorldLemmas.
    *)
   Lemma syntactically_safe_implies_next_cmd_safe :
     forall {A B} (U : universe A B),
-      Forall_natmap (fun u => syntactically_safe u.(protocol)) U.(users)
+      U_syntactically_safe U
       -> honest_cmds_safe U.
   Proof.
   Admitted.
@@ -117,17 +146,17 @@ Section RealWorldLemmas.
    *)
   Lemma syntactically_safe_preservation' :
     forall {A B} (U U': universe A B),
-      Forall_natmap (fun u => syntactically_safe u.(protocol)) U.(RealWorld.users)
+      U_syntactically_safe U
       -> step_universe U Silent U'
-      -> Forall_natmap (fun u => syntactically_safe u.(protocol)) U'.(RealWorld.users).
+      -> U_syntactically_safe U'.
   Proof.
   Admitted.
 
   Lemma syntactically_safe_preservation :
     forall {A B} (U U': universe A B),
-      Forall_natmap (fun u => syntactically_safe u.(protocol)) U.(RealWorld.users)
+      U_syntactically_safe U
       -> rstepSilent ^* U U'
-      -> Forall_natmap (fun u => syntactically_safe u.(protocol)) U'.(RealWorld.users).
+      -> U_syntactically_safe U'.
   Proof.
   Admitted.
 
@@ -167,12 +196,12 @@ Module Gen (PD : ProcDef).
   Lemma check_required_labeled_step :
     forall {A B} (U__r U__r' U__r'' : RealWorld.universe A B) U__i U__i' U__i'' a__r a__i,
       ( rstepSilent ^* U__r U__r' -> U__r = U__r' ) (* no available silent steps *)
-      -> Forall_natmap (fun u => syntactically_safe u.(protocol)) U__r'.(RealWorld.users)
+      -> U_syntactically_safe U__r'
       -> RealWorld.step_universe U__r' (Action a__r) U__r''
       -> istepSilent ^* U__i U__i'
       -> IdealWorld.lstep_universe U__i' (Action a__i) U__i''
       -> action_matches a__r U__r' a__i U__i'
-      /\ Forall_natmap (fun u => syntactically_safe u.(protocol)) U__r''.(RealWorld.users).
+      /\ U_syntactically_safe U__r''.
   Proof.
   Admitted.
 
