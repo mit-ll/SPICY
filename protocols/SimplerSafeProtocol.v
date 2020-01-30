@@ -126,6 +126,23 @@ Section RealWorldLemmas.
                          (findUserKeys U.(users), U.(all_ciphers)) u.(protocol) (v, honk, cs)
                   ) U.(users).
 
+
+  Lemma syntactically_safe_implies_next_cmd_safe' :
+    forall {t} (p : user_cmd t) t1 t2,
+      syntactically_safe t1 p t2
+      -> forall honestk cs honestk' cs' v u_id froms sents,
+        t1 = (honestk, cs)
+        -> t2 = (v, honestk', cs')
+        -> next_cmd_safe honestk cs u_id froms sents p.
+  Proof.
+    induction 1; inversion 1; inversion 1; subst;
+      try solve [ econstructor; subst; eauto ].
+
+    econstructor; subst; eauto.
+    admit. (* Stupid nonce handling *)
+
+  Admitted.
+
   (*
    * If we can prove that some simple syntactic symbolic execution implies
    * the honest_cmds_safe predicate...
@@ -135,7 +152,10 @@ Section RealWorldLemmas.
       U_syntactically_safe U
       -> honest_cmds_safe U.
   Proof.
-  Admitted.
+    unfold U_syntactically_safe, honest_cmds_safe; intros.
+    rewrite Forall_natmap_forall in H.
+    specialize (H _ _ H1); split_ex; eauto using syntactically_safe_implies_next_cmd_safe'.
+  Qed.
 
   Definition rstepSilent {A B} (U U' : universe A B) :=
     step_universe U Silent U'.
@@ -147,9 +167,19 @@ Section RealWorldLemmas.
   Lemma syntactically_safe_preservation' :
     forall {A B} (U U': universe A B),
       U_syntactically_safe U
-      -> step_universe U Silent U'
+      -> rstepSilent U U'
       -> U_syntactically_safe U'.
   Proof.
+    unfold U_syntactically_safe; intros.
+    rewrite Forall_natmap_forall in *; intros.
+    invert H0.
+    - specialize (H _ _ H2); split_ex.
+
+
+
+      
+    - admit.  (* assume adversary cannot step, in lame world! *)
+
   Admitted.
 
   Lemma syntactically_safe_preservation :

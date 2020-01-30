@@ -1258,6 +1258,14 @@ Module Gen (PD : ProcDef).
       concrete iproc p; invert H
     end.
 
+  Ltac simplify :=
+    repeat (unifyTails);
+    repeat match goal with
+           | [ H : True |- _ ] => clear H
+           end;
+    repeat progress (simpl in *; intros; try autorewrite with core in *);
+                     repeat (normalize_set || doSubtract).
+
   Ltac infer_istep :=
     match goal with
     | [H : IdealWorld.lstep_user _ (_, ?u.(IdealWorld.protocol), _) _,
@@ -1332,6 +1340,7 @@ Module Gen (PD : ProcDef).
     ; propositional
     ; subst
     ; clean_map_lookups
+    ; subst
     ; repeat match goal with
              | [H : (?x1, ?y1) = ?p |- _] =>
                match p with
@@ -1362,20 +1371,20 @@ Module Gen (PD : ProcDef).
   Ltac rstep :=
     repeat (autounfold
             ; match goal with
-              | [H : RealWorld.Output _ = RealWorld.Output _ |- _] =>
+              | [H : RealWorld.Output _ _ _ _ = RealWorld.Output _ _ _ _ |- _] =>
                 invert H
-              | [H : RealWorld.Input _ _ = RealWorld.Input _ _ |- _] =>
+              | [H : RealWorld.Input _ _ _ = RealWorld.Input _ _ _ |- _] =>
                 invert H
-              | [H : action_matches _ _ |- _] =>
+              | [H : action_matches _ _ _ _ |- _] =>
                 invert H
-              | [H : RealWorld.msg_accepted_by_pattern
-                       (_ ?k1 ?k2)
-                       (RealWorld.SignedCiphertext ?k1 ?k2 ?c) -> False
-                 |- _] =>
-                exfalso
-                ; apply H
-                ; econstructor
-                ; apply (RealWorld.SignedCiphertext k1 k2 c)
+              (* | [H : RealWorld.msg_accepted_by_pattern _ _ _ *)
+              (*          _ *)
+              (*          (RealWorld.SignedCiphertext ?cid) -> False *)
+              (*    |- _] => *)
+              (*   exfalso *)
+              (*   ; apply H *)
+              (*   ; econstructor *)
+              (*   ; apply (RealWorld.SignedCiphertext cid) *)
               (* | [H : rstepSilent ?u _ |- _] => *)
               (*   concrete u; churn *)
               | [H : RealWorld.step_universe ?u _ _ |- _] =>
@@ -1415,7 +1424,7 @@ Module Gen (PD : ProcDef).
     end.
 
   Ltac gen1' :=
-    simpl
+    simplify
     ; tidy
     ; idtac "rstep start"
     ; rstep
@@ -1436,11 +1445,11 @@ Module Gen (PD : ProcDef).
     | [|- multiStepClosure _ {(_, _)} {(_, _)} _] =>
       eapply MscStep
       ; [ solve[ apply oneStepClosure_grow; gen1' ]
-        | simpl; simpl_sets (sets; tidy)]
+        | simplify; simpl_sets (sets; tidy)]
     | [|- multiStepClosure _ (_ \cup ?wl) ?wl _] =>
       eapply msc_step_alt
       ; [ solve[ unfold oneStepClosure_new; gen1' ]
-        | solve[ simpl
+        | solve[ simplify
                  ; sets
                  ; split_ex
                  ; propositional
