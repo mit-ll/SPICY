@@ -190,4 +190,13 @@ Proof.
 
     gen1.
 
-  - 
+  - intros.
+    simpl in *.
+    sets_invert; unfold protos_ok, lift_fst;
+      split_ex; simpl in *; subst; solve_honest_actions_safe;
+        clean_map_lookups; eauto 8.
+
+    Unshelve.
+    all:eauto.
+Qed.
+    
