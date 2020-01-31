@@ -133,8 +133,8 @@ Ltac equality1 :=
   | [ H : existT _ _ _ = existT _ _ _ |- _ ] => apply inj_pair2 in H
   (* | [ H : existT _ ?x _ = existT _ ?x _ |- _ ] => apply inj_pair2 in H *)
 
-  | [ H: RealWorld.SigCipher _ _ = RealWorld.SigCipher _ _ |- _ ] => invert H
-  | [ H: RealWorld.SigEncCipher _ _ _ = RealWorld.SigEncCipher _ _ _ |- _ ] => invert H
+  | [ H: RealWorld.SigCipher _ _ _ _ = RealWorld.SigCipher _ _ _ _ |- _ ] => invert H
+  | [ H: RealWorld.SigEncCipher _ _ _ _ _ = RealWorld.SigEncCipher _ _ _ _ _ |- _ ] => invert H
   | [ H: MkCryptoKey _ _ _ = _ |- _ ] => invert H
 
   | [ H: exists _, _ |- _ ] => destruct H
@@ -1381,7 +1381,14 @@ Module Gen (PD : ProcDef).
                   invert H
                 | [H : action_matches _ _ _ _ |- _] =>
                   invert H
-              (* | [ H : MessageEq.message_eq _ _ _ _ _ |- _ ] => invert H; simpl in *; clean_map_lookups *)
+                | [ H : MessageEq.message_eq _ _ _ _ _ |- _ ] =>
+                  invert H
+                  ; match goal with (* clear out resulting assumption that seems to cause a problem for [close] *)
+                    | [ M : forall _ _ _, _ -> _ -> _ -> _ <-> _ |- _ ] => clear M
+                    end
+
+                  (* ; simpl in *; *)
+                  (* clean_map_lookups *)
 
               (* | [H : RealWorld.msg_accepted_by_pattern _ _ _ *)
               (*          _ *)
@@ -1417,7 +1424,9 @@ Module Gen (PD : ProcDef).
       ; concrete ru
       ; concrete iuniv iu
       ; solve[ idtac "trying left"; left; close
-             | idtac "left fails; trying right"; right; close ]
+             | idtac "left fails; trying right"; right; close
+             | idtac "something is horribly wrong"; fail 2 (* prevent an infinite loop *)
+             ]
     | [|- ?inv (?ru, ?iu)] =>
       is_evar inv
       ; concrete ru
@@ -1438,6 +1447,8 @@ Module Gen (PD : ProcDef).
     ; idtac "istep start"
     ; istep
     ; idtac "istep done"
+    ; subst
+    ; canonicalize users
     ; idtac "close start"
     ; repeat close
     ; idtac "close done".
