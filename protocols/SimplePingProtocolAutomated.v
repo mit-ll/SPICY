@@ -187,12 +187,126 @@ Proof.
     gen1.
     gen1.
 
-
-    simplify; simpl_sets (sets; tidy).
+    progress (simplify; simpl_sets (sets; tidy)).
     
     eapply MscDone; apply prove_oneStepClosure.
     + sets.
-    + rewrite ?union_assoc; gen1'.
+    + rewrite ?union_assoc.
+      simplify
+      ; tidy.
+
+      
+      rstep; istep; solve [ repeat close ].
+      rstep; istep; solve [ repeat close ].
+      rstep; istep; solve [ repeat close ].
+      rstep; istep; solve [ repeat close ].
+      rstep; istep; solve [ repeat close ].
+      rstep; istep; solve [ repeat close ].
+      rstep; istep; solve [ repeat close ].
+      rstep; istep; solve [ repeat close ].
+      rstep; istep; solve [ repeat close ].
+
+      2: rstep; istep; solve [ repeat close ].
+      2: rstep; istep; solve [ repeat close ].
+      2: rstep; istep; solve [ repeat close ].
+      2: rstep; istep; solve [ repeat close ].
+
+      rstep; istep.
+      simpl in *.
+
+      repeat (
+          ( progress subst )
+          || ( progress (simpl in *) )
+          || equality1
+          || match goal with
+            | [ H : MessageEq.message_eq _ _ _ _ _ |- _ ] => invert H; simpl in *; clean_map_lookups
+            end).
+
+          (* trying to figure out why putting above messageeq rule in rstep makes earlier gen1 steps spin forever *)
+
+      
+      simpl in *.
+
+      simpl in *.
+      
+      invert H12; simpl in *.
+      clean_map_lookups.
+
+      repeat equality1.
+      rewrite <- H3 in *.
+      simpl in H11.
+      subst.
+      repeat close.
+      simpl.
+      2:close.
+      progress simplify.
+
+      match goal with
+      | [ |- ?x ] =>
+        let t := type of x in idtac t
+      end.
+      progress (canonicalize users).
+      clear H14.
+
+
+      Ltac my_close :=
+        match goal with
+        | [|- [_ | _] (?ru, ?iu)] =>
+          idtac 1
+          ; concrete ru
+          ; concrete iuniv iu
+          ; tidy
+          ; repeat eexists
+          ; propositional
+          ; solve[ eauto
+                 | canonicalize users
+                   ; equality ]
+        | [|- (?inv1 \cup ?inv2) (?ru, ?iu)] =>
+          idtac 2
+          ; concrete inv1
+          ; concrete ru
+          ; concrete iuniv iu
+          ; solve[ idtac "trying left"; left; my_close
+                 | idtac "left fails; trying right"; right; my_close ]
+        | [|- ?inv (?ru, ?iu)] =>
+          idtac 3
+          ; is_evar inv
+          ; concrete ru
+          ; concrete iuniv iu
+          ; canonicalize users
+          ; clean_context
+          ; clean_map_lookups
+          ; incorp
+          ; solve[ my_close ]
+        end.
+
+      rewrite !merge_perms_right_identity.
+      simpl.
+
+      match goal with
+      | [ |- _ (?x1,?x2) ] => remember x2 as iw
+      end.
+
+      
+
+      remember ((_ <- IdealWorld.Return tt; IdealWorld.Return n0)%idealworld) as proto.
+
+
+      solve [ repeat close ].
+      solve [ repeat close ].
+      solve [ repeat close ].
+      solve [ repeat close ].
+      
+      ; idtac "rstep start"
+      ; rstep.
+      ; idtac "rstep done"
+      ; idtac "istep start"
+      ; istep
+      ; idtac "istep done"
+      ; idtac "close start"
+      ; repeat close
+      ; idtac "close done".
+
     
       ; [ solve[ sets ]
         | solve[ rewrite ?union_assoc; gen1' ]]

@@ -1368,15 +1368,21 @@ Module Gen (PD : ProcDef).
                invert H
              end.
 
+  Ltac s := simpl in *.
+
   Ltac rstep :=
     repeat (autounfold
-            ; match goal with
-              | [H : RealWorld.Output _ _ _ _ = RealWorld.Output _ _ _ _ |- _] =>
-                invert H
-              | [H : RealWorld.Input _ _ _ = RealWorld.Input _ _ _ |- _] =>
-                invert H
-              | [H : action_matches _ _ _ _ |- _] =>
-                invert H
+            ; equality1
+              || (progress s)
+              || match goal with
+                | [H : RealWorld.Output _ _ _ _ = RealWorld.Output _ _ _ _ |- _] =>
+                  invert H
+                | [H : RealWorld.Input _ _ _ = RealWorld.Input _ _ _ |- _] =>
+                  invert H
+                | [H : action_matches _ _ _ _ |- _] =>
+                  invert H
+              (* | [ H : MessageEq.message_eq _ _ _ _ _ |- _ ] => invert H; simpl in *; clean_map_lookups *)
+
               (* | [H : RealWorld.msg_accepted_by_pattern _ _ _ *)
               (*          _ *)
               (*          (RealWorld.SignedCiphertext ?cid) -> False *)
