@@ -29,6 +29,11 @@ Require Import
         RealWorld
         AdversarySafety.
 
+From Frap Require
+     ModelCheck
+     Sets
+     Invariant.
+
 Require IdealWorld.
 Import RealWorld.RealWorldNotations.
 
@@ -153,3 +158,94 @@ Section SafeProtocolLemmas.
   Qed.
 
 End SafeProtocolLemmas.
+
+Import Sets.
+Module Foo <: EMPTY.
+End Foo.
+Module Import SN := SetNotations(Foo).
+
+Import
+  Invariant.
+
+Inductive step (t__hon t__adv : type) :
+  (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon)
+  -> (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon)
+  -> Prop :=
+| RealSilent : forall ru ru' iu,
+    RealWorld.step_universe ru Silent ru' -> step (ru, iu) (ru', iu)
+| BothLoud : forall ru ru' ra ia iu iu' iu'',
+    RealWorld.step_universe ru (Action ra) ru'
+    -> istepSilent^* iu iu'
+    -> IdealWorld.lstep_universe iu' (Action ia) iu''
+    -> action_matches ra ru' ia iu''
+    -> step (ru, iu) (ru', iu'').
+
+Definition lift_fst {A B C} (f : A -> C) : (A * B) -> C :=
+  fun p => f (fst p).
+
+Module Type AutomatedSafeProtocol.
+
+  Parameter t__hon : type.
+  Parameter t__adv : type.
+  Parameter b : << Base t__adv >>.
+  Parameter iu0 : IdealWorld.universe t__hon.
+  Parameter ru0 : RealWorld.universe t__hon t__adv.
+
+  Axiom U_good : universe_starts_sane b ru0.
+  Axiom universe_starts_safe : universe_ok ru0 /\ adv_universe_ok ru0.
+
+  Axiom safe_invariant : invariantFor
+                           {| Initial := {(ru0, iu0)}; Step := @step t__hon t__adv  |}
+                           (lift_fst honest_cmds_safe).
+
+End AutomatedSafeProtocol.
+
+Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
+  Import Proto Simulation.
+
+  (* Hint Resolve *)
+  (*      R_silent_simulates *)
+  (*      R_loud_simulates *)
+  (*      R_honest_actions_safe. *)
+
+  Lemma proto_lamely_refines :
+    refines (lameAdv b) ru0 iu0.
+  Proof.
+    eexists; unfold simulates.
+    pose proof safe_invariant.
+    unfold Invariant.invariantFor, lift_fst in H; simpl in H.
+    assert ( (ru0,iu0) = (ru0,iu0) \/ False ) as ARG by eauto.
+    specialize (H _ ARG); clear ARG.
+    
+
+    (* pose proof universe_starts_safe. *)
+    (* intuition eauto. *)
+  Admitted.
+
+  Hint Resolve proto_lamely_refines.
+
+  Lemma proto_starts_ok : universe_starts_ok ru0.
+  Proof.
+    pose proof universe_starts_safe.
+    pose proof U_good.
+    unfold universe_starts_ok; intros.
+    unfold universe_ok, adv_universe_ok, universe_starts_sane in *; split_ands.
+    intuition eauto.
+  Qed.
+
+  Hint Resolve proto_starts_ok.
+
+  Theorem protocol_with_adversary_could_generate_spec :
+    forall U__ra advcode acts__r,
+      U__ra = add_adversary ru0 advcode
+      -> rCouldGenerate U__ra acts__r
+      -> exists acts__i,
+          iCouldGenerate iu0 acts__i
+          /\ traceMatches acts__r acts__i.
+  Proof.
+    intros.
+    pose proof U_good as L; unfold universe_starts_sane, adversary_is_lame in L; split_ands.
+    eapply refines_could_generate; eauto.
+  Qed.
+
+End ProtocolSimulates.

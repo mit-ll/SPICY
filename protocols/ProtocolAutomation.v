@@ -33,13 +33,13 @@ Require Import
         Tactics
         RealWorld
         Simulation
+        SafeProtocol
         AdversaryUniverse
         UniverseEqAutomation.
 
 From Frap Require
      ModelCheck
      Sets
-     Relations
      Invariant.
 
 Require IdealWorld RealWorld.
@@ -133,6 +133,7 @@ Ltac equality1 :=
   | [ H : existT _ _ _ = existT _ _ _ |- _ ] => apply inj_pair2 in H
   (* | [ H : existT _ ?x _ = existT _ ?x _ |- _ ] => apply inj_pair2 in H *)
 
+  | [ H: RealWorld.SignedCiphertext _ = RealWorld.SignedCiphertext _ |- _ ] => invert H
   | [ H: RealWorld.SigCipher _ _ _ _ = RealWorld.SigCipher _ _ _ _ |- _ ] => invert H
   | [ H: RealWorld.SigEncCipher _ _ _ _ _ = RealWorld.SigEncCipher _ _ _ _ _ |- _ ] => invert H
   | [ H: MkCryptoKey _ _ _ = _ |- _ ] => invert H
@@ -145,7 +146,7 @@ Ltac equality1 :=
 
 Module SimulationAutomation.
 
-  Hint Constructors RealWorld.msg_accepted_by_pattern.
+  Hint Constructors RealWorld.msg_accepted_by_pattern : core.
 
   Section InversionPrinciples.
     Import RealWorld.
@@ -726,15 +727,15 @@ Module SimulationAutomation.
       end
     end.
 
-  Remove Hints TrcRefl TrcFront Trc3Refl Trc3Front.
-  Hint Extern 1 (_ ^* ?U ?U) => apply TrcRefl.
-  (* Hint Extern 1 (~^* ?U ?U) => apply Trc3Refl. *)
+  Remove Hints TrcRefl TrcFront Trc3Refl Trc3Front : core.
+  Hint Extern 1 (_ ^* ?U ?U) => apply TrcRefl : core.
 
-  Remove Hints eq_sym (* includes_lookup *).
-  Remove Hints trans_eq_bool mult_n_O plus_n_O eq_add_S f_equal_nat.
+  Remove Hints
+         eq_sym (* includes_lookup *)
+         trans_eq_bool mult_n_O plus_n_O eq_add_S f_equal_nat : core.
 
-  Hint Constructors action_matches.
-  Hint Resolve IdealWorld.LStepSend' IdealWorld.LStepRecv'.
+  Hint Constructors action_matches : core.
+  Hint Resolve IdealWorld.LStepSend' IdealWorld.LStepRecv' : core.
 
   Lemma TrcRefl' :
     forall {A} (R : A -> A -> Prop) x1 x2,
@@ -835,8 +836,8 @@ Module SimulationAutomation.
       end
     end.
 
-  Hint Extern 1 (~^* _ _) => solve [ repeat real_silent_multistep ].
-  Hint Extern 1 (istepSilent ^* _ _) => ideal_silent_multistep.
+  Hint Extern 1 (~^* _ _) => solve [ repeat real_silent_multistep ] : core.
+  Hint Extern 1 (istepSilent ^* _ _) => ideal_silent_multistep : core.
 
   Hint Extern 1 ({| IdealWorld.channel_vector := _; IdealWorld.users := _ |} = _) => smash_universe; solve_concrete_maps : core.
   Hint Extern 1 (_ = {| IdealWorld.channel_vector := _; IdealWorld.users := _ |}) => smash_universe; solve_concrete_maps : core.
@@ -844,18 +845,18 @@ Module SimulationAutomation.
   (* Hint Extern 1 (IdealWorld.lstep_universe _ _ _) => single_step_ideal_universe; eauto 2; econstructor. *)
   Hint Extern 1 (IdealWorld.lstep_universe _ _ _) => step_ideal_user : core.
   
-  Hint Extern 1 (List.In _ _) => progress simpl.
+  Hint Extern 1 (List.In _ _) => progress simpl : core.
   Hint Extern 1 (~ In ?k ?m) =>
       (* (is_evar k; unify k (next_key m); rewrite not_find_in_iff; apply next_key_not_in; trivial) *)
      solve_concrete_maps : core.
 
-  Hint Extern 1 (action_adversary_safe _ _ _ = _) => unfold action_adversary_safe; simpl.
-  Hint Extern 1 (IdealWorld.msg_permissions_valid _ _) => progress simpl.
+  Hint Extern 1 (action_adversary_safe _ _ _ = _) => unfold action_adversary_safe; simpl : core.
+  Hint Extern 1 (IdealWorld.msg_permissions_valid _ _) => progress simpl : core.
 
-  Hint Extern 1 (_ = RealWorld.addUserKeys _ _) => unfold RealWorld.addUserKeys, map; simpl.
+  Hint Extern 1 (_ = RealWorld.addUserKeys _ _) => unfold RealWorld.addUserKeys, map; simpl : core.
 
-  Hint Extern 1 (add _ _ _ = _) => reflexivity || (solve [ solve_concrete_maps ] ) || (progress m_equal) || (progress clean_map_lookups).
-  Hint Extern 1 (find _ _ = _) => reflexivity || (solve [ solve_concrete_maps ] ) || (progress m_equal) || (progress clean_map_lookups).
+  Hint Extern 1 (add _ _ _ = _) => reflexivity || (solve [ solve_concrete_maps ] ) || (progress m_equal) || (progress clean_map_lookups) : core.
+  Hint Extern 1 (find _ _ = _) => reflexivity || (solve [ solve_concrete_maps ] ) || (progress m_equal) || (progress clean_map_lookups) : core.
 
   Ltac solve_action_matches1 :=
     match goal with
@@ -888,11 +889,11 @@ Module SimulationAutomation.
     | [ |- _ /\ _ ] => split
     end; split_ex; simpl in *.
 
-  Hint Extern 1 (action_matches _ _ _ _) => repeat (solve_action_matches1); clean_map_lookups.
+  Hint Extern 1 (action_matches _ _ _ _) => repeat (solve_action_matches1); clean_map_lookups : core.
 
   Hint Resolve
        findUserKeys_foldfn_proper
-       findUserKeys_foldfn_transpose.
+       findUserKeys_foldfn_transpose : core.
   
   Lemma findUserKeys_add_reduce :
     forall {A} (usrs : RealWorld.honest_users A) u_id ks p qmsgs mycs froms sents cur_n,
@@ -914,7 +915,7 @@ Module SimulationAutomation.
     forall A, @RealWorld.findUserKeys A $0 = $0.
   Proof. trivial. Qed.
   
-  Hint Constructors RealWorld.honest_key RealWorld.msg_pattern_safe.
+  Hint Constructors RealWorld.honest_key RealWorld.msg_pattern_safe : core.
 
   Lemma reduce_merge_perms :
     forall perms1 perms2 kid perm1 perm2,
@@ -1021,7 +1022,6 @@ Module SetLemmas.
   Lemma union_empty_l : forall {A} (s : set A),
       {} \cup s = s.
   Proof. sets. Qed.
-
 
   Lemma intersect_self : forall {A} (s : set A),
       s \cap s = s.
@@ -1170,39 +1170,21 @@ Module Tacs.
     canonicalize rusers; canonicalize iusers.
 End Tacs.
 
-Import Tacs.
+Import Tacs
+       ModelCheck
+       Invariant.
 
-Module Type ProcDef.
-  Parameter t__hon : type.
-  Parameter t__adv : type.
-  Parameter iu0 : IdealWorld.universe t__hon.
-  Parameter ru0 : RealWorld.universe t__hon t__adv.
-End ProcDef.
+(* Definition S {t__hon t__adv : type} (U__r0 : RealWorld.universe t__hon t__adv) (U__i0 : IdealWorld.universe t__hon) *)
+(*   : trsys (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon) := *)
+(*   {| Initial := {(U__r0, U__i0)} *)
+(*      ; Step := step (U__r0, U__i0)  |}. *)
 
-Module Gen (PD : ProcDef).
+
+Module Gen.
   Import
-    PD
     SetLemmas
     ModelCheck
-    Invariant
-    Relations.
-
-  Inductive step :
-    (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon)
-    -> (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon)
-    -> Prop :=
-  | RealSilent : forall ru ru' iu,
-      RealWorld.step_universe ru Silent ru' -> step (ru, iu) (ru', iu)
-  | BothLoud : forall ru ru' ra ia iu iu' iu'',
-      RealWorld.step_universe ru (Action ra) ru'
-      -> istepSilent^* iu iu'
-      -> IdealWorld.lstep_universe iu' (Action ia) iu''
-      -> action_matches ra ru' ia iu''
-      -> step (ru, iu) (ru', iu'').
-
-  Definition S : trsys (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon) :=
-    {| Initial := {(ru0, iu0)}
-       ; Step := step |}.
+    Invariant.
 
   Hint Unfold oneStepClosure oneStepClosure_current oneStepClosure_new : osc.
 
@@ -1236,15 +1218,14 @@ Module Gen (PD : ProcDef).
 
   Hint Resolve
        (* in_empty_map_contra *)
-       incl_empty_empty.
+       incl_empty_empty : core.
 
-  Definition lift_fst {A B C} (f : A -> C) : (A * B) -> C :=
-    fun p => f (fst p).
-
-  Definition universe_oks : (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon) -> Prop :=
-    lift_fst universe_ok.
-  Definition adv_universe_oks : (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon) -> Prop :=
-    lift_fst adv_universe_ok.
+  (* Definition universe_oks : (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon) -> Prop := *)
+  (*   lift_fst universe_ok. *)
+  (* Definition adv_universe_oks : (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon) -> Prop := *)
+  (*   lift_fst adv_universe_ok. *)
+  (* Definition protos_ok : (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon) -> Prop := *)
+  (*   lift_fst honest_cmds_safe. *)
 
   Ltac concrete_isteps :=
     match goal with
@@ -1374,6 +1355,7 @@ Module Gen (PD : ProcDef).
     repeat (autounfold
             ; equality1
               || (progress s)
+              || discriminate
               || match goal with
                 | [H : RealWorld.Output _ _ _ _ = RealWorld.Output _ _ _ _ |- _] =>
                   invert H
@@ -1383,12 +1365,14 @@ Module Gen (PD : ProcDef).
                   invert H
                 | [ H : MessageEq.message_eq _ _ _ _ _ |- _ ] =>
                   invert H
-                  ; match goal with (* clear out resulting assumption that seems to cause a problem for [close] *)
-                    | [ M : forall _ _ _, _ -> _ -> _ -> _ <-> _ |- _ ] => clear M
-                    end
+                (* clear out resulting assumption that seems to cause a problem for [close] *)
+                | [ H : forall _ _ _, _ -> _ -> _ -> _ <-> _ |- _ ] => clear H
 
-                  (* ; simpl in *; *)
-                  (* clean_map_lookups *)
+                (* | [ H : MessageEq.message_eq _ _ _ _ _ |- _ ] => *)
+                (*   invert H *)
+                (*   ; match goal with (* clear out resulting assumption that seems to cause a problem for [close] *) *)
+                (*     | [ M : forall _ _ _, _ -> _ -> _ -> _ <-> _ |- _ ] => clear M *)
+                (*     end *)
 
               (* | [H : RealWorld.msg_accepted_by_pattern _ _ _ *)
               (*          _ *)
@@ -1490,5 +1474,5 @@ Module Gen (PD : ProcDef).
 
   (* Use this to generate the invariant *)
   Ltac gen := repeat gen1.
-End Gen.
 
+End Gen.
