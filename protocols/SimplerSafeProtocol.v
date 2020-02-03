@@ -203,8 +203,7 @@ Module Gen (PD : ProcDef).
   Import
     PD
     SetLemmas
-    ModelCheck
-    Invariant.
+    ModelCheck.
 
   Definition univ_pr : Type := (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon)%type.
 

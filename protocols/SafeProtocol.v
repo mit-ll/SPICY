@@ -24,17 +24,13 @@ Require Import
         Maps
         Keys
         Messages
+        ModelCheck
         Tactics
         Simulation
         RealWorld
         AdversarySafety.
 
-From Frap Require
-     ModelCheck
-     Sets
-     Invariant.
-
-Require IdealWorld.
+Require Sets IdealWorld.
 Import RealWorld.RealWorldNotations.
 
 Set Implicit Arguments.
@@ -164,9 +160,6 @@ Module Foo <: EMPTY.
 End Foo.
 Module Import SN := SetNotations(Foo).
 
-Import
-  Invariant.
-
 Inductive step (t__hon t__adv : type) :
   (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon)
   -> (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon)
@@ -177,7 +170,7 @@ Inductive step (t__hon t__adv : type) :
     RealWorld.step_universe ru (Action ra) ru'
     -> istepSilent^* iu iu'
     -> IdealWorld.lstep_universe iu' (Action ia) iu''
-    -> action_matches ra ru' ia iu''
+    -> action_matches ra ru' ia iu'
     -> step (ru, iu) (ru', iu'').
 
 Definition lift_fst {A B C} (f : A -> C) : (A * B) -> C :=
@@ -200,6 +193,31 @@ Module Type AutomatedSafeProtocol.
 
 End AutomatedSafeProtocol.
 
+Section RealWorldLemmas.
+
+  Import
+    RealWorld
+    RealWorldNotations.
+
+  Lemma universe_predicates_preservation :
+    forall {A B} (U U' : universe A B) lbl,
+      universe_ok U
+      -> adv_universe_ok U
+      -> honest_cmds_safe U
+      -> step_universe U lbl U'
+      -> universe_ok U'
+        /\ adv_universe_ok U'.
+  Proof.
+    intros * UOK AUOK HCS STEP.
+    destruct lbl;
+      intuition eauto.
+
+    unfold adv_universe_ok in *; split_ands; 
+      eapply honest_labeled_step_univ_ok;
+      eauto using honest_cmds_implies_safe_actions.
+  Qed.
+End RealWorldLemmas.
+
 Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
   Import Proto Simulation.
 
@@ -208,14 +226,34 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
   (*      R_loud_simulates *)
   (*      R_honest_actions_safe. *)
 
+  Inductive R :
+    RealWorld.simpl_universe t__hon
+    -> IdealWorld.universe t__hon
+    -> Prop :=
+  | Sil : forall ru ru' iu,
+      R (RealWorld.peel_adv ru) iu
+      -> RealWorld.step_universe ru Silent ru'
+      -> R (@RealWorld.peel_adv _ t__adv ru') iu
+  | Loud : forall ru ru' iu iu' iu'' a__r a__i,
+      R (RealWorld.peel_adv ru) iu
+      -> RealWorld.step_universe ru (Action a__r) ru'
+      -> istepSilent^* iu iu'
+      -> IdealWorld.lstep_universe iu' (Action a__i) iu''
+      -> action_matches a__r ru' a__i iu'
+      -> R (@RealWorld.peel_adv _ t__adv ru') iu''.
+
   Lemma proto_lamely_refines :
     refines (lameAdv b) ru0 iu0.
   Proof.
     eexists; unfold simulates.
     pose proof safe_invariant.
-    unfold Invariant.invariantFor, lift_fst in H; simpl in H.
+    unfold invariantFor, lift_fst in H; simpl in H.
     assert ( (ru0,iu0) = (ru0,iu0) \/ False ) as ARG by eauto.
     specialize (H _ ARG); clear ARG.
+
+    unfold simulates_silent_step, simulates_labeled_step.
+    split; intros.
+    
     
 
     (* pose proof universe_starts_safe. *)

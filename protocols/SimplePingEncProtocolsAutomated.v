@@ -22,6 +22,7 @@ Require Import
         MyPrelude
         Maps
         Messages
+        ModelCheck
         Common
         Keys
         Automation
@@ -60,7 +61,7 @@ Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
   Definition iu0  := ideal_univ_start.
   Definition ru0  := real_univ_start $0 [] [] 0 0 startAdv.
 
-  Import Gen ModelCheck Invariant Tacs SetLemmas.
+  Import Gen Tacs SetLemmas.
 
   Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start mkiU real_univ_start mkrU : core.
 
@@ -69,7 +70,7 @@ Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
       {| Initial := {(ru0, iu0)}; Step := @step t__hon t__adv  |}
       (lift_fst honest_cmds_safe).
   Proof.
-    eapply Invariant.invariant_weaken.
+    eapply invariant_weaken.
 
     - apply multiStepClosure_ok; simpl.
       gen1.
@@ -80,7 +81,11 @@ Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
       gen1.
       gen1.
       gen1.
-
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      
     - intros.
       simpl in *.
       sets_invert; unfold lift_fst;
@@ -172,7 +177,7 @@ Module SimpleEncProtocolSecure <: AutomatedSafeProtocol.
   Definition iu0  := ideal_univ_start.
   Definition ru0  := real_univ_start $0 [] [] 0 0 startAdv.
 
-  Import Gen ModelCheck Invariant Tacs SetLemmas.
+  Import Gen Tacs SetLemmas.
 
   Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start mkiU real_univ_start mkrU : core.
 
@@ -181,9 +186,13 @@ Module SimpleEncProtocolSecure <: AutomatedSafeProtocol.
       {| Initial := {(ru0, iu0)}; Step := @step t__hon t__adv  |}
       (lift_fst honest_cmds_safe).
   Proof.
-    eapply Invariant.invariant_weaken.
+    eapply invariant_weaken.
 
     - apply multiStepClosure_ok; simpl.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
       gen1.
       gen1.
       gen1.

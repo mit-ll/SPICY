@@ -17,32 +17,27 @@
  *  as specifically authorized by the U.S. Government may violate any copyrights that exist in this work. *)
 From Coq Require Import
      List
-     (* Morphisms *)
      Eqdep
 .
 
 Require Import
         MyPrelude
-        Maps
-        Messages
-        MessageEq
+        AdversaryUniverse
+        Automation
         Common
         Keys
         KeysTheory
-        Automation
-        Tactics
+        Maps
+        Messages
+        MessageEq
+        ModelCheck
         RealWorld
-        Simulation
         SafeProtocol
-        AdversaryUniverse
+        Simulation
+        Tactics
         UniverseEqAutomation.
 
-From Frap Require
-     ModelCheck
-     Sets
-     Invariant.
-
-Require IdealWorld RealWorld.
+Require IdealWorld RealWorld Sets.
 
 Set Implicit Arguments.
 
@@ -1170,9 +1165,7 @@ Module Tacs.
     canonicalize rusers; canonicalize iusers.
 End Tacs.
 
-Import Tacs
-       ModelCheck
-       Invariant.
+Import Tacs.
 
 (* Definition S {t__hon t__adv : type} (U__r0 : RealWorld.universe t__hon t__adv) (U__i0 : IdealWorld.universe t__hon) *)
 (*   : trsys (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon) := *)
@@ -1182,9 +1175,7 @@ Import Tacs
 
 Module Gen.
   Import
-    SetLemmas
-    ModelCheck
-    Invariant.
+    SetLemmas.
 
   Hint Unfold oneStepClosure oneStepClosure_current oneStepClosure_new : osc.
 

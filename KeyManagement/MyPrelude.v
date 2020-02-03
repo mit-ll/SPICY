@@ -18,11 +18,11 @@
 From Coq
      Require Import Eqdep String Arith Omega Program Bool.
 
-Require Import StepRelations.
+Require Import StepRelations Sets.
 
-From Frap
-     Require Import
-     Sets.
+(* From Frap *)
+(*      Require Import *)
+(*      Sets. *)
      (* Relations. *)
 (* From Frap *)
 (*      Require Import Map Var Invariant ModelCheck. *)
