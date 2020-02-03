@@ -1365,8 +1365,10 @@ Module Gen.
                   invert H
                 | [ H : MessageEq.message_eq _ _ _ _ _ |- _ ] =>
                   invert H
+
                 (* clear out resulting assumption that seems to cause a problem for [close] *)
                 | [ H : forall _ _ _, _ -> _ -> _ -> _ <-> _ |- _ ] => clear H
+                | [ H : forall _ _ _ _, _ -> _ -> _ -> _ -> _ <-> _ |- _ ] => clear H
 
                 (* | [ H : MessageEq.message_eq _ _ _ _ _ |- _ ] => *)
                 (*   invert H *)
