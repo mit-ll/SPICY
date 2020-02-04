@@ -230,6 +230,8 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
     RealWorld.simpl_universe t__hon
     -> IdealWorld.universe t__hon
     -> Prop :=
+  | Base :
+      R (RealWorld.peel_adv ru0) iu0
   | Sil : forall ru ru' iu,
       R (RealWorld.peel_adv ru) iu
       -> RealWorld.step_universe ru Silent ru'
@@ -245,14 +247,27 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
   Lemma proto_lamely_refines :
     refines (lameAdv b) ru0 iu0.
   Proof.
-    eexists; unfold simulates.
+    exists R; unfold simulates.
+
     pose proof safe_invariant.
+    pose proof universe_starts_safe; split_ands.
+    
     unfold invariantFor, lift_fst in H; simpl in H.
     assert ( (ru0,iu0) = (ru0,iu0) \/ False ) as ARG by eauto.
     specialize (H _ ARG); clear ARG.
 
     unfold simulates_silent_step, simulates_labeled_step.
-    split; intros.
+
+    Hint Constructors R : safe.
+    
+    repeat (simple apply conj); intros; eauto with safe.
+    (* This isn't right.  Don't have necessary information!  Need stronger step statement *)
+    - admit.
+    - unfold honest_actions_safe; intros.
+      specialize (H (U__r,U__i)); simpl in H.
+      eapply H.
+
+    
     
     
 
