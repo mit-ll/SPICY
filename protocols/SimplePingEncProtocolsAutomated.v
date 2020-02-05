@@ -164,7 +164,6 @@ Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
       eauto using univ_ok_start, adv_univ_ok_start.
   Qed.
 
-
 End SimplePingProtocolSecure.
 
 Module SimpleEncProtocolSecure <: AutomatedSafeProtocol.

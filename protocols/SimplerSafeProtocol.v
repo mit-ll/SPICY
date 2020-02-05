@@ -70,8 +70,8 @@ Section RealWorldLemmas.
 
   | SafeBind : forall {r A} (cmd1 : user_cmd r) (cmd2 : <<r>> -> user_cmd A)
                  v1 v2 honestk1 honestk2 honestk3 cs1 cs2 cs3,
-      syntactically_safe (honestk1, cs1) cmd1 (v1, honestk2, cs2)
-      -> syntactically_safe (honestk1, cs1) (cmd2 v1) (v2, honestk3, cs3)
+        syntactically_safe (honestk1, cs1) cmd1 (v1, honestk2, cs2)
+      -> syntactically_safe (honestk2, cs2) (cmd2 v1) (v2, honestk3, cs3)
       -> syntactically_safe (honestk1, cs1) (Bind cmd1 cmd2) (v2, honestk3, cs3)
   | SafeEncrypt : forall {t} (msg : message t) k__sign k__enc msg_to honestk c_id c cs n,
       ~ In c_id cs
