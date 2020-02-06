@@ -51,6 +51,34 @@ Module Foo <: EMPTY.
 End Foo.
 Module Import SN := SetNotations(Foo).
 
+
+Definition canon_map {V} (m : NatMap.t V) :=
+  let xs := elements m
+  in  fold_left (fun acc '(k,v) => add k v acc) xs $0.
+
+Eval vm_compute in (canon_map ($0 $+ (0,0) $+ (1,2) $+ (0,1) $+ (0,0) $+ (0,0) $+ (0,0) $+ (0,2) $+ (0,0) $+ (1,0))).
+
+(* Lemma canon_map_ok : *)
+(*   forall {V} (m : NatMap.t V) l, *)
+(*     l = elements m *)
+(*     -> m = fold_left (fun acc '(k,v) => add k v acc) l $0. *)
+(* Proof. *)
+(*   induction l; intros. *)
+(*   - unfold fold_left. *)
+(*     symmetry; apply Empty_eq_empty. *)
+(*     apply elements_Empty; rewrite H; trivial. *)
+(*   - simpl. *)
+(*     destruct a; simpl in *. *)
+
+(* Lemma canon_map_ok : *)
+(*   forall {V} (m : NatMap.t V), *)
+(*     m = canon_map m. *)
+(* Proof. *)
+(*   induction m using map_induction_bis; Equal_eq; eauto. *)
+
+(*   unfold canon_map. *)
+(*   simpl. *)
+
 Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
 
   Import SimplePingProtocol.
@@ -68,7 +96,7 @@ Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
   Lemma safe_invariant :
     invariantFor
       {| Initial := {(ru0, iu0)}; Step := @step t__hon t__adv  |}
-      (lift_fst honest_cmds_safe).
+      (fun st => safety st /\ liveness st ).
   Proof.
     eapply invariant_weaken.
 
@@ -87,10 +115,21 @@ Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
       gen1.
       
     - intros.
-      simpl in *.
-      sets_invert; unfold lift_fst;
-        split_ex; simpl in *; subst; solve_honest_actions_safe;
-          clean_map_lookups; eauto 8.
+      simpl in *; split.
+      
+      + sets_invert; unfold safety;
+          split_ex; simpl in *; subst; solve_honest_actions_safe;
+            clean_map_lookups; eauto 8.
+      + sets_invert; unfold liveness; intros;
+          split_ex; subst; intros; rstep.
+        * do 3 eexists;
+            repeat (apply conj); eauto.
+        * do 3 eexists;
+            repeat (apply conj); eauto.
+          subst; repeat (solve_action_matches1); clean_map_lookups.
+        * do 3 eexists;
+            repeat (apply conj); eauto.
+          subst; repeat (solve_action_matches1); clean_map_lookups.
 
       Unshelve.
       all:eauto.

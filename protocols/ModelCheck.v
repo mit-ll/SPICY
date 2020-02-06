@@ -22,6 +22,10 @@ Require Import
 
 Set Implicit Arguments.
 
+Module Foo <: EMPTY.
+End Foo.
+Module Import SN := SetNotations(Foo).
+
 Record trsys state := {
   Initial : state -> Prop;
   Step : state -> state -> Prop
@@ -98,32 +102,44 @@ Qed.
 
 Inductive multiStepClosure {state} (sys : trsys state)
   : (state -> Prop) -> (state -> Prop) -> (state -> Prop) -> Prop :=
-| MscDone : forall inv worklist,
-    oneStepClosure sys inv inv
-    -> multiStepClosure sys inv worklist inv
+| MscDone : forall inv,
+    (* oneStepClosure sys inv inv *)
+    multiStepClosure sys inv ({ }) inv (* enforce worklist is empty and delete premise *)
 | MscStep : forall inv worklist inv' inv'',
     oneStepClosure sys worklist inv'
+    (* -> (forall st st', (inv \setminus worklist) st -> sys.(Step) st st' -> inv' st') *)
     -> multiStepClosure sys (inv \cup inv') (inv' \setminus inv) inv''
     -> multiStepClosure sys inv worklist inv''.
 
+(* add extra hypothesis that says : (inv \ wl) o step \incl inv *)
 Lemma multiStepClosure_ok' : forall state (sys : trsys state) (inv worklist inv' : state -> Prop),
-  multiStepClosure sys inv worklist inv'
-  -> (forall st, sys.(Initial) st -> inv st)
-  -> invariantFor sys inv'.
+    multiStepClosure sys inv worklist inv'
+    -> forall wl,
+        (forall st, sys.(Initial) st -> inv st)
+      -> wl = worklist
+      -> (forall st st', (inv \setminus wl) st -> sys.(Step) st st' -> inv st')
+      -> invariantFor sys inv'.
 Proof.
-  induction 1; simpl; intuition eauto using oneStepClosure_done.
-
-  apply IHmultiStepClosure.
-  intuition.
-  apply H1 in H2.
-  sets idtac.
+  induction 1; simpl; intros.
+  - eapply invariant_induction; subst; sets idtac; eauto.
+  - subst.
+    eapply IHmultiStepClosure; intros; eauto.
+    + apply H1 in H2; sets idtac.
+    + assert (inv st) by (sets idtac).
+      unfold oneStepClosure, oneStepClosure_current, oneStepClosure_new in H; destruct H.
+      sets idtac.
+      * assert (worklist st \/ ~ worklist st) as WL by sets idtac; destruct WL; eauto.
+      * assert (worklist st \/ ~ worklist st) as WL by sets idtac; destruct WL; eauto.
 Qed.
 
 Theorem multiStepClosure_ok : forall state (sys : trsys state) (inv : state -> Prop),
   multiStepClosure sys sys.(Initial) sys.(Initial) inv
   -> invariantFor sys inv.
 Proof.
-  eauto using multiStepClosure_ok'.
+  intros.
+  eapply multiStepClosure_ok'; eauto.
+  intros.
+  sets idtac.
 Qed.
 
 Theorem oneStepClosure_empty : forall state (sys : trsys state),

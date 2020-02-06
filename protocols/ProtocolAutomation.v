@@ -1433,9 +1433,10 @@ Module Gen.
   Ltac gen1 :=
     match goal with
     | [|- multiStepClosure _ _ { } _] =>
-      eapply MscDone; apply prove_oneStepClosure
-      ; [ solve[ sets ]
-        | solve[ rewrite ?union_assoc; gen1' ]]
+      eapply MscDone
+      (* eapply MscDone; apply prove_oneStepClosure *)
+      (* ; [ solve[ sets ] *)
+      (*   | solve[ rewrite ?union_assoc; gen1' ]] *)
     | [|- multiStepClosure _ {(_, _)} {(_, _)} _] =>
       eapply MscStep
       ; [ solve[ apply oneStepClosure_grow; gen1' ]
