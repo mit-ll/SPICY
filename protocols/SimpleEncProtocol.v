@@ -191,6 +191,8 @@ Hint Unfold
      real_univ_start real_univ_sent1 real_univ_recd1  mkrU
      ideal_univ_start ideal_univ_sent1 ideal_univ_recd1 ideal_univ_done mkiU : constants.
 
+Hint Unfold mkrU : user_build.
+
 Hint Constructors RealWorld.msg_accepted_by_pattern : core.
 Hint Extern 1 (RSimpleEnc (RealWorld.peel_adv _) _) =>
   simpl; simpl_real_users_context; simpl_ideal_users_context; simpl;

@@ -230,6 +230,7 @@ unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, mkiU; simpl;
   repeat (ideal_single_silent_multistep A);
   repeat (ideal_single_silent_multistep B); solve_refl.
 
+Hint Unfold mkrU : user_build.
 
 Module SimplePingProtocolSecure <: SafeProtocol.
   Definition A := Nat.
