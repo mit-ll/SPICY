@@ -456,6 +456,21 @@ Proof.
   end; maps_equal.
 Qed.
 
+Definition canon_map {V} (m : NatMap.t V) :=
+  of_list (to_list m).
+
+Lemma canon_map_ok :
+  forall {V} (m : NatMap.t V),
+    m = canon_map m.
+Proof.
+  intros.
+  unfold canon_map.
+  pose proof (of_list_3 m).
+  apply map_eq_Equal in H.
+  rewrite H.
+  trivial.
+Qed.
+
 (* Use if the keys are concrete. Faster and it sorts by key so order is consistent *)
 Definition canonicalize_concrete_map {v} (m : NatMap.t v) : NatMap.t v.
   destruct m.

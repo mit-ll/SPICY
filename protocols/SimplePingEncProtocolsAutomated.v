@@ -51,34 +51,6 @@ Module Foo <: EMPTY.
 End Foo.
 Module Import SN := SetNotations(Foo).
 
-
-Definition canon_map {V} (m : NatMap.t V) :=
-  let xs := elements m
-  in  fold_left (fun acc '(k,v) => add k v acc) xs $0.
-
-Eval vm_compute in (canon_map ($0 $+ (0,0) $+ (1,2) $+ (0,1) $+ (0,0) $+ (0,0) $+ (0,0) $+ (0,2) $+ (0,0) $+ (1,0))).
-
-(* Lemma canon_map_ok : *)
-(*   forall {V} (m : NatMap.t V) l, *)
-(*     l = elements m *)
-(*     -> m = fold_left (fun acc '(k,v) => add k v acc) l $0. *)
-(* Proof. *)
-(*   induction l; intros. *)
-(*   - unfold fold_left. *)
-(*     symmetry; apply Empty_eq_empty. *)
-(*     apply elements_Empty; rewrite H; trivial. *)
-(*   - simpl. *)
-(*     destruct a; simpl in *. *)
-
-(* Lemma canon_map_ok : *)
-(*   forall {V} (m : NatMap.t V), *)
-(*     m = canon_map m. *)
-(* Proof. *)
-(*   induction m using map_induction_bis; Equal_eq; eauto. *)
-
-(*   unfold canon_map. *)
-(*   simpl. *)
-
 Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
 
   Import SimplePingProtocol.
