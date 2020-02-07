@@ -29,7 +29,8 @@ Require Import
         Simulation
         AdversaryUniverse
         UniverseEqAutomation
-        ProtocolAutomation.
+        ProtocolAutomation
+        SafeProtocol.
 
 Require IdealWorld RealWorld.
 
@@ -48,6 +49,7 @@ Section IdealProtocol.
   Import IdealWorld.
 
   Definition CH__A2B : channel_id := 0.
+  Definition empty_chs : channels := ($0 $+ (CH__A2B, [])).
 
   Definition PERMS__a := $0 $+ (CH__A2B, {| read := true; write := true |}). (* writer *)
   Definition PERMS__b := $0 $+ (CH__A2B, {| read := true; write := false |}). (* reader *)
@@ -60,7 +62,7 @@ Section IdealProtocol.
     |}.
 
   Definition ideal_univ_start :=
-    mkiU ($0 $+ (CH__A2B, [])) PERMS__a PERMS__b
+    mkiU empty_chs PERMS__a PERMS__b
          (* user A *)
          ( n <- Gen
          ; chid <- CreateChannel
@@ -83,7 +85,7 @@ Section IdealProtocol.
          ; ret (extractContent (msgFst m))).
 
   Definition ideal_univ_recd1 chid n :=
-    mkiU ($0 $+ (CH__A2B, []) $+ (chid, []))
+    mkiU (empty_chs $+ (chid, []))
          (PERMS__a $+ (chid, creator_permission))
          (PERMS__b $+ (chid, {| read := false; write := true |}))
          (* user A *)
@@ -92,13 +94,6 @@ Section IdealProtocol.
          ( m <- @Return (Message (TPair Nat Access))
                        (MsgPair (Content n) (Permission {| ch_perm := {| read := false; write := true |} ; ch_id := chid |}))
          ; ret (extractContent (msgFst m))).
-
-  Definition ideal_univ_done chid n perms__a perms__b :=
-    mkiU ($0 $+ (CH__A2B, []) $+ (chid, [])) perms__a perms__b
-         (* user A *)
-         (Return n)
-         (* user B *)
-         (Return n).
 
 End IdealProtocol.
 
@@ -189,104 +184,110 @@ Section RealProtocol.
       ~^* (real_univ_sent1 k_id k n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
       -> @lameAdv Unit tt adv
       -> ~ In k_id KEYS
-      -> chid <> CH__A2B
+      -> ~ In chid empty_chs
       -> RSimplePing (peel_adv U__r) (ideal_univ_sent1 chid n)
   | Recd1 : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 k k_id n chid cid1 non1 adv,
       ~^* (real_univ_recd1 k_id k n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
       -> @lameAdv Unit tt adv
       -> ~ In k_id KEYS
-      -> chid <> CH__A2B
+      -> ~ In chid empty_chs
       -> RSimplePing (peel_adv U__r) (ideal_univ_recd1 chid n)
   .
 
-End RealProtocol.
-
-Hint Constructors RealWorld.msg_accepted_by_pattern.
-
-Hint Constructors RSimplePing.
-
-Lemma Sent1' :
-  forall U__r U__i cs mycs1 mycs2 cur_n1 cur_n2 k n k_id chid cid1 non1 adv,
+  Lemma Sent1' :
+    forall U__r U__i cs mycs1 mycs2 cur_n1 cur_n2 k n k_id chid cid1 non1 adv,
       ~^* (real_univ_sent1 k_id k n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
       -> @lameAdv Unit tt adv
       -> ~ In k_id KEYS
-      -> chid <> CH__A2B
+      -> ~ In chid empty_chs
       -> U__i = (ideal_univ_sent1 chid n)
       -> RSimplePing (RealWorld.peel_adv U__r) U__i.
-Proof. intros; subst; eauto. Qed.
+  Proof. intros; subst; eapply Sent1; eauto. Qed.
 
-Lemma Recd1' :
-  forall U__r U__i cs mycs1 mycs2 cur_n1 cur_n2 k k_id n chid cid1 non1 adv,
-    ~^* (real_univ_recd1 k_id k n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
-    -> @lameAdv Unit tt adv
-    -> ~ In k_id KEYS
-    -> chid <> CH__A2B
-    -> U__i = ideal_univ_recd1 chid n
-    -> RSimplePing (RealWorld.peel_adv U__r) U__i.
-Proof. intros; subst; eauto. Qed.
+  Lemma Recd1' :
+    forall U__r U__i cs mycs1 mycs2 cur_n1 cur_n2 k k_id n chid cid1 non1 adv,
+      ~^* (real_univ_recd1 k_id k n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
+      -> @lameAdv Unit tt adv
+      -> ~ In k_id KEYS
+      -> ~ In chid empty_chs
+      -> U__i = ideal_univ_recd1 chid n
+      -> RSimplePing (RealWorld.peel_adv U__r) U__i.
+  Proof. intros; subst; eapply Recd1; eauto. Qed.
 
+End RealProtocol.
+
+(* Hint Constructors RealWorld.msg_accepted_by_pattern. *)
+(* Hint Constructors RSimplePing. *)
 
 Import SimulationAutomation.
 
 Hint Unfold
      A B PERMS__a PERMS__b
      real_univ_start real_univ_sent1 real_univ_recd1 mkrU
-     ideal_univ_start ideal_univ_sent1 ideal_univ_recd1 ideal_univ_done mkiU : constants.
+     ideal_univ_start ideal_univ_sent1 ideal_univ_recd1 mkiU : constants.
 
 Hint Extern 0 (~^* _ _) =>
  progress(unfold real_univ_start, real_univ_sent1, real_univ_recd1, mkrU; simpl).
 Hint Extern 1 (RSimplePing (RealWorld.buildUniverse _ _ _ _ _ _) _) => unfold RealWorld.buildUniverse; simpl.
-Hint Extern 1 (RSimplePing (RealWorld.peel_adv _) _) => unfold RealWorld.peel_adv; simpl.
 
 Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
- progress(unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, ideal_univ_done, mkiU; simpl).
+ progress(unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, mkiU; simpl).
 
-Hint Extern 1 (IdealWorld.lstep_universe _ _ _) => single_step_ideal_universe; eauto 2; econstructor.
-
-(* Hint Extern 1 (KEYS $? _ = _) => unfold KEYS, A__keys, B__keys, KEY1, KEY2, KID1, KID2. *)
-(* Hint Extern 1 (A__keys $? _ = _) => unfold A__keys, B__keys, KEY1, KEY2, KID1, KID2. *)
-(* Hint Extern 1 (B__keys $? _ = _) => unfold A__keys, B__keys, KEY1, KEY2, KID1, KID2. *)
 Hint Extern 1 (PERMS__a $? _ = _) => unfold PERMS__a.
 Hint Extern 1 (PERMS__b $? _ = _) => unfold PERMS__b.
 
+Hint Extern 1 (istepSilent ^* _ _) =>
+unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, mkiU; simpl;
+  repeat (ideal_single_silent_multistep A);
+  repeat (ideal_single_silent_multistep B); solve_refl.
 
-Section FeebleSimulates.
+Ltac clear_extra_adversary :=
+  match goal with
+  | [ |- context [ RSimplePing
+                    (RealWorld.peel_adv {| RealWorld.users := _;
+                                           RealWorld.adversary := ?a;
+                                           RealWorld.all_ciphers := _;
+                                           RealWorld.all_keys := _ |}) _ ]] =>
+    repeat match goal with
+           | [ H : lameAdv _ ?bada |- _ ] =>
+             does_not_unify bada a; clear H bada
+           end
+  end.
 
-  (* Hint Extern 0 (istepSilent ^* _ _) => *)
-  (*   progress(unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, ideal_univ_done, mkiU; simpl). *)
-  Hint Extern 1 (istepSilent ^* _ _) =>
-    unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, ideal_univ_done, mkiU; simpl;
-    repeat (ideal_single_silent_multistep A);
-    repeat (ideal_single_silent_multistep B); solve_refl.
+Hint Extern 1 (RSimplePing (RealWorld.peel_adv _) _) =>
+  simpl; simpl_real_users_context; simpl_ideal_users_context; simpl;
+   ( (eapply Start  ; solve [ eauto ])
+   || (eapply Recd1' ; swap 1 4; solve [ eauto ])
+   || (eapply Sent1' ; swap 1 3; swap 2 4; solve [ eauto ]) ).
 
+Module ShareKeyProtocolSecure <: SafeProtocol.
+  Definition A := Nat.
+  Definition B := Unit.
 
-  Ltac clear_extra_adversary :=
-    match goal with
-    | [ |- context [ RSimplePing
-                      (RealWorld.peel_adv {| RealWorld.users := _;
-                                             RealWorld.adversary := ?a;
-                                             RealWorld.all_ciphers := _;
-                                             RealWorld.all_keys := _ |}) _ ]] =>
-      repeat match goal with
-             | [ H : lameAdv _ ?bada |- _ ] =>
-               does_not_unify bada a; clear H bada
-             end
-    end.
+  Definition U__i := ideal_univ_start.
+  Definition U__r := real_univ_start $0 [] [] 0 0 startAdv.
 
-  Lemma rsimpleping_silent_simulates :
-    simulates_silent_step (@lameAdv Unit tt) RSimplePing.
+  Definition b := tt.
+  Definition R := RSimplePing.
+
+  Lemma U_good : @universe_starts_sane _ Unit b U__r.
   Proof.
-    unfold simulates_silent_step.
+    unfold b, U__r, real_univ_start, mkrU, startAdv.
+    unfold universe_starts_sane; simpl.
+    repeat (apply conj); intros; eauto.
+    - solve_perm_merges; eauto.
+    - econstructor.
+    - unfold AdversarySafety.keys_honest, KEYS; rewrite Forall_natmap_forall; intros.
+      econstructor; simpl.
+      rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty; eauto.
+      solve_perm_merges.
+    - unfold lameAdv; simpl; eauto.
+  Qed.
 
-    (* time ( *)
-    (*     intros * R UOK AOK LAME * STEP; *)
-    (*     clear UOK AOK; *)
-    (*     invert R; *)
-    (*     destruct U__r0; destruct U__r; simpl in *; subst; *)
-    (*     churn; simpl_real_users_context; *)
-    (*     [> eexists; split; swap 1 2; eauto 12 ..] *)
-    (*   ). *)
 
+  Lemma R_silent_simulates : simulates_silent_step (@lameAdv Unit b) R.
+  Proof.
+    unfold b, R, simulates_silent_step.
 
     intros * R UOK AOK LAME * STEP;
       clear UOK AOK;
@@ -320,146 +321,41 @@ Section FeebleSimulates.
       + eexists; split; [ solve_refl | ]; eauto 12.
       + eexists; split; [ solve_refl | ]; eauto 12.
 
-        Unshelve.
-        all:apply tt.
-
-  (*   (* Time ( *) *)
-  (*   (*     intros * R UOK AOK LAME * STEP; *) *)
-  (*   (*     clear UOK AOK; *) *)
-  (*   (*     invert R; *) *)
-  (*   (*     destruct U__r0; destruct U__r; simpl in *; subst; *) *)
-  (*   (*     churn; simpl_real_users_context; *) *)
-  (*   (*     [> eexists; split; swap 1 2; eauto 12 ..] *) *)
-  (*   (*   ). *) *)
+    (* Time ( *)
+    (*     intros * R UOK AOK LAME * STEP; *)
+    (*     clear UOK AOK; *)
+    (*     invert R; *)
+    (*     destruct U__r0; destruct U__r; simpl in *; subst; *)
+    (*     churn; simpl_real_users_context; *)
+    (*     [> eexists; split; swap 1 2; eauto 12 ..] *)
+    (*   ). *)
   Qed.
 
-  Lemma rsimpleping_loud_simulates :
-    simulates_labeled_step (@lameAdv Unit tt) RSimplePing.
+  Lemma R_loud_simulates : simulates_labeled_step (@lameAdv Unit b) R.
   Proof.
-    unfold simulates_labeled_step.
+    unfold b, R, simulates_labeled_step.
 
     intros * R UOK AOK LAME * STEP;
       clear UOK AOK;
       invert R;
       destruct U__r0; destruct U__r; simpl in *; subst.
 
-    - churn; simpl_real_users_context; clear_extra_adversary.
-      
-      do 3 eexists;
-        repeat (apply conj).
+    - churn; simpl_real_users_context; simpl; clear_extra_adversary.
 
-      simpl.
-
-      unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, ideal_univ_done, mkiU; simpl;
-        repeat (ideal_single_silent_multistep A);
-        repeat (ideal_single_silent_multistep B).
-      2: solve_refl.
-      shelve.
-      + eapply IdealWorld.LStepUser' with (u_id := A); simpl; eauto.
-        eapply IdealWorld.LStepBindRecur; simpl.
-        econstructor; eauto.
-        econstructor; eauto.
-        simpl; eauto.
-        econstructor; eauto.
-
-      + eauto.
-      + simpl_real_users_context. simpl_ideal_users_context.
-        simpl.
-
-        eapply Sent1' with (chid := S CH__A2B); simpl; eauto.
-        unfold ideal_univ_sent1, mkiU; smash_universe.
-
-        Unshelve.
-        solve_concrete_maps.
+      + do 3 eexists;
+          repeat (apply conj); eauto 12.
 
     - churn; simpl_real_users_context; clear_extra_adversary.
       
       + do 3 eexists;
-          repeat (apply conj).
-
-        unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, ideal_univ_done, mkiU; simpl;
-          repeat (ideal_single_silent_multistep A);
-          repeat (ideal_single_silent_multistep B).
-        solve_refl.
-
-        * eapply IdealWorld.LStepUser' with (u_id := B); simpl; eauto.
-          simpl.
-          eapply IdealWorld.LStepBindRecur; simpl.
-          simpl; econstructor; eauto.
-
-        * simpl. simpl_real_users_context. simpl_ideal_users_context.
-          econstructor; eauto.
-          simpl.
-          clean_map_lookups.
-          reflexivity.
-          econstructor; simpl; eauto.
-          econstructor; econstructor; eauto.
-          intros; simpl in *.
-          apply lookup_some_implies_in in H; simpl in H.
-          split_ors; subst; try contradiction;
-            repeat equality1; subst; try congruence; simpl in *; eauto.
-          unfold add_key_perm, A__keys; eauto.
-          change (In k_id KEYS -> False) with (~ In k_id KEYS) in H5.
-          rewrite not_find_in_iff in H5.
-          solve_concrete_maps.
-          destruct (KID1 ==n k_id); subst; clean_map_lookups; try discriminate.
-          rewrite lookup_empty_none; clean_map_lookups; trivial.
-
-        * simpl_real_users_context.
-          simpl_ideal_users_context.
-          eapply Recd1'; simpl; eauto.
-
-          unfold ideal_univ_recd1, mkiU; simpl.
-          eapply ideal_univ_eq_fields_eq; maps_equal.
+          repeat (apply conj); eauto 12.
 
       + do 3 eexists;
-          repeat (apply conj).
+          repeat (apply conj); eauto 12.
 
-        unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, ideal_univ_done, mkiU; simpl;
-          repeat (ideal_single_silent_multistep A);
-          repeat (ideal_single_silent_multistep B).
-        solve_refl.
-
-        * eapply IdealWorld.LStepUser' with (u_id := B); simpl; eauto.
-          simpl.
-          eapply IdealWorld.LStepBindRecur; eauto.
-
-        * simpl.
-          simpl_real_users_context. simpl_ideal_users_context.
-          econstructor; eauto.
-          simpl.
-          clean_map_lookups.
-          reflexivity.
-          econstructor; simpl; eauto.
-          econstructor; econstructor; eauto.
-          intros; simpl in *.
-          repeat (solve_action_matches1; simpl; eauto).
-          unfold add_key_perm, A__keys; eauto.
-          change (In k_id KEYS -> False) with (~ In k_id KEYS) in H5.
-          rewrite not_find_in_iff in H5.
-          solve_concrete_maps.
-          destruct (KID1 ==n k_id); subst; clean_map_lookups; try discriminate.
-          rewrite lookup_empty_none; clean_map_lookups; trivial.
-
-        * simpl_real_users_context.
-          simpl_ideal_users_context.
-          eapply Recd1' with (chid := chid); simpl; eauto.
-
-          ** unfold real_univ_recd1, mkrU; simpl.
-             simpl_real_users_context.
-             real_single_silent_multistep A.
-             simpl_real_users_context.
-             eapply Trc3Refl'; smash_universe.
-
-          ** unfold  ideal_univ_recd1, mkiU; simpl.
-             eapply ideal_univ_eq_fields_eq; maps_equal.
-          
     - churn; simpl_real_users_context; clear_extra_adversary.
 
-      Unshelve.
-      all: apply tt.
-
-      (* time *)
+    (* time *)
     (*   (intros; *)
     (*    invert H; *)
     (*    try destruct U__r0; try destruct U__r; simpl in *; subst; *)
@@ -472,13 +368,11 @@ Section FeebleSimulates.
     (*     swap 3 4; swap 2 3; swap 1 2; [ .. | admit (* action matches predicate *)]; *)
     (*     simpl; clean_map_lookups; *)
     (*     eauto; eauto 12)). *)
-
   Qed.
 
-  Lemma rsimpleping_honest_actions_safe :
-    honest_actions_safe Unit RSimplePing.
+  Lemma R_honest_actions_safe : honest_actions_safe B R.
   Proof.
-    unfold honest_actions_safe; intros.
+    unfold B, R, honest_actions_safe; intros.
     clear H0 H1.
     
     inversion H; clear H;
@@ -524,128 +418,73 @@ Section FeebleSimulates.
 
   Qed.
 
-
-  (* Timings:
-   *
-   * --------------------------------------------------------------
-   * --------------------------------------------------------------
-   *)
-
-  Hint Resolve
-       rsimpleping_silent_simulates
-       rsimpleping_loud_simulates
-       rsimpleping_honest_actions_safe.
-
-  Lemma univ_ok_start :
-    forall adv,
-      @lameAdv Unit tt adv
-      -> universe_ok (real_univ_start $0 [] [] 0 0 adv).
+  Lemma univ_ok_start : universe_ok U__r.
   Proof.
-    unfold real_univ_start; econstructor; eauto.
+    unfold real_univ_start, U__r; econstructor; eauto.
   Qed.
 
-  Lemma merge_perms_true_either_true :
-      forall ks1 ks2 k_id,
-        ks1 $? k_id = Some true \/ ks2 $? k_id = Some true
-        -> ks1 $k++ ks2 $? k_id = Some true.
-    Proof.
-      intros; split_ors; solve_perm_merges.
-    Qed.
-
-    Hint Resolve merge_perms_true_either_true.
-
-
-  Lemma adv_univ_ok_start :
-    forall adv U__r honestk,
-      U__r = real_univ_start $0 [] [] 0 0 adv
-      -> honestk = RealWorld.findUserKeys U__r.(RealWorld.users)
-      -> @lameAdv Unit tt adv
-      -> adv.(RealWorld.key_heap) = $0
-      -> adv.(RealWorld.msg_heap) = []
-      -> adv.(RealWorld.c_heap) = []
-      -> adv_universe_ok (real_univ_start $0 [] [] 0 0 adv).
+  Lemma adv_univ_ok_start : adv_universe_ok U__r.
   Proof.
-    intros; unfold lameAdv in *;
-    unfold real_univ_start
-         , adv_universe_ok
-         , keys_and_permissions_good
-         , permission_heap_good.
-         
-    simpl; intuition (subst; eauto).
+    unfold adv_universe_ok, U__r; eauto.
+    unfold keys_and_permissions_good.
+    pose proof (adversary_is_lame_adv_univ_ok_clauses U_good).
+
+    intuition eauto;
+      unfold real_univ_start, mkrU in *; simpl in *.
 
     - unfold KEYS in *; solve_simple_maps; eauto.
-    - rewrite Forall_natmap_forall; intros;
-        unfold A__keys, B__keys, KEYS in *;
-        simpl in *; solve_simple_maps;
-          simpl in *; solve_simple_maps;
-            eauto.
-    - rewrite H2 in H5; clean_map_lookups.
+    - rewrite Forall_natmap_forall; intros.
+      solve_simple_maps; simpl;
+        unfold permission_heap_good, KEYS, A__keys, B__keys; intros;
+          solve_simple_maps; eauto.
 
     - unfold user_cipher_queues_ok.
       rewrite Forall_natmap_forall; intros.
-      cases (A ==n k); cases (B ==n k); subst; clean_map_lookups; simpl in *; econstructor; eauto.
-
-    - unfold message_queues_ok.
-      rewrite Forall_natmap_forall; intros.
-      cases (A ==n k); cases (B ==n k); subst; clean_map_lookups; simpl in *; econstructor; eauto.
-
-    - unfold adv_cipher_queue_ok.
-      rewrite Forall_forall; intros.
-      rewrite H4 in H; simpl in H; contradiction.
-
-    - unfold adv_message_queue_ok.
-      rewrite Forall_forall; intros.
-      rewrite H3 in H; simpl in H; contradiction.
-
-    - unfold adv_no_honest_keys; intros.
-      rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty; eauto.
-      unfold A__keys , B__keys; destruct (k_id ==n KID1); subst; solve_perm_merges.
-      + right; right.
-        rewrite H2; split; clean_map_lookups; eauto.
-      + left; apply merge_perms_adds_no_new_perms; eauto.
+      cases (ShareKeyProtocol.A ==n k); cases (ShareKeyProtocol.B ==n k);
+        subst; clean_map_lookups; simpl in *; econstructor; eauto.
 
     - unfold honest_nonces_ok; intros.
       unfold honest_nonce_tracking_ok.
 
-      destruct (u_id ==n A); destruct (u_id ==n B);
-        destruct (rec_u_id ==n A); destruct (rec_u_id ==n B);
-          unfold A in *; unfold B in *;
-            subst; try contradiction; try discriminate;
-              clean_map_lookups; eauto; simpl; repeat (apply conj); intros;
-                clean_map_lookups; eauto.
+      destruct (u_id ==n ShareKeyProtocol.A); destruct (u_id ==n ShareKeyProtocol.B);
+        destruct (rec_u_id ==n ShareKeyProtocol.A); destruct (rec_u_id ==n ShareKeyProtocol.B);
+          subst; try contradiction; try discriminate; clean_map_lookups; simpl;
+            repeat (apply conj); intros; clean_map_lookups; eauto.
 
     - unfold honest_users_only_honest_keys; intros.
-      destruct (u_id ==n A); destruct (u_id ==n B);
+      destruct (u_id ==n ShareKeyProtocol.A);
+        destruct (u_id ==n ShareKeyProtocol.B);
         subst;
         simpl in *;
         clean_map_lookups;
         rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty;
         eauto;
-        simpl in *.
-
-      + unfold A__keys in H0; destruct (KID1 ==n k_id); subst; clean_map_lookups; eauto.
-      + unfold B__keys in H0; destruct (KID1 ==n k_id); subst; clean_map_lookups; eauto.
+        simpl in *;
+        solve_perm_merges;
+        solve_concrete_maps;
+        solve_simple_maps;
+        eauto.
   Qed.
-
-  Hint Resolve
-       univ_ok_start
-       adv_univ_ok_start.
-
-  Theorem base_pingpong_refines_ideal_pingpong :
-    forall adv U__r honestk,
-      U__r = real_univ_start $0 [] [] 0 0 adv
-      -> honestk = RealWorld.findUserKeys U__r.(RealWorld.users)
-      -> @lameAdv Unit tt adv
-      -> RealWorld.key_heap adv = $0
-      -> RealWorld.msg_heap adv = []
-      -> RealWorld.c_heap adv = []
-      -> adv_message_queue_ok U__r.(RealWorld.users) U__r.(RealWorld.all_ciphers) U__r.(RealWorld.all_keys) adv.(RealWorld.msg_heap)
-      -> adv_no_honest_keys honestk adv.(RealWorld.key_heap)
-      -> refines (@lameAdv Unit tt) U__r ideal_univ_start.
+  
+  
+  Lemma universe_starts_safe : R (RealWorld.peel_adv U__r) U__i /\ universe_ok U__r /\ adv_universe_ok U__r.
   Proof.
-    exists RSimplePing; unfold simulates.
-    intuition (subst; eauto).
+    repeat (simple apply conj);
+      eauto using univ_ok_start, adv_univ_ok_start.
+
+    pose proof U_good;
+      unfold universe_starts_sane, adversary_is_lame in *;
+      split_ands;
+      unfold R;
+      unfold U__r in *;
+      eapply Start;
+      eauto.
   Qed.
 
+End ShareKeyProtocolSecure.
 
-End FeebleSimulates.
+(* Timings:
+ *
+ * --------------------------------------------------------------
+ * --------------------------------------------------------------
+ *)

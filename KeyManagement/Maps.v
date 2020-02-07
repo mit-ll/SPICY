@@ -30,8 +30,9 @@ Require Import
 Module Import NatMap := FMapList.Make(Nat_as_OT).
 Module P := WProperties_fun Nat_as_OT NatMap.
 Module F := P.F.
+Module O := OrdProperties NatMap.
 
-Export NatMap P F.
+Export NatMap P F O.
 
 From Coq Require List.
 
@@ -424,7 +425,7 @@ Proof.
   intros.
   match goal with
   | [ |- ?m = _ ] => canonicalize_map m
-  end; trivial.
+  end; maps_equal.
 Qed.
 
 Lemma canonicalize_map_test2 :
@@ -454,6 +455,36 @@ Proof.
   | [ |- ?m = _ ] => canonicalize_map m
   end; maps_equal.
 Qed.
+
+Definition canon_map {V} (m : NatMap.t V) :=
+  of_list (to_list m).
+
+Lemma canon_map_ok :
+  forall {V} (m : NatMap.t V),
+    m = canon_map m.
+Proof.
+  intros.
+  unfold canon_map.
+  pose proof (of_list_3 m).
+  apply map_eq_Equal in H.
+  rewrite H.
+  trivial.
+Qed.
+
+(* Use if the keys are concrete. Faster and it sorts by key so order is consistent *)
+Definition canonicalize_concrete_map {v} (m : NatMap.t v) : NatMap.t v.
+  destruct m.
+  unfold Raw.t in this0.
+  let f := constr:(fun (acc : NatMap.t v) (cur : nat * v) =>
+                     let (k, v) := cur
+                     in acc $+ (k, v))
+  in let m' := (eval simpl in (fold_left f this0 $0))
+  in apply m'.
+Defined.
+
+Ltac canonicalize_concrete_map m :=
+  let m' := (eval simpl in (canonicalize_concrete_map m))
+  in replace m with m' in * by maps_equal.
 
 Section MapPredicates.
   Variable V : Type.
@@ -518,3 +549,87 @@ Section MapPredicates.
   Qed.
 
 End MapPredicates.
+
+
+Section ConcreteMaps.
+
+  Definition next_key {V} (m : NatMap.t V) : nat :=
+    match max_elt m with
+    | None => 0
+    | Some (k,v) => S k
+    end.
+
+  Lemma max_elt_add_ne_recur :
+    forall {V} (m : NatMap.t V) k1 k2 v1 v2,
+      m $? k1 = None
+      -> k1 <> k2
+      -> max_elt (m $+ (k1,v1)) = Some (k2,v2)
+      -> max_elt m = Some (k2,v2).
+  Proof.
+    induction m using map_induction_bis; intros;
+      Equal_eq; eauto.
+
+    - unfold max_elt, max_elt_aux in H1; simpl in H1;
+        clean_map_lookups.
+
+    - destruct (x ==n k1); clean_map_lookups; eauto.
+    
+  Admitted.
+
+  Lemma max_elt_ge_elements :
+    forall {V} (m : NatMap.t V) k v,
+      max_elt m = Some (k,v)
+      -> forall k' v', m $? k' = Some v'
+                 -> le k' k.
+  Proof.
+    induction m using map_induction_bis; intros;
+      Equal_eq; clean_map_lookups; eauto.
+
+    destruct (x ==n k'); subst; clean_map_lookups; eauto.
+    - clear IHm.
+      generalize (max_elt_Above H0); intros MEA.
+      specialize (MEA k').
+      destruct (k ==n k'); subst; clean_map_lookups; eauto.
+      apply Nat.lt_le_incl.
+      apply MEA.
+      rewrite in_find_iff; unfold not; clean_map_lookups.
+      
+    - destruct (x ==n k); subst; eauto using max_elt_add_ne_recur.
+      apply Nat.lt_le_incl.
+      generalize (max_elt_Above H0); intros MEA.
+      apply MEA.
+      rewrite in_find_iff; unfold not; clean_map_lookups.
+  Qed.
+
+
+  Lemma next_key_not_in :
+    forall {V} (m : NatMap.t V) k,
+      k = next_key m
+      -> m $? k = None.
+  Proof.
+    unfold next_key; intros.
+    cases (max_elt m); subst.
+    - destruct p; simpl.
+      cases (m $? S k); eauto.
+      exfalso.
+
+      assert (Above k (m $- k)) by eauto using max_elt_Above.
+      specialize (H (S k)).
+
+      assert (In (S k) (m $- k)).
+      rewrite in_find_iff; unfold not; intros.
+      rewrite remove_neq_o in H0 by eauto; contra_map_lookup.
+      specialize (H H0).
+      SearchAbout (_ < _).
+      assert (k < S k) by eauto using Nat.lt_succ_diag_r.
+      assert (S k < S k) by eauto using Nat.lt_trans.
+      SearchAbout (_ < _).
+      assert (~ (S k < S k)) by eauto using lt_antirefl.
+      contradiction.
+
+    - apply max_elt_Empty in Heq.
+      apply Empty_eq_empty in Heq; subst.
+      apply lookup_empty_none.
+  Qed.
+
+End ConcreteMaps.

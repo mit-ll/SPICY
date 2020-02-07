@@ -7440,8 +7440,6 @@ Section SingleAdversarySimulates.
         -> honest_cmds_safe U__ra.
     Proof.
       unfold honest_cmds_safe; intros.
-      (* remember (strip_adversary_univ U__ra b) as U__r. *)
-      
       eapply clean_users_cleans_user
         with (honestk := RealWorld.findUserKeys U__ra.(RealWorld.users))
              (cs := U__ra.(RealWorld.all_ciphers))
@@ -7452,53 +7450,41 @@ Section SingleAdversarySimulates.
     Qed.
     
     Hint Resolve honest_cmds_safe_advuniv.
-    
+
     Lemma silent_step_advuniv_implies_univ_ok :
-      forall {A B} (U U' : universe A B) (U__i : IdealWorld.universe A) (R : simpl_universe A -> IdealWorld.universe A -> Prop) lbl (b : <<(Base B)>>),
+      forall {A B} (U U' : universe A B) lbl,
         step_universe U lbl U'
         -> lbl = Silent
         -> adv_universe_ok U
-        -> R (peel_adv (strip_adversary_univ U b)) U__i
-        -> honest_actions_safe B R
+        -> honest_cmds_safe U
         -> universe_ok U
         -> universe_ok U'.
      Proof.
-       intros.
-       remember (strip_adversary_univ U b) as U__r.
+       intros A B U U' lbl STEP e AUOK HCS UOK;
+         rewrite e in *; clear e.
 
-       assert (universe_ok (strip_adversary_univ U b))
-         as STRIP_UNIV_OK
-           by (eauto using ok_universe_strip_adversary_still_ok).
+       unfold adv_universe_ok in AUOK; split_ands.
+       invert STEP; eauto.
 
-       assert (adv_universe_ok (strip_adversary_univ U b))
-         as STRIP_ADV_UNIV_OK
-           by eauto using ok_adv_universe_strip_adversary_still_ok.
+       - match goal with
+         | [ H : users U $? _ = Some ?ud |- _ ] =>
+           destruct U; destruct ud;
+             unfold build_data_step, buildUniverse in *; simpl in *
+         end.
 
-       rewrite <- HeqU__r in *.
-       specialize (H3 _ _ H2 STRIP_UNIV_OK STRIP_ADV_UNIV_OK); subst.
-
-       unfold adv_universe_ok in H1; split_ands.
-       invert H; eauto.
-       - destruct U; destruct userData;
-           unfold build_data_step, buildUniverse in *; simpl in *.
-
-         generalize (clean_users_cleans_user (findUserKeys users) all_ciphers users u_id H11 eq_refl);
+         generalize (clean_users_cleans_user (findUserKeys users) all_ciphers users u_id H7 eq_refl);
            intros CLEAN_USER; simpl in CLEAN_USER.
 
-         apply honest_cmds_safe_advuniv in H3.
-         (* eapply honest_cmds_implies_safe_cipher_actions in H3; eauto. *)
-         (* 2: eapply StepUser; eauto. *)
-
-         unfold honest_cmds_safe in H3;
-           specialize (H3 _ _ _ eq_refl H11); simpl in H3.
+         unfold honest_cmds_safe in HCS;
+           specialize (HCS _ _ _ eq_refl H7); simpl in HCS.
          eapply honest_silent_step_adv_univ_enc_ciphers_ok; simpl; eauto.
-
+       
        - destruct U.
          unfold build_data_step, buildUniverseAdv in *; simpl in *.
          eapply adv_step_encrypted_ciphers_ok; eauto.
          unfold keys_and_permissions_good in *; split_ands; eauto.
      Qed.
-
+     
   End RealWorldLemmas.
 
   Hint Constructors RealWorld.step_user.
@@ -7611,12 +7597,12 @@ Section SingleAdversarySimulates.
       assumption. eapply honest_key_is_honest_clean_key in H1. eapply H1.
     - unfold strip_adversary_univ in H10, H7; simpl in *. unfold clean_ciphers in *; apply clean_ciphers_inv in H7.
       eapply MessageEq.CryptoSigEncCase with (honestk := (RealWorld.findUserKeys U__ra.(RealWorld.users))).
-      eapply H7. assumption. reflexivity. intros. specialize (H10 u).
-      eapply clean_users_cleans_user with (honestk := (RealWorld.findUserKeys U__ra.(RealWorld.users))) (cs := U__ra.(RealWorld.all_ciphers)) in H.
-      2: reflexivity. eapply H10 in H. simpl in H. intuition (eauto using clean_key_permissions_inv', clean_key_permissions_keeps_honest_permission).
-      eapply clean_key_permissions_keeps_honest_permission in H5. eapply clean_key_permissions_keeps_honest_permission in H6. eauto.
-      rewrite honest_key_honest_keyb in H2. assumption.
-      rewrite honest_key_honest_keyb in H1. assumption.
+      eapply H7. assumption. reflexivity. intros.  specialize (H10 u).
+     eapply clean_users_cleans_user with (honestk := (RealWorld.findUserKeys U__ra.(RealWorld.users))) (cs := U__ra.(RealWorld.all_ciphers)) in H.
+      2: reflexivity.  eapply H10 in H. simpl in H. intuition (eauto using clean_key_permissions_inv', clean_key_permissions_keeps_honest_permission).
+      eapply clean_key_permissions_keeps_honest_permission in H5; eauto. eapply clean_key_permissions_keeps_honest_permission in H6; eauto.
+      unfold honest_perm_filter_fn.  rewrite honest_key_honest_keyb in H2. unfold RealWorld.honest_keyb in H2. assumption.
+      unfold honest_perm_filter_fn.  rewrite honest_key_honest_keyb in H1. unfold RealWorld.honest_keyb in H1. assumption.
       apply H4 in H3. split_ands. eapply clean_key_permissions_inv in H3. split_ands. assumption.
       apply H4 in H3. split_ands. eapply clean_key_permissions_inv in H5. split_ands. assumption.
       assumption. eapply honest_key_is_honest_clean_key in H1. eapply H1.
@@ -7700,14 +7686,20 @@ Section SingleAdversarySimulates.
     do 3 eexists; intuition idtac; eauto.
   Qed.
 
+  Definition ciphers_honestly_signed (honestk : key_perms) (cs : RealWorld.ciphers) :=
+    Forall_natmap (fun c => RealWorld.cipher_honestly_signed honestk c = true) cs.
+
+  Definition keys_honest (honestk : key_perms) (ks : keys) :=
+    Forall_natmap (fun k => RealWorld.honest_key honestk k.(keyId)) ks.
+
   Definition universe_starts_ok {A B} (U : RealWorld.universe A B) :=
     let honestk := RealWorld.findUserKeys U.(RealWorld.users)
     in  (forall u_id u,
             U.(RealWorld.users) $? u_id = Some u
             -> u.(RealWorld.msg_heap) = []
             /\ (forall k_id kp, u.(RealWorld.key_heap) $? k_id = Some kp -> honestk $? k_id = Some true))
-      /\ Forall_natmap (fun c => RealWorld.cipher_honestly_signed honestk c = true) U.(RealWorld.all_ciphers)
-      /\ Forall_natmap (fun k => RealWorld.honest_key honestk k.(keyId)) U.(RealWorld.all_keys)
+      /\ ciphers_honestly_signed honestk U.(RealWorld.all_ciphers)
+      /\ keys_honest honestk U.(RealWorld.all_keys)
   .
 
   Lemma universe_starts_ok_clean_ciphers_idempotent :
@@ -8001,10 +7993,9 @@ Proof.
     assert (R' (RealWorld.peel_adv U') U__i') as INR' by (subst; eauto).
 
     assert (universe_ok U') as UOK.
-    eapply silent_step_advuniv_implies_univ_ok with (R0:=R') (b0:=b) (U__i0 := U__i); eauto.
-    subst.
-    rewrite strip_adv_simpl_peel_same_as_strip_adv in H7.
-    rewrite <- strip_adversary_same_as_peel_strip_simpl, strip_adv_simpl_strip_adv_idempotent; eauto.
+    eapply silent_step_advuniv_implies_univ_ok; eauto.
+
+    eapply H2; [rewrite HeqR' | ..]; eauto.
     
     assert (adv_universe_ok U') as AUOK.
     subst.

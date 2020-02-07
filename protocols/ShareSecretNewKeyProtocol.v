@@ -14,7 +14,7 @@
  * Delivered to the U.S. Government with Unlimited Rights, as defined in DFARS Part 252.227-7013
  * or 7014 (Feb 2014). Notwithstanding any copyright notice, U.S. Government rights in this work are
  * defined by DFARS 252.227-7013 or DFARS 252.227-7014 as detailed above. Use of this work other than
- *  as specifically authorized by the U.S. Government may violate any copyrights that exist in this work. *)
+ * as specifically authorized by the U.S. Government may violate any copyrights that exist in this work. *)
 From Coq Require Import
      List.
 
@@ -43,47 +43,64 @@ Set Implicit Arguments.
 Definition A : user_id   := 0.
 Definition B : user_id   := 1.
 
+Transparent A B.
+
 Section IdealProtocol.
   Import IdealWorld.
 
   Definition CH__A2B : channel_id := 0.
+  Definition CH__B2A : channel_id := 1.
+  Definition empty_chs : channels := ($0 $+ (CH__A2B, []) $+ (CH__B2A, [])).
 
-  Definition PERMS__a := $0 $+ (CH__A2B, {| read := true; write := true |}). (* writer *)
-  Definition PERMS__b := $0 $+ (CH__A2B, {| read := true; write := false |}). (* reader *)
+  Definition owner  := {| read := true; write := true |}.
+  Definition reader := {| read := true; write := false |}.
+  Definition writer := {| read := false; write := true |}.
 
-  Definition mkiU (cv : channels) (p__a p__b : cmd (Base Nat)): universe Nat :=
+  Definition PERMS__a := $0 $+ (CH__A2B, owner) $+ (CH__B2A, reader).
+  Definition PERMS__b := $0 $+ (CH__A2B, reader) $+ (CH__B2A, owner).
+
+  Definition mkiU (cv : channels) (perm__a perm__b : permissions) (p__a p__b : cmd (Base Nat)): universe Nat :=
     {| channel_vector := cv
      ; users := $0
-         $+ (A,   {| perms    := PERMS__a ; protocol := p__a |})
-         $+ (B,   {| perms    := PERMS__b ; protocol := p__b |})
+         $+ (A, {| perms := perm__a ; protocol := p__a |})
+         $+ (B, {| perms := perm__b ; protocol := p__b |})
     |}.
 
   Definition ideal_univ_start :=
-    mkiU ($0 $+ (CH__A2B, []))
+    mkiU empty_chs PERMS__a PERMS__b
          (* user A *)
          ( n <- Gen
-         ; _ <- Send (Content n) CH__A2B
+         ; chid <- CreateChannel
+         ; _ <- Send (MsgPair (Content n) (Permission {| ch_perm := writer ; ch_id := chid |})) CH__A2B
          ; Return n)
          (* user B *)
-         ( m <- @Recv Nat CH__A2B
-         ; ret (extractContent m)).
+         ( m <- @Recv (TPair Nat Access) CH__A2B
+         ; ret (extractContent (msgFst m))).
 
-  Definition ideal_univ_sent1 n :=
-    mkiU ($0 $+ (CH__A2B, [existT _ _ (Content n)]))
+  Definition ideal_univ_sent1 chid n :=
+    mkiU ($0
+           $+ (CH__A2B,
+                 [existT _ _ (MsgPair (Content n) (Permission {| ch_perm := writer ; ch_id := chid |})) ])
+           $+ (CH__B2A, [])
+           $+ (chid, []))
+         (PERMS__a $+ (chid, creator_permission)) PERMS__b
          (* user A *)
          ( _ <- ret tt
          ; ret n)
          (* user B *)
-         ( m <- @Recv Nat CH__A2B
-         ; ret (extractContent m)).
+         ( m <- @Recv (TPair Nat Access) CH__A2B
+         ; ret (extractContent (msgFst m))).
 
-  Definition ideal_univ_recd1 n :=
-    mkiU ($0 $+ (CH__A2B, []))
+  Definition ideal_univ_recd1 chid n :=
+    mkiU (empty_chs $+ (chid, []))
+         (PERMS__a $+ (chid, owner))
+         (PERMS__b $+ (chid, writer))
          (* user A *)
          (Return n)
          (* user B *)
-         ( m <- @Return (Message Nat) (Content n)
-         ; ret (extractContent m)).
+         ( m <- @Return (Message (TPair Nat Access))
+                       (MsgPair (Content n) (Permission {| ch_perm := writer ; ch_id := chid |}))
+         ; ret (extractContent (msgFst m))).
 
 End IdealProtocol.
 
@@ -91,81 +108,81 @@ Section RealProtocolParams.
   Import RealWorld.
 
   Definition KID1 : key_identifier := 0.
+  Definition KID2 : key_identifier := 1.
 
   Definition KEY1  := MkCryptoKey KID1 Signing AsymKey.
-  Definition KEYS  := $0 $+ (KID1, KEY1).
+  Definition KEY2  := MkCryptoKey KID2 Signing AsymKey.
+  Definition KEYS  := $0 $+ (KID1, KEY1) $+ (KID2, KEY2).
 
-  Definition A__keys := $0 $+ (KID1, true).
-  Definition B__keys := $0 $+ (KID1, false).
+  Definition A__keys := $0 $+ (KID1, true) $+ (KID2, false).
+  Definition B__keys := $0 $+ (KID1, false) $+ (KID2, true).
+
 End RealProtocolParams.
 
 Section RealProtocol.
   Import RealWorld.
 
   Definition mkrU (mycs1 mycs2 : my_ciphers) (froms1 froms2 : recv_nonces)
-                  (sents1 sents2 : sent_nonces) (cur_n1 cur_n2 : nat)
-                  (msgs1 msgs2 : queued_messages) (cs : ciphers)
-                  (p__a p__b : user_cmd (Base Nat)) (adv : user_data Unit) : universe Nat Unit :=
+             (sents1 sents2 : sent_nonces) (cur_n1 cur_n2 : nat)
+             (ks1 ks2 : key_perms)
+             (gks : keys)
+             (msgs1 msgs2 : queued_messages) (cs : ciphers)
+             (p__a p__b : user_cmd (Base Nat)) (adv : user_data Unit) : universe Nat Unit :=
     {| users := $0
-         $+ (A, {| key_heap := A__keys ; protocol := p__a ; msg_heap := msgs1 ; c_heap := mycs1
+         $+ (A, {| key_heap := ks1 ; protocol := p__a ; msg_heap := msgs1 ; c_heap := mycs1
                  ; from_nons := froms1 ; sent_nons := sents1 ; cur_nonce := cur_n1 |})
-         $+ (B, {| key_heap := B__keys ; protocol := p__b ; msg_heap := msgs2 ; c_heap := mycs2
+         $+ (B, {| key_heap := ks2 ; protocol := p__b ; msg_heap := msgs2 ; c_heap := mycs2
                  ; from_nons := froms2 ; sent_nons := sents2 ; cur_nonce := cur_n2 |})
      ; adversary        := adv
      ; all_ciphers      := cs
-     ; all_keys         := KEYS
+     ; all_keys         := gks
     |}.
 
   Definition real_univ_start cs mycs1 mycs2 cur_n1 cur_n2 :=
-    mkrU mycs1 mycs2 [] [] [] [] cur_n1 cur_n2 [] [] cs
+    mkrU mycs1 mycs2 [] [] [] [] cur_n1 cur_n2 A__keys B__keys KEYS [] [] cs
          (* user A *)
-         ( n  <- Gen
-         ; c  <- Sign KID1 B (message.Content n)
+         ( n <- Gen
+         ; kp <- GenerateAsymKey Encryption
+         ; c  <- Sign KID1 B (MsgPair (message.Content n) (Permission (fst kp, false)))
          ; _  <- Send B c
          ; Return n)
 
          (* user B *)
-         ( c  <- @Recv Nat (Signed KID1 true)
+         ( c  <- @Recv (TPair Nat Access) (Signed KID1 true)
          ; v  <- Verify KID1 c
          ; ret (if fst v
-                then match snd v with
-                     | message.Content p => p
-                     | _                 => 0
-                     end
+                then (extractContent (msgFst (snd v)))
                 else 1)).
   
-  Definition real_univ_sent1 n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 :=
-    mkrU mycs1 mycs2 [] [] [non1] [] cur_n1 cur_n2 [] [existT _ Nat (SignedCiphertext cid1)]
-         (cs $+ (cid1, SigCipher KID1 B non1 (message.Content n)))
+  Definition real_univ_sent1 k_id k n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 :=
+    mkrU mycs1 mycs2 [] [] [non1] [] cur_n1 cur_n2
+         (add_key_perm k_id true A__keys) B__keys (KEYS $+ (k_id, k))
+         [] [existT _ (TPair Nat Access) (SignedCiphertext cid1)]
+         (cs $+ (cid1, SigCipher KID1 B non1 (MsgPair (message.Content n) (Permission (k_id, false)))))
          (* user A *)
          ( _  <- ret tt
          ; ret n)
 
          (* user B *)
-         ( c  <- @Recv Nat (Signed KID1 true)
+         ( c  <- @Recv (TPair Nat Access) (Signed KID1 true)
          ; v  <- Verify KID1 c
          ; ret (if fst v
-                then match snd v with
-                     | message.Content p => p
-                     | _                 => 0
-                     end
+                then (extractContent (msgFst (snd v)))
                 else 1)).
 
-  Definition real_univ_recd1 n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 :=
-    mkrU mycs1 mycs2 [] [non1] [non1] [] cur_n1 cur_n2 [] []
-         (cs $+ (cid1, SigCipher KID1 B non1 (message.Content n)))
+  Definition real_univ_recd1 k_id k n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 :=
+    mkrU mycs1 mycs2 [] [non1] [non1] [] cur_n1 cur_n2
+         (add_key_perm k_id true A__keys) (B__keys $k++ ($0 $+ (k_id,false))) (KEYS $+ (k_id,k)) [] []
+         (cs $+ (cid1, SigCipher KID1 B non1 (MsgPair (message.Content n) (Permission (k_id, false)))))
          (* user A *)
          ( _  <- ret tt
          ; ret n)
 
          (* user B *)
-         ( c  <- (@Return (Crypto Nat) (SignedCiphertext cid1))
-         ; v  <- @Verify Nat KID1 c
+         ( c  <- (@Return (Crypto (TPair Nat Access)) (SignedCiphertext cid1))
+         ; v  <- @Verify (TPair Nat Access) KID1 c
          ; ret (if fst v
-                then match snd v with
-                     | message.Content p => p
-                     | _                 => 0
-                     end
+                then (extractContent (msgFst (snd v)))
                 else 1)).
 
   Inductive RSimplePing : RealWorld.simpl_universe Nat -> IdealWorld.universe Nat -> Prop :=
@@ -173,55 +190,65 @@ Section RealProtocol.
       ~^* (real_univ_start cs mycs1 mycs2 cur_n1 cur_n2 adv) U__r
       -> @lameAdv Unit tt adv
       -> RSimplePing (peel_adv U__r) ideal_univ_start
-  | Sent1 : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 n cid1 non1 adv,
-      ~^* (real_univ_sent1 n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
+  | Sent1 : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 k k_id n chid cid1 non1 adv,
+      ~^* (real_univ_sent1 k_id k n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
       -> @lameAdv Unit tt adv
-      -> RSimplePing (peel_adv U__r) (ideal_univ_sent1 n)
-  | Recd1 : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 n cid1 non1 adv,
-      ~^* (real_univ_recd1 n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
+      -> ~ In k_id KEYS
+      -> ~ In chid empty_chs
+      -> RSimplePing (peel_adv U__r) (ideal_univ_sent1 chid n)
+  | Recd1 : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 k k_id n chid cid1 non1 adv,
+      ~^* (real_univ_recd1 k_id k n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
       -> @lameAdv Unit tt adv
-      -> RSimplePing (peel_adv U__r) (ideal_univ_recd1 n)
+      -> ~ In k_id KEYS
+      -> ~ In chid empty_chs
+      -> RSimplePing (peel_adv U__r) (ideal_univ_recd1 chid n)
   .
 
-  Lemma Sent1' : forall U__r U__i cs mycs1 mycs2 cur_n1 cur_n2 n cid1 non1 adv,
-      ~^* (real_univ_sent1 n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
+  Lemma Start' : forall U__r U__i cs mycs1 mycs2 cur_n1 cur_n2 adv,
+      ~^* (real_univ_start cs mycs1 mycs2 cur_n1 cur_n2 adv) U__r
       -> @lameAdv Unit tt adv
-      -> U__i = ideal_univ_sent1 n
+      -> U__i = ideal_univ_start
+      -> RSimplePing (peel_adv U__r) U__i.
+  Proof. intros; subst; eapply Start; eauto. Qed.
+
+  Lemma Sent1' : forall U__r U__i cs mycs1 mycs2 cur_n1 cur_n2 k k_id n chid cid1 non1 adv,
+      ~^* (real_univ_sent1 k_id k n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
+      -> @lameAdv Unit tt adv
+      -> ~ In k_id KEYS
+      -> ~ In chid empty_chs
+      -> U__i = ideal_univ_sent1 chid n
       -> RSimplePing (peel_adv U__r) U__i.
   Proof. intros; subst; eapply Sent1; eauto. Qed.
-  
-  Lemma Recd1' : forall U__r U__i cs mycs1 mycs2 cur_n1 cur_n2 n cid1 non1 adv,
-      ~^* (real_univ_recd1 n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
+
+  Lemma Recd1' : forall U__r U__i cs mycs1 mycs2 cur_n1 cur_n2 k k_id n chid cid1 non1 adv,
+      ~^* (real_univ_recd1 k_id k n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
       -> @lameAdv Unit tt adv
-      -> U__i = ideal_univ_recd1 n
+      -> ~ In k_id KEYS
+      -> ~ In chid empty_chs
+      -> U__i = ideal_univ_recd1 chid n
       -> RSimplePing (peel_adv U__r) U__i.
   Proof. intros; subst; eapply Recd1; eauto. Qed.
 
 End RealProtocol.
+
+(* Hint Constructors RealWorld.msg_accepted_by_pattern. *)
+(* Hint Constructors RSimplePing. *)
+
+Import SimulationAutomation.
 
 Hint Unfold
      A B PERMS__a PERMS__b
      real_univ_start real_univ_sent1 real_univ_recd1 mkrU
      ideal_univ_start ideal_univ_sent1 ideal_univ_recd1 mkiU : constants.
 
-Import SimulationAutomation.
-
-(* Hint Constructors *)
-(*      RSimplePing. *)
-Hint Extern 1 (RSimplePing (RealWorld.peel_adv _) _) =>
-  simpl; simpl_real_users_context; simpl_ideal_users_context; simpl;
-   ( (eapply Start  ; solve [ eauto ])
-   || (eapply Recd1' ; solve [ eauto ])
-   || (eapply Sent1' ; solve [ eauto ]) ).
-
 Hint Extern 0 (~^* _ _) =>
  progress(unfold real_univ_start, real_univ_sent1, real_univ_recd1, mkrU; simpl).
+
 Hint Extern 1 (RSimplePing (RealWorld.buildUniverse _ _ _ _ _ _) _) => unfold RealWorld.buildUniverse; simpl.
 
 Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
  progress(unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, mkiU; simpl).
 
-(* Hint Extern 1 (IdealWorld.lstep_universe _ _ _) => single_step_ideal_universe; eauto 2; econstructor. *)
 Hint Extern 1 (PERMS__a $? _ = _) => unfold PERMS__a.
 Hint Extern 1 (PERMS__b $? _ = _) => unfold PERMS__b.
 
@@ -230,9 +257,27 @@ unfold ideal_univ_start, ideal_univ_sent1, ideal_univ_recd1, mkiU; simpl;
   repeat (ideal_single_silent_multistep A);
   repeat (ideal_single_silent_multistep B); solve_refl.
 
-Hint Unfold mkrU : user_build.
 
-Module SimplePingProtocolSecure <: SafeProtocol.
+Ltac clear_extra_adversary :=
+  match goal with
+  | [ |- context [ RSimplePing
+                    (RealWorld.peel_adv {| RealWorld.users := _;
+                                           RealWorld.adversary := ?a;
+                                           RealWorld.all_ciphers := _;
+                                           RealWorld.all_keys := _ |}) _ ]] =>
+    repeat match goal with
+           | [ H : lameAdv _ ?bada |- _ ] =>
+             does_not_unify bada a; clear H bada
+           end
+  end.
+
+Hint Extern 1 (RSimplePing (RealWorld.peel_adv _) _) =>
+  simpl; simpl_real_users_context; simpl_ideal_users_context; simpl;
+   ( (eapply Start  ; solve [ eauto ])
+   || (eapply Recd1' ; swap 1 4; solve [ eauto ])
+   || (eapply Sent1' ; swap 1 3; swap 2 4; solve [ eauto ]) ).
+
+Module ShareSecretNewKeyProtocolSecure <: SafeProtocol.
   Definition A := Nat.
   Definition B := Unit.
 
@@ -265,16 +310,18 @@ Module SimplePingProtocolSecure <: SafeProtocol.
       invert R;
       destruct U__r0; destruct U__r; simpl in *; subst.
 
-    - churn; simpl_real_users_context.
+    - churn; simpl_real_users_context; clear_extra_adversary.
+      + eexists; split; [ solve_refl | ]; eauto 12.
+      + eexists; split; [ solve_refl | ]; eauto 12.
       + eexists; split; [ solve_refl | ]; eauto 12.
       + eexists; split; [ solve_refl | ]; eauto 12.
       + eexists; split; [ solve_refl | ]; eauto 12.
       + eexists; split; [ solve_refl | ]; eauto 12.
 
-    - churn; simpl_real_users_context.
+    - churn; simpl_real_users_context; clear_extra_adversary.
       + eexists; split; [ solve_refl | ]; eauto 12.
         
-    - churn; simpl_real_users_context.
+    - churn; simpl_real_users_context; clear_extra_adversary.
  
       + eexists; split; [ solve_refl | ]; eauto 12.
       + eexists; split; [ solve_refl | ]; eauto 12.
@@ -309,12 +356,12 @@ Module SimplePingProtocolSecure <: SafeProtocol.
       invert R;
       destruct U__r0; destruct U__r; simpl in *; subst.
 
-    - churn; simpl_real_users_context; simpl.
+    - churn; simpl_real_users_context; simpl; clear_extra_adversary.
 
       + do 3 eexists;
           repeat (apply conj); eauto 12.
 
-    - churn; simpl_real_users_context.
+    - churn; simpl_real_users_context; clear_extra_adversary.
       
       + do 3 eexists;
           repeat (apply conj); eauto.
@@ -322,7 +369,7 @@ Module SimplePingProtocolSecure <: SafeProtocol.
       + do 3 eexists;
           repeat (apply conj); eauto 12.
 
-    - churn; simpl_real_users_context.
+    - churn; simpl_real_users_context; clear_extra_adversary.
 
     (* time *)
     (*   (intros; *)
@@ -352,17 +399,39 @@ Module SimplePingProtocolSecure <: SafeProtocol.
               solve_concrete_maps; solve_perm_merges
             end.
 
-    - churn;
-        [> solve_honest_actions_safe; eauto 8 ..].
+    - churn.
       
-    - churn;
-        [> solve_honest_actions_safe; eauto 8 ..].
+      + solve_honest_actions_safe; eauto 8.
+      + solve_honest_actions_safe; eauto 8.
+      + solve_honest_actions_safe; eauto 8.
+      + solve_honest_actions_safe; eauto 8.
+      + solve_honest_actions_safe; eauto 8.
+        solve_perm_merges.
+        solve_perm_merges; eauto.
+        solve_perm_merges.
+      + solve_honest_actions_safe; eauto 8.
+      + solve_honest_actions_safe; eauto 8.
 
-    - churn;
-        [> solve_honest_actions_safe; eauto 8 ..].
+    - churn.
+      + solve_honest_actions_safe; eauto 8.
+      + solve_honest_actions_safe; eauto 8.
 
-      Unshelve.
-      all: auto.
+    - churn.
+      + solve_honest_actions_safe; eauto 8.
+      + solve_honest_actions_safe; eauto 8.
+      + solve_honest_actions_safe; eauto 8.
+      + solve_honest_actions_safe; eauto 8.
+      + solve_honest_actions_safe; eauto 8.
+      + solve_honest_actions_safe; eauto 8.
+      + solve_honest_actions_safe; eauto 8.
+      + solve_honest_actions_safe; eauto 8.
+      + solve_honest_actions_safe; eauto 8.
+      + solve_honest_actions_safe; eauto 8.
+      + solve_honest_actions_safe; eauto 8.
+      + solve_honest_actions_safe; eauto 8.
+      + solve_honest_actions_safe; eauto 8.
+      + solve_honest_actions_safe; eauto 8.
+
   Qed.
 
   Lemma univ_ok_start : universe_ok U__r.
@@ -387,20 +456,20 @@ Module SimplePingProtocolSecure <: SafeProtocol.
 
     - unfold user_cipher_queues_ok.
       rewrite Forall_natmap_forall; intros.
-      cases (SimplePingProtocol.A ==n k); cases (SimplePingProtocol.B ==n k);
+      cases (ShareSecretNewKeyProtocol.A ==n k); cases (ShareSecretNewKeyProtocol.B ==n k);
         subst; clean_map_lookups; simpl in *; econstructor; eauto.
 
     - unfold honest_nonces_ok; intros.
       unfold honest_nonce_tracking_ok.
 
-      destruct (u_id ==n SimplePingProtocol.A); destruct (u_id ==n SimplePingProtocol.B);
-        destruct (rec_u_id ==n SimplePingProtocol.A); destruct (rec_u_id ==n SimplePingProtocol.B);
+      destruct (u_id ==n ShareSecretNewKeyProtocol.A); destruct (u_id ==n ShareSecretNewKeyProtocol.B);
+        destruct (rec_u_id ==n ShareSecretNewKeyProtocol.A); destruct (rec_u_id ==n ShareSecretNewKeyProtocol.B);
           subst; try contradiction; try discriminate; clean_map_lookups; simpl;
             repeat (apply conj); intros; clean_map_lookups; eauto.
 
     - unfold honest_users_only_honest_keys; intros.
-      destruct (u_id ==n SimplePingProtocol.A);
-        destruct (u_id ==n SimplePingProtocol.B);
+      destruct (u_id ==n ShareSecretNewKeyProtocol.A);
+        destruct (u_id ==n ShareSecretNewKeyProtocol.B);
         subst;
         simpl in *;
         clean_map_lookups;
@@ -428,7 +497,7 @@ Module SimplePingProtocolSecure <: SafeProtocol.
       eauto.
   Qed.
 
-End SimplePingProtocolSecure.
+End ShareSecretNewKeyProtocolSecure.
 
 (* Timings:
  *

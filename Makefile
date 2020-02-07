@@ -15,7 +15,7 @@
 # or 7014 (Feb 2014). Notwithstanding any copyright notice, U.S. Government rights in this work are
 # defined by DFARS 252.227-7013 or DFARS 252.227-7014 as detailed above. Use of this work other than
 #  as specifically authorized by the U.S. Government may violate any copyrights that exist in this work.
-.PHONY: all coq frap
+.PHONY: all coq
 
 all: coq
 
@@ -23,10 +23,10 @@ include Makefile.coq.conf
 
 VOFILES = $(COQMF_VFILES:.v=.vo)
 
-frap:
-	$(MAKE) -C frap lib
+# frap:
+# 	$(MAKE) -C frap lib
 
-coq: Makefile.coq frap
+coq: Makefile.coq
 	$(MAKE) -f Makefile.coq $(filter-out protocols%,$(VOFILES))
 
 protocols: coq
