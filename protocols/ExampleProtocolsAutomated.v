@@ -38,9 +38,7 @@ Require IdealWorld RealWorld.
 Import IdealWorld.IdealNotations.
 Import RealWorld.RealWorldNotations.
 
-Require
-  SimplePingProtocol
-  SimpleEncProtocol.
+Require Import ExampleProtocols.
 
 Set Implicit Arguments.
 
@@ -53,17 +51,17 @@ Module Import SN := SetNotations(Foo).
 
 Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
 
-  Import SimplePingProtocol.
+  Import SignPingSendProtocol.
 
   Definition t__hon := Nat.
   Definition t__adv := Unit.
   Definition b := tt.
   Definition iu0  := ideal_univ_start.
-  Definition ru0  := real_univ_start $0 [] [] 0 0 startAdv.
+  Definition ru0  := real_univ_start startAdv.
 
   Import Gen Tacs SetLemmas.
 
-  Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start mkiU real_univ_start mkrU : core.
+  Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start mkiU real_univ_start mkrU mkrUsr startAdv : core.
 
   Lemma safe_invariant :
     invariantFor
@@ -73,17 +71,18 @@ Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
     eapply invariant_weaken.
 
     - apply multiStepClosure_ok; simpl.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
+      time(
+          gen1
+          ; gen1
+          ; gen1
+          ; gen1
+          ; gen1
+          ; gen1
+          ; gen1
+          ; gen1
+          ; gen1
+          ; gen1
+          ; gen1 ).
       gen1.
       
     - intros.
@@ -115,7 +114,7 @@ Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
     - solve_perm_merges; eauto.
     - econstructor.
     - unfold AdversarySafety.keys_honest, KEYS; rewrite Forall_natmap_forall; intros.
-      econstructor; simpl.
+      econstructor; unfold mkrUsr; simpl.
       rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty; eauto.
       solve_perm_merges.
     - unfold lameAdv; simpl; eauto.
@@ -160,6 +159,7 @@ Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
         subst;
         simpl in *;
         clean_map_lookups;
+        unfold mkrUsr; simpl; 
         rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty;
         eauto;
         simpl in *;
@@ -179,13 +179,13 @@ End SimplePingProtocolSecure.
 
 Module SimpleEncProtocolSecure <: AutomatedSafeProtocol.
 
-  Import SimpleEncProtocol.
+  Import EncPingSendProtocol.
 
   Definition t__hon := Nat.
   Definition t__adv := Unit.
   Definition b := tt.
   Definition iu0  := ideal_univ_start.
-  Definition ru0  := real_univ_start $0 [] [] 0 0 startAdv.
+  Definition ru0  := real_univ_start startAdv.
 
   Import Gen Tacs SetLemmas.
 
@@ -194,7 +194,7 @@ Module SimpleEncProtocolSecure <: AutomatedSafeProtocol.
   Lemma safe_invariant :
     invariantFor
       {| Initial := {(ru0, iu0)}; Step := @step t__hon t__adv  |}
-      (lift_fst honest_cmds_safe).
+      (fun st => safety st /\ liveness st ).
   Proof.
     eapply invariant_weaken.
 
@@ -213,10 +213,21 @@ Module SimpleEncProtocolSecure <: AutomatedSafeProtocol.
       gen1.
 
     - intros.
-      simpl in *.
-      sets_invert; unfold lift_fst;
-        split_ex; simpl in *; subst; solve_honest_actions_safe;
-          clean_map_lookups; eauto 8.
+      simpl in *; split.
+      
+      + sets_invert; unfold safety;
+          split_ex; simpl in *; subst; solve_honest_actions_safe;
+            clean_map_lookups; eauto 8.
+      + sets_invert; unfold liveness; intros;
+          split_ex; subst; intros; rstep.
+        * do 3 eexists;
+            repeat (apply conj); eauto.
+        * do 3 eexists;
+            repeat (apply conj); eauto.
+          subst; repeat (solve_action_matches1); clean_map_lookups.
+        * do 3 eexists;
+            repeat (apply conj); eauto.
+          subst; repeat (solve_action_matches1); clean_map_lookups.
 
       Unshelve.
       all:eauto.
@@ -230,7 +241,7 @@ Module SimpleEncProtocolSecure <: AutomatedSafeProtocol.
     - solve_perm_merges; eauto.
     - econstructor.
     - unfold AdversarySafety.keys_honest, KEYS; rewrite Forall_natmap_forall; intros.
-      econstructor; simpl.
+      econstructor; unfold mkrUsr; simpl.
       rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty; eauto.
       solve_perm_merges.
     - unfold lameAdv; simpl; eauto.
@@ -275,6 +286,7 @@ Module SimpleEncProtocolSecure <: AutomatedSafeProtocol.
         subst;
         simpl in *;
         clean_map_lookups;
+        unfold mkrUsr; simpl;
         rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty;
         eauto;
         simpl in *;

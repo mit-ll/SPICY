@@ -46,7 +46,10 @@ protocols/SafeProtocol.v
 protocols/Sets.v
 protocols/ModelCheck.v
 
+protocols/ExampleProtocols.v
+protocols/ExampleProtocolsAutomated.v
+
 protocols/SimplePingProtocol.v
 protocols/SimpleEncProtocol.v
-protocols/ShareKeyProtocol.v
-protocols/ShareSecretNewKeyProtocol.v
+#protocols/ShareKeyProtocol.v
+#protocols/ShareSecretNewKeyProtocol.v

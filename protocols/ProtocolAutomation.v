@@ -502,10 +502,12 @@ Module SimulationAutomation.
       match goal with
 
       | [ H : ~ RealWorld.msg_accepted_by_pattern ?cs ?suid ?froms ?pat ?msg |- _ ] =>
-        assert ( RealWorld.msg_accepted_by_pattern cs suid froms pat msg ) by (econstructor; eauto); contradiction
+        assert ( RealWorld.msg_accepted_by_pattern cs suid froms pat msg )
+          by (econstructor; eauto); contradiction
 
       | [ H : RealWorld.msg_accepted_by_pattern ?cs ?suid ?froms ?pat ?msg -> False |- _ ] =>
-        assert ( RealWorld.msg_accepted_by_pattern cs suid froms pat msg ) by (econstructor; eauto); contradiction
+        assert ( RealWorld.msg_accepted_by_pattern cs suid froms pat msg )
+          by (econstructor; eauto); contradiction
 
       (* Only take a user step if we have chosen a user *)
       | [ H : RealWorld.step_user _ (Some ?u) _ _ |- _ ] => progress simpl in H
@@ -529,7 +531,8 @@ Module SimulationAutomation.
       | [ STEP : RealWorld.step_user _ None (_,_,_,_,_,_,_,_,_,_,RealWorld.protocol ?adv) _
         , LAME : lameAdv _ ?adv |- _ ] => pose proof (adv_no_step LAME STEP); contradiction
 
-      | [ H : RealWorld.step_user _ _ (build_data_step _ _) _ |- _ ] => unfold build_data_step in H; simpl in H
+      | [ H : RealWorld.step_user _ _ (build_data_step _ _) _ |- _ ] =>
+        unfold build_data_step in H; autounfold with user_build in H; simpl in H
 
       | [ H : ~^* (RealWorld.buildUniverse _ _ _ _ _ _ ) _ |- _] =>
         unfold RealWorld.buildUniverse in H; autorewrite with simpl_univ in H
@@ -1361,29 +1364,14 @@ Module Gen.
                 | [ H : forall _ _ _, _ -> _ -> _ -> _ <-> _ |- _ ] => clear H
                 | [ H : forall _ _ _ _, _ -> _ -> _ -> _ -> _ <-> _ |- _ ] => clear H
 
-                (* | [ H : MessageEq.message_eq _ _ _ _ _ |- _ ] => *)
-                (*   invert H *)
-                (*   ; match goal with (* clear out resulting assumption that seems to cause a problem for [close] *) *)
-                (*     | [ M : forall _ _ _, _ -> _ -> _ -> _ <-> _ |- _ ] => clear M *)
-                (*     end *)
-
-              (* | [H : RealWorld.msg_accepted_by_pattern _ _ _ *)
-              (*          _ *)
-              (*          (RealWorld.SignedCiphertext ?cid) -> False *)
-              (*    |- _] => *)
-              (*   exfalso *)
-              (*   ; apply H *)
-              (*   ; econstructor *)
-              (*   ; apply (RealWorld.SignedCiphertext cid) *)
-              (* | [H : rstepSilent ?u _ |- _] => *)
-              (*   concrete u; churn *)
-              | [H : RealWorld.step_universe ?u _ _ |- _] =>
-                concrete u; churn
-              | [H : RealWorld.step_user _ None _ _ |- _] =>
+                | [H : RealWorld.step_universe ?u _ _ |- _] =>
+                  concrete u; churn
+                | [H : RealWorld.step_user _ None _ _ |- _] =>
+                  (* churn *)
                 invert H
-              | [H : RealWorld.step_user _ _ ?u _ |- _] =>
-                concrete u; churn
-              end).
+                | [H : RealWorld.step_user _ _ ?u _ |- _] =>
+                  concrete u; churn
+                end).
 
   Ltac close :=
     match goal with
@@ -1408,6 +1396,8 @@ Module Gen.
       is_evar inv
       ; concrete ru
       ; concrete iuniv iu
+      ; repeat equality1
+      ; solve_concrete_maps
       ; canonicalize users
       ; clean_context
       ; clean_map_lookups
