@@ -218,10 +218,13 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
       step1; [cleanup; close .. | step2 | step3].
       step1; [cleanup; close .. | step2 | step3].
       step1; [cleanup; close .. | step2 | step3].
-
+      step1; [cleanup; close .. | step2 | step3].
+      step1; [cleanup; close .. | step2 | step3].
+      step1; [cleanup; close .. | step2 | step3].
+      eapply MscDone.
       
 
-      step1.
+      
       cleanup; subst. close.
       cleanup; subst. close.
       cleanup; subst. close.
