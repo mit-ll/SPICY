@@ -63,14 +63,18 @@ Module ShareSecretProtocol.
     Definition ideal_univ_start :=
       mkiU ($0 $+ (CH__A2B, [])) PERMS__a PERMS__b
            (* user A *)
-           ( n <- Gen
-           ; chid <- CreateChannel
-           ; _ <- Send (MsgPair (Content n) (Permission {| ch_perm := writer ; ch_id := chid |})) CH__A2B
-           ; Return n)
+           ( chid <- CreateChannel
+           ; _ <- Send (Permission {| ch_perm := writer ; ch_id := chid |}) CH__A2B
+           ; m <- @Recv Nat chid
+           ; @Return (Base Nat) (extractContent m)
+           )
 
            (* user B *)
-           ( m <- @Recv (TPair Nat Access) CH__A2B
-           ; ret (extractContent (msgFst m))).
+           ( m <- @Recv Access CH__A2B
+           ; n <- Gen
+           ; _ <- Send (Content n) (ch_id (extractPermission m))
+           ; @Return (Base Nat) n
+           ).
 
   End IW.
 
@@ -90,18 +94,20 @@ Module ShareSecretProtocol.
     Definition real_univ_start :=
       mkrU KEYS A__keys B__keys
            (* user A *)
-           ( n <- Gen
-           ; kp <- GenerateAsymKey Encryption
-           ; c  <- Sign KID1 B (MsgPair (message.Content n) (Permission (fst kp, false)))
-           ; _  <- Send B c
-           ; Return n)
+           ( kp <- GenerateAsymKey Encryption
+           ; c1 <- Sign KID1 B (Permission (fst kp, false))
+           ; _  <- Send B c1
+           ; c2 <- @Recv Nat (SignedEncrypted KID2 (fst kp) true)
+           ; m  <- Decrypt c2
+           ; @Return (Base Nat) (extractContent m) )
 
            (* user B *)
-           ( c  <- @Recv (TPair Nat Access) (Signed KID1 true)
-           ; v  <- Verify KID1 c
-           ; ret (if fst v
-                  then (extractContent (msgFst (snd v)))
-                  else 1)).
+           ( c1 <- @Recv Access (Signed KID1 true)
+           ; v  <- Verify KID1 c1
+           ; n  <- Gen
+           ; c2 <- SignEncrypt KID2 (fst (extractPermission (snd v))) A (message.Content n)
+           ; _  <- Send A c2
+           ; @Return (Base Nat) n).
   
   End RW.
 
@@ -189,6 +195,14 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
       gen1.
       gen1.
       gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
       
     - intros.
       simpl in *; split.
@@ -197,14 +211,54 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
           split_ex; simpl in *; subst; solve_honest_actions_safe;
             clean_map_lookups; eauto 8.
 
-        cleanup; subst; solve_concrete_maps.
-        cleanup; subst; solve_concrete_maps.
-        cleanup; subst; solve_concrete_maps.
-        
       + sets_invert; unfold liveness; intros;
           split_ex; subst; intros; rstep.
-        * do 3 eexists;
-            repeat (apply conj); eauto.
+        * do 3 eexists; repeat (apply conj); eauto.
+        * do 3 eexists; repeat (apply conj); eauto.
+             subst; repeat (solve_action_matches1); clean_map_lookups; eauto.
+        * do 3 eexists; repeat (apply conj); eauto.
+             subst; repeat (solve_action_matches1); clean_map_lookups; eauto.
+        * do 3 eexists; repeat (apply conj); eauto.
+          subst.
+          clear H5.
+          canonicalize users.
+          eapply Out.
+          reflexivity.
+          reflexivity.
+          eapply MessageEq.CryptoSigEncCase; simpl.
+          clean_map_lookups.
+          reflexivity.
+          simpl.
+          reflexivity.
+          reflexivity.
+
+          intros; simpl in *.
+          destruct (u ==n A); destruct (u ==n B); subst;
+            try discriminate; try contradiction;
+              clean_map_lookups;
+              simpl.
+
+          split; intros; split_ands; clean_map_lookups. admit.
+          split; intros; split_ands; clean_map_lookups.
+
+
+          
+          
+          subst; repeat (solve_action_matches1); cleanup; clean_map_lookups; eauto.
+             repeat (solve_concrete_maps; clean_map_lookups).
+             repeat (solve_concrete_perm_merges; solve_concrete_maps; clean_map_lookups).
+             repeat (solve_concrete_perm_merges; solve_concrete_maps; clean_map_lookups).
+
+             cleanup
+        * do 3 eexists; repeat (apply conj); eauto.
+             subst; repeat (solve_action_matches1); clean_map_lookups; eauto.
+        * do 3 eexists; repeat (apply conj); eauto.
+             subst; repeat (solve_action_matches1); clean_map_lookups; eauto.
+        * do 3 eexists; repeat (apply conj); eauto.
+             subst; repeat (solve_action_matches1); clean_map_lookups; eauto.
+                  
+        * do 3 eexists; repeat (apply conj); eauto.
+             
         * do 3 eexists;
             repeat (apply conj); eauto.
           subst; repeat (solve_action_matches1); clean_map_lookups; eauto.
