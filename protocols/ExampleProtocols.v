@@ -43,6 +43,10 @@ Set Implicit Arguments.
 Definition A : user_id   := 0.
 Definition B : user_id   := 1.
 
+Notation owner  := {| IdealWorld.read := true; IdealWorld.write := true |}.
+Notation reader := {| IdealWorld.read := true; IdealWorld.write := false |}.
+Notation writer := {| IdealWorld.read := false; IdealWorld.write := true |}.
+
 Section IdealWorldDefs.
   Import IdealWorld.
 
@@ -93,8 +97,8 @@ Module SignPingSendProtocol.
 
     Definition CH__A2B : channel_id := 0.
 
-    Definition PERMS__a := $0 $+ (CH__A2B, {| read := true; write := true |}). (* writer *)
-    Definition PERMS__b := $0 $+ (CH__A2B, {| read := true; write := false |}). (* reader *)
+    Definition PERMS__a := $0 $+ (CH__A2B, owner). (* writer *)
+    Definition PERMS__b := $0 $+ (CH__A2B, reader). (* reader *)
 
     Definition ideal_univ_start :=
       mkiU ($0 $+ (CH__A2B, [])) PERMS__a PERMS__b
@@ -171,8 +175,8 @@ Module EncPingSendProtocol.
 
     Definition CH__A2B : channel_id := 0.
 
-    Definition PERMS__a := $0 $+ (CH__A2B, {| read := false; write := true |}). (* writer *)
-    Definition PERMS__b := $0 $+ (CH__A2B, {| read := true; write := false |}). (* reader *)
+    Definition PERMS__a := $0 $+ (CH__A2B, writer).
+    Definition PERMS__b := $0 $+ (CH__A2B, reader).
 
     Definition ideal_univ_start :=
       mkiU ($0 $+ (CH__A2B, [])) PERMS__a PERMS__b
