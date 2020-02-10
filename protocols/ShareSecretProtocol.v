@@ -143,6 +143,30 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
 
   Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start mkiU real_univ_start mkrU mkrUsr startAdv : core.
 
+  Ltac step1 := eapply msc_step_alt; [ unfold oneStepClosure_new; simplify; tidy; rstep; istep | ..].
+  Ltac step2 := 
+    solve[ simplify
+           ; sets
+           ; split_ex
+           ; propositional
+           ; repeat match goal with
+                    | [H : (?x1, ?y1) = ?p |- _] =>
+                      match p with
+                      | (?x2, ?y2) =>
+                        tryif (concrete x2; concrete y2)
+                        then let H' := fresh H
+                             in assert (H' : (x1, y1) = (x2, y2) -> x1 = x2 /\ y1 = y2)
+                               by equality
+                                ; propositional
+                                ; discriminate
+                        else invert H
+                      | _ => invert H
+                      end
+                    end
+         | eapply intersect_empty_l ].
+
+  Ltac step3 := rewrite ?union_empty_r.
+
   Lemma safe_invariant :
     invariantFor
       {| Initial := {(ru0, iu0)}; Step := @step t__hon t__adv  |}
@@ -152,151 +176,18 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
 
     - apply multiStepClosure_ok; simpl.
       gen1.
-
-      Ltac cleanup :=
-        repeat (
-            equality1
-            || match goal with
-              | [ H : True |- _ ] => clear H
-              | [ H : ?X = ?X |- _ ] => clear H
-              | [ H : ?x = ?y |- _] => assert (x = y) as EQ by (clear H; trivial); clear H; clear EQ
-              | [ H : _ $+ (?k1,_) $? ?k2 = None |- _ ] =>
-                (rewrite add_neq_o in H by solve_simple_ineq)
-                || (rewrite add_eq_o in H by trivial)
-                || (destruct (k1 ==n k2); subst)
-              | [ H : ?m $? _ = _ |- _ ] => progress (unfold m in H)
-              | [ H : RealWorld.msg_accepted_by_pattern _ _ _ _ _ |- _ ] => invert H
-              | [ H : IdealWorld.msg_permissions_valid _ _ |- _ ] =>
-                generalize (Forall_inv H); generalize (Forall_inv_tail H); clear H; intros
-              | [ H : IdealWorld.permission_subset _ _ |- _ ] => invert H
-              | [ H : Forall _ [] |- _ ] => clear H
-              | [ H : context [true || _]  |- _] => rewrite orb_true_l in H
-              | [ H : context [_ || true]  |- _] => rewrite orb_true_r in H
-              | [ H : context [false || _]  |- _] => rewrite orb_false_l in H
-              | [ H : context [_ || false]  |- _] => rewrite orb_false_r in H
-              | [ H : context [$0 $k++ _] |- _] => rewrite merge_perms_left_identity in H
-              | [ H : context [_ $k++ $0] |- _] => rewrite merge_perms_right_identity in H
-              | [ H : context [_ $k++ _]  |- _] => erewrite reduce_merge_perms in H; clean_map_lookups; eauto
-              | [ H : context [match ?m $? _ with _ => _ end] |- _] => progress (unfold m in H)
-              | [ H : match _ $+ (?k1,_) $? ?k2 with _ => _ end = _ |- _ ] =>
-                (rewrite add_neq_o in H by solve_simple_ineq)
-                || (rewrite add_eq_o in H by trivial)
-              end
-          ).
-
-      Ltac step1 := eapply msc_step_alt; [ unfold oneStepClosure_new; simplify; tidy; rstep; istep | ..].
-      Ltac step2 := 
-        solve[ simplify
-               ; sets
-               ; split_ex
-               ; propositional
-               ; repeat match goal with
-                        | [H : (?x1, ?y1) = ?p |- _] =>
-                          match p with
-                          | (?x2, ?y2) =>
-                            tryif (concrete x2; concrete y2)
-                            then let H' := fresh H
-                                 in assert (H' : (x1, y1) = (x2, y2) -> x1 = x2 /\ y1 = y2)
-                                   by equality
-                                    ; propositional
-                                    ; discriminate
-                            else invert H
-                          | _ => invert H
-                          end
-                        end
-             | eapply intersect_empty_l ].
-
-      Ltac step3 := rewrite ?union_empty_r.
-
-      step1; [cleanup; progress canonicalize users; close | step2 | step3].
-      step1; [cleanup; progress canonicalize users; close | step2 | step3].
-      step1; [cleanup; progress canonicalize users; close | step2 | step3].
-      step1; [cleanup; progress canonicalize users; close | step2 | step3].
-      step1; [cleanup; progress canonicalize users; close | step2 | step3].
-      step1; [cleanup; progress canonicalize users; close | step2 | step3].
-
-      step1; [cleanup; close .. | step2 | step3].
-      step1; [cleanup; close .. | step2 | step3].
-      step1; [cleanup; close .. | step2 | step3].
-      step1; [cleanup; close .. | step2 | step3].
-      step1; [cleanup; close .. | step2 | step3].
-      step1; [cleanup; close .. | step2 | step3].
-      eapply MscDone.
-      
-
-      
-      cleanup; subst. close.
-      cleanup; subst. close.
-      cleanup; subst. close.
-      cleanup; subst. close.
-      cleanup; subst. close.
-      cleanup; subst. close.
-      cleanup; subst. close.
-      cleanup; subst. close.
-
-      step2.
-      step3.
-
-
-      
-
-      match goal with
-      | [ |- context[ {| RealWorld.users := ?usrs |} ]] =>
-        let s := eval compute in (canon_map usrs) in replace usrs with s
-      end.
-
-      2: maps_equal.
-
-      eapply msc_step_alt
-      ; [ solve[ unfold oneStepClosure_new; simplify; tidy; rstep; istep ]
-        | solve[ simplify
-                 ; sets
-                 ; split_ex
-                 ; propositional
-                 ; repeat match goal with
-                          | [H : (?x1, ?y1) = ?p |- _] =>
-                            match p with
-                            | (?x2, ?y2) =>
-                              tryif (concrete x2; concrete y2)
-                              then let H' := fresh H
-                                   in assert (H' : (x1, y1) = (x2, y2) -> x1 = x2 /\ y1 = y2)
-                                     by equality
-                                      ; propositional
-                                      ; discriminate
-                              else invert H
-                            | _ => invert H
-                            end
-                          end
-               | eapply intersect_empty_l]
-        | rewrite ?union_empty_r ]
-
-    simplify
-    ; tidy
-    ; idtac "rstep start"
-    ; rstep
-    ; idtac "rstep done"
-    ; idtac "istep start"
-    ; istep
-    ; idtac "istep done"
-    ; subst
-    ; canonicalize users
-    ; idtac "close start"
-    ; repeat close
-    ; idtac "close done".
-
-          
-      
-
-      ; gen1
-          ; gen1
-          ; gen1
-          ; gen1
-          ; gen1
-          ; gen1
-          ; gen1
-          ; gen1
-          ; gen1
-          ; gen1 ).
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
       gen1.
       
     - intros.
@@ -305,19 +196,22 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
       + sets_invert; unfold safety;
           split_ex; simpl in *; subst; solve_honest_actions_safe;
             clean_map_lookups; eauto 8.
+
+        cleanup; subst; solve_concrete_maps.
+        cleanup; subst; solve_concrete_maps.
+        cleanup; subst; solve_concrete_maps.
+        
       + sets_invert; unfold liveness; intros;
           split_ex; subst; intros; rstep.
         * do 3 eexists;
             repeat (apply conj); eauto.
         * do 3 eexists;
             repeat (apply conj); eauto.
-          subst; repeat (solve_action_matches1); clean_map_lookups.
+          subst; repeat (solve_action_matches1); clean_map_lookups; eauto.
         * do 3 eexists;
             repeat (apply conj); eauto.
-          subst; repeat (solve_action_matches1); clean_map_lookups.
+          subst; repeat (solve_action_matches1); clean_map_lookups; eauto.
 
-      Unshelve.
-      all:eauto.
   Qed.
 
   Lemma U_good : @universe_starts_sane _ Unit b ru0.
@@ -389,4 +283,4 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
       eauto using univ_ok_start, adv_univ_ok_start.
   Qed.
 
-End SimplePingProtocolSecure.
+End ShareSecretProtocolSecure.

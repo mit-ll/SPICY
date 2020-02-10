@@ -1373,6 +1373,37 @@ Module Gen.
                   concrete u; churn
                 end).
 
+  Ltac cleanup :=
+    repeat (
+        equality1
+        || match goal with
+          | [ H : True |- _ ] => clear H
+          | [ H : ?X = ?X |- _ ] => clear H
+          | [ H : ?x = ?y |- _] => assert (x = y) as EQ by (clear H; trivial); clear H; clear EQ
+          | [ H : _ $+ (?k1,_) $? ?k2 = None |- _ ] =>
+            (rewrite add_neq_o in H by solve_simple_ineq)
+            || (rewrite add_eq_o in H by trivial)
+            || (destruct (k1 ==n k2); subst)
+          | [ H : ?m $? _ = _ |- _ ] => progress (unfold m in H)
+          | [ H : RealWorld.msg_accepted_by_pattern _ _ _ _ _ |- _ ] => invert H
+          | [ H : IdealWorld.msg_permissions_valid _ _ |- _ ] =>
+            generalize (Forall_inv H); generalize (Forall_inv_tail H); clear H; intros
+          | [ H : IdealWorld.permission_subset _ _ |- _ ] => invert H
+          | [ H : Forall _ [] |- _ ] => clear H
+          | [ H : context [true || _]  |- _] => rewrite orb_true_l in H
+          | [ H : context [_ || true]  |- _] => rewrite orb_true_r in H
+          | [ H : context [false || _]  |- _] => rewrite orb_false_l in H
+          | [ H : context [_ || false]  |- _] => rewrite orb_false_r in H
+          | [ H : context [$0 $k++ _] |- _] => rewrite merge_perms_left_identity in H
+          | [ H : context [_ $k++ $0] |- _] => rewrite merge_perms_right_identity in H
+          | [ H : context [_ $k++ _]  |- _] => erewrite reduce_merge_perms in H; clean_map_lookups; eauto
+          | [ H : context [match ?m $? _ with _ => _ end] |- _] => progress (unfold m in H)
+          | [ H : match _ $+ (?k1,_) $? ?k2 with _ => _ end = _ |- _ ] =>
+            (rewrite add_neq_o in H by solve_simple_ineq)
+            || (rewrite add_eq_o in H by trivial)
+          end
+      ).
+
   Ltac close :=
     match goal with
     | [|- [_ | _] (?ru, ?iu)] =>
@@ -1400,6 +1431,7 @@ Module Gen.
       ; solve_concrete_maps
       ; canonicalize users
       ; clean_context
+      ; cleanup
       ; clean_map_lookups
       ; incorp
       ; solve[ close ]
