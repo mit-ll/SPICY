@@ -66,7 +66,7 @@ Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
   Lemma safe_invariant :
     invariantFor
       {| Initial := {(ru0, iu0)}; Step := @step t__hon t__adv  |}
-      (fun st => safety st /\ liveness st ).
+      (fun st => safety st /\ labels_align st ).
   Proof.
     eapply invariant_weaken.
 
@@ -91,7 +91,7 @@ Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
       + sets_invert; unfold safety;
           split_ex; simpl in *; subst; solve_honest_actions_safe;
             clean_map_lookups; eauto 8.
-      + sets_invert; unfold liveness; intros;
+      + sets_invert; unfold labels_align; intros;
           split_ex; subst; intros; rstep.
         * do 3 eexists;
             repeat (apply conj); eauto.
@@ -194,7 +194,7 @@ Module SimpleEncProtocolSecure <: AutomatedSafeProtocol.
   Lemma safe_invariant :
     invariantFor
       {| Initial := {(ru0, iu0)}; Step := @step t__hon t__adv  |}
-      (fun st => safety st /\ liveness st ).
+      (fun st => safety st /\ labels_align st ).
   Proof.
     eapply invariant_weaken.
 
@@ -218,7 +218,7 @@ Module SimpleEncProtocolSecure <: AutomatedSafeProtocol.
       + sets_invert; unfold safety;
           split_ex; simpl in *; subst; solve_honest_actions_safe;
             clean_map_lookups; eauto 8.
-      + sets_invert; unfold liveness; intros;
+      + sets_invert; unfold labels_align; intros;
           split_ex; subst; intros; rstep.
         * do 3 eexists;
             repeat (apply conj); eauto.

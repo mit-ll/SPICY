@@ -185,7 +185,7 @@ Definition safety {t__hon t__adv} (st : RealWorld.universe t__hon t__adv * Ideal
   let (ru, iu) := st
   in  honest_cmds_safe ru.
 
-Definition liveness {t__hon t__adv} (st : RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon) : Prop :=
+Definition labels_align {t__hon t__adv} (st : RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon) : Prop :=
   let (ru, iu) := st
   in  forall ru' ra,
       RealWorld.step_universe ru (Action ra) ru'
@@ -214,7 +214,7 @@ Module Type AutomatedSafeProtocol.
   Axiom safe_invariant : invariantFor
                            SYS
                            (fun st => safety st
-                                 /\ liveness st ).
+                                 /\ labels_align st ).
 
 End AutomatedSafeProtocol.
 
@@ -284,10 +284,10 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
   Lemma safety_inv : invariantFor SYS safety.
   Proof. eapply invariant_weaken; [ apply safe_invariant | firstorder idtac]. Qed.
 
-  Lemma liveness_inv : invariantFor SYS liveness.
+  Lemma labels_align_inv : invariantFor SYS labels_align.
   Proof. eapply invariant_weaken; [ apply safe_invariant | firstorder idtac]. Qed.
 
-  Hint Resolve safety_inv liveness_inv.
+  Hint Resolve safety_inv labels_align_inv.
 
   Definition reachable_from := (fun ru iu ru' iu' => SYS.(Step)^* (ru, iu) (ru', iu')).
   (* Definition reachable_froms := (fun st st' => reachable_from (fst st) (snd st) (fst st') (snd st')). *)
@@ -565,7 +565,7 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
     generalize (reachable_from_labeled_step H3 STEP LAME H H1 H2);
       intros; split_ex.
 
-    pose proof liveness_inv.
+    pose proof labels_align_inv.
     unfold invariantFor, SYS in H5; simpl in H5.
     assert ( (ru0,iu0) = (ru0,iu0) \/ False ) as ARG by eauto.
     specialize (H5 _ ARG _ H3 _ _ H0).
