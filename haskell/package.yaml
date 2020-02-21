@@ -1,0 +1,84 @@
+name: protocol-runner
+
+version: 0.0.1
+ghc-options:
+  # Recommended settings for polysemy
+  - -O2
+  - -flate-specialise
+  - -fspecialise-aggressively
+  # - -fplugin=Polysemy.Plugin
+  # Useful warnings
+  - -Wall
+  - -Wcompat
+  - -Wredundant-constraints
+  - -Wincomplete-record-updates
+  - -Wincomplete-uni-patterns
+
+default-extensions:
+  # Recommended extensions for polysemy
+  - DataKinds
+  - FlexibleContexts
+  - GADTs
+  - LambdaCase
+  - PolyKinds
+  - RankNTypes
+  - ScopedTypeVariables
+  - TypeApplications
+  - TypeOperators
+  - TypeFamilies
+  # - TemplateHaskell
+
+  # Deriving extensions
+  - GeneralizedNewtypeDeriving
+  - DeriveGeneric
+
+  # Misc extensions
+  - OverloadedStrings
+
+dependencies:
+  - base
+  - cryptonite
+  - polysemy
+  # - polysemy-plugin
+
+library:
+ source-dirs:
+   - src
+ exposed-modules:
+   - Effects.Cryptography
+   - Effects.Messaging
+   - Effects.Types
+   # Generated Code
+   - Common
+   - Datatypes
+   - ExampleProtocols
+   - Keys
+   - List
+   - Logic
+   - Maps
+   - Messages
+   - OrderedType
+   - OrderedTypeEx
+   - PeanoNat
+   - RealWorld
+   - Specif
+
+ other-modules: []
+
+# executables:
+#   ft:
+#     <<: *exedefaults
+#     main: FrontendTest.main
+#     source-dirs: [frontend, mock]
+#   mock-harness:
+#     <<: *exedefaults
+#     main: QueueMockHarness.main
+#     source-dirs: main
+#   mock-queue:
+#     <<: *exedefaults
+#     main: MockQueue.runQueue
+#     source-dirs: main
+#   psGenerator:
+#     <<: *exedefaults
+#     main: PSGenerator.main
+#     source-dirs: main

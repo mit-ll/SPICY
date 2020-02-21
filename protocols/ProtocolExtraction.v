@@ -16,7 +16,6 @@
  * defined by DFARS 252.227-7013 or DFARS 252.227-7014 as detailed above. Use of this work other than
  * as specifically authorized by the U.S. Government may violate any copyrights that exist in this work. *)
 
-
 From Coq Require
      extraction.Extraction
      extraction.ExtrHaskellBasic
@@ -25,12 +24,8 @@ From Coq Require
 
 Extraction Language Haskell.
 
+Cd "../haskell/src".
+
 Require Import ExampleProtocols.
-
 Import SignPingSendProtocol.
-
-Recursive Extraction real_univ_start.
-
-
-
-
+Separate Extraction real_univ_start.
