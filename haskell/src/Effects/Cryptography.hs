@@ -38,29 +38,29 @@ import           Effects.Types
 
 
 data Crypto m a where
-  MkSymmetricKey :: Crypto m Key
-  MkAsymmetricKey :: Crypto m (Key,Key)
+  MkSymmetricKey :: KeyUsage -> Crypto m Permission
+  MkAsymmetricKey :: KeyUsage -> Crypto m Permission
 
-  SignMessage :: Key -> Msg -> Crypto m CipherText
-  SignEncryptMessage :: Key -> Key -> Msg -> Crypto m CipherText
+  SignMessage :: Typ -> Key -> UserId -> MsgPayload -> Crypto m Msg
+  SignEncryptMessage :: Typ -> Key -> Key -> UserId -> MsgPayload -> Crypto m Msg
 
-  VerifyMessage :: Key -> CipherText -> Crypto m (Bool, Msg)
-  DecryptMessage :: Key -> Key -> CipherText -> Crypto m Msg
+  VerifyMessage :: Typ -> Key -> Msg -> Crypto m (Bool, MsgPayload)
+  DecryptMessage :: Typ -> Msg -> Crypto m MsgPayload
 
-mkSymmetricKey :: Member Crypto r => Sem r Key
-mkSymmetricKey = send ( MkSymmetricKey :: Crypto (Sem r) Key )
+mkSymmetricKey :: Member Crypto r => KeyUsage -> Sem r Permission
+mkSymmetricKey ku = send ( MkSymmetricKey ku :: Crypto (Sem r) Permission )
 
-mkAsymmetricKey :: Member Crypto r => Sem r (Key,Key)
-mkAsymmetricKey = send ( MkAsymmetricKey :: Crypto (Sem r) (Key,Key) )
+mkAsymmetricKey :: Member Crypto r => KeyUsage -> Sem r Permission
+mkAsymmetricKey ku = send ( MkAsymmetricKey ku :: Crypto (Sem r) Permission )
 
-signMessage :: Member Crypto r => Key -> Msg -> Sem r CipherText
-signMessage k msg = send ( SignMessage k msg :: Crypto (Sem r) CipherText )
+signMessage :: Member Crypto r => Typ -> Key -> UserId -> MsgPayload -> Sem r Msg
+signMessage typ k u msg = send ( SignMessage typ k u msg :: Crypto (Sem r) Msg )
 
-signEncryptMessage :: Member Crypto r => Key -> Key -> Msg -> Sem r CipherText
-signEncryptMessage k1 k2 msg = send ( SignEncryptMessage k1 k2 msg :: Crypto (Sem r) CipherText )
+signEncryptMessage :: Member Crypto r => Typ -> Key -> Key -> UserId -> MsgPayload -> Sem r Msg
+signEncryptMessage typ k1 k2 u msg = send ( SignEncryptMessage typ k1 k2 u msg :: Crypto (Sem r) Msg )
 
-verifyMessage :: Member Crypto r => Key -> CipherText -> Sem r (Bool, Msg)
-verifyMessage k msg = send ( VerifyMessage k msg :: Crypto (Sem r) (Bool, Msg) )
+verifyMessage :: Member Crypto r => Typ -> Key -> Msg -> Sem r (Bool, MsgPayload)
+verifyMessage typ k msg = send ( VerifyMessage typ k msg :: Crypto (Sem r) (Bool, MsgPayload) )
 
-decryptMessage :: Member Crypto r => Key -> Key -> CipherText -> Sem r Msg
-decryptMessage k1 k2 msg = send ( DecryptMessage k1 k2 msg :: Crypto (Sem r) Msg )
+decryptMessage :: Member Crypto r => Typ -> Msg -> Sem r MsgPayload
+decryptMessage typ msg = send ( DecryptMessage typ msg :: Crypto (Sem r) MsgPayload )

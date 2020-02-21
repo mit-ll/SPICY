@@ -34,11 +34,11 @@ import           Effects.Types
 
 
 data Messaging m a where
-  Send :: Msg -> Messaging m ()
-  Recv :: Pattern -> Messaging m Msg
+  Send :: Typ -> UserId -> Msg -> Messaging m ()
+  Recv :: Typ -> Pattern -> Messaging m Msg
 
-send :: Member Messaging r => Msg -> Sem r ()
-send msg = P.send ( Send msg :: Messaging (Sem r) () )
+send :: Member Messaging r => Typ -> UserId -> Msg -> Sem r ()
+send typ u msg = P.send ( Send typ u msg :: Messaging (Sem r) () )
 
-recv :: Member Messaging r => Pattern -> Sem r Msg
-recv pat = P.send ( Recv pat :: Messaging (Sem r) Msg )
+recv :: Member Messaging r => Typ -> Pattern -> Sem r Msg
+recv typ pat = P.send ( Recv typ pat :: Messaging (Sem r) Msg )

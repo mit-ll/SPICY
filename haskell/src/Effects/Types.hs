@@ -18,15 +18,35 @@
 
 module Effects.Types
   (
-    CipherText
+
+    Typ
+
+  , UserId
+
   , Key
+  , KeyUsage
+  , Permission
+
+  , CipherText
   , Msg
+  , MsgPayload
   , Pattern
 
   ) where
 
-data CipherText
-data Key
-data Msg
-data Pattern
+import qualified Common as C
+import qualified Keys as K
+import qualified Messages as M
+import qualified RealWorld as R
 
+type UserId = C.Coq_user_id
+
+type Typ        = M.Coq_type
+type Key        = K.Coq_key_identifier
+type KeyUsage   = K.Coq_key_usage
+type Permission = (Key, Bool)
+
+type CipherText = R.Coq_cipher
+type MsgPayload = R.Coq_message__Coq_message
+type Msg        = R.Coq_crypto
+type Pattern    = R.Coq_msg_pat
