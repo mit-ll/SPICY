@@ -365,10 +365,7 @@ Section MapLemmas.
     forall {V} n (v : V) xs sx hdrel,
       {| this := (n,v) :: xs ; sorted := Sorted.Sorted_cons sx hdrel |} #- n = {| this := xs ; sorted := sx |}.
   Proof.
-    intros. 
-    unfold remove. simpl.
-    eapply map_eq_elements_eq; simpl.
-
+    intros. unfold remove. eapply map_eq_elements_eq; simpl.
     pose proof (Raw.MX.elim_compare_eq (ChannelType.eq_refl n)); split_ex.
     rewrite H; trivial.
   Qed.
@@ -378,9 +375,7 @@ Section MapLemmas.
       Empty (elt:=v) m
       -> #0 = m.
   Proof.
-    intros.
-    apply elements_Empty in H.
-    apply map_eq_elements_eq. auto.
+    intros. apply elements_Empty in H. apply map_eq_elements_eq. auto.
   Qed.
 
   Lemma map_eq_Equal :
