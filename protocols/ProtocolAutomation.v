@@ -37,7 +37,8 @@ Require Import
         Tactics
         UniverseEqAutomation.
 
-Require IdealWorld RealWorld Sets.
+Require IdealWorld RealWorld Sets ChMaps.
+Import ChMaps.ChMap.
 
 Set Implicit Arguments.
 
@@ -97,7 +98,9 @@ Ltac equality1 :=
   | [ H : List.In _ _ |- _ ] => progress (simpl in H); intuition idtac
 
   | [ H : _ $+ (_,_) $? _ = _ |- _ ] => progress clean_map_lookups
+  | [ H : ChMap.add _ _  $? _ = _ |- _ ] => progress clean_map_lookups
   | [ H : $0 $? _ = Some _ |- _ ] => apply find_mapsto_iff in H; apply empty_mapsto_iff in H; contradiction
+  | [ H : ChMaps.ChMap.find _ $0 = Some _ |- _ ] => apply find_mapsto_iff in H; apply empty_mapsto_iff in H; contradiction
   | [ H : _ $? _ = Some _ |- _ ] => progress (simpl in H)
 
   | [ H : add _ _ _ $? _ = Some ?UD |- _ ] =>
@@ -316,7 +319,7 @@ Module SimulationAutomation.
               /\ ks $? k__enc   = Some kp__enc
               /\ ks $? k__sign  = Some true
               /\ lbl = Silent)
-        /\ (exists c_id,
+        /\ (exists c_id : nat, 
               ~ In c_id cs
               /\ cs' = cs $+ (c_id, SigEncCipher k__sign k__enc msg_to (u_id, cur_n) msg)
               /\ mycs' = c_id :: mycs
@@ -682,7 +685,7 @@ Module SimulationAutomation.
         | [ |- Forall _ _ ] => econstructor
         | [ |- {| IdealWorld.channel_vector := _; IdealWorld.users := _ |} = _] => smash_universe; solve_concrete_maps
         | [ |- _ = {| IdealWorld.channel_vector := _; IdealWorld.users := _ |}] => smash_universe; solve_concrete_maps
-        | [ |- IdealWorld.msg_permissions_valid _ _ ] => unfold IdealWorld.msg_permissions_valid
+        | [ |- IdealWorld.screen_msg _ _ ] => econstructor
         | [ |- IdealWorld.permission_subset _ _ ] => econstructor
         | [ |- context [ _ $? _ ] ] => solve_concrete_maps
         | [ |- ~ In ?k ?m ] => is_evar k; unify k (next_key m); rewrite not_find_in_iff; apply next_key_not_in; trivial
@@ -849,7 +852,7 @@ Module SimulationAutomation.
      solve_concrete_maps : core.
 
   Hint Extern 1 (action_adversary_safe _ _ _ = _) => unfold action_adversary_safe; simpl : core.
-  Hint Extern 1 (IdealWorld.msg_permissions_valid _ _) => progress simpl : core.
+  Hint Extern 1 (IdealWorld.screen_msg _ _) => econstructor; progress simpl : core.
 
   Hint Extern 1 (_ = RealWorld.addUserKeys _ _) => unfold RealWorld.addUserKeys, map; simpl : core.
 
@@ -887,7 +890,7 @@ Module SimulationAutomation.
     | [ |- _ /\ _ ] => split
     end; split_ex; simpl in *.
 
-  Hint Extern 1 (action_matches _ _ _ _) => repeat (solve_action_matches1); clean_map_lookups : core.
+  Hint Extern 1 (action_matches _ _ _ _) => repeat (solve_action_matches1); clean_map_lookups ; ChMaps.clean_chmap_lookups : core.
 
   Hint Resolve
        findUserKeys_foldfn_proper

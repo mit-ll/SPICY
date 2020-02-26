@@ -15,7 +15,7 @@
  * or 7014 (Feb 2014). Notwithstanding any copyright notice, U.S. Government rights in this work are
  * defined by DFARS 252.227-7013 or DFARS 252.227-7014 as detailed above. Use of this work other than
  *  as specifically authorized by the U.S. Government may violate any copyrights that exist in this work. *)
-Require Import Maps Messages.
+Require Import ChMaps Messages Maps.
 Require RealWorld IdealWorld Common Keys MyPrelude.
 From Coq Require Import List.
 
@@ -36,13 +36,23 @@ Fixpoint content_eq  {t__rw t__iw} (m__rw : RealWorld.message.message t__rw) (m_
   | _ => False
   end.
 
+Definition resolve_perm (ps : IdealWorld.permissions) id :=
+  match id with
+  | ChMaps.Single ch => NatMap.find ch ps
+  | ChMaps.Intersection ch1 ch2 =>
+    match (NatMap.find ch1 ps, NatMap.find ch2 ps) with
+    | (Some p1, Some p2) => Some (IdealWorld.perm_intersection p1 p2)
+    | _ => None
+    end
+  end.
+
 Inductive  message_eq : forall {A B t},
   RealWorld.crypto t -> RealWorld.universe A B ->
   IdealWorld.message.message t -> IdealWorld.universe A -> IdealWorld.channel_id -> Prop :=
 | ContentCase : forall {A B t}  (U__rw : RealWorld.universe A B) U__iw (m__rw : RealWorld.message.message t) m__iw ch_id user_data,
     content_eq m__rw m__iw
-    ->( forall u, U__iw.(IdealWorld.users) $? u = Some user_data
-            -> user_data.(IdealWorld.perms) $? ch_id = Some (IdealWorld.construct_permission true true))
+    -> (forall u, NatMap.find u U__iw.(IdealWorld.users)  = Some user_data
+            -> resolve_perm user_data.(IdealWorld.perms) ch_id = Some (IdealWorld.construct_permission true true))
     -> message_eq (RealWorld.Content m__rw) U__rw m__iw U__iw ch_id
 | CryptoSigCase : forall {A B t} (U__rw : RealWorld.universe A B) U__iw (m__iw : IdealWorld.message.message t) c_id ch_id k__sign
                     (m__rw : RealWorld.message.message t) b__iw honestk u_id msg_seq,
@@ -51,11 +61,11 @@ Inductive  message_eq : forall {A B t},
     -> honestk = RealWorld.findUserKeys (U__rw.(RealWorld.users))
     -> (forall u data__rw data__iw,
 	                     U__rw.(RealWorld.users) $? u = Some data__rw
-                          -> U__iw.(IdealWorld.users) $? u = Some data__iw
+                          -> NatMap.find u U__iw.(IdealWorld.users) = Some data__iw
                           ->  RealWorld.honest_key honestk k__sign
           (*sign key is honest.  honest key : find user keys on all users*)
             -> (data__rw.(RealWorld.key_heap) $? k__sign = Some true
-               <-> data__iw.(IdealWorld.perms) $? ch_id = Some (IdealWorld.construct_permission true b__iw)))
+               <-> resolve_perm data__iw.(IdealWorld.perms) ch_id = Some (IdealWorld.construct_permission true b__iw)))
     -> message_eq (RealWorld.SignedCiphertext c_id) U__rw m__iw U__iw ch_id
 | CryptoSigEncCase : forall {A B t} (U__rw : RealWorld.universe A B) U__iw (m__iw : IdealWorld.message.message t) c_id ch_id k__sign k__enc
                        (m__rw : RealWorld.message.message t) honestk u_id msg_seq,
@@ -69,5 +79,5 @@ Inductive  message_eq : forall {A B t},
                           -> RealWorld.honest_key honestk k__enc
             -> ((data__rw.(RealWorld.key_heap) $? k__sign = Some true
                 /\ data__rw.(RealWorld.key_heap) $? k__enc = Some b__rwenc)
-               <-> data__iw.(IdealWorld.perms) $? ch_id = Some (IdealWorld.construct_permission b__rwenc true)))
+               <-> resolve_perm data__iw.(IdealWorld.perms) ch_id = Some (IdealWorld.construct_permission b__rwenc true)))
     -> message_eq (RealWorld.SignedCiphertext c_id) U__rw m__iw U__iw ch_id.
