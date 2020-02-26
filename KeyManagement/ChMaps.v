@@ -24,13 +24,6 @@ Module ChannelType <: OrderedType.
     | _ => False
     end.
 
-  (*
-    Sort by:
-         single with lower n < single with higher n
-         any intersection < any single
-         intersection with lower n1 < intersection with higher n1
-         intersection with lower n2 < intersection with higher n2
-   *)
   Definition lt ch1 ch2 : Prop :=
     match (ch1, ch2) with
     | (Single n, Single n') => n < n'
@@ -121,8 +114,6 @@ Definition combine (ch1 ch2 : channel_id) :=
   | _ => None
   end.
 
-
-
 Module Import ChMap := FMapList.Make(ChannelType).
 Module P := WProperties_fun ChannelType ChMap.
 Module F := P.F.
@@ -166,7 +157,7 @@ Ltac context_map_rewrites1 :=
 
 Ltac contra_map_lookup1 :=
   match goal with
-  | [ H : ?chs #? ?ch = ?v -> _, ARG : ?ks #? ?k = ?v |- _ ] => specialize (H ARG)
+  | [ H : ?chs #? ?ch = ?v -> _, ARG : ?chs #? ?ch = ?v |- _ ] => specialize (H ARG)
   | [ H1 : ?chs #? ?ch = _, H2 : ?chs #? ?ch = _ |- _ ] => rewrite H1 in H2; invert H2
   | [ H : ?chs #? ?ch = _ |- context [ ?chs #? ?ch <> _ ] ] => unfold not; intros
   end.
@@ -233,21 +224,25 @@ Section MapLemmas.
   Qed.
   
 
+  Ltac reorder_intersection_neq :=
+    match goal with
+    | [ n : ~ (?ch1 = ?ch0 /\ ?ch2 = ?ch3) |- ~ ChannelType.eq (Intersection ?ch0 ?ch3) (Intersection ?ch1 ?ch2) ] => 
+      unfold ChannelType.eq; unfold not; intro; split_ands
+    (* | [ h : not (?ch0 = ?ch1 /\ ?ch2 = ?ch3) |- not ChannelType.eq (Intersection ch0 ch2) (Intersection ch1 ch3) ] => *)
+    (*   unfold ChannelType.eq; unfold not; intro; split_ands *)
+    (* | [ H : ~ (?ch1 = ?ch0 /\ ?ch2 = ?ch3) |- ~ ChannelType.eq (Intersection ch0 ch3) (Intersection ch1 ch2) ] => *)
+    (*   unfold ChannelType.eq; unfold not; intro; split_and *)
+    end; eauto. 
+
   Lemma lookup_split :
     forall V (m : ChMap.t V) k k' v v',
       (m #+ (k, v)) #? k' = Some v'
       -> (~(ChannelType.eq k' k) /\ m #? k' = Some v') \/ ((ChannelType.eq k' k) /\ v' = v).
   Proof.
     intros.
-    cases (eq_dec k k'); intros; subst; clean_chmap_lookups; eauto.
-    destruct k, k'. rewrite y. right. split; trivial. invert y. invert y. split_ands.
-    rewrite H, H0. right; split; trivial.
-    cases (eq_dec k k'); intros; subst; clean_chmap_lookups; eauto.
-    destruct k, k'. left. split. unfold not. intro. unfold ChannelType.eq in H0.
-    rewrite H0 in n.
-    contradiction. trivial. left. split. unfold ChannelType.eq. assumption. trivial.
-    left. split. unfold ChannelType.eq. trivial. trivial. left. split. unfold ChannelType.eq.
-    unfold not. intro. split_ands. rewrite H1 in n. rewrite H0 in n. unfold not in n. eauto. eauto.
+    cases (eq_dec k k'); intros; subst; clean_chmap_lookups.
+    destruct k, k'; invert y; eauto.
+    destruct k, k'; left; split; eauto. reorder_intersection_neq.
   Qed.
 
   Lemma map_eq_fields_eq :
@@ -297,8 +292,8 @@ Section MapLemmas.
       
       pose proof (Raw.MX.elim_compare_eq (ChannelType.eq_refl n1)) as EQn1.
       pose proof (Raw.MX.elim_compare_eq (ChannelType.eq_refl n2)) as EQn2.
-      split_ex.
-      rewrite H2, H3 in *.
+      split_ex; subst.
+      (* rewrite H2, H3 in *. *)
 
       cases (ChannelType.compare n1 n2);
         cases (ChannelType.compare n2 n1);
@@ -306,11 +301,44 @@ Section MapLemmas.
           repeat
             match goal with
             | [ H : ChannelType.eq _ _ |- _ ] => unfold ChannelType.eq in H; subst
-            end; eauto.
-      destruct n1, n2. rewrite e. trivial. invert e. invert e. split_ands. rewrite e0. rewrite e6. trivial.
-      destruct n1, n2. rewrite e. trivial. invert e. invert e. split_ands. rewrite e. rewrite e4. trivial.
-      destruct n1, n2. rewrite e. trivial. invert e. invert e. split_ands. rewrite e. rewrite e4. trivial.
+            end; eauto;
+      destruct n1, n2; eauto; split_ands; subst; try reflexivity; try tauto.
       clear Heq. eapply lt_contra in l. invert l. assumption.
+      clear Heq. eapply lt_contra in l. invert l. assumption.
+      clear Heq. eapply lt_contra in l. invert l. assumption.
+      (* clear Heq. rewrite Heq0 in H. invert H. reflexivity. *)
+      
+      (* eapply lt_contra in l. invert l. assumption. *)
+      (* clear Heq H H0 H1. eapply lt_contra in l. invert l. *)
+      (* apply OrderTac.order. order. .lt_le in l. destruct ChannelType.lt in l. *)
+      (* match goal with *)
+      (* | [ H0 : context [H1], H1 : ChannelType.lt ?ch1 ?ch2, H2 : ChannelType.lt ?ch2 ?ch1 |- _ ] =>  *)
+      (*   clear Heq; eapply lt_contra in H1; invert H1; assumption *)
+      (* end.j *)
+      
+      (*   contradiction. *)
+      (* subst. *)
+
+      rewrite Heq0 in H. invert H. reflexivity.
+      rewrite H3 in H0. invert H0.
+      rewrite H3 in H0. invert H0.
+      rewrite H3 in H0. invert H0.
+      rewrite H3 in H0. invert H0. reflexivity.
+      rewrite H3 in H0. invert H0. reflexivity.
+      rewrite H3 in H0. invert H0. reflexivity.
+      rewrite H3 in H0. invert H0. reflexivity.
+      rewrite H3 in H0. invert H0. reflexivity.
+      rewrite H3 in H0. invert H0. reflexivity.
+      rewrite H2 in H. invert H.
+      rewrite H2 in H. invert H.
+      rewrite H2 in H. invert H.
+      rewrite H2 in H. invert H. reflexivity.
+      rewrite H2 in H. invert H. reflexivity.
+      rewrite H2 in H. invert H.
+      clear Heq. eapply lt_contra in l. invert l. assumption.
+      clear Heq. eapply lt_contra in l. invert l. assumption.
+        
+      (* destruct n1, n2; eauto; split_ands; subst; try reflexivity; try tauto. *)
       
     - split; auto; subst.
 
