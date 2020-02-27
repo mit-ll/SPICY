@@ -99,7 +99,7 @@ Module ChannelType <: OrderedType.
 
     apply LT. unfold lt. right. now apply nat_compare_lt.
     apply GT. unfold lt. right. now apply nat_compare_gt.
-  Qed.
+  Defined.
 
   Lemma eq_dec :
     forall x y, { eq x y } + { ~ eq x y }.
@@ -509,22 +509,18 @@ End MapLemmas.
 (* (*     | [ H : Equal _ _ |- _] => apply map_eq_Equal in H; subst *) *)
 (* (*     end. *) *)
 
-(* (* Ltac m_equal := *) *)
-(* (*   repeat match goal with *) *)
-(* (*          (* | [ |- context[find ?k (add ?k' _ _) ] ] => idtac k; idtac k'; case (eq_dec k k'); intro *) *) *)
-(* (*          | [ |- context[find ?k (add ?k _ _) ] ]  => *) *)
-(* (*            rewrite add_eq_o by (simple apply @eq_refl) *) *)
-(* (*          | [ |- context[find ?k (add ?k' _ _) ] ] => *) *)
-(* (*            rewrite add_neq_o by ( (unfold not; intros ?SIMPLEQ; invert SIMPLEQ) || intuition idtac ) *) *)
-(* (*          | [ |- context[$0 $++ _ ] ] => rewrite empty_add_idempotent *) *)
-(* (*          | [ |- context[_ $++ $0 ] ] => rewrite add_empty_idempotent *) *)
-(* (*          (* | [ |- (add _ _ _) = _ ] => normalize_set *) *) *)
-(* (*          | [ |- (add _ _ _) = _ ] => unfold add, Raw.add; simpl *) *)
-(* (*          | [ |- {| this := _ ; sorted := _ |} = _ ] => eapply map_eq_fields_eq *) *)
-(* (*          | [ H : Empty ?m |- $0 = ?m ] => eapply Empty_eq_empty; exact H *) *)
-(* (*          | [ H : Empty ?m |- ?m = $0 ] => symmetry *) *)
-(* (*          | [ |- empty _ = _ ] => unfold empty, Raw.empty, remove, Raw.remove; simpl *) *)
-(* (*          end. *) *)
+Ltac chm_equal :=
+  repeat match goal with
+         | [ |- context[find ?k (add ?k _ _) ] ]  =>
+           rewrite add_eq_o by (simple apply @eq_refl)
+         | [ |- context[find ?k (add ?k' _ _) ] ] =>
+           rewrite add_neq_o by ( (unfold not; intros ?SIMPLEQ; invert SIMPLEQ) || intuition idtac )
+         | [ |- (add _ _ _) = _ ] => unfold add, Raw.add; simpl
+         | [ |- {| this := _ ; sorted := _ |} = _ ] => eapply map_eq_fields_eq
+         | [ H : Empty ?m |- #0 = ?m ] => eapply Empty_eq_empty; exact H
+         | [ H : Empty ?m |- ?m = #0 ] => symmetry
+         | [ |- empty _ = _ ] => unfold empty, Raw.empty, remove, Raw.remove; simpl
+         end.
 
 (* (* Lemma remove_not_in_map_idempotent : *) *)
 (* (*   forall V (m : NatMap.t V) k, *) *)

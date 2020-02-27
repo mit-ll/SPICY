@@ -109,9 +109,11 @@ Section ExamplarProofs.
 
   Section Ideal.
     Import IdealWorld.
+    Import ChNotation.
+    Import ChannelType.
 
-    Definition ch1 := Single 10.
-    Definition ch2 := Single 11.
+    Definition ch1 := (Single 10).
+    Definition ch2 := (Single 11).
 
     (* This needs more of the lemmas in ChMaps *)
     Lemma ideal_test1 :
@@ -125,9 +127,8 @@ Section ExamplarProofs.
            users := $0 $+ (uid1, {| protocol := proto1; perms := perms1' |})
                      $+ (uid2, {| protocol := proto2; perms := perms2' |}) |}.
     Proof.
-      intros; do 2 eexists; smash_universe; m_equal; eauto.
-      clean_chmap_lookups.
-      Admitted.
+      intros. do 2 eexists; smash_universe; m_equal; chm_equal; eauto.
+    Qed.
 
   End Ideal.
 
