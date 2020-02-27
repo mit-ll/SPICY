@@ -92,7 +92,7 @@ Module ChannelType <: OrderedType.
 
     apply LT. unfold lt. right. now apply nat_compare_lt.
     apply GT. unfold lt. right. now apply nat_compare_gt.
-  Qed.
+  Defined.
 
   Lemma eq_dec :
     forall x y, { eq x y } + { ~ eq x y }.
@@ -297,8 +297,8 @@ Section MapLemmas.
       
       pose proof (Raw.MX.elim_compare_eq (ChannelType.eq_refl n1)) as EQn1.
       pose proof (Raw.MX.elim_compare_eq (ChannelType.eq_refl n2)) as EQn2.
-      split_ex; subst.
-      (* rewrite H2, H3 in *. *)
+      split_ex.
+      rewrite H2, H3 in *.
 
       cases (ChannelType.compare n1 n2);
         cases (ChannelType.compare n2 n1);
@@ -306,44 +306,11 @@ Section MapLemmas.
           repeat
             match goal with
             | [ H : ChannelType.eq _ _ |- _ ] => unfold ChannelType.eq in H; subst
-            end; eauto;
-      destruct n1, n2; eauto; split_ands; subst; try reflexivity; try tauto.
+            end; eauto.
+      destruct n1, n2. rewrite e. trivial. invert e. invert e. split_ands. rewrite e0. rewrite e6. trivial.
+      destruct n1, n2. rewrite e. trivial. invert e. invert e. split_ands. rewrite e. rewrite e4. trivial.
+      destruct n1, n2. rewrite e. trivial. invert e. invert e. split_ands. rewrite e. rewrite e4. trivial.
       clear Heq. eapply lt_contra in l. invert l. assumption.
-      clear Heq. eapply lt_contra in l. invert l. assumption.
-      clear Heq. eapply lt_contra in l. invert l. assumption.
-      (* clear Heq. rewrite Heq0 in H. invert H. reflexivity. *)
-      
-      (* eapply lt_contra in l. invert l. assumption. *)
-      (* clear Heq H H0 H1. eapply lt_contra in l. invert l. *)
-      (* apply OrderTac.order. order. .lt_le in l. destruct ChannelType.lt in l. *)
-      (* match goal with *)
-      (* | [ H0 : context [H1], H1 : ChannelType.lt ?ch1 ?ch2, H2 : ChannelType.lt ?ch2 ?ch1 |- _ ] =>  *)
-      (*   clear Heq; eapply lt_contra in H1; invert H1; assumption *)
-      (* end.j *)
-      
-      (*   contradiction. *)
-      (* subst. *)
-
-      rewrite Heq0 in H. invert H. reflexivity.
-      rewrite H3 in H0. invert H0.
-      rewrite H3 in H0. invert H0.
-      rewrite H3 in H0. invert H0.
-      rewrite H3 in H0. invert H0. reflexivity.
-      rewrite H3 in H0. invert H0. reflexivity.
-      rewrite H3 in H0. invert H0. reflexivity.
-      rewrite H3 in H0. invert H0. reflexivity.
-      rewrite H3 in H0. invert H0. reflexivity.
-      rewrite H3 in H0. invert H0. reflexivity.
-      rewrite H2 in H. invert H.
-      rewrite H2 in H. invert H.
-      rewrite H2 in H. invert H.
-      rewrite H2 in H. invert H. reflexivity.
-      rewrite H2 in H. invert H. reflexivity.
-      rewrite H2 in H. invert H.
-      clear Heq. eapply lt_contra in l. invert l. assumption.
-      clear Heq. eapply lt_contra in l. invert l. assumption.
-        
-      (* destruct n1, n2; eauto; split_ands; subst; try reflexivity; try tauto. *)
       
     - split; auto; subst.
 

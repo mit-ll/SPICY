@@ -27,6 +27,7 @@ KeyManagement/KeysTheory.v
 KeyManagement/UsersTheory.v
 KeyManagement/InvariantsTheory.v
 KeyManagement/Common.v
+KeyManagement/ChMaps.v
 KeyManagement/MyPrelude.v
 KeyManagement/Maps.v
 KeyManagement/MessageEq.v

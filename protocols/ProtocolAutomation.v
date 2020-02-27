@@ -38,7 +38,8 @@ Require Import
         UniverseEqAutomation.
 
 Require IdealWorld RealWorld Sets ChMaps.
-Import ChMaps.ChMap.
+
+(* Import ChMaps.ChMap. *)
 
 Set Implicit Arguments.
 
@@ -92,15 +93,17 @@ Section RealWorldLemmas.
   
 End RealWorldLemmas.
 
+Import ChMaps.ChNotation.
+
 Ltac equality1 :=
   match goal with
   | [ H : ?x = ?x |- _ ] => clear H
   | [ H : List.In _ _ |- _ ] => progress (simpl in H); intuition idtac
 
   | [ H : _ $+ (_,_) $? _ = _ |- _ ] => progress clean_map_lookups
-  | [ H : ChMap.add _ _  $? _ = _ |- _ ] => progress clean_map_lookups
+  | [ H : ChMaps.ChMap.add _ _  #? _ = _ |- _ ] => progress clean_map_lookups
   | [ H : $0 $? _ = Some _ |- _ ] => apply find_mapsto_iff in H; apply empty_mapsto_iff in H; contradiction
-  | [ H : ChMaps.ChMap.find _ $0 = Some _ |- _ ] => apply find_mapsto_iff in H; apply empty_mapsto_iff in H; contradiction
+  | [ H : ChMaps.ChMap.find _ #0 = Some _ |- _ ] => apply find_mapsto_iff in H; apply empty_mapsto_iff in H; contradiction
   | [ H : _ $? _ = Some _ |- _ ] => progress (simpl in H)
 
   | [ H : add _ _ _ $? _ = Some ?UD |- _ ] =>
