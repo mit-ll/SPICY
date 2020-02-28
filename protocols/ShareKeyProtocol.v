@@ -21,6 +21,7 @@ From Coq Require Import
 Require Import
         MyPrelude
         Maps
+        ChMaps
         Messages
         Common
         Keys
@@ -48,11 +49,12 @@ Transparent A B.
 Section IdealProtocol.
   Import IdealWorld.
 
-  Definition CH__A2B : channel_id := 0.
-  Definition empty_chs : channels := ($0 $+ (CH__A2B, [])).
+  Definition p__A2B : nat := 0.
+  Definition CH__A2B : channel_id := # p__A2B.
+  Definition empty_chs : channels := (#0 #+ (CH__A2B, [])).
 
-  Definition PERMS__a := $0 $+ (CH__A2B, {| read := true; write := true |}). (* writer *)
-  Definition PERMS__b := $0 $+ (CH__A2B, {| read := true; write := false |}). (* reader *)
+  Definition PERMS__a := $0 $+ (p__A2B, {| read := true; write := true |}). (* writer *)
+  Definition PERMS__b := $0 $+ (p__A2B, {| read := true; write := false |}). (* reader *)
 
   Definition mkiU (cv : channels) (perm__a perm__b : permissions) (p__a p__b : cmd (Base Nat)): universe Nat :=
     {| channel_vector := cv
@@ -73,9 +75,9 @@ Section IdealProtocol.
          ; ret (extractContent (msgFst m))).
 
   Definition ideal_univ_sent1 chid n :=
-    mkiU ($0 $+ (CH__A2B,
+    mkiU (#0 #+ (CH__A2B,
                  [existT _ _ (MsgPair (Content n) (Permission {| ch_perm := {| read := false; write := true |} ; ch_id := chid |})) ])
-           $+ (chid, []))
+           #+ (#chid, []))
          (PERMS__a $+ (chid, creator_permission)) PERMS__b
          (* user A *)
          ( _ <- ret tt
@@ -85,7 +87,7 @@ Section IdealProtocol.
          ; ret (extractContent (msgFst m))).
 
   Definition ideal_univ_recd1 chid n :=
-    mkiU (empty_chs $+ (chid, []))
+    mkiU (empty_chs #+ (#chid, []))
          (PERMS__a $+ (chid, creator_permission))
          (PERMS__b $+ (chid, {| read := false; write := true |}))
          (* user A *)
@@ -184,13 +186,13 @@ Section RealProtocol.
       ~^* (real_univ_sent1 k_id k n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
       -> @lameAdv Unit tt adv
       -> ~ In k_id KEYS
-      -> ~ In chid empty_chs
+      -> empty_chs #? (#chid) = None
       -> RSimplePing (peel_adv U__r) (ideal_univ_sent1 chid n)
   | Recd1 : forall U__r cs mycs1 mycs2 cur_n1 cur_n2 k k_id n chid cid1 non1 adv,
       ~^* (real_univ_recd1 k_id k n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
       -> @lameAdv Unit tt adv
       -> ~ In k_id KEYS
-      -> ~ In chid empty_chs
+      -> empty_chs #? (#chid) = None 
       -> RSimplePing (peel_adv U__r) (ideal_univ_recd1 chid n)
   .
 
@@ -199,7 +201,7 @@ Section RealProtocol.
       ~^* (real_univ_sent1 k_id k n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
       -> @lameAdv Unit tt adv
       -> ~ In k_id KEYS
-      -> ~ In chid empty_chs
+      -> empty_chs #? (#chid) = None
       -> U__i = (ideal_univ_sent1 chid n)
       -> RSimplePing (RealWorld.peel_adv U__r) U__i.
   Proof. intros; subst; eapply Sent1; eauto. Qed.
@@ -209,7 +211,7 @@ Section RealProtocol.
       ~^* (real_univ_recd1 k_id k n cs mycs1 mycs2 cur_n1 cur_n2 cid1 non1 adv) U__r
       -> @lameAdv Unit tt adv
       -> ~ In k_id KEYS
-      -> ~ In chid empty_chs
+      -> empty_chs #? (#chid) = None
       -> U__i = ideal_univ_recd1 chid n
       -> RSimplePing (RealWorld.peel_adv U__r) U__i.
   Proof. intros; subst; eapply Recd1; eauto. Qed.

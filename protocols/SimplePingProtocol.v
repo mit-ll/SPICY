@@ -47,8 +47,8 @@ Definition B : user_id   := 1.
 Section IdealProtocol.
   Import IdealWorld.
 
-  Definition CH__A2B : channel_id := (Single 0).
   Definition P__A2B : perm_id := 0.
+  Definition CH__A2B : channel_id := #P__A2B.
 
   Definition PERMS__a := $0 $+ (P__A2B, {| read := true; write := true |}). (* writer *)
   Definition PERMS__b := $0 $+ (P__A2B, {| read := true; write := false |}). (* reader *)

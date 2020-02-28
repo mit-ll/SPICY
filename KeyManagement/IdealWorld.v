@@ -90,7 +90,7 @@ Inductive cmd_type :=
 
 Definition denote (t : cmd_type) :=
   match t with
-  | ChannelId => channel_id
+  | ChannelId => perm_id
   | Base t' => typeDenote t'
   | Message t' => message t'
   end
@@ -105,7 +105,7 @@ Inductive cmd : cmd_type -> Type :=
 | Gen : cmd (Base Nat)
 | Send {t} (m : message t) (ch_id : channel_id) : cmd (Base Unit)
 | Recv {t} (ch_id : channel_id) : cmd (Message t)
-| CreateChannel : cmd (ChannelId)
+| CreateChannel : cmd ChannelId
 .
 
 Module IdealNotations.
@@ -189,7 +189,7 @@ Inductive lstep_user : forall A, ilabel -> channels * cmd A * permissions -> cha
     cv #? (Single ch_id) = None ->
     lstep_user Silent
                (cv, CreateChannel, ps)
-               (cv #+ ((Single ch_id), []), @Return ChannelId (Single ch_id), ps $+ (ch_id, creator_permission))
+               (cv #+ ((Single ch_id), []), @Return ChannelId ch_id, ps $+ (ch_id, creator_permission))
 | LStepSend : forall t (cv : channels) (m : message t) ch_id ps ch_d b,
     ps $? ch_id = Some {| read := b ; write := true |} ->
     cv #? (Single ch_id) = Some ch_d ->

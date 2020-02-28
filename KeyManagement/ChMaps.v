@@ -89,6 +89,13 @@ Definition combine (ch1 ch2 : channel_id) :=
 
 Module Import ChMap := MyOrderedMap( ChannelType ).
 
+Module ChNotation.
+  Notation "# x" := (Single x) (at level 50, left associativity).
+  Notation "x #& y" := (Intersection x y) (at level 50, left associativity).
+End ChNotation. 
+
+Export ChNotation.
+
 Module ChMapNotation.
   Notation "#0" := (empty _).
   Notation "m #+ ( k , v )" := (add k v m) (at level 50, left associativity).
@@ -110,3 +117,4 @@ Ltac m_equal :=
          | [ H : Map.Empty ?m |- ?m = #0 ] => symmetry
          | [ |- Map.empty _ = _ ] => unfold Map.empty, Map.Raw.empty, remove, Map.Raw.remove; simpl
          end.
+
