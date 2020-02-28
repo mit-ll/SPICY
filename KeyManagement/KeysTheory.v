@@ -42,19 +42,19 @@ Section FindKeysLemmas.
 
   Lemma findUserKeys_foldfn_proper :
     forall {A},
-      Proper (eq ==> eq ==> eq ==> eq) (fun (_ : NatMap.key) (u : user_data A) (ks : key_perms) => ks $k++ key_heap u).
+      Proper (eq ==> eq ==> eq ==> eq) (fun (_ : NatMap.Map.key) (u : user_data A) (ks : key_perms) => ks $k++ key_heap u).
   Proof. solve_proper. Qed.
 
   Lemma findUserKeys_foldfn_proper_Equal :
     forall {A},
-      Proper (eq ==> eq ==> Equal ==> Equal) (fun (_ : NatMap.key) (u : user_data A) (ks : key_perms) => ks $k++ key_heap u).
+      Proper (eq ==> eq ==> Equal ==> Equal) (fun (_ : NatMap.Map.key) (u : user_data A) (ks : key_perms) => ks $k++ key_heap u).
   Proof.
     unfold Proper, respectful; intros; subst; Equal_eq; unfold Equal; intros; trivial.
   Qed.
 
   Lemma findUserKeys_foldfn_transpose :
     forall {A},
-      transpose_neqkey eq (fun (_ : NatMap.key) (u : user_data A) (ks : key_perms) => ks $k++ key_heap u).
+      transpose_neqkey eq (fun (_ : NatMap.Map.key) (u : user_data A) (ks : key_perms) => ks $k++ key_heap u).
   Proof.
     unfold transpose_neqkey; intros.
     rewrite !merge_perms_assoc,merge_perms_sym with (ks1:=key_heap e'); trivial.
@@ -62,7 +62,7 @@ Section FindKeysLemmas.
 
   Lemma findUserKeys_foldfn_transpose_Equal :
     forall {A},
-      transpose_neqkey Equal (fun (_ : NatMap.key) (u : user_data A) (ks : key_perms) => ks $k++ key_heap u).
+      transpose_neqkey Equal (fun (_ : NatMap.Map.key) (u : user_data A) (ks : key_perms) => ks $k++ key_heap u).
   Proof.
     unfold transpose_neqkey; intros; unfold Equal; intros.
     rewrite !merge_perms_assoc,merge_perms_sym with (ks1:=key_heap e'); trivial.
@@ -73,7 +73,7 @@ Section FindKeysLemmas.
 
   Lemma findUserKeys_notation :
     forall {A} (usrs : honest_users A),
-      fold (fun (_ : NatMap.key) (u : user_data A) (ks : key_perms) => ks $k++ key_heap u) usrs $0 = findUserKeys usrs.
+      fold (fun (_ : NatMap.Map.key) (u : user_data A) (ks : key_perms) => ks $k++ key_heap u) usrs $0 = findUserKeys usrs.
     unfold findUserKeys; trivial.
   Qed.
 
@@ -112,7 +112,7 @@ Section FindKeysLemmas.
                                                           ; cur_nonce := cur_n
                                                          |} )).
   Proof.
-    induction usrs using P.map_induction_bis; intros; Equal_eq;
+    induction usrs using map_induction_bis; intros; Equal_eq;
       unfold findUserKeys;
       solve_find_user_keys u_id usrs IHusrs; eauto.
   Qed.
@@ -129,7 +129,7 @@ Section FindKeysLemmas.
                                       ; cur_nonce := cur_n |})) = findUserKeys usrs.
   Proof.
     unfold user_keys;
-      induction usrs using P.map_induction_bis; intros; Equal_eq; auto;
+      induction usrs using map_induction_bis; intros; Equal_eq; auto;
         unfold findUserKeys;
         solve_find_user_keys u_id usrs IHusrs; eauto.
   Qed.
@@ -146,7 +146,7 @@ Section FindKeysLemmas.
                                       ; cur_nonce := cur_n |})) = findUserKeys usrs $k++ ks'.
   Proof.
     unfold user_keys;
-      induction usrs using P.map_induction_bis; intros; Equal_eq; auto;
+      induction usrs using map_induction_bis; intros; Equal_eq; auto;
         unfold findUserKeys;
         solve_find_user_keys u_id usrs IHusrs;
         simpl; eauto;
@@ -170,7 +170,7 @@ Section FindKeysLemmas.
                                       ; cur_nonce := cur_n  |})) = findUserKeys usrs $+ (k_id,true).
   Proof.
     unfold user_keys;
-      induction usrs using P.map_induction_bis; intros; Equal_eq; 
+      induction usrs using map_induction_bis; intros; Equal_eq; 
         clean_map_lookups; eauto.
 
     unfold findUserKeys;
@@ -189,7 +189,7 @@ Section FindKeysLemmas.
       -> findUserKeys usrs $? k <> None.
   Proof.
     intros.
-    induction usrs using P.map_induction_bis; intros; Equal_eq;
+    induction usrs using map_induction_bis; intros; Equal_eq;
       subst; clean_map_lookups; eauto;
         unfold findUserKeys;
         solve_find_user_keys u_id usrs IHusrs;
@@ -209,7 +209,7 @@ Section FindKeysLemmas.
       -> ks $? k = Some true
       -> findUserKeys usrs $? k = Some true.
   Proof.
-    induction usrs using P.map_induction_bis; intros; Equal_eq; subst;
+    induction usrs using map_induction_bis; intros; Equal_eq; subst;
       unfold findUserKeys;
       solve_find_user_keys u_id usrs IHusrs; eauto.
 
@@ -225,7 +225,7 @@ Section FindKeysLemmas.
       -> findUserKeys usrs $k++ ks = findUserKeys usrs.
   Proof.
     unfold user_keys;
-      induction usrs using P.map_induction_bis; intros * UKS; unfold user_keys in UKS;
+      induction usrs using map_induction_bis; intros * UKS; unfold user_keys in UKS;
         Equal_eq; clean_map_lookups; eauto.
 
     unfold findUserKeys;
@@ -261,7 +261,7 @@ Section FindKeysLemmas.
   Lemma not_honest_key_after_new_pub_keys :
     forall pubk honestk k,
       ~ honest_key honestk k
-      -> (forall (k_id : NatMap.key) (kp : bool), pubk $? k_id = Some kp -> kp = false)
+      -> (forall (k_id : NatMap.Map.key) (kp : bool), pubk $? k_id = Some kp -> kp = false)
       -> ~ honest_key (honestk $k++ pubk) k.
   Proof.
     unfold not; intros * NOTHK FN HK; invert HK.
@@ -417,8 +417,8 @@ Section CleanKeys.
       -> ks $? k_id = Some k
       -> honest_key_filter_fn honestk k_id k = false.
   Proof.
-    induction ks using P.map_induction_bis; intros; Equal_eq;
-      unfold clean_keys,filter in *; keys_solver honestk; eauto.
+    induction ks using map_induction_bis; intros; Equal_eq;
+      unfold clean_keys, filter in *; keys_solver honestk; eauto.
   Qed.
 
   Lemma clean_keys_keeps_honest_key :
@@ -445,7 +445,7 @@ Section CleanKeys.
         ks $? k_id = None
       -> clean_keys honestk ks $? k_id = None.
   Proof.
-    induction ks using P.map_induction_bis; intros; Equal_eq;
+    induction ks using map_induction_bis; intros; Equal_eq;
       unfold clean_keys in *;
       keys_solver honestk; eauto.
   Qed.
@@ -522,7 +522,7 @@ Section CleanKeys.
       -> ks $? k_id = Some k
       -> honest_perm_filter_fn honestk k_id k = false.
   Proof.
-    induction ks using P.map_induction_bis; intros; Equal_eq;
+    induction ks using map_induction_bis; intros; Equal_eq;
       unfold clean_key_permissions,filter in *;
       keys_solver honestk; eauto.
   Qed.
@@ -532,7 +532,7 @@ Section CleanKeys.
         ks $? k_id = None
       -> clean_key_permissions honestk ks $? k_id = None.
   Proof.
-    induction ks using P.map_induction_bis; intros; Equal_eq;
+    induction ks using map_induction_bis; intros; Equal_eq;
       unfold clean_key_permissions in *;
       keys_solver honestk; eauto.
   Qed.

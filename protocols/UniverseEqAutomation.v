@@ -127,7 +127,7 @@ Section ExamplarProofs.
            users := $0 $+ (uid1, {| protocol := proto1; perms := perms1' |})
                      $+ (uid2, {| protocol := proto2; perms := perms2' |}) |}.
     Proof.
-      intros. do 2 eexists; smash_universe; m_equal; chm_equal; eauto.
+      intros. do 2 eexists; smash_universe; Maps.m_equal; ChMaps.m_equal; eauto.
     Qed.
 
   End Ideal.

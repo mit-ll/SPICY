@@ -1396,7 +1396,7 @@ Module Gen.
       ; concrete iuniv iu
       ; solve[ idtac "trying left"; left; close
              | idtac "left fails; trying right"; right; close
-             | idtac "something is horribly wrong"; fail 2 (* prevent an infinite loop *)
+             | idtac "something is horribly wrong" (* prevent an infinite loop *)
              ]
     | [|- ?inv (?ru, ?iu)] =>
       is_evar inv
@@ -1407,6 +1407,7 @@ Module Gen.
       ; canonicalize users
       ; clean_context
       ; clean_map_lookups
+      ; ChMaps.clean_chmap_lookups
       ; incorp
       ; solve[ close ]
     end.

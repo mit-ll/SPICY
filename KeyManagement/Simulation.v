@@ -37,7 +37,7 @@ Require IdealWorld
 
 Import IdealWorld.IdealNotations
        RealWorld.RealWorldNotations
-       ChNotation.
+       .
 
 Set Implicit Arguments.
 

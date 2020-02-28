@@ -38,9 +38,9 @@ Fixpoint content_eq  {t__rw t__iw} (m__rw : RealWorld.message.message t__rw) (m_
 
 Definition resolve_perm (ps : IdealWorld.permissions) id :=
   match id with
-  | ChMaps.Single ch => NatMap.find ch ps
+  | ChMaps.Single ch => ps $? ch
   | ChMaps.Intersection ch1 ch2 =>
-    match (NatMap.find ch1 ps, NatMap.find ch2 ps) with
+    match (ps $? ch1, ps $? ch2) with
     | (Some p1, Some p2) => Some (IdealWorld.perm_intersection p1 p2)
     | _ => None
     end
@@ -51,7 +51,7 @@ Inductive  message_eq : forall {A B t},
   IdealWorld.message.message t -> IdealWorld.universe A -> IdealWorld.channel_id -> Prop :=
 | ContentCase : forall {A B t}  (U__rw : RealWorld.universe A B) U__iw (m__rw : RealWorld.message.message t) m__iw ch_id user_data,
     content_eq m__rw m__iw
-    -> (forall u, NatMap.find u U__iw.(IdealWorld.users)  = Some user_data
+    -> (forall u, U__iw.(IdealWorld.users) $? u  = Some user_data
             -> resolve_perm user_data.(IdealWorld.perms) ch_id = Some (IdealWorld.construct_permission true true))
     -> message_eq (RealWorld.Content m__rw) U__rw m__iw U__iw ch_id
 | CryptoSigCase : forall {A B t} (U__rw : RealWorld.universe A B) U__iw (m__iw : IdealWorld.message.message t) c_id ch_id k__sign
@@ -61,7 +61,7 @@ Inductive  message_eq : forall {A B t},
     -> honestk = RealWorld.findUserKeys (U__rw.(RealWorld.users))
     -> (forall u data__rw data__iw,
 	                     U__rw.(RealWorld.users) $? u = Some data__rw
-                          -> NatMap.find u U__iw.(IdealWorld.users) = Some data__iw
+                          -> U__iw.(IdealWorld.users) $? u = Some data__iw
                           ->  RealWorld.honest_key honestk k__sign
           (*sign key is honest.  honest key : find user keys on all users*)
             -> (data__rw.(RealWorld.key_heap) $? k__sign = Some true

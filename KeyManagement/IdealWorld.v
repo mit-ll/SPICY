@@ -24,8 +24,6 @@ Require Import MyPrelude.
 (* Module Import SN := SetNotations(Foo). *)
 
 Require Import Common ChMaps Maps Messages.
-Import ChNotation.
-
 
 Require Messages.
 Set Implicit Arguments.

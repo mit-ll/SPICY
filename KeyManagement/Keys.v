@@ -95,7 +95,7 @@ Proof.
 Qed.
 
 Definition merge_perms (ks ks' : key_perms) : key_perms :=
-  fold add_key_perm ks ks'.
+  Map.fold add_key_perm ks ks'.
 
 Notation "m1 $k++ m2" := (merge_perms m2 m1) (at level 50, left associativity).
 
@@ -140,7 +140,6 @@ Section KeyMergeTheorems.
 
   Hint Resolve empty_Empty.
 
-  (* Hint Extern 1 (~ In _ _) => rewrite not_find_in_iff. *)
   Lemma merge_perms_notation :
     forall ks1 ks2,
       fold add_key_perm ks2 ks1 = ks1 $k++ ks2.

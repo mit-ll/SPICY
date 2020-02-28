@@ -92,8 +92,8 @@ Module SignPingSendProtocol.
   Section IW.
     Import IdealWorld.
 
-    Definition CH__A2B : channel_id := (Single 0).
-    Definition perms_CH__A2B := 0.
+    Notation CH__A2B := (Single 0).
+    Notation perms_CH__A2B := 0.
 
     Definition PERMS__a := $0 $+ (perms_CH__A2B, {| read := true; write := true |}). (* writer *)
     Definition PERMS__b := $0 $+ (perms_CH__A2B, {| read := true; write := false |}). (* reader *)
