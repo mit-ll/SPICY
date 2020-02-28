@@ -86,7 +86,7 @@ Section IdealLemmas.
 
 End IdealLemmas.
 
-Hint Rewrite add_empty_idempotent empty_add_idempotent : maps.
+(* Hint Rewrite add_empty_idempotent empty_add_idempotent : maps. *)
 
 Ltac smash_universe :=
   unfold RealWorld.buildUniverse;
@@ -109,7 +109,7 @@ Section ExamplarProofs.
 
   Section Ideal.
     Import IdealWorld.
-    Import ChNotation.
+    (* Import ChNotation. *)
     Import ChannelType.
 
     Definition ch1 := (Single 10).

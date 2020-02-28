@@ -34,9 +34,6 @@ Set Implicit Arguments.
 
 Module MyOrderedMap (OT : UsualOrderedType).
   Import OT.
-  (* Parameter V : Type. *)
-
-  Definition K : Type := t.
 
   Module Import Map := FMapList.Make( OT ).
   Definition t := Map.t.
@@ -426,7 +423,7 @@ Module MyOrderedMap (OT : UsualOrderedType).
   Definition canonicalize_concrete_map {V} (m : Map.t V) : Map.t V.
     destruct m.
     unfold Raw.t in this0.
-    let f := constr:(fun (acc : Map.t V) (cur : K * V) =>
+    let f := constr:(fun (acc : Map.t V) (cur : OT.t * V) =>
                        let (k, v) := cur
                        in acc $+ (k, v))
     in let m' := (eval simpl in (fold_left f this0 $0))
@@ -502,22 +499,6 @@ Module MyOrderedMap (OT : UsualOrderedType).
   End MapPredicates.
 
   Export Map F P.
-  
-  (* Re-export additional lemmas *)
-  (* Definition add_eq_o := F.add_eq_o. *)
-  (* Definition add_neq_o := F.add_neq_o. *)
-  (* Definition transpose_neqkey := P.transpose_neqkey. *)
-  (* Definition fold_add := P.fold_add. *)
-  (* Definition fold_Empty := P.fold_Empty. *)
-  (* Definition filter := P.filter. *)
-  (* Definition filter_iff := P.filter_iff. *)
-  (* Definition mapi_o := F.mapi_o. *)
-  (* Definition not_find_in_iff := F.not_find_in_iff. *)
-  (* Definition find_mapsto_iff := F.find_mapsto_iff. *)
-  (* Definition map_mapsto_iff := F.map_mapsto_iff. *)
-  (* Definition mapi_mapsto_iff := F.mapi_mapsto_iff. *)
-
-  (* Definition max_elt := max_elt. *)
 
 End MyOrderedMap.
 
@@ -532,7 +513,7 @@ End NatMapNotation.
 Export NatMapNotation.
 
 Definition merge_maps {V : Type} (m1 m2 : Map.t V) : Map.t V :=
-  Map.fold (fun k v m => m $+ (k,v) ) m1 m2.
+  fold (fun k v m => m $+ (k,v) ) m1 m2.
 
 Notation "m1 $++ m2" := (merge_maps m2 m1) (at level 50, left associativity).
 
@@ -573,46 +554,44 @@ Ltac m_equal :=
          | [ |- Map.empty _ = _ ] => unfold Map.empty, Map.Raw.empty, remove, Map.Raw.remove; simpl
          end.
 
-(* Section ConcreteMaps. *)
+Section ConcreteMaps.
 
-(*   Print NatMap.F. *)
+  Definition next_key {V} (m : Map.t V) : nat :=
+    match O.max_elt m with
+    | None => 0
+    | Some (k,v) => S k
+    end.
 
-(*   Definition next_key {V} (m : Map.t V) : nat := *)
-(*     match max_elt m with *)
-(*     | None => 0 *)
-(*     | Some (k,v) => S k *)
-(*     end. *)
+  Lemma next_key_not_in :
+    forall {V} (m : Map.t V) k,
+      k = next_key m
+      -> m $? k = None.
+  Proof.
+    unfold next_key; intros.
+    cases (O.max_elt m); subst.
+    - destruct p; simpl.
+      cases (m $? S k); eauto.
+      exfalso.
 
-(*   Lemma next_key_not_in : *)
-(*     forall {V} (m : Map.t V) k, *)
-(*       k = next_key m *)
-(*       -> m $? k = None. *)
-(*   Proof. *)
-(*     unfold next_key; intros. *)
-(*     cases (max_elt m); subst. *)
-(*     - destruct p; simpl. *)
-(*       cases (m $? S k); eauto. *)
-(*       exfalso. *)
+      assert (O.Above k (m $- k)) by eauto using O.max_elt_Above.
+      specialize (H (S k)).
 
-(*       assert (Above k (m $- k)) by eauto using max_elt_Above. *)
-(*       specialize (H (S k)). *)
+      assert (In (S k) (m $- k)).
+      rewrite in_find_iff; unfold not; intros.
+      rewrite remove_neq_o in H0 by eauto; contra_map_lookup.
+      specialize (H H0).
 
-(*       assert (In (S k) (m $- k)). *)
-(*       rewrite in_find_iff; unfold not; intros. *)
-(*       rewrite remove_neq_o in H0 by eauto; contra_map_lookup. *)
-(*       specialize (H H0). *)
+      assert (k < S k) by eauto using Nat.lt_succ_diag_r.
+      assert (S k < S k) by eauto using Nat.lt_trans.
 
-(*       assert (k < S k) by eauto using Nat.lt_succ_diag_r. *)
-(*       assert (S k < S k) by eauto using Nat.lt_trans. *)
+      assert (~ (S k < S k)) by eauto using OTF.lt_antirefl.
+      contradiction.
 
-(*       assert (~ (S k < S k)) by eauto using lt_antirefl. *)
-(*       contradiction. *)
+    - apply O.max_elt_Empty in Heq.
+      apply Empty_eq_empty in Heq; subst.
+      apply lookup_empty_none.
+  Qed.
 
-(*     - apply max_elt_Empty in Heq. *)
-(*       apply Empty_eq_empty in Heq; subst. *)
-(*       apply lookup_empty_none. *)
-(*   Qed. *)
-
-(* End ConcreteMaps. *)
+End ConcreteMaps.
 
 

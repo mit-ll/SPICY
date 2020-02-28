@@ -37,7 +37,13 @@ Require Import
         Tactics
         UniverseEqAutomation.
 
-Require IdealWorld RealWorld Sets ChMaps.
+Require
+  IdealWorld
+  RealWorld
+  Sets.
+
+Require Import
+  ChMaps.
 
 (* Import ChMaps.ChMap. *)
 
@@ -93,17 +99,15 @@ Section RealWorldLemmas.
   
 End RealWorldLemmas.
 
-Import ChMaps.ChNotation.
-
 Ltac equality1 :=
   match goal with
   | [ H : ?x = ?x |- _ ] => clear H
   | [ H : List.In _ _ |- _ ] => progress (simpl in H); intuition idtac
 
   | [ H : _ $+ (_,_) $? _ = _ |- _ ] => progress clean_map_lookups
-  | [ H : ChMaps.ChMap.add _ _  #? _ = _ |- _ ] => progress clean_map_lookups
+  | [ H : _ #+ (_,_) #? _ = _ |- _ ] => progress clean_map_lookups
   | [ H : $0 $? _ = Some _ |- _ ] => apply find_mapsto_iff in H; apply empty_mapsto_iff in H; contradiction
-  | [ H : ChMaps.ChMap.find _ #0 = Some _ |- _ ] => apply find_mapsto_iff in H; apply empty_mapsto_iff in H; contradiction
+  | [ H : #0 #? _ = Some _ |- _ ] => apply find_mapsto_iff in H; apply empty_mapsto_iff in H; contradiction
   | [ H : _ $? _ = Some _ |- _ ] => progress (simpl in H)
 
   | [ H : add _ _ _ $? _ = Some ?UD |- _ ] =>
@@ -597,12 +601,10 @@ Module SimulationAutomation.
     | [ H : ~ In _ _ |- _ ] => rewrite not_find_in_iff in H
     | [ |- ~ In _ _ ] => rewrite not_find_in_iff; try eassumption
     | [ H : In ?x ?xs -> False |- _ ] => change (In x xs -> False) with (~ In x xs) in H
-                                                               
+
     | [ |- context [ next_key ] ] => progress (unfold next_key; simpl)
     | [ |- ?m $+ (?kid1,_) $? ?kid1 = _ ] => rewrite add_eq_o by trivial
     | [ |- ?m $+ (?kid2,_) $? ?kid1 = _ ] => rewrite add_neq_o by solve_simple_ineq (* auto 2 *)
-    (*   rewrite add_neq_o by solve_concrete_maps *)
-    (* || rewrite add_eq_o by (unify kid1 kid2; solve_concrete_maps) *)
     | [ |- (match ?m $+ (?kid1,_) $? ?kid1 with _ => _ end) = _ ] => rewrite add_eq_o by trivial
     | [ |- (match ?m $+ (?kid2,_) $? ?kid1 with _ => _ end) = _ ] => rewrite add_neq_o by solve_simple_ineq (* auto 2 *)
     | [ |- (match ?m $+ (?kid1,_) $? ?kid1 with _ => _ end) $? _ = _ ] => rewrite add_eq_o by trivial

@@ -98,3 +98,15 @@ End ChMapNotation.
 
 Export ChMapNotation.
   
+Ltac m_equal :=
+  repeat match goal with
+         | [ |- context[_ #+ (?k,_) #? ?k ] ]  =>
+           rewrite add_eq_o by (simple apply @eq_refl)
+         | [ |- context[_ #+ (?k',_) #? ?k] ] =>
+           rewrite add_neq_o by ( (unfold not; intros ?SIMPLEQ; invert SIMPLEQ) || intuition idtac )
+         | [ |- (_ #+ (_,_)) = _ ] => unfold Map.add, Map.Raw.add; simpl
+         | [ |- {| Map.this := _ ; Map.sorted := _ |} = _ ] => eapply map_eq_fields_eq
+         | [ H : Map.Empty ?m |- #0 = ?m ] => eapply Empty_eq_empty; exact H
+         | [ H : Map.Empty ?m |- ?m = #0 ] => symmetry
+         | [ |- Map.empty _ = _ ] => unfold Map.empty, Map.Raw.empty, remove, Map.Raw.remove; simpl
+         end.
