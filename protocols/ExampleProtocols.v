@@ -99,7 +99,7 @@ Module SignPingSendProtocol.
     Definition PERMS__b := $0 $+ (perms_CH__A2B, {| read := true; write := false |}). (* reader *)
 
     Definition ideal_univ_start :=
-      mkiU (ChMap.add CH__A2B [] (@empty _)) PERMS__a PERMS__b
+      mkiU (#0 #+ (CH__A2B, [])) PERMS__a PERMS__b
            (* user A *)
            ( n <- Gen
            ; _ <- Send (Content n) CH__A2B
@@ -178,7 +178,7 @@ Module EncPingSendProtocol.
     Definition PERMS__b := $0 $+ (perms_CH__A2B, {| read := true; write := false |}). (* reader *)
 
     Definition ideal_univ_start :=
-      mkiU (ChMap.add CH__A2B [] (empty _)) PERMS__a PERMS__b
+      mkiU (#0 #+ (CH__A2B, [])) PERMS__a PERMS__b
            (* user A *)
            ( n <- Gen
            ; _ <- Send (Content n) CH__A2B

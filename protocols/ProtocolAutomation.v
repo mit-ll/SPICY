@@ -895,7 +895,8 @@ Module SimulationAutomation.
     | [ |- _ /\ _ ] => split
     end; split_ex; simpl in *.
 
-  Hint Extern 1 (action_matches _ _ _ _) => repeat (solve_action_matches1); clean_map_lookups ; ChMaps.clean_chmap_lookups : core.
+  Hint Extern 1 (action_matches _ _ _ _) =>
+    repeat (solve_action_matches1); NatMap.clean_map_lookups ; ChMap.clean_map_lookups : core.
 
   Hint Resolve
        findUserKeys_foldfn_proper
@@ -1408,8 +1409,8 @@ Module Gen.
       ; solve_concrete_maps
       ; canonicalize users
       ; clean_context
-      ; clean_map_lookups
-      ; ChMaps.clean_chmap_lookups
+      ; NatMap.clean_map_lookups
+      ; ChMap.clean_map_lookups
       ; incorp
       ; solve[ close ]
     end.
