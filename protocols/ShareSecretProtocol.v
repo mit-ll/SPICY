@@ -21,6 +21,7 @@ From Coq Require Import
 Require Import
         MyPrelude
         Maps
+        ChMaps
         Messages
         ModelCheck
         Common
@@ -53,26 +54,30 @@ Module ShareSecretProtocol.
   Section IW.
     Import IdealWorld.
 
-    Definition CH__A2B : channel_id := 0.
-    Definition CH__B2A : channel_id := 1.
-    Definition empty_chs : channels := ($0 $+ (CH__A2B, []) $+ (CH__B2A, [])).
+    Notation CH__A2B := (Single 0).
+    Notation CH__B2A := (Single 1).
+    Notation pCH__A2B := 0.
+    Notation pCH__B2A := 1.
 
-    Definition PERMS__a := $0 $+ (CH__A2B, owner) $+ (CH__B2A, reader).
-    Definition PERMS__b := $0 $+ (CH__A2B, reader) $+ (CH__B2A, owner).
+    (* Definition empty_chs : channels := (#0 #+ (CH__A2B, []) #+ (CH__B2A, [])). *)
+
+    Definition PERMS__a := $0 $+ (pCH__A2B, owner) $+ (pCH__B2A, reader).
+    Definition PERMS__b := $0 $+ (pCH__A2B, reader) $+ (pCH__B2A, owner).
 
     Definition ideal_univ_start :=
-      mkiU ($0 $+ (CH__A2B, [])) PERMS__a PERMS__b
+      mkiU (#0 #+ (CH__A2B, [])) PERMS__a PERMS__b
            (* user A *)
            ( chid <- CreateChannel
            ; _ <- Send (Permission {| ch_perm := writer ; ch_id := chid |}) CH__A2B
-           ; m <- @Recv Nat chid
+           ; m <- @Recv Nat (chid #& pCH__B2A)
            ; @Return (Base Nat) (extractContent m)
            )
 
            (* user B *)
            ( m <- @Recv Access CH__A2B
            ; n <- Gen
-           ; _ <- Send (Content n) (ch_id (extractPermission m))
+           ; _ <- let chid := ch_id (extractPermission m)
+                 in  Send (Content n) (chid #& pCH__B2A)
            ; @Return (Base Nat) n
            ).
 
@@ -196,14 +201,92 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
       gen1.
       gen1.
       gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
+
+
       gen1.
       gen1.
       gen1.
       
+    - intros.
+      simpl in *; split.
+      
+      + sets_invert; unfold safety;
+          split_ex; simpl in *; subst; solve_honest_actions_safe;
+            clean_map_lookups; eauto 8.
+
+        Unshelve.
+        all:clean_map_lookups.
+        
+      + sets_invert; unfold labels_align;
+          split_ex; subst; intros; rstep; subst.
+
+        * do 3 eexists; repeat (simple apply conj); eauto.
+        * do 3 eexists; repeat (simple apply conj).
+          repeat ideal_single_silent_multistep A.
+          repeat ideal_single_silent_multistep B.
+          solve_refl.
+          canonicalize users.
+          
+        * do 3 eexists; repeat (simple apply conj); eauto.
+        * do 3 eexists; repeat (simple apply conj); eauto.
+        * do 3 eexists; repeat (simple apply conj); eauto.
+        * do 3 eexists; repeat (simple apply conj); eauto.
+        * do 3 eexists; repeat (simple apply conj); eauto.
+        * do 3 eexists; repeat (simple apply conj); eauto.
+        * do 3 eexists; repeat (simple apply conj); eauto.
+        * do 3 eexists; repeat (simple apply conj); eauto.
+        * do 3 eexists; repeat (simple apply conj); eauto.
+        * do 3 eexists; repeat (simple apply conj); eauto.
+        * do 3 eexists; repeat (simple apply conj); eauto.
+        * do 3 eexists; repeat (simple apply conj); eauto.
+        * do 3 eexists; repeat (simple apply conj); eauto.
+
+          eapply TrcFront.
+          eapply IdealWorld.LStepUser'; swap 2 3; [ pick_user A | ..]; simpl; (try simple eapply @eq_refl).
+          eapply IdealWorld.LStepBindRecur; i_single_silent_step; solve_ideal_step_stuff; eauto 2.
+          eapply TrcFront.
+          isilent_step_univ A.
+          simpl.
+          canonicalize users.
+          
+          eapply i_single_silent_step; solve_ideal_step_stuff; eauto 2.
+          
+          rewrite <- ChMaps.ChMap.F.not_find_in_iff.
+
+          assert (exists i, #0 #+ (# 1, 1) #+ (# 0, 0) #? (# i) = None).
+          eexists.
+
+          match goal with
+          | [ |- ?m #? (# ?i) = None ] =>
+            is_evar i; ChMaps.ChMap.canonicalize_concrete_map m
+          end.
+
+          
+            ((eapply IdealWorld.LStepBindRecur; i_single_silent_step; solve [ solve_ideal_step_stuff; eauto 2  ])).
+             || (i_single_silent_step; solve [ solve_ideal_step_stuff; eauto 2 ])).
+          
+
+
+               |]; simpl.
+
+
+  Ltac isilent_step_univ uid :=
+    eapply IdealWorld.LStepUser'; simpl; swap 2 3; [ pick_user uid | ..]; (try simple eapply @eq_refl);
+    ((eapply IdealWorld.LStepBindRecur; i_single_silent_step; solve [ solve_ideal_step_stuff; eauto 2  ])
+     || (i_single_silent_step; solve [ solve_ideal_step_stuff; eauto 2 ])).
+
+  Ltac single_silent_multistep usr_step := eapply TrcFront; [usr_step |]; simpl.
+  Ltac single_silent_multistep3 usr_step := eapply Trc3Front; swap 1 2; [usr_step |..]; simpl; trivial.
+  
+  Ltac real_single_silent_multistep uid := single_silent_multistep3 ltac:(rsilent_step_univ uid).
+  Ltac ideal_single_silent_multistep uid := single_silent_multistep ltac:(isilent_step_univ uid).
+
+             
+             ideal_single_silent_multistep A.
+             
+        * do 3 eexists; repeat (simple apply conj); eauto.
+        * do 3 eexists; repeat (simple apply conj); eauto.
+                  
     - intros.
       simpl in *; split.
       
