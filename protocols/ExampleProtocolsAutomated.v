@@ -89,7 +89,8 @@ Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
       simpl in *; split.
       
       + sets_invert; unfold safety;
-          split_ex; simpl in *; subst; solve_honest_actions_safe;
+          split_ex; simpl in *; subst;
+            solve_honest_actions_safe;
             clean_map_lookups; eauto 8.
 
         Unshelve.
@@ -97,12 +98,9 @@ Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
         
       + sets_invert; unfold liveness; intros;
           split_ex; subst; intros; rstep; subst.
-        * do 3 eexists;
-            repeat (apply conj); eauto.
-        * do 3 eexists;
-               repeat (apply conj); eauto.
-        * do 3 eexists;
-            repeat (apply conj); eauto.
+        * do 3 eexists; repeat (simple apply conj); eauto.
+        * do 3 eexists; repeat (simple apply conj); eauto.
+        * do 3 eexists; repeat (simple apply conj); eauto.
   Qed.
 
   Lemma U_good : @universe_starts_sane _ Unit b ru0.
@@ -219,12 +217,9 @@ Module SimpleEncProtocolSecure <: AutomatedSafeProtocol.
             clean_map_lookups; eauto 8.
       + sets_invert; unfold liveness; intros;
           split_ex; subst; intros; rstep; subst.
-        * do 3 eexists;
-            repeat (apply conj); eauto.
-        * do 3 eexists;
-            repeat (apply conj); eauto.
-        * do 3 eexists;
-            repeat (apply conj); eauto.
+        * do 3 eexists; repeat (simple apply conj); eauto.
+        * do 3 eexists; repeat (simple apply conj); eauto.
+        * do 3 eexists; repeat (simple apply conj); eauto.
 
       Unshelve.
       all:eauto.

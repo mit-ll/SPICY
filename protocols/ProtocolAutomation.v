@@ -806,20 +806,16 @@ Module SimulationAutomation.
     repeat
       match goal with
       | [ |- context [ RealWorld.buildUniverse ] ] => progress (unfold RealWorld.buildUniverse; simpl)
-      | [ |- context [ RealWorld.mkUniverse ?usrs _ _ _] ] => canonicalize_map usrs
+      | [ |- context [ {| RealWorld.users := ?usrs |}] ] => progress canonicalize_map usrs
+      (* | [ |- context [ RealWorld.mkUniverse ?usrs _ _ _] ] => canonicalize_map usrs *)
       end.
 
   Ltac simpl_ideal_users_context :=
-    repeat match goal with
-           | [|- context[{| IdealWorld.channel_vector := _
-                           ; IdealWorld.users := ?usrs |}]] =>
-             progress canonicalize_concrete_map usrs
-           end.
-    (* simpl; *)
-    (* repeat *)
-    (*   match goal with *)
-    (*   | [ |- context [ IdealWorld.construct_universe _ ?usrs] ] => canonicalize_map usrs *)
-    (*   end. *)
+    simpl;
+    repeat
+      match goal with
+      | [ |- context [ {| IdealWorld.users := ?usrs |}] ] => progress canonicalize_map usrs
+      end.
 
   Ltac rss_clean uid := real_single_silent_multistep uid; [ solve [eauto 3] .. |].
 
