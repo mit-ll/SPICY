@@ -21,6 +21,7 @@ From Coq Require Import
 Require Import
         MyPrelude
         Maps
+        ChMaps
         Messages
         Common
         Keys
@@ -46,10 +47,11 @@ Definition B : user_id   := 1.
 Section IdealProtocol.
   Import IdealWorld.
 
-  Definition CH__A2B : channel_id := 0.
+  Definition P__A2B : perm_id := 0.
+  Definition CH__A2B : channel_id := #P__A2B.
 
-  Definition PERMS__a := $0 $+ (CH__A2B, {| read := true; write := true |}). (* writer *)
-  Definition PERMS__b := $0 $+ (CH__A2B, {| read := true; write := false |}). (* reader *)
+  Definition PERMS__a := $0 $+ (P__A2B, {| read := true; write := true |}). (* writer *)
+  Definition PERMS__b := $0 $+ (P__A2B, {| read := true; write := false |}). (* reader *)
 
   Definition mkiU (cv : channels) (p__a p__b : cmd (Base Nat)): universe Nat :=
     {| channel_vector := cv
@@ -59,7 +61,7 @@ Section IdealProtocol.
     |}.
 
   Definition ideal_univ_start :=
-    mkiU ($0 $+ (CH__A2B, []))
+    mkiU (#0 #+ (CH__A2B, []))
          (* user A *)
          ( n <- Gen
          ; _ <- Send (Content n) CH__A2B
@@ -69,7 +71,7 @@ Section IdealProtocol.
          ; ret (extractContent m)).
 
   Definition ideal_univ_sent1 n :=
-    mkiU ($0 $+ (CH__A2B, [existT _ _ (Content n)]))
+    mkiU (#0 #+ (CH__A2B, [existT _ _ (Content n)]))
          (* user A *)
          ( _ <- ret tt
          ; ret n)
@@ -78,7 +80,7 @@ Section IdealProtocol.
          ; ret (extractContent m)).
 
   Definition ideal_univ_recd1 n :=
-    mkiU ($0 $+ (CH__A2B, []))
+    mkiU (#0 #+ (CH__A2B, []))
          (* user A *)
          (Return n)
          (* user B *)
@@ -312,12 +314,21 @@ Module SimplePingProtocolSecure <: SafeProtocol.
     - churn; simpl_real_users_context; simpl.
 
       + do 3 eexists;
-          repeat (apply conj); eauto 12.
+          repeat (apply conj); eauto 12. admit. admit.
 
     - churn; simpl_real_users_context.
       
       + do 3 eexists;
           repeat (apply conj); eauto.
+        eapply IdealWorld.LStepUser' with (u_id := SimplePingProtocol.B); eauto. simpl.
+        eapply IdealWorld.LStepBindRecur.
+        eapply IdealWorld.LStepRecv.
+        unfold CH__A2B. clean_chmap_lookups. reflexivity. unfold PERMS__b. clean_map_lookups. reflexivity. reflexivity. reflexivity.
+        simpl. unfold ideal_univ_recd1, mkiU. clean_chmap_lookups. unfold CH__A2B. clean_chmap_lookups. f_equal. clean_chmap_lookups.
+        rewrite map_add_eq. reflexivity.
+        maps_equal. eauto.  repeat solve_action_matches1. 
+
+        invert H.
 
       + do 3 eexists;
           repeat (apply conj); eauto 12.

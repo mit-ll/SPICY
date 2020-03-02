@@ -37,7 +37,17 @@ Require Import
         Tactics
         UniverseEqAutomation.
 
-Require IdealWorld RealWorld Sets.
+Require
+  IdealWorld
+  RealWorld
+  Sets.
+
+Require
+  ChMaps.
+
+Import ChMaps.ChMapNotation.
+
+(* Import ChMaps.ChMap. *)
 
 Set Implicit Arguments.
 
@@ -97,18 +107,19 @@ Ltac equality1 :=
   | [ H : List.In _ _ |- _ ] => progress (simpl in H); intuition idtac
 
   | [ H : _ $+ (_,_) $? _ = _ |- _ ] => progress clean_map_lookups
+  | [ H : _ #+ (_,_) #? _ = _ |- _ ] => progress clean_map_lookups
   | [ H : $0 $? _ = Some _ |- _ ] => apply find_mapsto_iff in H; apply empty_mapsto_iff in H; contradiction
+  | [ H : #0 #? _ = Some _ |- _ ] => apply find_mapsto_iff in H; apply empty_mapsto_iff in H; contradiction
   | [ H : _ $? _ = Some _ |- _ ] => progress (simpl in H)
+  | [ H : _ #? _ = Some _ |- _ ] => progress (simpl in H)
 
-  | [ H : add _ _ _ $? _ = Some ?UD |- _ ] =>
+  | [ H : _ $+ (_,_) $? _ = Some ?UD |- _ ] =>
     match type of UD with
     | RealWorld.user_data _ => apply lookup_some_implies_in in H; simpl in H
     | _ => apply lookup_split in H; intuition idtac
     end
-    (* match type of UD with *)
-    (* | RealWorld.user_data bool => apply lookup_some_implies_in in H; simpl in H *)
-    (* | _ => apply lookup_split in H; intuition idtac *)
-    (* end *)
+  | [ H : _ #+ (_,_) #? _ = Some ?UD |- _ ] =>
+    apply ChMaps.ChMap.lookup_split in H; intuition idtac
 
   | [ H : _ = {| RealWorld.users := _ ; RealWorld.adversary := _ ; RealWorld.all_ciphers := _ ; RealWorld.all_keys := _ |} |- _ ]
     => inversion H; clear H; subst
@@ -123,10 +134,8 @@ Ltac equality1 :=
   | [ H : _ = (_ :: _) |- _ ] => inversion H; clear H
   | [ H : (_,_) = (_,_) |- _ ] => inversion H; clear H
   | [ H : Action _ = Action _ |- _ ] => inversion H; clear H
-  (* | [ H : RealWorld.Return _ = RealWorld.Return _ |- _ ] => inversion H; clear H *)
   | [ H : RealWorld.Return _ = RealWorld.Return _ |- _ ] => apply invert_return in H
   | [ H : existT _ _ _ = existT _ _ _ |- _ ] => apply inj_pair2 in H
-  (* | [ H : existT _ ?x _ = existT _ ?x _ |- _ ] => apply inj_pair2 in H *)
 
   | [ H: RealWorld.SignedCiphertext _ = RealWorld.SignedCiphertext _ |- _ ] => invert H
   | [ H: RealWorld.SigCipher _ _ _ _ = RealWorld.SigCipher _ _ _ _ |- _ ] => invert H
@@ -316,7 +325,7 @@ Module SimulationAutomation.
               /\ ks $? k__enc   = Some kp__enc
               /\ ks $? k__sign  = Some true
               /\ lbl = Silent)
-        /\ (exists c_id,
+        /\ (exists c_id : nat, 
               ~ In c_id cs
               /\ cs' = cs $+ (c_id, SigEncCipher k__sign k__enc msg_to (u_id, cur_n) msg)
               /\ mycs' = c_id :: mycs
@@ -576,6 +585,8 @@ Module SimulationAutomation.
     match goal with
     | [ H : context [ $0 $? _ ] |- _ ] => rewrite lookup_empty_none in H
     | [ |- context [ $0 $? _ ]] => rewrite lookup_empty_none
+    | [ H : context [ #0 #? _ ] |- _ ] => rewrite ChMaps.ChMap.lookup_empty_none in H
+    | [ |- context [ #0 #? _ ]] => rewrite ChMaps.ChMap.lookup_empty_none
 
     | [ H : Some _ = Some _ |- _ ] => invert H
     | [ H : Some _ = None |- _ ] => discriminate
@@ -584,19 +595,31 @@ Module SimulationAutomation.
     | [ H : ?m $? ?k = _ |- _ ] => progress (unfold m in H)
     | [ H : ?m $+ (?k1,_) $? ?k1 = _ |- _ ] => rewrite add_eq_o in H by trivial
     | [ H : ?m $+ (?k1,_) $? ?k2 = _ |- _ ] => rewrite add_neq_o in H by solve_simple_ineq (* auto 2 *)
-                                                                                       
+    | [ H : ?m #? ?k = _ |- _ ] => progress (unfold m in H)
+    | [ H : ?m #+ (?k1,_) #? ?k1 = _ |- _ ] => rewrite ChMaps.ChMap.F.add_eq_o in H by trivial
+    | [ H : ?m #+ (?k1,_) #? ?k2 = _ |- _ ] => rewrite ChMaps.ChMap.F.add_neq_o in H by solve_simple_ineq (* auto 2 *)
+
     | [ H : In ?k ?m -> False |- _ ] =>
-      is_not_var k; assert (In k m) by (clear H; rewrite in_find_iff; unfold not; intros; repeat solve_concrete_maps1); contradiction
+      is_not_var k;
+      assert (In k m) by (clear H; rewrite in_find_iff; unfold not; intros; repeat solve_concrete_maps1);
+      contradiction
     | [ H : In _ _ |- _ ] => rewrite in_find_iff in H
     | [ H : ~ In _ _ |- _ ] => rewrite not_find_in_iff in H
     | [ |- ~ In _ _ ] => rewrite not_find_in_iff; try eassumption
     | [ H : In ?x ?xs -> False |- _ ] => change (In x xs -> False) with (~ In x xs) in H
-                                                               
+    | [ H : ChMaps.ChMap.Map.In ?k ?m -> False |- _ ] =>
+      is_not_var k;
+      assert (ChMaps.ChMap.Map.In k m) by (clear H; rewrite ChMaps.ChMap.F.in_find_iff; unfold not; intros; repeat solve_concrete_maps1);
+      contradiction
+    | [ H : ChMaps.ChMap.Map.In _ _ |- _ ] => rewrite ChMaps.ChMap.F.in_find_iff in H
+    | [ H : ~ ChMaps.ChMap.Map.In _ _ |- _ ] => rewrite ChMaps.ChMap.F.not_find_in_iff in H
+    | [ |- ~ ChMaps.ChMap.Map.In _ _ ] => rewrite ChMaps.ChMap.F.not_find_in_iff; try eassumption
+    | [ H : ChMaps.ChMap.Map.In ?x ?xs -> False |- _ ] => change (ChMaps.ChMap.Map.In x xs -> False) with (~ ChMaps.ChMap.Map.In x xs) in H
+
     | [ |- context [ next_key ] ] => progress (unfold next_key; simpl)
+
     | [ |- ?m $+ (?kid1,_) $? ?kid1 = _ ] => rewrite add_eq_o by trivial
     | [ |- ?m $+ (?kid2,_) $? ?kid1 = _ ] => rewrite add_neq_o by solve_simple_ineq (* auto 2 *)
-    (*   rewrite add_neq_o by solve_concrete_maps *)
-    (* || rewrite add_eq_o by (unify kid1 kid2; solve_concrete_maps) *)
     | [ |- (match ?m $+ (?kid1,_) $? ?kid1 with _ => _ end) = _ ] => rewrite add_eq_o by trivial
     | [ |- (match ?m $+ (?kid2,_) $? ?kid1 with _ => _ end) = _ ] => rewrite add_neq_o by solve_simple_ineq (* auto 2 *)
     | [ |- (match ?m $+ (?kid1,_) $? ?kid1 with _ => _ end) $? _ = _ ] => rewrite add_eq_o by trivial
@@ -608,30 +631,46 @@ Module SimulationAutomation.
       is_not_evar k2; is_not_evar k2; (is_var k1 || is_var k2);
       destruct (k1 ==n k2); subst; try contradiction
     | [ |- _ = ?m $+ (?kid2,_) $? ?kid1 ] => symmetry
+    | [ |- ?m #+ (?kid1,_) #? ?kid1 = _ ] => rewrite ChMaps.ChMap.F.add_eq_o by trivial
+    | [ |- ?m #+ (?kid2,_) #? ?kid1 = _ ] => rewrite ChMaps.ChMap.F.add_neq_o by solve_simple_ineq (* auto 2 *)
+    | [ |- (match ?m #+ (?kid1,_) #? ?kid1 with _ => _ end) = _ ] => rewrite ChMaps.ChMap.F.add_eq_o by trivial
+    | [ |- (match ?m #+ (?kid2,_) #? ?kid1 with _ => _ end) = _ ] => rewrite ChMaps.ChMap.F.add_neq_o by solve_simple_ineq (* auto 2 *)
+    | [ |- (match ?m #+ (?kid1,_) #? ?kid1 with _ => _ end) #? _ = _ ] => rewrite ChMaps.ChMap.F.add_eq_o by trivial
+    | [ |- (match ?m #+ (?kid2,_) #? ?kid1 with _ => _ end) #? _ = _ ] => rewrite ChMaps.ChMap.F.add_neq_o by solve_simple_ineq (* auto 2 *)
+    | [ |- _ = (match _ #+ (_,_) #? _ with _ => _ end) ] => symmetry
+    | [ |- _ = (match _ #+ (_,_) #? _ with _ => _ end) #? _ ] => symmetry
+    | [ |- context [ match ?m #+ (?kid1,_) #? ?kid1 with _ => _ end ] ] => rewrite ChMaps.ChMap.F.add_eq_o by trivial
+    | [ |- _ #+ (?k1,_) #? ?k2 = _ ] =>
+      is_not_evar k2; is_not_evar k2; (is_var k1 || is_var k2);
+      destruct (ChMaps.ChMap.F.eq_dec k1 k2); subst; try contradiction
+    | [ |- _ = ?m #+ (?kid2,_) #? ?kid1 ] => symmetry
                                            
     | [ |- context [ add_key_perm _ _ _ ]] => progress (unfold add_key_perm)
     | [ |- context [ ?m $? ?kid1 ] ] => progress (unfold m)
+    | [ |- context [ ?m #? ?kid1 ] ] => progress (unfold m)
 
     | [ H : ?m $? ?k <> _ |- _ ] => cases (m $? k); try contradiction; clear H
+    | [ H : ?m #? ?k <> _ |- _ ] => cases (m #? k); try contradiction; clear H
 
     | [ |- _ = _ ] => reflexivity
     | [ |- _ $+ (_,_) = _ ] => apply map_eq_Equal; unfold Equal; intros
+    | [ |- _ #+ (_,_) = _ ] => apply ChMaps.ChMap.map_eq_Equal; unfold ChMaps.ChMap.Map.Equal; intros
 
     | [ |- Some _ = Some _ ] => f_equal
     | [ |- {| RealWorld.key_heap := _ |} = _ ] => f_equal
-    (* | [ |- ?kid1 <> ?kid2 ] => *)
-    (*   ( (is_evar kid1; fill_unification_var_ineq kid1 kid2) *)
-    (*     || (is_evar kid2; fill_unification_var_ineq kid2 kid1)); *)
-    (*   unfold not; intro; congruence *)
     | [ |- _ $? _ = _ ] => eassumption
+    | [ |- _ #? _ = _ ] => eassumption
 
                              
     | [ H : ?m $+ (?k1,_) $? ?k2 = _ |- _ $+ (_,_) $? _ = _ ] =>
       (is_var k1 || is_var k2); idtac "destructing1 " k1 k2; destruct (k1 ==n k2); subst
     | [ H : ?m $+ (?k1,_) $? ?k2 = _ |- (match _ $+ (_,_) $? _ with _ => _ end) $? _ = _ ] =>
       (is_var k1 || is_var k2); idtac "destructing2 " k1 k2; destruct (k1 ==n k2); subst
-      (* | [ H : ?m $+ (?k1,_) $? ?k2 = _ |- context [ _ $? _ ] ] => *)
-      (*   (is_var k1 || is_var k2); idtac "destructing " k1 k2; destruct (k1 ==n k2); subst *)
+    | [ H : ?m #+ (?k1,_) #? ?k2 = _ |- _ #+ (_,_) #? _ = _ ] =>
+      (is_var k1 || is_var k2); idtac "#destructing1 " k1 k2; destruct (ChMaps.ChMap.F.eq_dec k1 k2); subst
+    | [ H : ?m #+ (?k1,_) #? ?k2 = _ |- (match _ #+ (_,_) #? _ with _ => _ end) #? _ = _ ] =>
+      (is_var k1 || is_var k2); idtac "#destructing2 " k1 k2; destruct (ChMaps.ChMap.F.eq_dec k1 k2); subst
+
     end.
 
   Ltac solve_concrete_maps := repeat solve_concrete_maps1.
@@ -682,10 +721,11 @@ Module SimulationAutomation.
         | [ |- Forall _ _ ] => econstructor
         | [ |- {| IdealWorld.channel_vector := _; IdealWorld.users := _ |} = _] => smash_universe; solve_concrete_maps
         | [ |- _ = {| IdealWorld.channel_vector := _; IdealWorld.users := _ |}] => smash_universe; solve_concrete_maps
-        | [ |- IdealWorld.msg_permissions_valid _ _ ] => unfold IdealWorld.msg_permissions_valid
+        | [ |- IdealWorld.screen_msg _ _ ] => econstructor
         | [ |- IdealWorld.permission_subset _ _ ] => econstructor
-        | [ |- context [ _ $? _ ] ] => solve_concrete_maps
-        | [ |- ~ In ?k ?m ] => is_evar k; unify k (next_key m); rewrite not_find_in_iff; apply next_key_not_in; trivial
+        | [ |- context [ _ #? _ ] ] => solve_concrete_maps
+        (* | [ |- ~ ChMaps.Map.In ?k ?m ] => *)
+        (*   is_evar k; unify k (next_key m); rewrite not_find_in_iff; apply next_key_not_in; trivial *)
         | [ |- _ = _ ] => reflexivity
         end; simpl).
 
@@ -766,14 +806,15 @@ Module SimulationAutomation.
     repeat
       match goal with
       | [ |- context [ RealWorld.buildUniverse ] ] => progress (unfold RealWorld.buildUniverse; simpl)
-      | [ |- context [ RealWorld.mkUniverse ?usrs _ _ _] ] => canonicalize_map usrs
+      | [ |- context [ {| RealWorld.users := ?usrs |}] ] => progress canonicalize_map usrs
+      (* | [ |- context [ RealWorld.mkUniverse ?usrs _ _ _] ] => canonicalize_map usrs *)
       end.
 
   Ltac simpl_ideal_users_context :=
     simpl;
     repeat
       match goal with
-      | [ |- context [ IdealWorld.construct_universe _ ?usrs] ] => canonicalize_map usrs
+      | [ |- context [ {| IdealWorld.users := ?usrs |}] ] => progress canonicalize_map usrs
       end.
 
   Ltac rss_clean uid := real_single_silent_multistep uid; [ solve [eauto 3] .. |].
@@ -814,8 +855,8 @@ Module SimulationAutomation.
     eapply IdealWorld.LStepUser' with (u_id := uid);
     [ solve [ solve_concrete_maps ] | simpl | reflexivity ];
     eapply IdealWorld.LStepBindRecur;
-    ( (eapply IdealWorld.LStepRecv; solve [ solve_ideal_step_stuff ])
-      || (eapply IdealWorld.LStepSend; solve [ solve_ideal_step_stuff ])).
+    ( (eapply IdealWorld.LStepRecv'; solve [ solve_ideal_step_stuff ])
+      || (eapply IdealWorld.LStepSend'; solve [ solve_ideal_step_stuff ])).
 
   Ltac step_each_ideal_user U :=
     match U with
@@ -828,8 +869,8 @@ Module SimulationAutomation.
     | [ |- IdealWorld.lstep_universe _ (Action _) ?U' ] =>
       is_evar U'; simpl_ideal_users_context;
       match goal with
-      | |- IdealWorld.lstep_universe
-            {| IdealWorld.users := ?usrs; IdealWorld.channel_vector := _ |} _ _ =>
+      | [ |- IdealWorld.lstep_universe
+            {| IdealWorld.users := ?usrs; IdealWorld.channel_vector := _ |} _ _ ] =>
         step_each_ideal_user usrs
       end
     end.
@@ -849,12 +890,18 @@ Module SimulationAutomation.
      solve_concrete_maps : core.
 
   Hint Extern 1 (action_adversary_safe _ _ _ = _) => unfold action_adversary_safe; simpl : core.
-  Hint Extern 1 (IdealWorld.msg_permissions_valid _ _) => progress simpl : core.
+  Hint Extern 1 (IdealWorld.screen_msg _ _) => econstructor; progress simpl : core.
 
   Hint Extern 1 (_ = RealWorld.addUserKeys _ _) => unfold RealWorld.addUserKeys, map; simpl : core.
 
-  Hint Extern 1 (add _ _ _ = _) => reflexivity || (solve [ solve_concrete_maps ] ) || (progress m_equal) || (progress clean_map_lookups) : core.
-  Hint Extern 1 (find _ _ = _) => reflexivity || (solve [ solve_concrete_maps ] ) || (progress m_equal) || (progress clean_map_lookups) : core.
+  Hint Extern 1 (_ $+ (_,_) = _) =>
+    reflexivity || (solve [ solve_concrete_maps ] ) || (progress m_equal) || (progress clean_map_lookups) : core.
+  Hint Extern 1 (_ $? _ = _) =>
+    reflexivity || (solve [ solve_concrete_maps ] ) || (progress m_equal) || (progress clean_map_lookups) : core.
+  Hint Extern 1 (_ #+ (_,_) = _) =>
+    reflexivity || (solve [ solve_concrete_maps ] ) || (progress ChMaps.m_equal) || (progress ChMaps.ChMap.clean_map_lookups) : core.
+  Hint Extern 1 (_ #? _ = _) =>
+    reflexivity || (solve [ solve_concrete_maps ] ) || (progress ChMaps.m_equal) || (progress ChMaps.ChMap.clean_map_lookups) : core.
 
   Ltac solve_action_matches1 :=
     match goal with
@@ -887,7 +934,8 @@ Module SimulationAutomation.
     | [ |- _ /\ _ ] => split
     end; split_ex; simpl in *.
 
-  Hint Extern 1 (action_matches _ _ _ _) => repeat (solve_action_matches1); clean_map_lookups : core.
+  Hint Extern 1 (action_matches _ _ _ _) =>
+    repeat (solve_action_matches1); NatMap.clean_map_lookups ; ChMaps.ChMap.clean_map_lookups : core.
 
   Hint Resolve
        findUserKeys_foldfn_proper
@@ -1386,8 +1434,8 @@ Module Gen.
             || (destruct (k1 ==n k2); subst)
           | [ H : ?m $? _ = _ |- _ ] => progress (unfold m in H)
           | [ H : RealWorld.msg_accepted_by_pattern _ _ _ _ _ |- _ ] => invert H
-          | [ H : IdealWorld.msg_permissions_valid _ _ |- _ ] =>
-            generalize (Forall_inv H); generalize (Forall_inv_tail H); clear H; intros
+          (* | [ H : IdealWorld.msg_permissions_valid _ _ |- _ ] => *)
+          (*   generalize (Forall_inv H); generalize (Forall_inv_tail H); clear H; intros *)
           | [ H : IdealWorld.permission_subset _ _ |- _ ] => invert H
           | [ H : Forall _ [] |- _ ] => clear H
           | [ H : context [true || _]  |- _] => rewrite orb_true_l in H
@@ -1421,7 +1469,7 @@ Module Gen.
       ; concrete iuniv iu
       ; solve[ idtac "trying left"; left; close
              | idtac "left fails; trying right"; right; close
-             | idtac "something is horribly wrong"; fail 2 (* prevent an infinite loop *)
+             | idtac "something is horribly wrong" (* prevent an infinite loop *)
              ]
     | [|- ?inv (?ru, ?iu)] =>
       is_evar inv
@@ -1432,7 +1480,8 @@ Module Gen.
       ; canonicalize users
       ; clean_context
       ; cleanup
-      ; clean_map_lookups
+      ; NatMap.clean_map_lookups
+      ; ChMaps.ChMap.clean_map_lookups
       ; incorp
       ; solve[ close ]
     end.

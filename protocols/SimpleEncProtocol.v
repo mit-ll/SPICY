@@ -10,6 +10,7 @@ From Coq Require Import
 Require Import
         MyPrelude
         Maps
+        ChMaps
         Messages
         MessageEq
         Common
@@ -37,10 +38,11 @@ Transparent A B.
 Section IdealProtocol.
   Import IdealWorld.
 
-  Definition CH__A2B : channel_id := 0.
+  Definition p__A2B : nat := 0.
+  Definition CH__A2B : channel_id := #p__A2B.
 
-  Definition PERMS__a := $0 $+ (CH__A2B, {| read := false; write := true |}). (* writer *)
-  Definition PERMS__b := $0 $+ (CH__A2B, {| read := true; write := false |}). (* reader *)
+  Definition PERMS__a := $0 $+ (p__A2B, {| read := false; write := true |}). (* writer *)
+  Definition PERMS__b := $0 $+ (p__A2B, {| read := true; write := false |}). (* reader *)
 
   Definition mkiU (cv : channels) (p__a p__b : cmd (Base Nat) ): universe Nat :=
     {| channel_vector := cv
@@ -50,7 +52,7 @@ Section IdealProtocol.
     |}.
 
   Definition ideal_univ_start :=
-    mkiU ($0 $+ (CH__A2B, []))
+    mkiU (#0 #+ (CH__A2B, []))
          (* user A *)
          ( n <- Gen
          ; _ <- Send (Content n) CH__A2B
@@ -60,7 +62,7 @@ Section IdealProtocol.
            ; ret (extractContent m)).
 
   Definition ideal_univ_sent1 n :=
-    mkiU ($0 $+ (CH__A2B, [existT _ _ (Content n)]))
+    mkiU (#0 #+ (CH__A2B, [existT _ _ (Content n)]))
          (* user A *)
          ( _ <- ret tt
          ; ret n)
@@ -69,7 +71,7 @@ Section IdealProtocol.
              ; ret (extractContent m)).
 
   Definition ideal_univ_recd1 n :=
-    mkiU ($0 $+ (CH__A2B, []))
+    mkiU (#0 #+ (CH__A2B, []))
          (* user A *)
          (Return n)
          (* user B *)
@@ -77,7 +79,7 @@ Section IdealProtocol.
          ; ret (extractContent m)).
 
   Definition ideal_univ_done n :=
-    mkiU ($0 $+ (CH__A2B, []))
+    mkiU (#0 #+ (CH__A2B, []))
          (* user A *)
          (Return n)
          (* user B *)

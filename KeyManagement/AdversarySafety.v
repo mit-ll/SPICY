@@ -381,7 +381,7 @@ Section UniverseLemmas.
   Lemma adv_no_honest_keys_after_honestk_no_private_key_msg :
     forall {t} (msg : crypto t) honestk cs advk,
       adv_no_honest_keys honestk advk
-      -> (forall (k_id : NatMap.key) (kp : bool), findKeysCrypto cs msg $? k_id = Some kp -> kp = false)
+      -> (forall (k_id : NatMap.Map.key) (kp : bool), findKeysCrypto cs msg $? k_id = Some kp -> kp = false)
       -> adv_no_honest_keys (honestk $k++ findKeysCrypto cs msg) advk.
   Proof.
     unfold adv_no_honest_keys; intros; eauto;
@@ -430,7 +430,7 @@ Section UniverseLemmas.
   Lemma keys_and_permissions_good_user_new_pubk :
     forall {A t} (usrs : honest_users A) gks (msg : message t) u_id u_d ks cmd qmsgs mycs froms sents cur_n adv_heap,
       keys_and_permissions_good gks usrs adv_heap
-      -> (forall (k : NatMap.key) (kp : bool), findKeysMessage msg $? k = Some kp -> gks $? k <> None)
+      -> (forall (k : NatMap.Map.key) (kp : bool), findKeysMessage msg $? k = Some kp -> gks $? k <> None)
       -> u_d = {| key_heap := ks $k++ findKeysMessage msg
                ; msg_heap := qmsgs
                ; protocol := cmd
@@ -3524,7 +3524,8 @@ Section SingleAdversarySimulates.
     Proof.
       unfold strip_adversary, clean_users; destruct user_data; simpl; intros.
       rewrite <- find_mapsto_iff in H.
-      rewrite <- find_mapsto_iff, mapi_mapsto_iff; intros; subst; auto; eexists; subst; simpl; intuition eauto.
+      rewrite <- find_mapsto_iff, mapi_mapsto_iff; intros;
+        subst; auto; eexists; subst; simpl; intuition eauto.
       simpl; trivial.
     Qed.
 
@@ -3700,7 +3701,8 @@ Section SingleAdversarySimulates.
       unfold user_cipher_queues_ok; intros.
       pose proof (clean_users_no_change_honestk usrs).
       rewrite Forall_natmap_forall in *; intros.
-      rewrite <- find_mapsto_iff in H3; unfold clean_users in H3; rewrite mapi_mapsto_iff in H3; intros; subst; trivial.
+      rewrite <- find_mapsto_iff in H3; unfold clean_users in H3;
+        rewrite mapi_mapsto_iff in H3; intros; subst; trivial.
       split_ex; split_ands; subst; simpl in *.
       rewrite find_mapsto_iff in H1; specialize (H _ _ H1).
       eapply user_cipher_queue_ok_after_cleaning; auto.
@@ -3752,7 +3754,8 @@ Section SingleAdversarySimulates.
       unfold msg_signing_key; intros.
       destruct msg; try discriminate.
       - cases (cs $? c_id); cases (clean_ciphers honestk cs $? c_id); try discriminate.
-        rewrite <- find_mapsto_iff in Heq0; rewrite clean_ciphers_mapsto_iff in Heq0; rewrite find_mapsto_iff in Heq0;
+        rewrite <- find_mapsto_iff in Heq0;
+          rewrite clean_ciphers_mapsto_iff in Heq0; rewrite find_mapsto_iff in Heq0;
           split_ands; clean_map_lookups.
         destruct c0; try discriminate; clean_context; trivial.
     Qed.
@@ -3877,7 +3880,8 @@ Section SingleAdversarySimulates.
     Proof.
       unfold message_queues_ok; intros.
       rewrite Forall_natmap_forall in *; intros.
-      rewrite <- find_mapsto_iff in H2; unfold clean_users in H2; rewrite mapi_mapsto_iff in H2; intros; subst; trivial.
+      rewrite <- find_mapsto_iff in H2;
+        unfold clean_users in H2; rewrite mapi_mapsto_iff in H2; intros; subst; trivial.
       split_ex; split_ands; subst; simpl in *.
       rewrite find_mapsto_iff in H2; specialize (H _ _ H2).
       eapply message_queue_ok_after_cleaning; auto.
@@ -3990,7 +3994,7 @@ Section SingleAdversarySimulates.
           | user_id => fail 1
           | key_identifier => fail 1
           | nat => fail 1
-          | NatMap.key => fail 1
+          | NatMap.Map.key => fail 1
           | _ => specialize (H ARG)
           end
         | [ H : (?arg1 = ?arg2) -> _ |- _ ] => let EQ := fresh "EQ" in
@@ -4600,7 +4604,7 @@ Section SingleAdversarySimulates.
       pose proof (findUserKeys_clean_users_correct usrs cs k_id); subst.
       repeat
         match goal with
-        | [ K : NatMap.key, H : (forall k : NatMap.key, _) |- _ ] => specialize (H K)
+        | [ K : NatMap.Map.key, H : (forall k : NatMap.Map.key, _) |- _ ] => specialize (H K)
         end.
       split_ors; split_ands;
         match goal with
@@ -5234,7 +5238,8 @@ Section SingleAdversarySimulates.
         -> False.
     Proof.
       intros.
-      assert (Equal (clean_ciphers honestk cs) (clean_ciphers honestk cs $+ (c_id, c))) by (rewrite <- H0; apply Equal_refl).
+      assert (Equal (clean_ciphers honestk cs) (clean_ciphers honestk cs $+ (c_id, c)))
+        by (rewrite <- H0; apply Equal_refl).
       unfold Equal in H1; specialize (H1 c_id).
       clean_map_lookups; rewrite clean_ciphers_no_new_ciphers in H1; symmetry in H1; auto; clean_map_lookups.
     Qed.
