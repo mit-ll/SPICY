@@ -45,7 +45,7 @@ Require
 Require
   ChMaps.
 
-Import ChMaps.ChMapNotation.
+Import ChMaps.ChMapNotation ChMaps.ChNotation.
 
 (* Import ChMaps.ChMap. *)
 
@@ -724,8 +724,10 @@ Module SimulationAutomation.
         | [ |- IdealWorld.screen_msg _ _ ] => econstructor
         | [ |- IdealWorld.permission_subset _ _ ] => econstructor
         | [ |- context [ _ #? _ ] ] => solve_concrete_maps
-        (* | [ |- ~ ChMaps.Map.In ?k ?m ] => *)
-        (*   is_evar k; unify k (next_key m); rewrite not_find_in_iff; apply next_key_not_in; trivial *)
+        (* | [ |- ~ ChMaps.ChMap.Map.In ?k ?m ] => *)
+        (*   is_evar k; unify k (ChMaps.next_key m); rewrite not_find_in_iff; apply next_key_not_in; trivial *)
+        | [ |- ?m #? (# ?k) = None ] =>
+          solve [ is_evar k; unify (# k) (ChMaps.next_key m); apply ChMaps.next_key_not_in; trivial ] 
         | [ |- _ = _ ] => reflexivity
         end; simpl).
 
@@ -1436,6 +1438,7 @@ Module Gen.
           | [ H : RealWorld.msg_accepted_by_pattern _ _ _ _ _ |- _ ] => invert H
           (* | [ H : IdealWorld.msg_permissions_valid _ _ |- _ ] => *)
           (*   generalize (Forall_inv H); generalize (Forall_inv_tail H); clear H; intros *)
+          | [ H : IdealWorld.screen_msg _ _ |- _ ] => invert H
           | [ H : IdealWorld.permission_subset _ _ |- _ ] => invert H
           | [ H : Forall _ [] |- _ ] => clear H
           | [ H : context [true || _]  |- _] => rewrite orb_true_l in H
@@ -1514,7 +1517,7 @@ Module Gen.
         | simplify; simpl_sets (sets; tidy)]
     | [|- multiStepClosure _ (_ \cup ?wl) ?wl _] =>
       eapply msc_step_alt
-      ; [ solve[ unfold oneStepClosure_new; gen1' ]
+      ; [ solve[ unfold oneStepClosure_new; repeat gen1' ]
         | solve[ simplify
                  ; sets
                  ; split_ex
