@@ -24,6 +24,7 @@ From Coq Require Import
 Require Import
         MyPrelude
         Maps
+        ChMaps
         Messages
         MessageEq
         Common
@@ -35,7 +36,8 @@ Require IdealWorld
         RealWorld.
 
 Import IdealWorld.IdealNotations
-       RealWorld.RealWorldNotations.
+       RealWorld.RealWorldNotations
+       .
 
 Set Implicit Arguments.
 
@@ -61,7 +63,7 @@ Inductive action_matches : forall {A B : type},
                ms (U__rw : RealWorld.universe A B) (U__iw : IdealWorld.universe A) rw iw ch_id cs ps p froms,
       rw = (RealWorld.Input m__rw p froms)
       -> iw = IdealWorld.Input m__iw ch_id cs ps
-      -> U__iw.(IdealWorld.channel_vector) $? ch_id = Some ((existT _ _ m__expected) :: ms)
+      -> U__iw.(IdealWorld.channel_vector) #? ch_id = Some ((existT _ _ m__expected) :: ms)
       -> MessageEq.message_eq m__rw U__rw m__iw U__iw ch_id
       -> action_matches rw U__rw iw U__iw
 | Out : forall A B t (m__rw : RealWorld.crypto t) (m__iw : IdealWorld.message.message t)
@@ -77,10 +79,10 @@ Section RealWorldUniverseProperties.
   Import RealWorld.
 
   Variable honestk : key_perms.
-
+  
   Definition permission_heap_honest (perms : key_perms) :=
     forall k_id p,
-      perms $? k_id = Some p
+     perms $? k_id = Some p
       -> honestk $? k_id = Some true.
 
   Definition permission_heap_good (ks : keys) (perms : key_perms) :=

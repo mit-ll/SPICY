@@ -108,7 +108,9 @@ Section CleanMessages.
     cases (msg_signing_key (clean_ciphers honestk cs) msg); try discriminate.
     unfold msg_signing_key in *; destruct msg; try discriminate.
     - cases (clean_ciphers honestk cs $? c_id); try discriminate.
-      rewrite <- find_mapsto_iff in Heq0; rewrite clean_ciphers_mapsto_iff in Heq0; rewrite find_mapsto_iff in Heq0; split_ands.
+      rewrite <- find_mapsto_iff in Heq0;
+        rewrite clean_ciphers_mapsto_iff in Heq0;
+        rewrite find_mapsto_iff in Heq0; split_ands.
       rewrite H0; destruct c; try discriminate; eauto.
   Qed.
 

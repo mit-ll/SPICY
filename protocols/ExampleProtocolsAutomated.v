@@ -89,21 +89,18 @@ Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
       simpl in *; split.
       
       + sets_invert; unfold safety;
-          split_ex; simpl in *; subst; solve_honest_actions_safe;
+          split_ex; simpl in *; subst;
+            solve_honest_actions_safe;
             clean_map_lookups; eauto 8.
-      + sets_invert; unfold labels_align; intros;
-          split_ex; subst; intros; rstep.
-        * do 3 eexists;
-            repeat (apply conj); eauto.
-        * do 3 eexists;
-            repeat (apply conj); eauto.
-          subst; repeat (solve_action_matches1); clean_map_lookups.
-        * do 3 eexists;
-            repeat (apply conj); eauto.
-          subst; repeat (solve_action_matches1); clean_map_lookups.
 
-      Unshelve.
-      all:eauto.
+        Unshelve.
+        all:clean_map_lookups.
+        
+      + sets_invert; unfold labels_align; intros;
+          split_ex; subst; intros; rstep; subst.
+        * do 3 eexists; repeat (simple apply conj); eauto.
+        * do 3 eexists; repeat (simple apply conj); eauto.
+        * do 3 eexists; repeat (simple apply conj); eauto.
   Qed.
 
   Lemma U_good : @universe_starts_sane _ Unit b ru0.
@@ -218,19 +215,15 @@ Module SimpleEncProtocolSecure <: AutomatedSafeProtocol.
       + sets_invert; unfold safety;
           split_ex; simpl in *; subst; solve_honest_actions_safe;
             clean_map_lookups; eauto 8.
-      + sets_invert; unfold labels_align; intros;
-          split_ex; subst; intros; rstep.
-        * do 3 eexists;
-            repeat (apply conj); eauto.
-        * do 3 eexists;
-            repeat (apply conj); eauto.
-          subst; repeat (solve_action_matches1); clean_map_lookups.
-        * do 3 eexists;
-            repeat (apply conj); eauto.
-          subst; repeat (solve_action_matches1); clean_map_lookups.
 
-      Unshelve.
-      all:eauto.
+        Unshelve.
+        all:clean_map_lookups.
+        
+      + sets_invert; unfold labels_align;
+          split_ex; subst; intros; rstep; subst.
+        * do 3 eexists; repeat (simple apply conj); eauto.
+        * do 3 eexists; repeat (simple apply conj); eauto.
+        * do 3 eexists; repeat (simple apply conj); eauto.
   Qed.
 
   Lemma U_good : @universe_starts_sane _ Unit b ru0.
