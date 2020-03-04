@@ -23,7 +23,6 @@ From Coq Require Import
 From KeyManagement Require Import
      MyPrelude
      Common
-     ProtocolAutomation
      Automation
      Maps
      Keys
@@ -236,11 +235,6 @@ Section RealWorldLemmas.
 
       step_user lbl suid bd bd'
 
-      (* -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks' *)
-      (*     (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs' *)
-      (*     froms froms' sents sents' cur_n cur_n', *)
-        (*   bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
-        (* -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd') *)
       -> forall (bd__x bd__x' : data_step_no_cmd A B)  (cmd cmd' : user_cmd C),
           bd = (bd__x, cmd)
         -> bd' = (bd__x', cmd')
@@ -293,40 +287,237 @@ Section RealWorldLemmas.
   Qed.
 
   (* need to know that msg, if cipher, is in cs *)
-  (* Lemma findKeysCrypto_addnl_cipher : *)
-  (*   forall {t} (msg : crypto t) ks cs c_id c, *)
+  Lemma findKeysCrypto_addnl_cipher :
+    forall {t} (msg : crypto t) cs c_id c,
+      ~ In c_id cs
+      -> (forall cid, msg_cipher_id msg = Some cid -> cs $? cid <> None)
+      -> findKeysCrypto cs msg = findKeysCrypto (cs $+ (c_id,c)) msg.
+  Proof.
+    intros.
+    unfold findKeysCrypto.
+    destruct msg; eauto.
+    destruct (c_id ==n c_id0); subst; clean_map_lookups; eauto.
+    simpl in *.
+    specialize (H0 _ eq_refl); contradiction.
+  Qed.
+
+  (* Lemma msg_no_adv_private_findKeysCrypto_addnl_cipher : *)
+  (*   forall {t} (msg : crypto t) honestk cs c_id c, *)
   (*     ~ In c_id cs *)
-  (*     -> keys_mine ks (findKeysCrypto cs msg) *)
+  (*     -> message_no_adv_private honestk cs msg *)
   (*     -> findKeysCrypto cs msg = findKeysCrypto (cs $+ (c_id,c)) msg. *)
   (* Proof. *)
   (*   intros. *)
-  (*   unfold findKeysCrypto in *. *)
+  (*   unfold findKeysCrypto. *)
   (*   destruct msg; eauto. *)
   (*   destruct (c_id ==n c_id0); subst; clean_map_lookups; eauto. *)
-  (*   unfold keys_mine in H0. *)
+  (*   unfold message_no_adv_private in H0. *)
+  (*   simpl in *. *)
+  (*   specialize (H0 _ eq_refl); contradiction. *)
+  (* Qed. *)
+  
+  Lemma merge_findKeysCrypto_addnl_cipher :
+    forall {t} (msg : crypto t) cs c_id c ks,
+      ~ In c_id cs
+      -> (forall cid, msg_cipher_id msg = Some cid -> cs $? cid <> None)
+      -> ks $k++ findKeysCrypto cs msg = ks $k++ findKeysCrypto (cs $+ (c_id,c)) msg.
+  Proof.
+    intros.
+    erewrite findKeysCrypto_addnl_cipher; trivial.
+  Qed.
+
+  Lemma msg_signed_addressed_addnl_cipher :
+    forall {t} (msg : crypto t) cs c_id c honestk suid,
+      ~ In c_id cs
+      -> (forall cid, msg_cipher_id msg = Some cid -> cs $? cid <> None)
+      -> msg_signed_addressed honestk cs suid msg =
+        msg_signed_addressed honestk (cs $+ (c_id,c)) suid msg.
+  Proof.
+    intros.
+    match goal with
+    | [ |- msg_signed_addressed ?honk ?cs ?suid ?msg = _ ] =>
+      case_eq (msg_signed_addressed honk cs suid msg)
+    end; intros; symmetry; eauto using msg_signed_addressed_nochange_addnl_cipher.
+  Qed.
+
+  Lemma msg_signed_addressed_nochange_addnl_honest_key :
+    forall {t} (msg : crypto t) (gks : keys) honestk cs suid k_id tf,
+      ~ In k_id honestk
+      -> gks $? k_id = None
+      -> (forall k, msg_signing_key cs msg = Some k ->
+              gks $? k <> None /\
+              (honest_key honestk k ->
+               message_no_adv_private honestk cs msg /\ msgCiphersSignedOk honestk cs msg))
+      -> msg_signed_addressed honestk cs suid msg = tf
+      -> msg_signed_addressed (honestk $+ (k_id,true)) cs suid msg = tf.
+  Proof.
+    destruct tf; eauto using msg_signed_addressed_addnl_honest_key; intros.
+    unfold msg_signed_addressed in *; intros.
+    rewrite andb_false_iff in *; split_ors; eauto.
+    left.
+    unfold msg_honestly_signed in *.
+    destruct (msg_signing_key cs msg); eauto.
+    unfold honest_keyb in *.
+    destruct (k_id ==n k); subst; clean_map_lookups; eauto.
+    specialize (H1 _ eq_refl); split_ands; contradiction.
+  Qed.
+
+  Lemma honestk_merge_new_msgs_keys_same :
+    forall honestk cs  {t} (msg : crypto t),
+      message_no_adv_private honestk cs msg
+      -> (honestk $k++ findKeysCrypto cs msg) = honestk.
+  Proof.
+    intros.
+    apply map_eq_Equal; unfold Equal; intros.
+    solve_perm_merges; eauto;
+      specialize (H _ _ Heq0); clean_map_lookups; eauto.
+  Qed.
+
+  Lemma honestk_merge_new_msgs_keys_dec_same :
+    forall honestk {t} (msg : message t),
+      (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true)
+      -> (honestk $k++ findKeysMessage msg) = honestk.
+  Proof.
+    intros.
+    apply map_eq_Equal; unfold Equal; intros.
+    solve_perm_merges; eauto;
+      specialize (H _ _ Heq0); clean_map_lookups; eauto.
+  Qed.
+
+  (* Lemma msg_signed_addressed_new_msgs_keys_same : *)
+  (*   forall honestk cs suid {t1 t2} (msg1 : crypto t1) (msg2 : crypto t2), *)
+  (*     message_no_adv_private honestk cs msg1 *)
+  (*     -> msg_signed_addressed (honestk $k++ findKeysCrypto cs msg1) cs suid msg2 = *)
+  (*       msg_signed_addressed honestk cs suid msg2. *)
+  (* Proof. *)
+  (*   intros. *)
+  (*   unfold msg_signed_addressed; *)
+  (*     repeat *)
+  (*       match goal with *)
+  (*       | [ |- context [ _ && true ]] => rewrite andb_true_r *)
+  (*       | [ |- context [ _ && false ]] => rewrite andb_false_r *)
+  (*       | [ |- (_ && ?a) = (_ && ?a) ] => destruct a; subst *)
+  (*       end; eauto. *)
+  (*   unfold msg_honestly_signed. *)
+  (*   destruct (msg_signing_key cs msg2); eauto. *)
+  (*   unfold honest_keyb. *)
+  (*   solve_perm_merges; eauto; *)
+  (*     specialize (H _ _ H1); clean_map_lookups; eauto. *)
+  (* Qed. *)
+
+  (* Lemma msg_signed_addressed_new_msgs_keys_dec_same : *)
+  (*   forall honestk cs suid {t1 t2} (msg1 : message t1) (msg2 : crypto t2), *)
+  (*     (forall k_id kp, findKeysMessage msg1 $? k_id = Some kp -> honestk $? k_id = Some true) *)
+  (*     -> msg_signed_addressed (honestk $k++ findKeysMessage msg1) cs suid msg2 = *)
+  (*       msg_signed_addressed honestk cs suid msg2. *)
+  (* Proof. *)
+  (*   intros. *)
+  (*   unfold msg_signed_addressed; *)
+  (*     repeat *)
+  (*       match goal with *)
+  (*       | [ |- context [ _ && true ]] => rewrite andb_true_r *)
+  (*       | [ |- context [ _ && false ]] => rewrite andb_false_r *)
+  (*       | [ |- (_ && ?a) = (_ && ?a) ] => destruct a; subst *)
+  (*       end; eauto. *)
+  (*   unfold msg_honestly_signed. *)
+  (*   destruct (msg_signing_key cs msg2); eauto. *)
+  (*   unfold honest_keyb. *)
+  (*   solve_perm_merges; eauto; *)
+  (*     specialize (H _ _ H1); clean_map_lookups; eauto. *)
+  (* Qed. *)
 
   (* need to know that msg, if cipher, is in cs *)
-  (* Lemma updateTrackedNonce_addnl_cipher : *)
-  (*   forall suid nons cs {t} (msg : crypto t) c_id c, *)
-  (*     ~ In c_id cs *)
-  (*     -> updateTrackedNonce suid nons cs msg = *)
-  (*       updateTrackedNonce suid nons (cs $+ (c_id, c)) msg. *)
-  (* Proof. *)
-  (*   intros. *)
-  (*   unfold updateTrackedNonce. *)
-  (*   destruct msg; eauto. *)
-  (*   destruct (c_id ==n c_id0); subst; clean_map_lookups.  *)
+  Lemma updateTrackedNonce_addnl_cipher :
+    forall suid nons cs {t} (msg : crypto t) c_id c,
+      ~ In c_id cs
+      -> (forall cid, msg_cipher_id msg = Some cid -> cs $? cid <> None)
+      -> updateTrackedNonce suid nons cs msg =
+        updateTrackedNonce suid nons (cs $+ (c_id, c)) msg.
+  Proof.
+    intros.
+    unfold updateTrackedNonce.
+    destruct msg; eauto.
+    destruct (c_id ==n c_id0); subst; clean_map_lookups; eauto.
+    specialize (H0 _ eq_refl); contradiction.
+  Qed.
 
-  (* Lemma msg_not_accepted_pattern_addnl_cipher : *)
-  (*   forall {t} (msg : crypto t) cs suid froms pat c_id c, *)
-  (*     ~ In c_id cs *)
-  (*     -> ~ msg_accepted_by_pattern cs suid froms pat msg *)
-  (*     -> ~ msg_accepted_by_pattern (cs $+ (c_id, c)) suid froms pat msg. *)
-  (* Proof. *)
-  (*   intros. *)
-  (*   unfold not. *)
-  (*   destruct pat; intros; eauto. *)
-  (*   - invert H1. *)
+  Lemma msg_not_accepted_pattern_addnl_cipher :
+    forall {t} (msg : crypto t) cs suid froms pat c_id c,
+      ~ In c_id cs
+      -> (forall cid, msg_cipher_id msg = Some cid -> cs $? cid <> None)
+      -> ~ msg_accepted_by_pattern cs suid froms pat msg
+      -> ~ msg_accepted_by_pattern (cs $+ (c_id, c)) suid froms pat msg.
+  Proof.
+    intros.
+    unfold not.
+    destruct pat; intros; eauto;
+      repeat
+        match goal with
+        | [ H : msg_accepted_by_pattern _ _ _ _ _ |- _ ] => invert H
+        | [ H : _ $+ (?cid1,_) $? ?cid2 = _ |- _ ] => destruct (cid1 ==n cid2); subst; clean_map_lookups
+        | [ H : ?cs $? ?cid = None,
+                H1 : (forall c_id, _ = Some c_id -> ?cs $? c_id <> None) |- _ ] => simpl in H1; specialize (H1 _ eq_refl); contradiction
+        | [ H : ~ msg_accepted_by_pattern ?cs ?to ?froms ?pat ?m |- _ ] =>
+          assert (msg_accepted_by_pattern cs to froms pat m) by (econstructor; eauto); contradiction
+        end.
+  Qed.
+
+  Lemma msg_accepted_pattern_addnl_cipher :
+    forall {t} (msg : crypto t) cs suid froms pat c_id c,
+      ~ In c_id cs
+      -> msg_accepted_by_pattern cs suid froms pat msg
+      -> msg_accepted_by_pattern (cs $+ (c_id, c)) suid froms pat msg.
+  Proof.
+    intros * NOTIN H; invert H; eauto.
+  Qed.
+
+
+  Lemma msg_accepted_pattern_addnl_cipher_inv :
+    forall {t} (msg : crypto t) cs suid froms pat c_id c,
+      ~ In c_id cs
+      -> (forall cid, msg_cipher_id msg = Some cid -> cs $? cid <> None)
+      -> msg_accepted_by_pattern (cs $+ (c_id, c)) suid froms pat msg
+      -> msg_accepted_by_pattern cs suid froms pat msg.
+  Proof.
+    intros * NOTIN INCS H; invert H; eauto;
+      destruct (c_id ==n c_id0); subst;
+        clean_map_lookups; eauto;
+          simpl in INCS; specialize (INCS _ eq_refl);
+            contradiction.
+  Qed.
+
+  Hint Resolve
+       findKeysCrypto_addnl_cipher
+       merge_findKeysCrypto_addnl_cipher
+       updateTrackedNonce_addnl_cipher
+       msg_signed_addressed_addnl_cipher
+       msg_signed_addressed_nochange_addnl_honest_key
+       msg_accepted_pattern_addnl_cipher
+       msg_accepted_pattern_addnl_cipher_inv
+       msg_not_accepted_pattern_addnl_cipher
+       : core.
+
+  Import SimulationAutomation.
+  Import AdversarySafety.Automation.
+
+  Ltac step_usr uid :=
+    match goal with
+    | [ H : RealWorld.step_user _ (Some uid) (_,_,_,_,_,_,_,_,_,_,?cmd) _ |- _ ] =>
+      match cmd with
+      | Return _ => invert H
+      | Bind _ _ => apply step_user_inv_bind in H; split_ands; split_ors; split_ands; subst; try discriminate
+      | Gen => apply step_user_inv_gen in H
+      | Send _ _ => apply step_user_inv_send in H
+      | Recv _ => apply step_user_inv_recv in H
+      | SignEncrypt _ _ _ _ => apply step_user_inv_enc in H
+      | Decrypt _ => apply step_user_inv_dec in H
+      | Sign _ _ _ => apply step_user_inv_sign in H
+      | Verify _ _ => apply step_user_inv_verify in H
+      | GenerateSymKey _ => apply step_user_inv_gensym in H
+      | GenerateAsymKey _ => apply step_user_inv_genasym in H
+      | _ => idtac "***Missing inversion: " cmd; invert H
+      end
+    end; split_ex; split_ors; split_ex; subst.
 
   Lemma commutes_sound' :
     forall {A B C D} suid1 u_id1 lbl1 (bd1 bd1' : data_step0 A B C),
@@ -341,13 +532,23 @@ Section RealWorldLemmas.
 
           -> forall cs cs1 cs' (usrs1 usrs1' usrs2 usrs2' : honest_users A) (adv adv1 adv' : user_data B) gks gks1 gks'
               ks1 ks1' qmsgs1 qmsgs1' mycs1 mycs1' cmd1 cmd1' froms1 froms1' sents1 sents1' cur_n1 cur_n1'
-              ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' cmd2 cmd2' froms2 froms2' sents2 sents2' cur_n2 cur_n2' s,
+              ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' cmd2 cmd2' froms2 froms2' sents2 sents2' cur_n2 cur_n2' cmdc1 cmdc1' cmdc2 s,
 
-                bd1  = (usrs1,  adv,  cs,  gks,  ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd1)
+              bd1  = (usrs1,  adv,  cs,  gks,  ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd1)
               -> bd1' = (usrs1', adv1, cs1, gks1, ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd1')
               -> bd2  = (usrs2,  adv1, cs1, gks1, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
               -> bd2' = (usrs2', adv', cs', gks', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
-
+              (* allow protocol to freely vary, since we won't be looking at it *)
+              -> usrs1 $? u_id1 = Some (mkUserData ks1 cmdc1 qmsgs1 mycs1 froms1 sents1 cur_n1)
+              -> usrs1 $? u_id2 = Some (mkUserData ks2 cmdc2 qmsgs2 mycs2 froms2 sents2 cur_n2)
+              -> usrs2 = usrs1' $+ (u_id1, mkUserData ks1' cmdc1' qmsgs1' mycs1' froms1' sents1' cur_n1')
+              -> encrypted_ciphers_ok (findUserKeys usrs1) cs gks
+              -> message_queues_ok cs usrs1 gks
+              -> keys_and_permissions_good gks usrs1 adv.(key_heap)
+              -> user_cipher_queues_ok cs (findUserKeys usrs1) usrs1
+              -> next_cmd_safe (findUserKeys usrs1) cs u_id1 froms1 sents1 cmd1
+              -> next_cmd_safe (findUserKeys usrs1) cs u_id2 froms2 sents2 cmd2
+                                  
               (* no recursion *)
               -> nextAction cmd1 cmd1
               -> nextAction cmd2 cmd2
@@ -356,244 +557,125 @@ Section RealWorldLemmas.
               -> summarize cmd1 s
               -> commutes cmd2 s
 
-              -> forall bd3 (usrs3 usrs4 : honest_users A),
-                  bd3 = (usrs3,   adv,  cs,  gks,  ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
-                  -> exists bd3' bd4 bd4' lbl3 lbl4 adv2 cs2 gks2 usrs3' usrs4',
+              -> forall bd3 cmd2'',
+                  bd3 = (usrs1,   adv,  cs,  gks,  ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
+                  -> exists bd3' bd4 bd4' lbl3 lbl4 adv2 cs2 gks2 usrs3' usrs4 usrs4',
                       step_user lbl3 suid2 bd3 bd3'
                       /\ bd3' = (usrs3', adv2, cs2, gks2, ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
+                      /\ usrs4 = usrs3' $+ (u_id2, mkUserData ks2' cmd2'' qmsgs2' mycs2' froms2' sents2' cur_n2')
                       /\ bd4 = (usrs4,   adv2, cs2, gks2, ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd1)
                       /\ bd4' = (usrs4', adv', cs', gks', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd1')
                       /\ step_user lbl4 suid1 bd4 bd4'
   .
   Proof.
-    intros;
-      cases cmd1; cases cmd2;
-      subst;
-      repeat
+    intros
+    ; cases cmd1; cases cmd2
+    ; repeat
         match goal with
-         | [ ARG : nextAction (Send ?u ?msg) (Send ?u ?msg) , H : (forall c _ _ _, nextAction (Send ?u ?msg) c -> c <> _) |- _ ] =>
-           specialize (H _ u _ msg ARG); contradiction
+        | [ ARG : nextAction (Send ?u ?msg) (Send ?u ?msg) , H : (forall c _ _ _, nextAction (Send ?u ?msg) c -> c <> _) |- _ ] =>
+          specialize (H _ u _ msg ARG); contradiction
+        | [ H : nextAction (Recv _) _  |- _ ] => msg_queue_prop; msg_queue_prop; clear H
         | [ H : nextAction ?c1 ?c2 |- _ ] => apply nextAction_couldBe in H; try contradiction
         | [ H : commutes (Send _ _) _ |- _ ] => unfold commutes in H; contradiction
-        | [ H : step_user _ _ _ _ |- _ ] => invert H
-        end; subst;
-        churn;
-        try solve [ do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto ].
+        (* | [ H : commutes (Recv _) _ |- _ ] => unfold commutes in H; contradiction *)
+        end
+    ; subst
+    ; step_usr u_id1; step_usr u_id2.
 
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-         admit.
-
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit. admit. admit. admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit. admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit. admit. admit. 
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-         (* ~ msg_accepted_by_pattern cs1 (Some u_id1) froms1 pat msg0 *)
-         (*   ===================== *)
-         (*   ~ msg_accepted_by_pattern (cs1 $+ (c_id, SigEncCipher k__sign k__enc msg_to (Some u_id2, cur_n2) msg)) (Some u_id1) froms1 pat msg0 *)
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit. admit. admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit. admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-    - do 10 eexists; (repeat simple apply conj); try reflexivity; try econstructor; eauto; eauto.
-         admit.
-       
-
-
-    
-    Ltac p :=
+    Ltac s1 :=
       match goal with
-      | [ |- _ /\ _ ] => simple apply conj
-      | [ |- _ = _ ] => reflexivity
-      | [ |- step_user _ _ _ _ ] => solve [ econstructor; repeat p; eauto ]
-      | [ H : ?m $+ (?k1,_) $? ?k2 = None |- ?m $? ?k3 = None ] =>
-        match type of m with
-        | keys => idtac
-        | ciphers => idtac
-        end;
-        is_not_evar k1; is_not_evar k2; is_evar k3; unify k3 k2;
-          destruct (k1 ==n k2); subst; clean_map_lookups; idtac 1
-      | [ H : ?m $+ (?k1,_) $? ?k2 = None |- ?m $+ (?k2,_) $? ?k3 = None ] =>
-        match type of m with
-        | keys => idtac
-        | ciphers => idtac
-        end;
-        is_not_evar k1; is_not_evar k2; is_evar k3; unify k3 k1;
-          destruct (k1 ==n k2); subst; clean_map_lookups; idtac 2
-      | [ |- (_,_) = _ ] => f_equal
-      | [ |- _ $+ (_,_) = _ ] => maps_equal
-      | [ |- _ $+ (_,_) $? _ = _ ] => clean_map_lookups
+      | [ |- step_user _ _ _ _ ] => econstructor
+      | [ |- context [ findUserKeys (_ $+ (_,_)) ]] => autorewrite with find_user_keys
+      | [ H : message_queue_ok _ _ (_ :: _) _ |- context [ findKeysCrypto (_ $+ (_,_)) _ ]] =>
+        invert H; split_ands
+      | [ H : message_queue_ok _ _ (_ :: _) _ |- context [ updateTrackedNonce _ _ (_ $+ (_,_)) _ ]] =>
+        invert H; split_ands
+      | [ H : message_queue_ok _ _ (_ :: _) _ |- ~ msg_accepted_by_pattern (_ $+ (_,_)) _ _ _ _ ] =>
+        invert H; split_ands
+      | [ |- context [ if msg_signed_addressed ?honk ?cs ?suid ?m then _ else _ ]] =>
+        erewrite <- msg_signed_addressed_addnl_cipher by eauto; 
+        destruct (msg_signed_addressed honk cs suid m); subst
+      | [ H : message_queue_ok _ _ (_ :: _) _ |- context [ msg_signed_addressed (?honk $+ (_,true)) _ _ _ ]] =>
+        invert H; split_ands;
+        erewrite msg_signed_addressed_nochange_addnl_honest_key
+      | [ H : keys_and_permissions_good _ ?usrs _ |- ~ In ?kid (findUserKeys ?usrs) ] =>
+        keys_and_permissions_prop; unfold not; let IN := fresh "IN" in intro IN; rewrite in_find_iff in IN;
+        case_eq (findUserKeys usrs $? kid); intros; try contradiction
+      | [ H : permission_heap_good ?gks ?ks, ARG : ?ks $? ?k = Some _, CONT : ?gks $? ?k = None  |- _ ] =>
+        specialize (H _ _ ARG); split_ex; contra_map_lookup
+      | [ GOOD : keys_and_permissions_good ?gks ?usrs _ ,
+          NIN : ?gks $? ?kid = None ,
+          IN : ?ks $? ?kid = Some _ ,
+          US : _ $? _ = Some (  mkUserData ?ks _ _ _ _ _ _ )
+          |- False ] =>
+        progress (keys_and_permissions_prop; repeat permission_heaps_prop)
+      | [ GOOD : permission_heap_good ?gks ?ks ,
+          NIN : ?gks $? ?kid = None ,
+          IN : ?ks $? ?kid = Some _ 
+          |- False ] =>
+        specialize (GOOD _ _ IN); split_ex; contra_map_lookup
+      | [ H : ~ In ?cid1 (?cs $+ (?cid2,_)) |- ~ In ?cid1 ?cs ] =>
+        rewrite not_find_in_iff in H; destruct (cid1 ==n cid2); subst; clean_map_lookups
+      | [ H : ?m $+ (?k1,_) $? ?k2 = _ |- ?m $? ?k2 = _ ] =>
+        (progress clean_map_lookups)
+         || (destruct (k1 ==n k2); subst)
+      | [ OK : user_cipher_queues_ok ?cs ?honk ?usrs, IN : List.In ?cid _ , CS : ?cs $? ?cid = None |- False ] =>
+        progress user_cipher_queues_prop
+      | [ |- None = Some _ ] => exfalso
+      | [ |- Some _ = None ] => exfalso
       end.
 
-    Ltac simpl_solve uid :=
-      split_ex; subst;
-      match goal with
-      | [ H : step_user _ (Some uid) _ _ |- _ ] => invert H; try contradiction
-      end; clean_map_lookups;
-      do 29 eexists;
-         repeat p;
-         eauto;
-         repeat
-           match goal with
-           | [ |- hstep _ _ _ _ ] => solve [ econstructor; eauto ]
-           | [ H : forall _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _, step_user _ _ _ _  -> step_user _ _ _ _ |- hstep _ _ _ _ ] =>
-             solve [ eapply H; eauto ] 
-           end.
-         
-    induction 1; inversion 5; inversion 1; intros;
-      clean_context;
+    all: try solve [ do 11 eexists; (repeat simple apply conj); try reflexivity; repeat s1; eauto; repeat s1; eauto ].
+
+    Ltac foo :=
       repeat 
         match goal with
-        | [ H : (_,_,_,_,_,_,_,_,_,_,_) = (_,_,_,_,_,_,_,_,_,_,_) |- _ ] => invert H
-        | [ H : commutes _ _ |- _ ] => unfold commutes in H; try contradiction
-        end; clean_context; try (solve [ simpl_solve u_id2 ] ).
+        | [ |- context [ _ $k++ findKeysMessage _ ]] =>
+          (do 2 user_cipher_queues_prop); encrypted_ciphers_prop;
+          rewrite honestk_merge_new_msgs_keys_dec_same by eassumption
+        | [ H : message_queue_ok _ _ (existT _ _ ?m :: _) _ |- msg_accepted_by_pattern _ _ _ _ ?m ] =>
+          invert H; split_ex
 
+        | [ H : message_no_adv_private _ ?cs ?msg |- context [ _ $k++ findKeysCrypto ?cs ?msg ]] =>
+          rewrite honestk_merge_new_msgs_keys_same by eassumption
+        | [ H : (honest_key _ ?k -> _) ,
+                ARG : honest_key _ ?k
+            |- _ ] =>
+          specialize (H ARG); split_ands
+        | [ H : (forall _, msg_signing_key ?cs ?m = Some _ -> _) ,
+                ARG : msg_signing_key ?cs ?m = Some ?k ,
+                      ARG2 : honest_key _ ?k
+            |- _ ] =>
+          specialize (H _ ARG); split_ands
+        | [ MQOK : message_queue_ok _ _ (existT _ _ ?msg :: _) _ ,
+                   MHS : msg_honestly_signed _ _ ?msg = true
+            |- context [ _ $k++ findKeysCrypto _ ?msg ]] =>
+          invert MQOK;
+          generalize (msg_honestly_signed_has_signing_key_cipher_id _ _ _ MHS); intros; split_ex;
+          eapply msg_honestly_signed_signing_key_honest in MHS; eauto
+        | [ H : msg_accepted_by_pattern ?cs _ _ ?pat ?msg ,
+                NCS : next_cmd_safe ?honk ?cs _ _ _ (Recv ?pat)
+            |- context [ _ $k++ findKeysCrypto _ ?msg ]] =>
+          invert NCS; assert (msg_honestly_signed honk cs msg = true) by eauto
+        | [ |- (if ?fi then _ else _) = (if ?fi then _ else _) ] =>
+          destruct fi
+        | [ |- _ = _ ] => solve [ eauto | symmetry; eauto ]
+        end.
 
-    - apply nextAction_couldBe in H30; contradiction.
-    - split_ex; subst.
-      match goal with
-      | [ H : step_user _ (Some u_id2) _ _ |- _ ] => invert H; try contradiction
-      end; clean_map_lookups.
-      + destruct (rec_u_id ==n u_id2); subst; clean_map_lookups; simpl in *.
-        * do 29 eexists; repeat p; eauto.
-             econstructor; eauto.
-             eapply H5; eauto.
-             invert H40.
-             econstructor; eauto.
-        * do 29 eexists; repeat p; eauto.
-             econstructor; eauto.
-             eapply H5; eauto.
-             invert H40.
-             econstructor; eauto.
-             clean_map_lookups.
-             reflexivity.
-      + destruct (rec_u_id ==n u_id2); subst; clean_map_lookups; simpl in *.
-        * do 29 eexists; repeat p; eauto.
-             econstructor; eauto.
-             eapply H5; eauto.
-             invert H40.
-             econstructor; eauto.
-        * do 29 eexists; repeat p; eauto.
-             econstructor; eauto.
-             eapply H5; eauto.
-             invert H40.
-             econstructor; eauto.
-             clean_map_lookups.
-           reflexivity.
-
-      + destruct (rec_u_id ==n u_id2); subst; clean_map_lookups; simpl in *.
-        * do 29 eexists; repeat p; eauto.
-             econstructor; eauto.
-             eapply H5; eauto.
-             invert H40.
-             econstructor; eauto.
-        * do 29 eexists; repeat p; eauto.
-             econstructor; eauto.
-             eapply H5; eauto.
-             invert H40.
-             econstructor; eauto.
-             clean_map_lookups.
-           reflexivity.
-
-    - split_ex; subst.
-      match goal with
-      | [ H : step_user _ (Some u_id2) _ _ |- _ ] => invert H; try contradiction
-      end; clean_map_lookups.
-      + do 29 eexists; repeat p; eauto.
-           econstructor; eauto.
-           eapply H2; eauto.
-      + do 29 eexists; repeat p; eauto.
-           destruct (k_id ==n k_id0); subst; econstructor; eauto.
-           eapply H2; eauto.
-      + do 29 eexists; repeat p; eauto.
-           destruct (k_id ==n k_id0); subst; econstructor; eauto.
-           eapply H2; eauto.
-
-    - split_ex; subst.
-      match goal with
-      | [ H : step_user _ (Some u_id2) _ _ |- _ ] => invert H; try contradiction
-      end; clean_map_lookups.
-      + do 29 eexists; repeat p; eauto.
-           econstructor; eauto.
-           eapply H2; eauto.
-      + do 29 eexists; repeat p; eauto.
-           destruct (k_id ==n k_id0); subst; econstructor; eauto.
-           eapply H2; eauto.
-      + do 29 eexists; repeat p; eauto.
-           destruct (k_id ==n k_id0); subst; econstructor; eauto.
-           eapply H2; eauto.
+    (do 11 eexists); (repeat simple apply conj); try reflexivity; repeat s1; eauto; repeat s1; foo; eauto.
+    (do 11 eexists); (repeat simple apply conj); try reflexivity; repeat s1; eauto; repeat s1; foo; eauto.
+    (do 11 eexists); (repeat simple apply conj); try reflexivity; repeat s1; eauto; repeat s1; foo; eauto.
+    (do 11 eexists); (repeat simple apply conj); try reflexivity; repeat s1; eauto; repeat s1; foo; eauto.
+    (do 11 eexists); (repeat simple apply conj); try reflexivity; repeat s1; eauto; repeat s1; foo; eauto.
+    (do 11 eexists); (repeat simple apply conj); try reflexivity; repeat s1; eauto; repeat s1; foo; eauto.
+    (do 11 eexists); (repeat simple apply conj); try reflexivity; repeat s1; eauto; repeat s1; foo; eauto.
+    (do 11 eexists); (repeat simple apply conj); try reflexivity; repeat s1; eauto; repeat s1; foo; eauto.
   Qed.
+
+
+
+
+  
   Lemma commutes_sound' :
     forall {A B C} suid1 u_id1 lbl1 (bd1 bd1' : data_step0 A B C),
 
