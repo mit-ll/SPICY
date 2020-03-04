@@ -44,26 +44,6 @@ Module ChannelType <: UsualOrderedType.
       intro EQ; invert EQ; split_ors; subst; try Nat.order.
   Qed.
 
-  (* Print Compare. *)
-  (* Print lt. *)
-
-  (* Definition compare (x y : t) : Compare lt eq x y := *)
-  (*   match (x,y) with *)
-  (*   | (Single n, Single n')          => *)
-  (*     match Nat_as_OT.compare n n' with *)
-  (*     | EQ neq => EQ (eq x y) *)
-  (*     | LT nlt => @LT channel_id lt eq x y  *)
-  (*     | GT ngt => GT (lt y x) *)
-  (*     end *)
-  (*   | (Intersection x1 x2, Single s) => LT lt (Intersection x1 x2) (Single s) *)
-  (*   | (Intersection n1 n2, Intersection n1' n2') => (n1 = n1' /\ n2 < n2') \/ n1 < n1' *)
-  (*   | (Single _, Intersection _ _) => False *)
-  (*   end. *)
-    
-
-
-
-  
   Lemma compare :
     forall( x y : t), Compare lt eq x y.
   Proof.

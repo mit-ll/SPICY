@@ -21,6 +21,7 @@ From Coq Require Import
 Require Import
         MyPrelude
         Maps
+        ChMaps
         Messages
         ModelCheck
         Common
@@ -71,19 +72,20 @@ Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
     eapply invariant_weaken.
 
     - apply multiStepClosure_ok; simpl.
-      time(
-          gen1
-          ; gen1
-          ; gen1
-          ; gen1
-          ; gen1
-          ; gen1
-          ; gen1
-          ; gen1
-          ; gen1
-          ; gen1
-          ; gen1 ).
       gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+
+      (* time(gen). *)
       
     - intros.
       simpl in *; split.

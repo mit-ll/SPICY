@@ -59,13 +59,13 @@ Module ShareSecretProtocol.
     Notation pCH__A2B := 0.
     Notation pCH__B2A := 1.
 
-    (* Definition empty_chs : channels := (#0 #+ (CH__A2B, []) #+ (CH__B2A, [])). *)
+    Definition empty_chs : channels := (#0 #+ (CH__A2B, []) #+ (CH__B2A, [])).
 
     Definition PERMS__a := $0 $+ (pCH__A2B, owner) $+ (pCH__B2A, reader).
     Definition PERMS__b := $0 $+ (pCH__A2B, reader) $+ (pCH__B2A, owner).
 
     Definition ideal_univ_start :=
-      mkiU (#0 #+ (CH__A2B, [])) PERMS__a PERMS__b
+      mkiU empty_chs PERMS__a PERMS__b
            (* user A *)
            ( chid <- CreateChannel
            ; _ <- Send (Permission {| ch_perm := writer ; ch_id := chid |}) CH__A2B
@@ -201,6 +201,61 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
       gen1.
       gen1.
       gen1.
+
+      eapply msc_step_alt
+      ; [unfold oneStepClosure_new | ..].
+    simplify
+    ; tidy
+    ; idtac "rstep start"
+    ; rstep
+    ; idtac "rstep done"
+    ; idtac "istep start"
+    ; istep
+    ; idtac "istep done"
+    ; subst
+    ; canonicalize users.
+
+    cleanup.
+
+    repeat (
+      equality1 || discriminate ||
+      match goal with
+           | [ H : context [ ChannelType.eq _ _ ] |- _ ] => unfold ChannelType.eq in H
+           | [ H : _ #+ (?k1,_) #? ?k2 = None |- _ ] =>
+               (rewrite ChMaps.ChMap.F.add_neq_o in H by solve_simple_ineq)
+             || (rewrite ChMaps.ChMap.F.add_eq_o in H by trivial)
+             || (destruct (ChMaps.ChMap.F.eq_dec k1 k2); subst)
+           end).
+
+
+    match goal with
+    | [ H : (?m #+ (?k1,_) #? (# ?k2) = _) |- _ ] =>
+      is_var k2; idtac k1 k2
+      ; destruct (ChMaps.ChMap.F.eq_dec k1 (# k2)); subst
+    end; ChMaps.ChMap.clean_map_lookups.
+    close.
+    
+    match goal with
+    | [ H : (?m #+ (?k1,_) #? (# ?k2) = _) |- _ ] =>
+      is_var k2; idtac k1 k2
+      ; destruct (ChMaps.ChMap.F.eq_dec k1 (# k2)); subst
+    end; ChMaps.ChMap.clean_map_lookups.
+    close.
+    
+    match goal with
+    | [ H : (?m #+ (?k1,_) #? (# ?k2) = _) |- _ ] =>
+      is_var k2; idtac k1 k2
+      ; destruct (ChMaps.ChMap.F.eq_dec k1 (# k2)); subst
+    end; ChMaps.ChMap.clean_map_lookups.
+    cleanup.
+    close.
+    cleanup.
+    invert H7.
+    
+    ; idtac "close start"
+    ; repeat close
+    ; idtac "close done".
+      
 
 
       gen1.

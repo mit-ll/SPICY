@@ -130,8 +130,9 @@ Ltac equality1 :=
 
   | [ H : _ = RealWorld.mkUserData _ _ _ |- _ ] => inversion H; clear H
   | [ H : Some _ = Some _ |- _ ] => inversion H; clear H
-  | [ H : (_ :: _) = _ |- _ ] => inversion H; clear H
-  | [ H : _ = (_ :: _) |- _ ] => inversion H; clear H
+  | [ H : (_ :: _) = (_ :: _) |- _ ] => inversion H; clear H
+  | [ H : (_ :: _) = ?x |- _ ] => is_var x; inversion H; clear H
+  | [ H : ?x = (_ :: _) |- _ ] => is_var x; inversion H; clear H
   | [ H : (_,_) = (_,_) |- _ ] => inversion H; clear H
   | [ H : Action _ = Action _ |- _ ] => inversion H; clear H
   | [ H : RealWorld.Return _ = RealWorld.Return _ |- _ ] => apply invert_return in H
@@ -141,6 +142,9 @@ Ltac equality1 :=
   | [ H: RealWorld.SigCipher _ _ _ _ = RealWorld.SigCipher _ _ _ _ |- _ ] => invert H
   | [ H: RealWorld.SigEncCipher _ _ _ _ _ = RealWorld.SigEncCipher _ _ _ _ _ |- _ ] => invert H
   | [ H: MkCryptoKey _ _ _ = _ |- _ ] => invert H
+
+  | [ H: _ = {| IdealWorld.read := _ |} |- _ ] => invert H
+  | [ H: {| IdealWorld.read := _ |} = _ |- _ ] => invert H
 
   | [ H: exists _, _ |- _ ] => destruct H
   | [ H: _ /\ _ |- _ ] => destruct H
@@ -591,7 +595,7 @@ Module SimulationAutomation.
     | [ H : Some _ = Some _ |- _ ] => invert H
     | [ H : Some _ = None |- _ ] => discriminate
     | [ H : None = Some _ |- _ ] => discriminate
-                                              
+
     | [ H : ?m $? ?k = _ |- _ ] => progress (unfold m in H)
     | [ H : ?m $+ (?k1,_) $? ?k1 = _ |- _ ] => rewrite add_eq_o in H by trivial
     | [ H : ?m $+ (?k1,_) $? ?k2 = _ |- _ ] => rewrite add_neq_o in H by solve_simple_ineq (* auto 2 *)
@@ -723,6 +727,7 @@ Module SimulationAutomation.
         | [ |- _ = {| IdealWorld.channel_vector := _; IdealWorld.users := _ |}] => smash_universe; solve_concrete_maps
         | [ |- IdealWorld.screen_msg _ _ ] => econstructor
         | [ |- IdealWorld.permission_subset _ _ ] => econstructor
+        | [ |- IdealWorld.check_perm _ _ _ ] => unfold IdealWorld.check_perm
         | [ |- context [ _ #? _ ] ] => solve_concrete_maps
         (* | [ |- ~ ChMaps.ChMap.Map.In ?k ?m ] => *)
         (*   is_evar k; unify k (ChMaps.next_key m); rewrite not_find_in_iff; apply next_key_not_in; trivial *)
@@ -775,7 +780,7 @@ Module SimulationAutomation.
          trans_eq_bool mult_n_O plus_n_O eq_add_S f_equal_nat : core.
 
   Hint Constructors action_matches : core.
-  Hint Resolve IdealWorld.LStepSend' IdealWorld.LStepRecv' : core.
+  Hint Resolve IdealWorld.LStepSend IdealWorld.LStepRecv' : core.
 
   Lemma TrcRefl' :
     forall {A} (R : A -> A -> Prop) x1 x2,
@@ -858,7 +863,7 @@ Module SimulationAutomation.
     [ solve [ solve_concrete_maps ] | simpl | reflexivity ];
     eapply IdealWorld.LStepBindRecur;
     ( (eapply IdealWorld.LStepRecv'; solve [ solve_ideal_step_stuff ])
-      || (eapply IdealWorld.LStepSend'; solve [ solve_ideal_step_stuff ])).
+      || (eapply IdealWorld.LStepSend; solve [ solve_ideal_step_stuff ])).
 
   Ltac step_each_ideal_user U :=
     match U with
@@ -1430,16 +1435,24 @@ Module Gen.
           | [ H : True |- _ ] => clear H
           | [ H : ?X = ?X |- _ ] => clear H
           | [ H : ?x = ?y |- _] => assert (x = y) as EQ by (clear H; trivial); clear H; clear EQ
+          | [ H: RealWorld.keys_mine _ $0 |- _ ] => clear H
           | [ H : _ $+ (?k1,_) $? ?k2 = None |- _ ] =>
-            (rewrite add_neq_o in H by solve_simple_ineq)
+              (rewrite add_neq_o in H by solve_simple_ineq)
             || (rewrite add_eq_o in H by trivial)
             || (destruct (k1 ==n k2); subst)
+          | [ H : context [ ChMaps.ChannelType.eq _ _ ] |- _ ] => unfold ChMaps.ChannelType.eq in H
+          | [ H : _ #+ (?k1,_) #? ?k2 = None |- _ ] =>
+              (rewrite ChMaps.ChMap.F.add_neq_o in H by solve_simple_ineq)
+            || (rewrite ChMaps.ChMap.F.add_eq_o in H by trivial)
+            || (destruct (ChMaps.ChMap.F.eq_dec k1 k2); subst)
+
           | [ H : ?m $? _ = _ |- _ ] => progress (unfold m in H)
           | [ H : RealWorld.msg_accepted_by_pattern _ _ _ _ _ |- _ ] => invert H
           (* | [ H : IdealWorld.msg_permissions_valid _ _ |- _ ] => *)
           (*   generalize (Forall_inv H); generalize (Forall_inv_tail H); clear H; intros *)
           | [ H : IdealWorld.screen_msg _ _ |- _ ] => invert H
           | [ H : IdealWorld.permission_subset _ _ |- _ ] => invert H
+          | [ H : context [ IdealWorld.addMsg _ _ _ ] |- _ ] => unfold IdealWorld.addMsg in H; simpl in H
           | [ H : Forall _ [] |- _ ] => clear H
           | [ H : context [true || _]  |- _] => rewrite orb_true_l in H
           | [ H : context [_ || true]  |- _] => rewrite orb_true_r in H
