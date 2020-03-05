@@ -227,14 +227,14 @@ Inductive lstep_user : forall A, ilabel -> channels * cmd A * permissions -> cha
 Hint Extern 1 (check_perm _ _ _) => unfold check_perm; clean_map_lookups : core.
 
 Lemma LStepRecv' : forall t (cv cv' : channels) ch_d ch_d' ps ps' (m : message t) ch_id b,
-    cv #? (Single ch_id) = Some ch_d
-    -> ps $? ch_id = Some {| read := true ; write := b |}
+    cv #? ch_id = Some ch_d
+    -> check_perm ch_id ps {| read := true ; write := b |}
     -> ch_d = (existT _ _ m) :: ch_d'
     -> ps' = add_ps_to_set m ps
-    -> cv' = cv #+ (Single ch_id, ch_d')
+    -> cv' = cv #+ (ch_id, ch_d')
     -> lstep_user
-        (Action (Input m (Single ch_id) cv ps))
-        (cv, Recv (Single ch_id), ps)
+        (Action (Input m ch_id cv ps))
+        (cv, Recv ch_id, ps)
         (cv', @Return (Message t) m, ps').
 Proof.
   intros; subst; econstructor; eauto. 

@@ -736,19 +736,35 @@ Module SimulationAutomation.
   Ltac solve_ideal_step_stuff :=
     repeat (
         match goal with
+        | [ H : # ?x = # ?y -> False |- _ ] => assert (x <> y) by congruence; clear H
         | [ |- Forall _ _ ] => econstructor
         | [ |- {| IdealWorld.channel_vector := _; IdealWorld.users := _ |} = _] => smash_universe; solve_concrete_maps
         | [ |- _ = {| IdealWorld.channel_vector := _; IdealWorld.users := _ |}] => smash_universe; solve_concrete_maps
         | [ |- IdealWorld.screen_msg _ _ ] => econstructor
         | [ |- IdealWorld.permission_subset _ _ ] => econstructor
         | [ |- IdealWorld.check_perm _ _ _ ] => unfold IdealWorld.check_perm
-        | [ |- context [ _ #? _ ] ] => solve_concrete_maps
-        (* | [ |- ~ ChMaps.ChMap.Map.In ?k ?m ] => *)
-        (*   is_evar k; unify k (ChMaps.next_key m); rewrite not_find_in_iff; apply next_key_not_in; trivial *)
         | [ |- ?m #? (# ?k) = None ] =>
           solve [ is_evar k; unify (# k) (ChMaps.next_key m); apply ChMaps.next_key_not_in; trivial ] 
+        | [ |- (match ?m $+ (?kid1,_) $? ?kid1 with _ => _ end) ] => rewrite add_eq_o by trivial
+        | [ |- (match ?m $+ (?kid2,_) $? ?kid1 with _ => _ end) ] => rewrite add_neq_o by solve_simple_ineq (* auto 2 *)
+        | [ |- context [ #0 #? _ ]] => rewrite ChMaps.ChMap.lookup_empty_none
         | [ |- _ = _ ] => reflexivity
+        | [ |- context [ _ $? _ ] ] => solve_concrete_maps
+        | [ |- context [ _ #? _ ] ] => solve_concrete_maps
         end; simpl).
+
+  (* match goal with *)
+  (* | [ |- Forall _ _ ] => econstructor *)
+  (* | [ |- {| IdealWorld.channel_vector := _; IdealWorld.users := _ |} = _] => smash_universe; solve_concrete_maps *)
+  (* | [ |- _ = {| IdealWorld.channel_vector := _; IdealWorld.users := _ |}] => smash_universe; solve_concrete_maps *)
+  (* | [ |- IdealWorld.screen_msg _ _ ] => econstructor *)
+  (* | [ |- IdealWorld.permission_subset _ _ ] => econstructor *)
+  (* | [ |- IdealWorld.check_perm _ _ _ ] => unfold IdealWorld.check_perm *)
+  (* | [ |- context [ _ #? _ ] ] => solve_concrete_maps *)
+  (* | [ |- ?m #? (# ?k) = None ] => *)
+  (*   solve [ is_evar k; unify (# k) (ChMaps.next_key m); apply ChMaps.next_key_not_in; trivial ]  *)
+  (* | [ |- _ = _ ] => reflexivity *)
+  (* end; simpl). *)
 
   Ltac isilent_step_univ uid :=
     eapply IdealWorld.LStepUser'; simpl; swap 2 3; [ pick_user uid | ..]; (try simple eapply @eq_refl);
@@ -885,10 +901,19 @@ Module SimulationAutomation.
       idtac "stepping " AB; (single_labeled_ideal_step AB || step_each_ideal_user usrs)
     end.
 
+  (* TODO: during canonicalization, cleanup the channels map *)
+  Local Ltac blah1 :=
+    match goal with
+    | [ |- context [ IdealWorld.addMsg ]] => unfold IdealWorld.addMsg; simpl
+    | [ |- context [ ?m #? _ ]] => progress unfold m
+    | [ |- context [ _ #+ (?k1,_) #? ?k1 ]] => rewrite ChMaps.ChMap.F.add_eq_o by trivial
+    | [ |- context [ _ #+ (?k1,_) #? ?k2 ]] => rewrite ChMaps.ChMap.F.add_neq_o by congruence
+    end.
+
   Ltac step_ideal_user :=
     match goal with
     | [ |- IdealWorld.lstep_universe _ (Action _) ?U' ] =>
-      is_evar U'; simpl_ideal_users_context;
+      is_evar U'; simpl_ideal_users_context; (repeat blah1);
       match goal with
       | [ |- IdealWorld.lstep_universe
             {| IdealWorld.users := ?usrs; IdealWorld.channel_vector := _ |} _ _ ] =>
@@ -949,6 +974,10 @@ Module SimulationAutomation.
       destruct (k1 ==n k2); subst; clean_map_lookups; simpl
     | [ H : ?P $? _ = Some {| IdealWorld.read := _; IdealWorld.write := _ |} |- _ ] => simpl in *; unfold P in H; solve_concrete_maps
     | [ |- _ $? _ = Some _ ] => progress solve_concrete_maps
+    | [ |- context [ IdealWorld.addMsg ]] => unfold IdealWorld.addMsg; simpl
+    | [ |- context [ ?m #? _ ]] => progress unfold m
+    | [ |- context [ _ #+ (?k1,_) #? ?k1 ]] => rewrite ChMaps.ChMap.F.add_eq_o by trivial
+    | [ |- context [ _ #+ (?k1,_) #? ?k2 ]] => rewrite ChMaps.ChMap.F.add_neq_o by congruence
     | [ |- _ <-> _ ] => split
     | [ |- _ -> _ ] => intros
     | [ |- _ = _ ] => reflexivity
