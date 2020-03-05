@@ -179,6 +179,17 @@ Module SimulationAutomation.
     (*         step_user lbl u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, Bind cmd1 cmd) (usrs', adv', cs', gks', ks', qmsgs', mycs', Bind cmd1' cmd)) *)
     (*     Sort Prop. *)
 
+    Lemma step_user_inv_ret :
+      forall {A B C} (usrs usrs' : honest_users A) (adv adv' : user_data B)
+        lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' tos tos' cur_n cur_n' (cmd : user_cmd C) (r : <<C>>),
+        step_user lbl u_id
+                  (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cur_n, Return r)
+                  (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cur_n', cmd)
+        -> False.
+    Proof.
+      intros * STEP; inversion STEP.
+    Qed.
+
     Lemma step_user_inv_gen :
       forall {A B} (usrs usrs' : honest_users A) (adv adv' : user_data B)
         lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' tos tos' cur_n cur_n' cmd,
@@ -281,7 +292,10 @@ Module SimulationAutomation.
         /\ qmsgs = qmsgs'
         /\ froms = froms'
         /\ tos' = updateTrackedNonce (Some rec_u_id) tos cs msg
+        /\ cur_n = cur_n'
         /\ mycs = mycs'
+        /\ keys_mine ks (findKeysCrypto cs msg)
+        /\ incl (findCiphers msg) mycs
         /\ adv' = 
           {| key_heap  := adv.(key_heap) $k++ findKeysCrypto cs msg
            ; protocol  := adv.(protocol)
@@ -306,7 +320,7 @@ Module SimulationAutomation.
       intros * H.
       invert H; intuition eauto.
     Qed.
-
+    
     Lemma step_user_inv_enc :
       forall {A B t} (usrs usrs' : honest_users A) (adv adv' : user_data B) k__sign k__enc (msg : message t)
         lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' tos tos' cur_n cur_n' msg_to cmd,
@@ -527,7 +541,7 @@ Module SimulationAutomation.
       | [ H : RealWorld.step_user _ (Some ?u) (_,_,_,_,_,_,_,_,_,_,?cmd) _ |- _ ] =>
         is_not_var u;
         match cmd with
-        | Return _ => invert H
+        | Return _ => apply step_user_inv_ret in H; contradiction
         | Bind _ _ => apply step_user_inv_bind in H; split_ands; split_ors; split_ands; subst; try discriminate
         | Gen => apply step_user_inv_gen in H
         | Send _ _ => apply step_user_inv_send in H
