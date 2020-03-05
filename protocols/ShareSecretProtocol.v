@@ -201,63 +201,10 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
       gen1.
       gen1.
       gen1.
-
-      eapply msc_step_alt
-      ; [unfold oneStepClosure_new | ..].
-    simplify
-    ; tidy
-    ; idtac "rstep start"
-    ; rstep
-    ; idtac "rstep done"
-    ; idtac "istep start"
-    ; istep
-    ; idtac "istep done"
-    ; subst
-    ; canonicalize users.
-
-    cleanup.
-
-    repeat (
-      equality1 || discriminate ||
-      match goal with
-           | [ H : context [ ChannelType.eq _ _ ] |- _ ] => unfold ChannelType.eq in H
-           | [ H : _ #+ (?k1,_) #? ?k2 = None |- _ ] =>
-               (rewrite ChMaps.ChMap.F.add_neq_o in H by solve_simple_ineq)
-             || (rewrite ChMaps.ChMap.F.add_eq_o in H by trivial)
-             || (destruct (ChMaps.ChMap.F.eq_dec k1 k2); subst)
-           end).
-
-
-    match goal with
-    | [ H : (?m #+ (?k1,_) #? (# ?k2) = _) |- _ ] =>
-      is_var k2; idtac k1 k2
-      ; destruct (ChMaps.ChMap.F.eq_dec k1 (# k2)); subst
-    end; ChMaps.ChMap.clean_map_lookups.
-    close.
-    
-    match goal with
-    | [ H : (?m #+ (?k1,_) #? (# ?k2) = _) |- _ ] =>
-      is_var k2; idtac k1 k2
-      ; destruct (ChMaps.ChMap.F.eq_dec k1 (# k2)); subst
-    end; ChMaps.ChMap.clean_map_lookups.
-    close.
-    
-    match goal with
-    | [ H : (?m #+ (?k1,_) #? (# ?k2) = _) |- _ ] =>
-      is_var k2; idtac k1 k2
-      ; destruct (ChMaps.ChMap.F.eq_dec k1 (# k2)); subst
-    end; ChMaps.ChMap.clean_map_lookups.
-    cleanup.
-    close.
-    cleanup.
-    invert H7.
-    
-    ; idtac "close start"
-    ; repeat close
-    ; idtac "close done".
-      
-
-
+      gen1.
+      gen1.
+      gen1.
+      gen1.
       gen1.
       gen1.
       gen1.
@@ -275,135 +222,123 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
       + sets_invert; unfold labels_align;
           split_ex; subst; intros; rstep; subst.
 
-        * do 3 eexists; repeat (simple apply conj); eauto.
-        * do 3 eexists; repeat (simple apply conj).
-          repeat ideal_single_silent_multistep A.
-          repeat ideal_single_silent_multistep B.
-          solve_refl.
-          canonicalize users.
-          
-        * do 3 eexists; repeat (simple apply conj); eauto.
-        * do 3 eexists; repeat (simple apply conj); eauto.
-        * do 3 eexists; repeat (simple apply conj); eauto.
-        * do 3 eexists; repeat (simple apply conj); eauto.
-        * do 3 eexists; repeat (simple apply conj); eauto.
-        * do 3 eexists; repeat (simple apply conj); eauto.
-        * do 3 eexists; repeat (simple apply conj); eauto.
-        * do 3 eexists; repeat (simple apply conj); eauto.
-        * do 3 eexists; repeat (simple apply conj); eauto.
-        * do 3 eexists; repeat (simple apply conj); eauto.
-        * do 3 eexists; repeat (simple apply conj); eauto.
-        * do 3 eexists; repeat (simple apply conj); eauto.
-        * do 3 eexists; repeat (simple apply conj); eauto.
+Ltac g :=
+  match goal with
+  | [ H : # ?x = # ?y -> False |- _ ] => assert (x <> y) by congruence; clear H
+  | [ |- Forall _ _ ] => econstructor
+  | [ |- {| IdealWorld.channel_vector := _; IdealWorld.users := _ |} = _] => smash_universe; solve_concrete_maps
+  | [ |- _ = {| IdealWorld.channel_vector := _; IdealWorld.users := _ |}] => smash_universe; solve_concrete_maps
+  | [ |- IdealWorld.screen_msg _ _ ] => econstructor
+  | [ |- IdealWorld.permission_subset _ _ ] => econstructor
+  | [ |- IdealWorld.check_perm _ _ _ ] => unfold IdealWorld.check_perm
+  | [ |- ?m #? (# ?k) = None ] =>
+    solve [ is_evar k; unify (# k) (ChMaps.next_key m); apply ChMaps.next_key_not_in; trivial ] 
+  | [ |- (match ?m $+ (?kid1,_) $? ?kid1 with _ => _ end) ] => rewrite add_eq_o by trivial
+  | [ |- (match ?m $+ (?kid2,_) $? ?kid1 with _ => _ end) ] => rewrite add_neq_o by solve_simple_ineq (* auto 2 *)
+  | [ |- context [ #0 #? _ ]] => rewrite ChMap.lookup_empty_none
+  | [ |- _ = _ ] => reflexivity
+  | [ |- context [ _ $? _ ] ] => solve_concrete_maps
+  | [ |- context [ _ #? _ ] ] => solve_concrete_maps
+  end; simpl.
+Ltac single_silent_multistep' usr_step := eapply TrcFront; [usr_step |]; simpl.
+Ltac isilent_step_univ' uid :=
+  eapply IdealWorld.LStepUser'; simpl; swap 2 3; [ pick_user uid | ..]; (try simple eapply @eq_refl);
+  ((eapply IdealWorld.LStepBindRecur; i_single_silent_step; solve [ repeat g; eauto 2  ])
+   || (i_single_silent_step; solve [ repeat g; eauto 2 ])).
+Ltac ideal_single_silent_multistep' uid := single_silent_multistep' ltac:(isilent_step_univ' uid).
+Hint Extern 1 (istepSilent ^* _ _) =>
+  autounfold with constants; simpl;
+    repeat (ideal_single_silent_multistep' A);
+    repeat (ideal_single_silent_multistep' B); solve_refl.
+Ltac single_labeled_ideal_step' uid :=
+  eapply IdealWorld.LStepUser' with (u_id := uid);
+  [ solve [ solve_concrete_maps ] | simpl | reflexivity ];
+  eapply IdealWorld.LStepBindRecur;
+  ( (eapply IdealWorld.LStepRecv; solve [ repeat g ])
+    || (eapply IdealWorld.LStepSend; solve [ repeat g ])).
+Ltac blah1 :=
+  match goal with
+  | [ |- context [ IdealWorld.addMsg ]] => unfold IdealWorld.addMsg, empty_chs; simpl
+  | [ |- context [ _ #+ (?k1,_) #? ?k1 ]] => rewrite ChMap.F.add_eq_o by trivial
+  | [ |- context [ _ #+ (?k1,_) #? ?k2 ]] => rewrite ChMap.F.add_neq_o by congruence
+  end.
+Hint Extern 1 (IdealWorld.lstep_universe _ (Action _) _) => 
+  canonicalize users; repeat blah1; (single_labeled_ideal_step' A || single_labeled_ideal_step' B).
 
-          eapply TrcFront.
-          eapply IdealWorld.LStepUser'; swap 2 3; [ pick_user A | ..]; simpl; (try simple eapply @eq_refl).
-          eapply IdealWorld.LStepBindRecur; i_single_silent_step; solve_ideal_step_stuff; eauto 2.
-          eapply TrcFront.
-          isilent_step_univ A.
-          simpl.
-          canonicalize users.
-          
-          eapply i_single_silent_step; solve_ideal_step_stuff; eauto 2.
-          
-          rewrite <- ChMaps.ChMap.F.not_find_in_iff.
+    * (do 3 eexists); repeat (simple apply conj); eauto.
+    * (do 3 eexists); repeat (simple apply conj); eauto.
+      repeat (solve_action_matches1 || blah1); clean_map_lookups; ChMap.clean_map_lookups; eauto.
+    * (do 3 eexists); repeat (simple apply conj); eauto.
+      repeat (solve_action_matches1 || blah1); clean_map_lookups; ChMap.clean_map_lookups; eauto.
+    * (do 3 eexists); repeat (simple apply conj); eauto.
+      repeat (solve_action_matches1 || blah1 || g); clean_map_lookups; ChMap.clean_map_lookups; eauto.
+      unfold IdealWorld.perm_intersection; simpl; eauto.
+      solve_perm_merges; solve_concrete_maps; eauto.
+      erewrite merge_perms_adds_ks1; eauto; solve_concrete_maps.
+      erewrite merge_perms_adds_ks2; eauto; solve_concrete_maps.
 
-          assert (exists i, #0 #+ (# 1, 1) #+ (# 0, 0) #? (# i) = None).
-          eexists.
-
-          match goal with
-          | [ |- ?m #? (# ?i) = None ] =>
-            is_evar i; ChMaps.ChMap.canonicalize_concrete_map m
-          end.
-
-          
-            ((eapply IdealWorld.LStepBindRecur; i_single_silent_step; solve [ solve_ideal_step_stuff; eauto 2  ])).
-             || (i_single_silent_step; solve [ solve_ideal_step_stuff; eauto 2 ])).
-          
-
-
-               |]; simpl.
-
-
-  Ltac isilent_step_univ uid :=
-    eapply IdealWorld.LStepUser'; simpl; swap 2 3; [ pick_user uid | ..]; (try simple eapply @eq_refl);
-    ((eapply IdealWorld.LStepBindRecur; i_single_silent_step; solve [ solve_ideal_step_stuff; eauto 2  ])
-     || (i_single_silent_step; solve [ solve_ideal_step_stuff; eauto 2 ])).
-
-  Ltac single_silent_multistep usr_step := eapply TrcFront; [usr_step |]; simpl.
-  Ltac single_silent_multistep3 usr_step := eapply Trc3Front; swap 1 2; [usr_step |..]; simpl; trivial.
-  
-  Ltac real_single_silent_multistep uid := single_silent_multistep3 ltac:(rsilent_step_univ uid).
-  Ltac ideal_single_silent_multistep uid := single_silent_multistep ltac:(isilent_step_univ uid).
-
-             
-             ideal_single_silent_multistep A.
-             
-        * do 3 eexists; repeat (simple apply conj); eauto.
-        * do 3 eexists; repeat (simple apply conj); eauto.
-                  
-    - intros.
-      simpl in *; split.
+    * (do 3 eexists); repeat (simple apply conj); eauto.
+      repeat (solve_action_matches1 || blah1 || g); clean_map_lookups; ChMap.clean_map_lookups; eauto.
+      unfold IdealWorld.perm_intersection; simpl; eauto.
+      solve_perm_merges; solve_concrete_maps; eauto.
+      erewrite merge_perms_adds_ks1; eauto; solve_concrete_maps.
+      erewrite merge_perms_adds_ks2; eauto; solve_concrete_maps.
       
-      + sets_invert; unfold safety;
-          split_ex; simpl in *; subst; solve_honest_actions_safe;
-            clean_map_lookups; eauto 8.
+    * (do 3 eexists); repeat (simple apply conj); eauto.
+      repeat (solve_action_matches1 || blah1 || g); clean_map_lookups; ChMap.clean_map_lookups; eauto.
+      unfold IdealWorld.perm_intersection; simpl; eauto.
+      solve_perm_merges; solve_concrete_maps; eauto.
+      erewrite merge_perms_adds_ks1; eauto; solve_concrete_maps.
+      erewrite merge_perms_adds_ks2; eauto; solve_concrete_maps.
+      
+    * (do 3 eexists); repeat (simple apply conj); eauto.
+      repeat (solve_action_matches1 || blah1 || g); clean_map_lookups; ChMap.clean_map_lookups; eauto.
+      unfold IdealWorld.perm_intersection; simpl; eauto.
+      solve_perm_merges; solve_concrete_maps; eauto.
+      erewrite merge_perms_adds_ks1; eauto; solve_concrete_maps.
+      erewrite merge_perms_adds_ks2; eauto; solve_concrete_maps.
 
-      + sets_invert; unfold labels_align; intros;
-          split_ex; subst; intros; rstep.
-        * do 3 eexists; repeat (apply conj); eauto.
-        * do 3 eexists; repeat (apply conj); eauto.
-             subst; repeat (solve_action_matches1); clean_map_lookups; eauto.
-        * do 3 eexists; repeat (apply conj); eauto.
-             subst; repeat (solve_action_matches1); clean_map_lookups; eauto.
-        * do 3 eexists; repeat (apply conj); eauto.
-          subst.
-          clear H5.
-          canonicalize users.
-          eapply Out.
-          reflexivity.
-          reflexivity.
-          eapply MessageEq.CryptoSigEncCase; simpl.
-          clean_map_lookups.
-          reflexivity.
-          simpl.
-          reflexivity.
-          reflexivity.
+    * (do 3 eexists); repeat (simple apply conj); eauto.
+      repeat (solve_action_matches1 || blah1 || g); clean_map_lookups; ChMap.clean_map_lookups; eauto.
+      unfold IdealWorld.perm_intersection; simpl; eauto.
+      solve_perm_merges; solve_concrete_maps; eauto.
+      erewrite merge_perms_adds_ks1; eauto; solve_concrete_maps.
+      erewrite merge_perms_adds_ks2; eauto; solve_concrete_maps.
 
-          intros; simpl in *.
-          destruct (u ==n A); destruct (u ==n B); subst;
-            try discriminate; try contradiction;
-              clean_map_lookups;
-              simpl.
+    * (do 3 eexists); repeat (simple apply conj); eauto.
+      repeat (solve_action_matches1 || blah1 || g); clean_map_lookups; ChMap.clean_map_lookups; eauto.
+      unfold IdealWorld.perm_intersection; simpl; eauto.
+      solve_perm_merges; solve_concrete_maps; eauto.
+      erewrite merge_perms_adds_ks1; eauto; solve_concrete_maps.
+      erewrite merge_perms_adds_ks2; eauto; solve_concrete_maps.
 
-          split; intros; split_ands; clean_map_lookups. admit.
-          split; intros; split_ands; clean_map_lookups.
+    * (do 3 eexists); repeat (simple apply conj); eauto.
+      repeat (solve_action_matches1 || blah1 || g); clean_map_lookups; ChMap.clean_map_lookups; eauto.
+      unfold IdealWorld.perm_intersection; simpl; eauto.
+      solve_perm_merges; solve_concrete_maps; eauto.
+      erewrite merge_perms_adds_ks1; eauto; solve_concrete_maps.
+      erewrite merge_perms_adds_ks2; eauto; solve_concrete_maps.
 
+    * (do 3 eexists); repeat (simple apply conj); eauto.
+      repeat (solve_action_matches1 || blah1 || g); clean_map_lookups; ChMap.clean_map_lookups; eauto.
+      unfold IdealWorld.perm_intersection; simpl; eauto.
+      solve_perm_merges; solve_concrete_maps; eauto.
+      erewrite merge_perms_adds_ks1; eauto; solve_concrete_maps.
+      erewrite merge_perms_adds_ks2; eauto; solve_concrete_maps.
 
-          
-          
-          subst; repeat (solve_action_matches1); cleanup; clean_map_lookups; eauto.
-             repeat (solve_concrete_maps; clean_map_lookups).
-             repeat (solve_concrete_perm_merges; solve_concrete_maps; clean_map_lookups).
-             repeat (solve_concrete_perm_merges; solve_concrete_maps; clean_map_lookups).
+    * (do 3 eexists); repeat (simple apply conj); eauto.
+      repeat (solve_action_matches1 || blah1 || g); clean_map_lookups; ChMap.clean_map_lookups; eauto.
+      unfold IdealWorld.perm_intersection; simpl; eauto.
+      solve_perm_merges; solve_concrete_maps; eauto.
+      erewrite merge_perms_adds_ks1; eauto; solve_concrete_maps.
+      erewrite merge_perms_adds_ks2; eauto; solve_concrete_maps.
 
-             cleanup
-        * do 3 eexists; repeat (apply conj); eauto.
-             subst; repeat (solve_action_matches1); clean_map_lookups; eauto.
-        * do 3 eexists; repeat (apply conj); eauto.
-             subst; repeat (solve_action_matches1); clean_map_lookups; eauto.
-        * do 3 eexists; repeat (apply conj); eauto.
-             subst; repeat (solve_action_matches1); clean_map_lookups; eauto.
-                  
-        * do 3 eexists; repeat (apply conj); eauto.
-             
-        * do 3 eexists;
-            repeat (apply conj); eauto.
-          subst; repeat (solve_action_matches1); clean_map_lookups; eauto.
-        * do 3 eexists;
-            repeat (apply conj); eauto.
-          subst; repeat (solve_action_matches1); clean_map_lookups; eauto.
-
+    * (do 3 eexists); repeat (simple apply conj); eauto.
+      repeat (solve_action_matches1 || blah1 || g); clean_map_lookups; ChMap.clean_map_lookups; eauto.
+      unfold IdealWorld.perm_intersection; simpl; eauto.
+      solve_perm_merges; solve_concrete_maps; eauto.
+      erewrite merge_perms_adds_ks1; eauto; solve_concrete_maps.
+      erewrite merge_perms_adds_ks2; eauto; solve_concrete_maps.
   Qed.
 
   Lemma U_good : @universe_starts_sane _ Unit b ru0.
