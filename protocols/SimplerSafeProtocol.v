@@ -162,15 +162,23 @@ Section RealWorldLemmas.
         /\ mycs = mycs'
         /\ froms = froms'
         /\ sents = sents'
-        /\ cur_n = cur_n'.
-
+        /\ cur_n = cur_n'
+        /\ (forall cs'' (usrs'': honest_users A) (adv'' : user_data B) gks'' ks'' qmsgs'' mycs'' froms'' sents'' cur_n'',
+              step_user lbl suid
+                        (usrs'', adv'', cs'', gks'', ks'', qmsgs'', mycs'', froms'', sents'', cur_n'', cmd)
+                        (usrs'', adv'', cs'', gks'', ks'', qmsgs'', mycs'', froms'', sents'', cur_n'', cmd')).
   Proof.
     induction 1; inversion 1; inversion 1; intros; subst;
       match goal with
       | [ H : nextAction _ _ |- _ ] => invert H
       end; eauto.
 
-    intuition idtac.
+    - eapply IHstep_user in H5; eauto; intuition (subst; eauto).
+      econstructor; eauto.
+
+    - invert H4.
+      intuition idtac.
+      econstructor.
   Qed.
 
   Lemma step_na_not_return :
@@ -772,6 +780,408 @@ Section RealWorldLemmas.
 
   Qed.
 
+  Lemma commutes_sound_recur_cmd1' :
+    forall {A B C D} suid1 u_id1 lbl1 (bd1 bd1' : data_step0 A B C),
+
+      step_user lbl1 suid1 bd1 bd1'
+      -> suid1 = Some u_id1
+      -> forall (bd2 bd2' : data_step0 A B D) lbl2 suid2 u_id2,
+
+          step_user lbl2 suid2 bd2 bd2'
+          -> suid2 = Some u_id2
+          -> u_id1 <> u_id2
+
+          -> forall cs cs1 cs' (usrs1 usrs1' usrs2 usrs2' : honest_users A) (adv adv1 adv' : user_data B) gks gks1 gks'
+              ks1 ks1' qmsgs1 qmsgs1' mycs1 mycs1' cmd1 cmd1' froms1 froms1' sents1 sents1' cur_n1 cur_n1'
+              ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' cmd2 cmd2' froms2 froms2' sents2 sents2' cur_n2 cur_n2' cmdc1 cmdc1' cmdc2 s,
+
+              bd1  = (usrs1,  adv,  cs,  gks,  ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd1)
+              -> bd1' = (usrs1', adv1, cs1, gks1, ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd1')
+              -> bd2  = (usrs2,  adv1, cs1, gks1, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
+              -> bd2' = (usrs2', adv', cs', gks', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
+              (* allow protocol to freely vary, since we won't be looking at it *)
+              -> usrs1 $? u_id1 = Some (mkUserData ks1 cmdc1 qmsgs1 mycs1 froms1 sents1 cur_n1)
+              -> usrs1 $? u_id2 = Some (mkUserData ks2 cmdc2 qmsgs2 mycs2 froms2 sents2 cur_n2)
+              -> usrs2 = usrs1' $+ (u_id1, mkUserData ks1' cmdc1' qmsgs1' mycs1' froms1' sents1' cur_n1')
+              -> encrypted_ciphers_ok (findUserKeys usrs1) cs gks
+              -> message_queues_ok cs usrs1 gks
+              -> keys_and_permissions_good gks usrs1 adv.(key_heap)
+              -> user_cipher_queues_ok cs (findUserKeys usrs1) usrs1
+              -> next_cmd_safe (findUserKeys usrs1) cs u_id1 froms1 sents1 cmd1
+              -> next_cmd_safe (findUserKeys usrs1) cs u_id2 froms2 sents2 cmd2
+                                  
+              (* no recursion *)
+              (* -> nextAction cmd1 cmd1 *)
+              -> nextAction cmd2 cmd2
+              (* -> (forall cmd__n x t (m : crypto t), nextAction cmd1 cmd__n -> cmd__n <> Send x m) *)
+
+              -> summarize cmd1 s
+              -> commutes cmd2 s
+
+              -> forall bd3 cmd2'',
+                  bd3 = (usrs1,   adv,  cs,  gks,  ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
+                  -> exists bd3' bd4 bd4' lbl3 lbl4 adv2 cs2 gks2 usrs3' usrs4 usrs4',
+                      step_user lbl3 suid2 bd3 bd3'
+                      /\ bd3' = (usrs3', adv2, cs2, gks2, ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
+                      /\ usrs4 = usrs3' $+ (u_id2, mkUserData ks2' cmd2'' qmsgs2' mycs2' froms2' sents2' cur_n2')
+                      /\ bd4 = (usrs4,   adv2, cs2, gks2, ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd1)
+                      /\ bd4' = (usrs4', adv', cs', gks', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd1')
+                      /\ step_user lbl4 suid1 bd4 bd4'
+  .
+  Proof.
+    induction 1; inversion 5; inversion 1
+    ; intros
+    ; repeat
+        match goal with
+        | [ ARG : nextAction (Send ?u ?msg) (Send ?u ?msg) , H : (forall c _ _ _, nextAction (Send ?u ?msg) c -> c <> _) |- _ ] =>
+          specialize (H _ u _ msg ARG); contradiction
+        | [ H : nextAction (Recv _) _  |- _ ] => msg_queue_prop; msg_queue_prop; clear H
+        (* | [ H : nextAction ?c1 ?c2 |- _ ] => apply nextAction_couldBe in H; try contradiction *)
+        | [ H : commutes (Send _ _) _ |- _ ] => unfold commutes in H; contradiction
+        (* | [ H : commutes (Recv _) _ |- _ ] => unfold commutes in H; contradiction *)
+        end
+    ; subst; eauto.
+
+    Hint Extern 1 (forall _ _ _ _, nextAction _ _ -> _ <> _ ) => intros * NA; invert NA; congruence.
+
+    all : try solve [ eapply commutes_sound'; eauto; econstructor; eauto ].
+
+    - specialize (IHstep_user eq_refl).
+      clean_context.
+      specialize (IHstep_user _ _ _ _ _ H1 eq_refl H3).
+      specialize (IHstep_user _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+                              _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+                              _ _ _ _ _ _ _ _ _ _ _ _ _ _ s
+                              eq_refl eq_refl eq_refl eq_refl H30 H31 eq_refl).
+      invert H37.
+      invert H40.
+      specialize_simply.
+      specialize (IHstep_user _ cmd2'' eq_refl).
+      split_ex; subst.
+      (do 11 eexists); repeat simple apply conj; eauto.
+      econstructor; eauto.
+
+    - cases cmd2;
+        repeat 
+        match goal with
+        | [ H : nextAction ?c1 ?c2 |- _ ] => apply nextAction_couldBe in H; try contradiction
+        | [ H : commutes (Send _ _) _ |- _ ] => unfold commutes in H; contradiction
+        end; step_usr u_id2
+        ; (do 11 eexists); (repeat simple apply conj); try reflexivity; repeat s1; eauto; repeat s1; foo; eauto.
+
+    - eapply commutes_sound_send; eauto.
+      econstructor; eauto.
+
+  Qed.
+
+  
+
+  Lemma step_no_depend_other_usrs_program :
+    forall {A B C} suid u_id1 lbl bd bd',
+      step_user lbl suid bd bd'
+      -> suid = Some u_id1
+
+      -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks'
+          (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs'
+          froms froms' sents sents' cur_n cur_n',
+
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+        -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+        -> forall usrs1 cmdc cmdc' u_id2 ks2 qmsgs2 mycs2 froms2 sents2 cur_n2,
+            u_id1 <> u_id2
+            -> usrs $? u_id2 = Some (mkUserData ks2 cmdc qmsgs2 mycs2 froms2 sents2 cur_n2)
+            -> usrs1 = usrs $+ (u_id2, mkUserData ks2 cmdc' qmsgs2 mycs2 froms2 sents2 cur_n2)
+            -> exists usrs1',
+                step_user lbl suid
+                          (usrs1, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+                          (usrs1', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+                /\ (forall u, u <> u_id2 -> usrs1' $? u = usrs' $? u)
+                /\ (exists ks2' qmsgs2' mycs2' froms2' sents2' cur_n2' cmdc'',
+                      usrs' $? u_id2 = Some (mkUserData ks2' cmdc'' qmsgs2' mycs2' froms2' sents2' cur_n2')
+                    /\ usrs1' $? u_id2 = Some (mkUserData ks2' cmdc' qmsgs2' mycs2' froms2' sents2' cur_n2')).
+  Proof.
+    induct 1; inversion 2; inversion 1; intros; subst;
+      try solve [ eexists; repeat simple apply conj; [ econstructor | | do 7 eexists]; eauto ];
+      clean_context.
+
+    - specialize (IHstep_user eq_refl).
+      specialize (IHstep_user _ _ _ _ _ _ _ _ _ _ _
+                              _ _ _ _ _ _ _ _ _ _ _
+                              eq_refl eq_refl).
+      specialize (IHstep_user _ _ cmdc' _ _ _ _ _ _ _
+                              H14 H26 eq_refl).
+      split_ex.
+      eexists; repeat simple apply conj; eauto.
+      econstructor; eauto.
+      do 7 eexists; eauto.
+                              
+    - eexists; repeat simple apply conj; [ econstructor | | do 7 eexists]; try congruence; eauto.
+      autorewrite with find_user_keys; trivial.
+    - destruct (u_id2 ==n rec_u_id); subst; clean_map_lookups; simpl.
+      eexists; repeat simple apply conj; [ econstructor | | do 7 eexists]; try congruence; eauto. 
+      eexists; repeat simple apply conj; [ econstructor | | do 7 eexists]; try congruence; eauto. 
+  Qed.
+
+  Lemma step_no_depend_other_usrs_program' :
+    forall {A B C} suid u_id1 lbl bd bd',
+      step_user lbl suid bd bd'
+      -> suid = Some u_id1
+
+      -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks'
+          (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs'
+          froms froms' sents sents' cur_n cur_n',
+
+          bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+          -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+
+          -> forall cmdc cmdc' u_id2 ks2 qmsgs2 mycs2 froms2 sents2 cur_n2 ks2' qmsgs2' mycs2' froms2' sents2' cur_n2',
+              u_id1 <> u_id2
+              -> usrs $? u_id2 = Some (mkUserData ks2 cmdc qmsgs2 mycs2 froms2 sents2 cur_n2)
+              -> usrs' $? u_id2 = Some (mkUserData ks2' cmdc qmsgs2' mycs2' froms2' sents2' cur_n2')
+              -> step_user lbl (Some u_id1)
+                          (usrs $+ (u_id2, mkUserData ks2 cmdc' qmsgs2 mycs2 froms2 sents2 cur_n2)
+                           , adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+                          (usrs' $+ (u_id2, mkUserData ks2' cmdc' qmsgs2' mycs2' froms2' sents2' cur_n2')
+                           , adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd').
+  Proof.
+    induct 1; inversion 2; inversion 1; intros; subst; clean_map_lookups;
+      try solve [ econstructor; eauto ];
+      clean_context.
+
+    - econstructor; eauto.
+      autorewrite with find_user_keys; eauto.
+    - destruct (u_id2 ==n rec_u_id); subst; clean_map_lookups; simpl; econstructor; try congruence; eauto.
+  Qed.
+
+  Lemma step_no_depend_other_usrs_program'' :
+    forall {A B C} suid u_id1 lbl bd bd',
+      step_user lbl suid bd bd'
+      -> suid = Some u_id1
+
+      -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks'
+          (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs'
+          froms froms' sents sents' cur_n cur_n',
+
+          bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+          -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+
+          -> forall cmdc cmdc' u_id2 ks2 qmsgs2 mycs2 froms2 sents2 cur_n2,
+              u_id1 <> u_id2
+              -> usrs $? u_id2 = Some (mkUserData ks2 cmdc qmsgs2 mycs2 froms2 sents2 cur_n2)
+              -> exists ks2' qmsgs2' mycs2' froms2' sents2' cur_n2',
+                  usrs' $? u_id2 = Some (mkUserData ks2' cmdc qmsgs2' mycs2' froms2' sents2' cur_n2')
+                  /\ step_user lbl (Some u_id1)
+                              (usrs $+ (u_id2, mkUserData ks2 cmdc' qmsgs2 mycs2 froms2 sents2 cur_n2)
+                               , adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+                              (usrs' $+ (u_id2, mkUserData ks2' cmdc' qmsgs2' mycs2' froms2' sents2' cur_n2')
+                               , adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd').
+  Proof.
+    induct 1; inversion 2; inversion 1; intros; subst; clean_map_lookups.
+
+    - specialize (IHstep_user eq_refl).
+      specialize (IHstep_user _ _ _ _ _ _ _ _ _ _ _
+                              _ _ _ _ _ _ _ _ _ _ _
+                              eq_refl eq_refl).
+      specialize (IHstep_user _ cmdc' _ _ _ _ _ _ _
+                              H14 H26).
+      clean_context.
+      split_ex.
+      (do 6 eexists); split; eauto.
+      econstructor; eauto.
+
+    - (do 6 eexists); split; [ | econstructor]; eauto.
+    - (do 6 eexists); split; [ | econstructor]; eauto.
+    - (do 6 eexists); split; [ | econstructor]; eauto.
+    - (do 6 eexists); split; [ | econstructor]; eauto.
+      autorewrite with find_user_keys; trivial.
+    - destruct (u_id2 ==n rec_u_id); subst; clean_map_lookups; simpl in *.
+      (do 6 eexists); split; [ | econstructor]; try congruence; eauto.
+      (do 6 eexists); split; [ | econstructor]; try congruence; eauto.
+    - (do 6 eexists); split; [ | econstructor]; eauto.
+    - (do 6 eexists); split; [ | econstructor]; eauto.
+    - (do 6 eexists); split; [ | econstructor]; eauto.
+    - (do 6 eexists); split; [ | econstructor]; eauto.
+    - (do 6 eexists); split; [ | econstructor]; eauto.
+    - (do 6 eexists); split; [ | econstructor]; eauto.
+  Qed.
+
+  (* Lemma step_no_depend_other_usrs_program''' : *)
+  (*   forall {A B C} suid u_id1 lbl bd bd', *)
+  (*     step_user lbl suid bd bd' *)
+  (*     -> suid = Some u_id1 *)
+
+  (*     -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks' *)
+  (*         (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs' *)
+  (*         froms froms' sents sents' cur_n cur_n', *)
+
+  (*         bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
+  (*         -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd') *)
+
+  (*         -> forall cmdc cmdc' u_id2 ks2 qmsgs2 mycs2 froms2 sents2 cur_n2, *)
+  (*             u_id1 <> u_id2 *)
+  (*             -> usrs $? u_id2 = Some (mkUserData ks2 cmdc qmsgs2 mycs2 froms2 sents2 cur_n2) *)
+  (*             -> exists ks2' qmsgs2' mycs2' froms2' sents2' cur_n2', *)
+  (*                 usrs' $? u_id2 = Some (mkUserData ks2' cmdc qmsgs2' mycs2' froms2' sents2' cur_n2') *)
+  (*                 /\ step_user lbl (Some u_id1) *)
+  (*                             (usrs $+ (u_id2, mkUserData ks2 cmdc' qmsgs2 mycs2 froms2 sents2 cur_n2) *)
+  (*                              , adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
+  (*                             (usrs' $+ (u_id2, mkUserData ks2' cmdc' qmsgs2' mycs2' froms2' sents2' cur_n2') *)
+  (*                              , adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd'). *)
+  (* Proof. *)
+  (*   induct 1; inversion 2; inversion 1; intros; subst; clean_map_lookups. *)
+
+  (*   - specialize (IHstep_user eq_refl). *)
+  (*     specialize (IHstep_user _ _ _ _ _ _ _ _ _ _ _ *)
+  (*                             _ _ _ _ _ _ _ _ _ _ _ *)
+  (*                             eq_refl eq_refl). *)
+  (*     specialize (IHstep_user _ cmdc' _ _ _ _ _ _ _ *)
+  (*                             H14 H26). *)
+  (*     clean_context. *)
+  (*     split_ex. *)
+  (*     (do 6 eexists); split; eauto. *)
+  (*     econstructor; eauto. *)
+
+  (*   - (do 6 eexists); split; [ | econstructor]; eauto. *)
+  (*   - (do 6 eexists); split; [ | econstructor]; eauto. *)
+  (*   - (do 6 eexists); split; [ | econstructor]; eauto. *)
+  (*   - (do 6 eexists); split; [ | econstructor]; eauto. *)
+  (*     autorewrite with find_user_keys; trivial. *)
+  (*   - destruct (u_id2 ==n rec_u_id); subst; clean_map_lookups; simpl in *. *)
+  (*     (do 6 eexists); split; [ | econstructor]; try congruence; eauto. *)
+  (*     (do 6 eexists); split; [ | econstructor]; try congruence; eauto. *)
+  (*   - (do 6 eexists); split; [ | econstructor]; eauto. *)
+  (*   - (do 6 eexists); split; [ | econstructor]; eauto. *)
+  (*   - (do 6 eexists); split; [ | econstructor]; eauto. *)
+  (*   - (do 6 eexists); split; [ | econstructor]; eauto. *)
+  (*   - (do 6 eexists); split; [ | econstructor]; eauto. *)
+  (*   - (do 6 eexists); split; [ | econstructor]; eauto. *)
+  (* Qed. *)
+
+  
+  Lemma commutes_sound_recur' :
+    forall {A B} suid1 u_id1 lbl1 (bd1 bd1' : data_step0 A B (Base A)),
+
+      step_user lbl1 suid1 bd1 bd1'
+      -> suid1 = Some u_id1
+      -> forall (bd2 bd2' : data_step0 A B (Base A)) lbl2 suid2 u_id2,
+
+          step_user lbl2 suid2 bd2 bd2'
+          -> suid2 = Some u_id2
+          -> u_id1 <> u_id2
+
+          -> forall cs cs1 cs' (usrs1 usrs1' usrs2 usrs2' : honest_users A) (adv adv1 adv' : user_data B) gks gks1 gks'
+              ks1 ks1' qmsgs1 qmsgs1' mycs1 mycs1' cmd1 cmd1' froms1 froms1' sents1 sents1' cur_n1 cur_n1'
+              ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' cmd2 cmd2' froms2 froms2' sents2 sents2' cur_n2 cur_n2' s,
+
+              bd1  = (usrs1,  adv,  cs,  gks,  ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd1)
+              -> bd1' = (usrs1', adv1, cs1, gks1, ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd1')
+              -> bd2  = (usrs2,  adv1, cs1, gks1, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
+              -> bd2' = (usrs2', adv', cs', gks', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
+              (* allow protocol to freely vary, since we won't be looking at it *)
+              -> usrs1 $? u_id1 = Some (mkUserData ks1 cmd1 qmsgs1 mycs1 froms1 sents1 cur_n1)
+              -> usrs1 $? u_id2 = Some (mkUserData ks2 cmd2 qmsgs2 mycs2 froms2 sents2 cur_n2)
+              -> usrs2 = usrs1' $+ (u_id1, mkUserData ks1' cmd1' qmsgs1' mycs1' froms1' sents1' cur_n1')
+              -> encrypted_ciphers_ok (findUserKeys usrs1) cs gks
+              -> message_queues_ok cs usrs1 gks
+              -> keys_and_permissions_good gks usrs1 adv.(key_heap)
+              -> user_cipher_queues_ok cs (findUserKeys usrs1) usrs1
+              -> next_cmd_safe (findUserKeys usrs1) cs u_id1 froms1 sents1 cmd1
+              -> next_cmd_safe (findUserKeys usrs1) cs u_id2 froms2 sents2 cmd2
+
+              -> forall E (cmd__i2 : user_cmd E),
+                  nextAction cmd2 cmd__i2
+                  -> summarize cmd1 s
+                  -> commutes cmd__i2 s
+
+                  -> forall bd3,
+                      bd3 = (usrs1,   adv,  cs,  gks,  ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
+                      -> exists bd3' bd4 bd4' lbl3 lbl4 adv2 cs2 gks2 usrs3' usrs4 usrs4',
+                        step_user lbl3 suid2 bd3 bd3'
+                        /\ bd3' = (usrs3', adv2, cs2, gks2, ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
+                        /\ usrs4 = usrs3' $+ (u_id2, mkUserData ks2' cmd2' qmsgs2' mycs2' froms2' sents2' cur_n2')
+                        /\ bd4 = (usrs4,   adv2, cs2, gks2, ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd1)
+                        /\ bd4' = (usrs4', adv', cs', gks', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd1')
+                        /\ step_user lbl4 suid1 bd4 bd4'
+  .
+  Proof.
+    intros; subst.
+
+    specialize (nextAction_couldBe H17).
+    cases cmd__i2; intros; try contradiction; clean_context.
+
+    - eapply step_na_return in H17; eauto; split_ands; subst.
+      eapply step_no_depend_other_usrs_program'' in H; eauto; split_ex.
+      (do 11 eexists); repeat simple apply conj; eauto.
+
+    - eapply step_na_not_return in H17; eauto; split_ex; subst; try congruence.
+      eapply commutes_sound_recur_cmd1' with (cmd2 := cmd1) (cmd3 := Gen) in H; eauto.
+      split_ex; subst.
+
+      (do 11 eexists); repeat simple apply conj; try reflexivity; eauto.
+      econstructor.
+
+    - generalize H17; intros NACMD2.
+      eapply step_na_not_return in H17; eauto; split_ex; subst; try congruence.
+      eapply commutes_sound_recur_cmd1' with (cmd2 := cmd1) (cmd3 := Recv pat) in H; eauto.
+      split_ex; subst.
+
+      (do 11 eexists); repeat simple apply conj; try reflexivity; eauto.
+      econstructor.
+
+
+      eapply step_no_depend_other_usrs_program'' in H1; try reflexivity; try congruence.
+      2: match goal with | [ |- _ <> ?u ] => unify u u_id1; congruence end.
+      2: clean_map_lookups; reflexivity.
+      split_ex.
+
+      eapply H6.
+
+
+      
+      exact H1.
+
+  H2 : step_user lbl2 (Some u_id2)
+         (usrs1' $+ (u_id1,
+          {|
+          key_heap := ks1';
+          protocol := cmd1';
+          msg_heap := qmsgs1';
+          c_heap := mycs1';
+          from_nons := froms1';
+          sent_nons := sents1';
+          cur_nonce := cur_n1' |}), adv1, cs1, gks1, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, Gen)
+         (usrs2', adv', cs', gks', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', x0)
+
+  step_user ?lbl3 (Some u_id2) (usrs1, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, Gen)
+    (?usrs3', ?adv2, ?cs2, ?gks2, ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', x0)
+
+  step_user ?lbl3 (Some u_id2) (usrs1, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, x Gen)
+    (?usrs3', ?adv2, ?cs2, ?gks2, ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', x x0)
+
+      
+      
+      (do 11 eexists); repeat simple apply conj; try reflexivity; eauto.
+      eapply H6; eauto.
+      
+      eapply step_no_depend_other_usrs_program'' in H2; try reflexivity.
+      2: match goal with | [ |- _ <> ?u ] => unify u u_id1; congruence end.
+      2: clean_map_lookups; reflexivity.
+      split_ex.
+
+
+      
+      
+    - eapply step_na_not_return in H17; eauto; split_ex; subst; try congruence.
+      
+      eapply step_no_depend_other_usrs_program'' in H2; try reflexivity.
+      2: match goal with | [ |- _ <> ?u ] => unify u u_id1; congruence end.
+      2: clean_map_lookups; reflexivity.
+      split_ex.
+      (do 11 eexists); repeat simple apply conj; try reflexivity; eauto.
+
+
+
+  
   
                                   
   Lemma silent_commutes :
