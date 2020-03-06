@@ -949,6 +949,13 @@ Module SimulationAutomation.
   Hint Extern 1 (_ #? _ = _) =>
     reflexivity || (solve [ solve_concrete_maps ] ) || (progress ChMaps.m_equal) || (progress ChMaps.ChMap.clean_map_lookups) : core.
 
+
+  Local Ltac merge_perms_helper :=
+    repeat match goal with
+           | [ |- _ = _ ] => reflexivity
+           | [ |- _ $? _ = _ ] => solve_concrete_maps
+           end.
+  
   Ltac solve_action_matches1 :=
     match goal with
     | [ |- content_eq _ _ ] => progress simpl
@@ -978,6 +985,17 @@ Module SimulationAutomation.
     | [ |- context [ ?m #? _ ]] => progress unfold m
     | [ |- context [ _ #+ (?k1,_) #? ?k1 ]] => rewrite ChMaps.ChMap.F.add_eq_o by trivial
     | [ |- context [ _ #+ (?k1,_) #? ?k2 ]] => rewrite ChMaps.ChMap.F.add_neq_o by congruence
+    | [ |- context [ IdealWorld.perm_intersection ] ] =>
+      unfold IdealWorld.perm_intersection; simpl
+    | [ H : _ $k++ _ $? _ = Some ?b |- context [ ?b ]] =>
+      solve [ solve_perm_merges; solve_concrete_maps ]
+    | [ |- _ $k++ _ $? _ = Some _ ] =>
+      solve [ erewrite merge_perms_adds_ks1; (swap 2 4; merge_perms_helper) ]
+      || solve [ erewrite merge_perms_adds_ks2; (swap 2 4; merge_perms_helper) ]
+    | [ H : match _ $+ (?k1,_) $? ?k1 with _ => _ end = _ |- _ ] =>
+      rewrite add_eq_o in H by trivial
+    | [ H : match _ $+ (?k1,_) $? ?k2 with _ => _ end = _ |- _ ] =>
+      rewrite add_neq_o in H by congruence
     | [ |- _ <-> _ ] => split
     | [ |- _ -> _ ] => intros
     | [ |- _ = _ ] => reflexivity

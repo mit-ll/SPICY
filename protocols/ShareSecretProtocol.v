@@ -222,78 +222,20 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
       + sets_invert; unfold labels_align;
           split_ex; subst; intros; rstep; subst.
 
-    * (do 3 eexists); repeat (simple apply conj); eauto.
-    * (do 3 eexists); repeat (simple apply conj); eauto.
-    * (do 3 eexists); repeat (simple apply conj); eauto.
-    * (do 3 eexists); repeat (simple apply conj); eauto.
-      repeat (solve_action_matches1; solve_ideal_step_stuff); clean_map_lookups; ChMap.clean_map_lookups; eauto.
-      unfold IdealWorld.perm_intersection; simpl; eauto.
-      solve_perm_merges; solve_concrete_maps; eauto.
-      erewrite merge_perms_adds_ks1; eauto; solve_concrete_maps.
-      erewrite merge_perms_adds_ks2; eauto; solve_concrete_maps.
+        * (do 3 eexists); repeat (simple apply conj); eauto.
+        * (do 3 eexists); repeat (simple apply conj); eauto.
+        * (do 3 eexists); repeat (simple apply conj); eauto.
+        * (do 3 eexists); repeat (simple apply conj); eauto.
+        * (do 3 eexists); repeat (simple apply conj); eauto.
+        * (do 3 eexists); repeat (simple apply conj); eauto.
+        * (do 3 eexists); repeat (simple apply conj); eauto.
+        * (do 3 eexists); repeat (simple apply conj); eauto.
+        * (do 3 eexists); repeat (simple apply conj); eauto.
+        * (do 3 eexists); repeat (simple apply conj); eauto.
+        * (do 3 eexists); repeat (simple apply conj); eauto.
+        * (do 3 eexists); repeat (simple apply conj); eauto.
+        * (do 3 eexists); repeat (simple apply conj); eauto.
 
-    * (do 3 eexists); repeat (simple apply conj); eauto.
-      repeat (solve_action_matches1; solve_ideal_step_stuff); clean_map_lookups; ChMap.clean_map_lookups; eauto.
-      unfold IdealWorld.perm_intersection; simpl; eauto.
-      solve_perm_merges; solve_concrete_maps; eauto.
-      erewrite merge_perms_adds_ks1; eauto; solve_concrete_maps.
-      erewrite merge_perms_adds_ks2; eauto; solve_concrete_maps.
-
-    * (do 3 eexists); repeat (simple apply conj); eauto.
-      repeat (solve_action_matches1; solve_ideal_step_stuff); clean_map_lookups; ChMap.clean_map_lookups; eauto.
-      unfold IdealWorld.perm_intersection; simpl; eauto.
-      solve_perm_merges; solve_concrete_maps; eauto.
-      erewrite merge_perms_adds_ks1; eauto; solve_concrete_maps.
-      erewrite merge_perms_adds_ks2; eauto; solve_concrete_maps.
-
-    * (do 3 eexists); repeat (simple apply conj); eauto.
-      repeat (solve_action_matches1; solve_ideal_step_stuff); clean_map_lookups; ChMap.clean_map_lookups; eauto.
-      unfold IdealWorld.perm_intersection; simpl; eauto.
-      solve_perm_merges; solve_concrete_maps; eauto.
-      erewrite merge_perms_adds_ks1; eauto; solve_concrete_maps.
-      erewrite merge_perms_adds_ks2; eauto; solve_concrete_maps.
-
-    * (do 3 eexists); repeat (simple apply conj); eauto.
-      repeat (solve_action_matches1; solve_ideal_step_stuff); clean_map_lookups; ChMap.clean_map_lookups; eauto.
-      unfold IdealWorld.perm_intersection; simpl; eauto.
-      solve_perm_merges; solve_concrete_maps; eauto.
-      erewrite merge_perms_adds_ks1; eauto; solve_concrete_maps.
-      erewrite merge_perms_adds_ks2; eauto; solve_concrete_maps.
-
-    * (do 3 eexists); repeat (simple apply conj); eauto.
-      repeat (solve_action_matches1; solve_ideal_step_stuff); clean_map_lookups; ChMap.clean_map_lookups; eauto.
-      unfold IdealWorld.perm_intersection; simpl; eauto.
-      solve_perm_merges; solve_concrete_maps; eauto.
-      erewrite merge_perms_adds_ks1; eauto; solve_concrete_maps.
-      erewrite merge_perms_adds_ks2; eauto; solve_concrete_maps.
-
-    * (do 3 eexists); repeat (simple apply conj); eauto.
-      repeat (solve_action_matches1; solve_ideal_step_stuff); clean_map_lookups; ChMap.clean_map_lookups; eauto.
-      unfold IdealWorld.perm_intersection; simpl; eauto.
-      solve_perm_merges; solve_concrete_maps; eauto.
-      erewrite merge_perms_adds_ks1; eauto; solve_concrete_maps.
-      erewrite merge_perms_adds_ks2; eauto; solve_concrete_maps.
-
-    * (do 3 eexists); repeat (simple apply conj); eauto.
-      repeat (solve_action_matches1; solve_ideal_step_stuff); clean_map_lookups; ChMap.clean_map_lookups; eauto.
-      unfold IdealWorld.perm_intersection; simpl; eauto.
-      solve_perm_merges; solve_concrete_maps; eauto.
-      erewrite merge_perms_adds_ks1; eauto; solve_concrete_maps.
-      erewrite merge_perms_adds_ks2; eauto; solve_concrete_maps.
-
-    * (do 3 eexists); repeat (simple apply conj); eauto.
-      repeat (solve_action_matches1; solve_ideal_step_stuff); clean_map_lookups; ChMap.clean_map_lookups; eauto.
-      unfold IdealWorld.perm_intersection; simpl; eauto.
-      solve_perm_merges; solve_concrete_maps; eauto.
-      erewrite merge_perms_adds_ks1; eauto; solve_concrete_maps.
-      erewrite merge_perms_adds_ks2; eauto; solve_concrete_maps.
-
-    * (do 3 eexists); repeat (simple apply conj); eauto.
-      repeat (solve_action_matches1; solve_ideal_step_stuff); clean_map_lookups; ChMap.clean_map_lookups; eauto.
-      unfold IdealWorld.perm_intersection; simpl; eauto.
-      solve_perm_merges; solve_concrete_maps; eauto.
-      erewrite merge_perms_adds_ks1; eauto; solve_concrete_maps.
-      erewrite merge_perms_adds_ks2; eauto; solve_concrete_maps.
   Qed.
 
   Lemma U_good : @universe_starts_sane _ Unit b ru0.
