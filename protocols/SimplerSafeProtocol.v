@@ -67,32 +67,6 @@ Section RealWorldLemmas.
 
   (* Partial order reduction *)
 
-  Inductive nextAction : forall {A B}, user_cmd A -> user_cmd B -> Prop :=
-  | NaReturn : forall A (a : << A >>),
-      nextAction (Return a) (Return a)
-  | NaGen :
-      nextAction Gen Gen
-  | NaSend : forall t uid (msg : crypto t),
-      nextAction (Send uid msg) (Send uid msg)
-  | NaRecv : forall t pat,
-      nextAction (@Recv t pat) (@Recv t pat)
-  | NaSignEncrypt : forall t k__s k__e u_id (msg : message t),
-      nextAction (SignEncrypt k__s k__e u_id msg) (SignEncrypt k__s k__e u_id msg)
-  | NaDecrypt : forall t (msg : crypto t),
-      nextAction (Decrypt msg) (Decrypt msg)
-  | NaSign : forall t k u_id (msg : message t),
-      nextAction (Sign k u_id msg) (Sign k u_id msg)
-  | NaVerify : forall t k (msg : crypto t),
-      nextAction (Verify k msg) (Verify k msg)
-  | NaGenSymKey : forall usg,
-      nextAction (GenerateSymKey usg) (GenerateSymKey usg)
-  | NaGenAsymKey : forall usg,
-      nextAction (GenerateAsymKey usg) (GenerateAsymKey usg)
-  | NaBind : forall A B r (c : user_cmd B) (c1 : user_cmd r) (c2 : << r >> -> user_cmd A),
-      nextAction c1 c
-      -> nextAction (Bind c1 c2) c
-  .
-
   Record summary := { sending_to : Sets.set user_id }.
 
   Inductive summarize : forall {t}, user_cmd t -> summary -> Prop :=
@@ -272,26 +246,6 @@ Section RealWorldLemmas.
         do 9 destruct bd__x1 as [bd__x1 ?x].
         do 9 destruct bd__x1' as [bd__x1' ?x].
         eapply StepBindRecur; eauto 12.
-  Qed.
-
-  Lemma nextAction_couldBe :
-    forall {A B} (c1 : user_cmd A) (c2 : user_cmd B),
-      nextAction c1 c2
-      -> match c2 with
-        | Return _ => True
-        | Gen => True
-        | Send _ _ => True
-        | Recv _ => True
-        | SignEncrypt _ _ _ _ => True
-        | Decrypt _ => True
-        | Sign _ _ _ => True
-        | Verify _ _ => True
-        | GenerateAsymKey _ => True
-        | GenerateSymKey _ => True
-        | Bind _ _ => False
-        end.
-  Proof.
-    induction 1; eauto.
   Qed.
 
   (* need to know that msg, if cipher, is in cs *)
@@ -656,6 +610,21 @@ Section RealWorldLemmas.
 
     all: try solve [ do 11 eexists; (repeat simple apply conj); try reflexivity; repeat s1; eauto; repeat s1; eauto ].
 
+    Ltac process_next_cmd_safe :=
+      match goal with
+      | [ H : next_cmd_safe _ _ _ _ _ ?c |- _] =>
+        let NA := fresh "NA" in 
+        match c with
+        | (Bind (Return ?r) ?c2) =>
+          assert (nextAction c (Return r)) as NA by (repeat econstructor)
+        | _ =>
+          assert (nextAction c c) as NA by econstructor
+        end
+        ; specialize (H _ _ NA)
+        ; simpl in H
+        ; split_ex
+      end.
+
     Ltac foo :=
       repeat 
         match goal with
@@ -685,11 +654,12 @@ Section RealWorldLemmas.
         | [ H : msg_accepted_by_pattern ?cs _ _ ?pat ?msg ,
                 NCS : next_cmd_safe ?honk ?cs _ _ _ (Recv ?pat)
             |- context [ _ $k++ findKeysCrypto _ ?msg ]] =>
-          invert NCS; assert (msg_honestly_signed honk cs msg = true) by eauto
+          repeat process_next_cmd_safe; invert NCS; assert (msg_honestly_signed honk cs msg = true) by eauto
         | [ |- (if ?fi then _ else _) = (if ?fi then _ else _) ] =>
           destruct fi
         | [ |- _ = _ ] => solve [ eauto | symmetry; eauto ]
         end.
+
 
     (do 11 eexists); (repeat simple apply conj); try reflexivity; repeat s1; eauto; repeat s1; foo; eauto.
     (do 11 eexists); (repeat simple apply conj); try reflexivity; repeat s1; eauto; repeat s1; foo; eauto.
@@ -771,7 +741,7 @@ Section RealWorldLemmas.
       (do 11 eexists); (repeat simple apply conj); try reflexivity; repeat s1; eauto; repeat s1; try congruence; eauto;
       repeat
         match goal with
-        | [ H : next_cmd_safe _ _ _ _ _ (Send _ _) |- _ ] => invert H; split_ex; subst
+        | [ H : next_cmd_safe _ _ _ _ _ (Send _ _) |- _ ] => process_next_cmd_safe; subst
         | [ |- context [ findKeysCrypto (_ $+ (?cid1,_)) (SignedCiphertext ?cid2) ]] =>
           destruct (cid1 ==n cid2); subst; clean_map_lookups; rewrite findKeysCrypto_addnl_cipher'
         | [ |- context [ updateTrackedNonce _ _ (_ $+ (?cid1,_)) (SignedCiphertext ?cid2) ]] =>
@@ -853,7 +823,7 @@ Section RealWorldLemmas.
                               _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
                               _ _ _ _ _ _ _ _ _ _ _ _ _ _ s
                               eq_refl eq_refl eq_refl eq_refl H30 H31 eq_refl).
-      invert H37.
+      apply next_action_next_cmd_safe_bind in H37.
       invert H40.
       specialize_simply.
       specialize (IHstep_user _ cmd2'' eq_refl).
@@ -873,7 +843,6 @@ Section RealWorldLemmas.
       econstructor; eauto.
 
   Qed.
-
   
 
   Lemma step_no_depend_other_usrs_program :
@@ -1005,59 +974,6 @@ Section RealWorldLemmas.
     - (do 6 eexists); split; [ | econstructor]; eauto.
   Qed.
 
-  (* Lemma step_no_depend_other_usrs_program''' : *)
-  (*   forall {A B C} suid u_id1 lbl bd bd', *)
-  (*     step_user lbl suid bd bd' *)
-  (*     -> suid = Some u_id1 *)
-
-  (*     -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks' *)
-  (*         (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs' *)
-  (*         froms froms' sents sents' cur_n cur_n', *)
-
-  (*         bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
-  (*         -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd') *)
-
-  (*         -> forall cmdc cmdc' u_id2 ks2 qmsgs2 mycs2 froms2 sents2 cur_n2, *)
-  (*             u_id1 <> u_id2 *)
-  (*             -> usrs $? u_id2 = Some (mkUserData ks2 cmdc qmsgs2 mycs2 froms2 sents2 cur_n2) *)
-  (*             -> exists ks2' qmsgs2' mycs2' froms2' sents2' cur_n2', *)
-  (*                 usrs' $? u_id2 = Some (mkUserData ks2' cmdc qmsgs2' mycs2' froms2' sents2' cur_n2') *)
-  (*                 /\ step_user lbl (Some u_id1) *)
-  (*                             (usrs $+ (u_id2, mkUserData ks2 cmdc' qmsgs2 mycs2 froms2 sents2 cur_n2) *)
-  (*                              , adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
-  (*                             (usrs' $+ (u_id2, mkUserData ks2' cmdc' qmsgs2' mycs2' froms2' sents2' cur_n2') *)
-  (*                              , adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd'). *)
-  (* Proof. *)
-  (*   induct 1; inversion 2; inversion 1; intros; subst; clean_map_lookups. *)
-
-  (*   - specialize (IHstep_user eq_refl). *)
-  (*     specialize (IHstep_user _ _ _ _ _ _ _ _ _ _ _ *)
-  (*                             _ _ _ _ _ _ _ _ _ _ _ *)
-  (*                             eq_refl eq_refl). *)
-  (*     specialize (IHstep_user _ cmdc' _ _ _ _ _ _ _ *)
-  (*                             H14 H26). *)
-  (*     clean_context. *)
-  (*     split_ex. *)
-  (*     (do 6 eexists); split; eauto. *)
-  (*     econstructor; eauto. *)
-
-  (*   - (do 6 eexists); split; [ | econstructor]; eauto. *)
-  (*   - (do 6 eexists); split; [ | econstructor]; eauto. *)
-  (*   - (do 6 eexists); split; [ | econstructor]; eauto. *)
-  (*   - (do 6 eexists); split; [ | econstructor]; eauto. *)
-  (*     autorewrite with find_user_keys; trivial. *)
-  (*   - destruct (u_id2 ==n rec_u_id); subst; clean_map_lookups; simpl in *. *)
-  (*     (do 6 eexists); split; [ | econstructor]; try congruence; eauto. *)
-  (*     (do 6 eexists); split; [ | econstructor]; try congruence; eauto. *)
-  (*   - (do 6 eexists); split; [ | econstructor]; eauto. *)
-  (*   - (do 6 eexists); split; [ | econstructor]; eauto. *)
-  (*   - (do 6 eexists); split; [ | econstructor]; eauto. *)
-  (*   - (do 6 eexists); split; [ | econstructor]; eauto. *)
-  (*   - (do 6 eexists); split; [ | econstructor]; eauto. *)
-  (*   - (do 6 eexists); split; [ | econstructor]; eauto. *)
-  (* Qed. *)
-
-  
   Lemma commutes_sound_recur' :
     forall {A B} suid1 u_id1 lbl1 (bd1 bd1' : data_step0 A B (Base A)),
 
@@ -1113,73 +1029,103 @@ Section RealWorldLemmas.
       eapply step_no_depend_other_usrs_program'' in H; eauto; split_ex.
       (do 11 eexists); repeat simple apply conj; eauto.
 
-    - eapply step_na_not_return in H17; eauto; split_ex; subst; try congruence.
-      eapply commutes_sound_recur_cmd1' with (cmd2 := cmd1) (cmd3 := Gen) in H; eauto.
-      split_ex; subst.
+      Ltac setup cmd1 uid :=
+        match goal with
+        | [ NA : nextAction ?c2 ?c
+          , STEP : step_user _ (Some uid) _ _
+          , NCS : next_cmd_safe _ _ _ _ _ ?c2 |- _ ] => 
+          let NACMD2 := fresh "NACMD2" in
+          generalize NA; intros NACMD2
+        ; eapply step_na_not_return in NA; eauto; split_ex; subst; try congruence
+        ; eapply commutes_sound_recur_cmd1' with (cmd2 := cmd1) (cmd3 := c) in STEP; eauto
+        ; split_ex; subst
+        ; specialize (NCS _ _ NACMD2); simpl in NCS
+        end.
 
+    - setup cmd1 u_id1.
       (do 11 eexists); repeat simple apply conj; try reflexivity; eauto.
-      econstructor.
+      unfold next_cmd_safe; intros * NCSNA; invert NCSNA; eauto.
 
-    - generalize H17; intros NACMD2.
-      eapply step_na_not_return in H17; eauto; split_ex; subst; try congruence.
-      eapply commutes_sound_recur_cmd1' with (cmd2 := cmd1) (cmd3 := Recv pat) in H; eauto.
-      split_ex; subst.
-
+    - setup cmd1 u_id1.
       (do 11 eexists); repeat simple apply conj; try reflexivity; eauto.
-      econstructor.
+      unfold next_cmd_safe; intros * NCSNA; invert NCSNA; eauto.
 
-
-      eapply step_no_depend_other_usrs_program'' in H1; try reflexivity; try congruence.
-      2: match goal with | [ |- _ <> ?u ] => unify u u_id1; congruence end.
-      2: clean_map_lookups; reflexivity.
-      split_ex.
-
-      eapply H6.
-
-
-      
-      exact H1.
-
-  H2 : step_user lbl2 (Some u_id2)
-         (usrs1' $+ (u_id1,
-          {|
-          key_heap := ks1';
-          protocol := cmd1';
-          msg_heap := qmsgs1';
-          c_heap := mycs1';
-          from_nons := froms1';
-          sent_nons := sents1';
-          cur_nonce := cur_n1' |}), adv1, cs1, gks1, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, Gen)
-         (usrs2', adv', cs', gks', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', x0)
-
-  step_user ?lbl3 (Some u_id2) (usrs1, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, Gen)
-    (?usrs3', ?adv2, ?cs2, ?gks2, ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', x0)
-
-  step_user ?lbl3 (Some u_id2) (usrs1, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, x Gen)
-    (?usrs3', ?adv2, ?cs2, ?gks2, ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', x x0)
-
-      
-      
+    - setup cmd1 u_id1.
       (do 11 eexists); repeat simple apply conj; try reflexivity; eauto.
-      eapply H6; eauto.
-      
-      eapply step_no_depend_other_usrs_program'' in H2; try reflexivity.
-      2: match goal with | [ |- _ <> ?u ] => unify u u_id1; congruence end.
-      2: clean_map_lookups; reflexivity.
-      split_ex.
+      unfold next_cmd_safe; intros * NCSNA; invert NCSNA; eauto.
 
-
-      
-      
-    - eapply step_na_not_return in H17; eauto; split_ex; subst; try congruence.
-      
-      eapply step_no_depend_other_usrs_program'' in H2; try reflexivity.
-      2: match goal with | [ |- _ <> ?u ] => unify u u_id1; congruence end.
-      2: clean_map_lookups; reflexivity.
-      split_ex.
+    - setup cmd1 u_id1.
       (do 11 eexists); repeat simple apply conj; try reflexivity; eauto.
+      unfold next_cmd_safe; intros * NCSNA; invert NCSNA; eauto.
+
+    - setup cmd1 u_id1.
+      (do 11 eexists); repeat simple apply conj; try reflexivity; eauto.
+      unfold next_cmd_safe; intros * NCSNA; invert NCSNA; eauto.
+
+    - setup cmd1 u_id1.
+      (do 11 eexists); repeat simple apply conj; try reflexivity; eauto.
+      unfold next_cmd_safe; intros * NCSNA; invert NCSNA; eauto.
+
+    - setup cmd1 u_id1.
+      (do 11 eexists); repeat simple apply conj; try reflexivity; eauto.
+      unfold next_cmd_safe; intros * NCSNA; invert NCSNA; eauto.
+
+    - setup cmd1 u_id1.
+      (do 11 eexists); repeat simple apply conj; try reflexivity; eauto.
+      unfold next_cmd_safe; intros * NCSNA; invert NCSNA; eauto.
+
+  Qed.
+
+  Definition buildUniverse_step {A B} (ds : data_step0 A B (Base A)) (uid : user_id) : universe A B  :=
+    let '(usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) := ds
+    in  buildUniverse usrs adv cs gks uid
+                      (mkUserData ks cmd qmsgs mycs froms sents cur_n).
 
 
+  Lemma commutes_sound :
+    forall {A B} (U__r : universe A B) lbl1 (u_id1 : user_id) userData1 bd1,
+      U__r.(users) $? u_id1 = Some userData1
+      -> universe_ok U__r
+      -> adv_universe_ok U__r
+      -> step_user lbl1 (Some u_id1) (build_data_step U__r userData1) bd1
+      -> forall U__r' lbl2 u_id2 bd1' userData2,
+          U__r' = buildUniverse_step bd1 u_id1
+          -> u_id1 <> u_id2
+          -> U__r'.(users) $? u_id2 = Some userData2
+          -> step_user lbl2 (Some u_id2) (build_data_step U__r' userData2) bd1'
+          -> exists u_id2 U__r'' ud1 ud2 bd3 bd3',
+              U__r.(users) $? u_id2 = Some ud2
+              /\ step_user lbl2 (Some u_id2) (build_data_step U__r ud2) bd3
+              /\ U__r'' = buildUniverse_step bd3 u_id2
+              /\ U__r''.(users) $? u_id1 = Some ud1
+              /\ step_user lbl1 (Some u_id1) (build_data_step U__r'' ud1) bd3'
+              /\ buildUniverse_step bd3' u_id1 = buildUniverse_step bd1' u_id2.
+  Proof.
+    intros.
+    destruct U__r; destruct U__r'; simpl in *.
+    destruct userData1; destruct userData2; simpl in *.
+    unfold universe_ok, adv_universe_ok in *; split_ands.
+    unfold build_data_step, buildUniverse_step, buildUniverse in *; simpl in *.
+
+    Ltac dt bd :=
+      destruct bd as [[[[[[[[[[?usrs ?adv] ?cs] ?gks] ?ks] ?qmsgs] ?mycs] ?froms] ?sents] ?cur_n] ?cmd].
+
+    dt bd1; dt bd1'.
+    clean_context; subst.
+    invert H3; clean_map_lookups.
+
+    eapply commutes_sound_recur' with (u_id3 := u_id1) (u_id4 := u_id2) in H0
+    ; try reflexivity; try eassumption; eauto.
+
+
+
+
+
+
+
+      -> step_universe U__r lbl1 U__r'
+      -> step_universe U__r' lbl2 U__r''
+    
 
   
   
@@ -1340,7 +1286,8 @@ Section RealWorldLemmas.
       -> rstepSilent ^* U U'
       -> U_syntactically_safe U'.
   Proof.
-  Admitted.
+  Admitted
+       
 
 End RealWorldLemmas.
 

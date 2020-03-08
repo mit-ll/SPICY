@@ -6103,6 +6103,49 @@ Section SingleAdversarySimulates.
 
     Hint Resolve honest_users_only_honest_keys_gen_key.
 
+    Lemma next_action_next_cmd_safe :
+      forall honestk cs uid froms sents {A} (cmd : user_cmd A) {B} (cmd__n : user_cmd B),
+        nextAction cmd cmd__n
+        -> next_cmd_safe honestk cs uid froms sents cmd
+        -> next_cmd_safe honestk cs uid froms sents cmd__n.
+    Proof.
+      intros.
+      unfold next_cmd_safe in *; intros.
+      specialize (H0 _ _ H).
+      apply nextAction_couldBe in H.
+      cases cmd__n; try contradiction; invert H1; eauto.
+    Qed.
+
+    Lemma next_action_next_cmd_safe_bind :
+      forall honestk cs uid froms sents {A B} (cmd1 : user_cmd A) (cmd2 : <<A>> -> user_cmd B),
+        next_cmd_safe honestk cs uid froms sents (x <- cmd1 ; cmd2 x)
+        -> next_cmd_safe honestk cs uid froms sents cmd1.
+    Proof.
+      intros.
+      unfold next_cmd_safe in *; intros; eauto.
+      eapply H; econstructor; eauto.
+    Qed.
+
+    Hint Resolve
+         next_action_next_cmd_safe
+         next_action_next_cmd_safe_bind.
+
+    Ltac process_next_cmd_safe :=
+      try
+        match goal with
+        | [ H : next_cmd_safe _ _ _ _ _ ?c |- _] =>
+          let NA := fresh "NA" in 
+          match c with
+          | (Bind (Return ?r) ?c2) =>
+            assert (nextAction c (Return r)) as NA by (repeat econstructor)
+          | _ =>
+            assert (nextAction c c) as NA by econstructor
+          end
+          ; specialize (H _ _ NA)
+          ; simpl in H
+          ; split_ex
+        end.
+
     Lemma honest_users_only_honest_keys_honest_steps :
       forall {A B C} u_id suid cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
                 gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd',
@@ -6137,9 +6180,7 @@ Section SingleAdversarySimulates.
       induction 1; inversion 3; inversion 5; intros;
         subst;
         autorewrite with find_user_keys;
-        match goal with
-        | [ H : next_cmd_safe _ _ _ _ _ _ |- _] => invert H
-        end;
+        process_next_cmd_safe;
         eauto;
         clean_context.
 
@@ -6158,23 +6199,23 @@ Section SingleAdversarySimulates.
 
         + generalize (msg_honestly_signed_has_signing_key_cipher_id _ _ _ MHS); intros; split_ands; split_ex.
           eapply msg_honestly_signed_signing_key_honest in MHS; eauto.
-          unfold msg_cipher_id in H3; destruct msg; try discriminate;
+          unfold msg_cipher_id in H2; destruct msg; try discriminate;
             clean_context; simpl in *.
           cases (cs' $? x); try discriminate.
           clean_context; invert MHS.
           destruct c; simpl in *; clean_map_lookups; eauto.
           encrypted_ciphers_prop; eauto.
-          specialize (H13 _ _ H0); split_ands; subst; clean_map_lookups; eauto.
+          specialize (H12 _ _ H0); split_ands; subst; clean_map_lookups; eauto.
 
         + generalize (msg_honestly_signed_has_signing_key_cipher_id _ _ _ MHS); intros; split_ands; split_ex.
           eapply msg_honestly_signed_signing_key_honest in MHS; eauto.
-          unfold msg_cipher_id in H3; destruct msg; try discriminate;
+          unfold msg_cipher_id in H2; destruct msg; try discriminate;
             clean_context; simpl in *.
           cases (cs' $? x); try discriminate.
           clean_context; invert MHS.
           destruct c; simpl in *; clean_map_lookups; eauto.
           encrypted_ciphers_prop; eauto.
-          specialize (H13 _ _ H0); split_ands; subst; clean_map_lookups; eauto.
+          specialize (H12 _ _ H0); split_ands; subst; clean_map_lookups; eauto.
 
       - unfold honest_users_only_honest_keys in *; intros.
         assert (rec_u_id <> u_id) by eauto.
@@ -6182,9 +6223,10 @@ Section SingleAdversarySimulates.
           subst;
           try contradiction;
           clean_map_lookups;
+          simpl in *;
           eauto.
 
-        + specialize (H10 _ _ H26 _ _ H4).
+        + specialize (H10 _ _ H26 _ _ H12).
           autorewrite with find_user_keys; eauto.
 
         + destruct (u_id0 ==n rec_u_id); subst;
@@ -6207,7 +6249,6 @@ Section SingleAdversarySimulates.
           match goal with
           | [ H : (forall _ _, ?ks $? _ = Some _ -> _), ARG : ?ks $? _ = Some _ |- _ ] => specialize (H _ _ ARG)
           end; eauto.
-
     Qed.
 
     Lemma honest_users_only_honest_keys_adv_steps :
@@ -6254,9 +6295,7 @@ Section SingleAdversarySimulates.
     Proof.
       induction 1; inversion 3; inversion 1; intros;
         try discriminate; subst;
-          match goal with
-          | [ H : next_cmd_safe _ _ _ _ _ _ |- _ ] => invert H
-          end;
+          process_next_cmd_safe;
           eauto;
           clean_context;
           eauto 12.
@@ -6804,9 +6843,7 @@ Section SingleAdversarySimulates.
         autorewrite with find_user_keys in *;
         keys_and_permissions_prop;
         clean_context;
-        match goal with
-        | [ H : next_cmd_safe _ _ _ _ _ _ |- _ ] => invert H
-        end;
+        process_next_cmd_safe;
         eauto.
 
       - econstructor; eauto.
@@ -6938,9 +6975,7 @@ Section SingleAdversarySimulates.
 
       split_ors; subst;
         erewrite clean_messages_addnl_cipher_idempotent, clean_users_addnl_cipher_idempotent; eauto;
-          match goal with
-          | [ H : next_cmd_safe _ _ _ _ _ _ |- _] => invert H; split_ands
-          end;
+          process_next_cmd_safe;
           econstructor; eauto.
 
       unfold keys_mine in *; intros.
@@ -7002,10 +7037,7 @@ Section SingleAdversarySimulates.
                      findCiphers msg ++ mycs,
                      updateTrackedNonce (Some u_id) froms cs msg, sents, cur_n, @Return (Crypto t) msg).
     Proof.
-      intros;
-        match goal with
-        | [ H : next_cmd_safe _ _ _ _ _ _ |- _] => invert H; split_ands
-        end; subst.
+      intros; process_next_cmd_safe; subst.
 
       assert (msg_signed_addressed (findUserKeys usrs) cs (Some u_id) msg = true)
         as MSA by (unfold msg_signed_addressed; eauto using accepted_safe_msg_pattern_honestly_signed
@@ -7018,26 +7050,17 @@ Section SingleAdversarySimulates.
       pose proof (msg_honestly_signed_has_signing_key_cipher_id _ _ _ H0); split_ands; split_ex.
       eapply msg_honestly_signed_signing_key_honest in H0; eauto.
 
-      generalize (accepted_safe_msg_pattern_replay_safe H10 H); intros; split_ex;
+      generalize (accepted_safe_msg_pattern_replay_safe H7 H); intros; split_ex;
         subst.
       unfold msg_nonce_ok at 2; context_map_rewrites.
-      rewrite count_occ_not_In with (eq_dec := msg_seq_eq) in H7;
-        rewrite H7.
+      rewrite count_occ_not_In with (eq_dec := msg_seq_eq) in H8;
+        rewrite H8.
       rewrite fold_clean_messages1' , clean_messages'_fst_pull, fold_clean_messages.
       invert H6; split_ands.
 
-      (* unfold msg_cipher_id in *; destruct msg; try discriminate; clean_context. *)
-      (* assert (exists c, cs $? x = Some c /\ ~ List.In (cipher_nonce c) froms) by admit. *)
-      (* split_ex. *)
-      (* unfold msg_nonce_ok at 2; context_map_rewrites. *)
-      (* rewrite count_occ_not_In with (eq_dec := msg_seq_eq) in H4; *)
-      (*   rewrite H4. *)
-      (* rewrite fold_clean_messages1' , clean_messages'_fst_pull, fold_clean_messages. *)
-      (* invert H6; split_ands. *)
-
-      specialize (H8 _ H2); split_ands.
-      specialize (H9 H0); split_ands.
-      unfold message_no_adv_private in H9.
+      specialize (H9 _ H2); split_ands.
+      specialize (H10 H0); split_ands.
+      unfold message_no_adv_private in H10.
 
       match goal with
       | [ |- context [ findUserKeys usrs $k++ ?pubk ]] => 
@@ -7057,14 +7080,14 @@ Section SingleAdversarySimulates.
         unfold msg_to_this_user, msg_destination_user in H1; context_map_rewrites.
         destruct (cipher_to_user x2 ==n u_id); subst; try discriminate.
         destruct (cipher_to_user x2 ==n cipher_to_user x2); try contradiction.
-        rewrite H7 ; trivial.
+        rewrite H8 ; trivial.
       * rewrite clean_key_permissions_distributes_merge_key_permissions.
         match goal with
         | [ |- context [ ?same $k++ ?fst = ?same $k++ ?snd ]] => assert (fst = snd)
         end.
         maps_equal.
         cases (@findKeysCrypto t0 cs (SignedCiphertext x1) $? y).
-        ** specialize (H9 _ _ Heq0); split_ands; subst.
+        ** specialize (H10 _ _ Heq0); split_ands; subst.
            erewrite clean_key_permissions_keeps_honest_permission; eauto; symmetry.
            unfold findKeysCrypto. unfold findKeysCrypto in Heq0; context_map_rewrites.
            erewrite clean_ciphers_keeps_honest_cipher; eauto.
@@ -7156,9 +7179,7 @@ Section SingleAdversarySimulates.
                      updateTrackedNonce (Some rec_u_id) sents cs msg, cur_n, ret tt).
     Proof.
       intros; subst; eauto.
-      match goal with
-      | [ H : next_cmd_safe _ _ _ _ _ _ |- _] => invert H; split_ex; subst
-      end.
+      process_next_cmd_safe; subst.
       econstructor; eauto using clean_users_cleans_user; simpl.
 
       - simpl in *.
@@ -7256,7 +7277,7 @@ Section SingleAdversarySimulates.
                     , honest_silent_decrypt_implies_honest_step_origuniv
                     , honest_silent_new_key_implies_honest_step_origuniv].
 
-      - invert H23.
+      - apply next_action_next_cmd_safe_bind in H23.
 
         remember (findUserKeys usrs) as honestk.
         remember (usrs' $+ (u_id, {| key_heap := ks'
@@ -7282,7 +7303,7 @@ Section SingleAdversarySimulates.
                                 H20
                                 H21
                                 H22
-                                H2
+                                H23
                                 _ _ _ _
                                 eq_refl
                                 _ _ _
@@ -7403,40 +7424,36 @@ Section SingleAdversarySimulates.
         -> (forall k_id, honestk' $? k_id = Some true -> honestk $? k_id = Some true)
         -> next_cmd_safe honestk cs u_id froms sents cmd.
     Proof.
-      induction 1; intros; econstructor; intros; eauto.
-      - specialize (H _ _ H1); split_ands; eauto.
-      - invert H; econstructor;
-          repeat
-            match goal with
-            | [ H : RealWorld.honest_key _ _ |- _ ] => invert H
-            | [ |- RealWorld.honest_key _ _ ] => econstructor
-            | [ H : (forall _, ?honestk $? _ = Some _ -> _), ARG : ?honestk $? _ = Some _ |- _ ] =>
-              specialize (H _ ARG)
-            end; eauto.
-      - split_ex; subst.
-        eapply msg_honestly_signed_after_without_cleaning; eauto.
+      unfold next_cmd_safe; intros.
+      specialize (H _ _ H1).
+
+      cases cmd__n; split_ex; subst; intros; eauto;
+        repeat simple apply conj; intros; eauto 8.
+
+      - eapply msg_honestly_signed_after_without_cleaning; eauto.
         unfold RealWorld.msg_honestly_signed, RealWorld.msg_signing_key in *;
           context_map_rewrites;
           unfold RealWorld.honest_keyb in *.
         cases (honestk' $? RealWorld.cipher_signing_key x0); try discriminate;
           destruct b; try discriminate.
-        specialize (H3 _ Heq); context_map_rewrites; eauto.
-      - split_ex; subst;
-          unfold RealWorld.msg_to_this_user, RealWorld.msg_destination_user in *;
+        specialize (H0 _ Heq); context_map_rewrites; eauto.
+
+      - unfold RealWorld.msg_to_this_user, RealWorld.msg_destination_user in *;
           context_map_rewrites.
         erewrite clean_ciphers_inv; eauto.
-      - split_ex; subst.
-        eapply msgCiphersSigned_before_clean_ciphers; eauto.
+
+      - eapply msgCiphersSigned_before_clean_ciphers; eauto.
         unfold RealWorld.msgCiphersSignedOk in *; simpl in *.
-        invert H1; econstructor; eauto.
+        invert H3; econstructor; eauto.
         unfold RealWorld.msg_honestly_signed, RealWorld.msg_signing_key in *;
           context_map_rewrites;
           unfold RealWorld.honest_keyb in *.
         cases (honestk' $? RealWorld.cipher_signing_key x0); try discriminate;
           destruct b; try discriminate.
-        specialize (H3 _ Heq); context_map_rewrites; eauto.
-      - split_ex; subst.
-        do 2 eexists; split; eauto.
+        specialize (H0 _ Heq); context_map_rewrites; eauto.
+
+      - invert H; econstructor; eauto.
+      - specialize (H _ _ H2); split_ands; eauto.
     Qed.
   
     Lemma honest_cmds_safe_advuniv :

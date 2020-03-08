@@ -259,40 +259,120 @@ Section RealWorldUniverseProperties.
                                                  /\ ~ List.In (cipher_nonce c) sents
     end.
 
-  Inductive next_cmd_safe (honestk : key_perms) (cs : ciphers) (u_id : user_id) (froms : recv_nonces) (sents : sent_nonces) :
-    forall {A}, user_cmd A -> Prop :=
+End RealWorldUniverseProperties.
 
-  | SafeBind : forall {r A} (cmd1 : user_cmd r) (cmd2 : <<r>> -> user_cmd A),
-      next_cmd_safe honestk cs u_id froms sents cmd1
-      -> next_cmd_safe honestk cs u_id froms sents (Bind cmd1 cmd2)
-  | SafeEncrypt : forall {t} (msg : message t) k__sign k__enc msg_to,
-      honestk $? k__enc = Some true
-      -> (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true)
-      -> next_cmd_safe honestk cs u_id froms sents (SignEncrypt k__sign k__enc msg_to msg)
-  | SafeSign : forall {t} (msg : message t) k msg_to,
-      (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true /\ kp = false)
-      -> next_cmd_safe honestk cs u_id froms sents (Sign k msg_to msg)
-  | SafeRecv : forall t pat,
-      msg_pattern_safe honestk pat
-      -> next_cmd_safe honestk cs u_id froms sents (@Recv t pat)
-  | SafeSend : forall {t} (msg : crypto t) msg_to,
-        msg_honestly_signed honestk cs msg = true
-      -> msg_to_this_user cs (Some msg_to) msg = true
-      -> msgCiphersSignedOk honestk cs msg
-      -> (exists c_id c, msg = SignedCiphertext c_id
-                /\ cs $? c_id = Some c
-                /\ fst (cipher_nonce c) = (Some u_id)  (* only send my messages *)
-                /\ ~ List.In (cipher_nonce c) sents)
-      -> next_cmd_safe honestk cs u_id froms sents (Send msg_to msg)
-
-  (* Boring Commands *)
-  | SafeReturn : forall {A} (a : <<A>>), next_cmd_safe honestk cs u_id froms sents (Return a)
-  | SafeGen : next_cmd_safe honestk cs u_id froms sents Gen
-  | SafeDecrypt : forall {t} (c : crypto t), next_cmd_safe honestk cs u_id froms sents (Decrypt c)
-  | SafeVerify : forall {t} k (c : crypto t), next_cmd_safe honestk cs u_id froms sents (Verify k c)
-  | SafeGenerateSymKey : forall usage, next_cmd_safe honestk cs u_id froms sents (GenerateSymKey usage)
-  | SafeGenerateAsymKey : forall usage, next_cmd_safe honestk cs u_id froms sents (GenerateAsymKey usage)
+Section SafeActions.
+  Import RealWorld.
+  
+  Inductive nextAction : forall {A B}, user_cmd A -> user_cmd B -> Prop :=
+  | NaReturn : forall A (a : << A >>),
+      nextAction (Return a) (Return a)
+  | NaGen :
+      nextAction Gen Gen
+  | NaSend : forall t uid (msg : crypto t),
+      nextAction (Send uid msg) (Send uid msg)
+  | NaRecv : forall t pat,
+      nextAction (@Recv t pat) (@Recv t pat)
+  | NaSignEncrypt : forall t k__s k__e u_id (msg : message t),
+      nextAction (SignEncrypt k__s k__e u_id msg) (SignEncrypt k__s k__e u_id msg)
+  | NaDecrypt : forall t (msg : crypto t),
+      nextAction (Decrypt msg) (Decrypt msg)
+  | NaSign : forall t k u_id (msg : message t),
+      nextAction (Sign k u_id msg) (Sign k u_id msg)
+  | NaVerify : forall t k (msg : crypto t),
+      nextAction (Verify k msg) (Verify k msg)
+  | NaGenSymKey : forall usg,
+      nextAction (GenerateSymKey usg) (GenerateSymKey usg)
+  | NaGenAsymKey : forall usg,
+      nextAction (GenerateAsymKey usg) (GenerateAsymKey usg)
+  | NaBind : forall A B r (c : user_cmd B) (c1 : user_cmd r) (c2 : << r >> -> user_cmd A),
+      nextAction c1 c
+      -> nextAction (Bind c1 c2) c
   .
+
+  Lemma nextAction_couldBe :
+    forall {A B} (c1 : user_cmd A) (c2 : user_cmd B),
+      nextAction c1 c2
+      -> match c2 with
+        | Return _ => True
+        | Gen => True
+        | Send _ _ => True
+        | Recv _ => True
+        | SignEncrypt _ _ _ _ => True
+        | Decrypt _ => True
+        | Sign _ _ _ => True
+        | Verify _ _ => True
+        | GenerateAsymKey _ => True
+        | GenerateSymKey _ => True
+        | Bind _ _ => False
+        end.
+  Proof.
+    induction 1; eauto.
+  Qed.
+
+  Definition next_cmd_safe (honestk : key_perms) (cs : ciphers) (u_id : user_id)
+             (froms : recv_nonces) (sents : sent_nonces) {A} (cmd : user_cmd A) :=
+    forall {B} (cmd__n : user_cmd B),
+      nextAction cmd cmd__n
+      -> match cmd__n with
+        | Return _ => True
+        | Gen => True
+        | Send msg_to msg =>
+          msg_honestly_signed honestk cs msg = true
+          /\ msg_to_this_user cs (Some msg_to) msg = true
+          /\ msgCiphersSignedOk honestk cs msg
+          /\ (exists c_id c, msg = SignedCiphertext c_id
+                       /\ cs $? c_id = Some c
+                       /\ fst (cipher_nonce c) = (Some u_id)  (* only send my messages *)
+                       /\ ~ List.In (cipher_nonce c) sents)
+        | Recv pat =>
+          msg_pattern_safe honestk pat
+        | SignEncrypt k__sign k__enc msg_to msg =>
+          honestk $? k__enc = Some true
+          /\ (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true)
+        | Decrypt _ => True
+        | Sign _ _ msg =>
+          (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true /\ kp = false)
+        | Verify _ _ => True
+        | GenerateAsymKey _ => True
+        | GenerateSymKey _ => True
+        | Bind _ _ => False
+        end.
+
+  (* Inductive next_cmd_safe (honestk : key_perms) (cs : ciphers) (u_id : user_id) (froms : recv_nonces) (sents : sent_nonces) : *)
+  (*   forall {A}, user_cmd A -> Prop := *)
+
+  (* | SafeBind : forall {r A} (cmd1 : user_cmd r) (cmd2 : <<r>> -> user_cmd A), *)
+  (*     next_cmd_safe honestk cs u_id froms sents cmd1 *)
+  (*     -> next_cmd_safe honestk cs u_id froms sents (Bind cmd1 cmd2) *)
+  (* | SafeEncrypt : forall {t} (msg : message t) k__sign k__enc msg_to, *)
+  (*     honestk $? k__enc = Some true *)
+  (*     -> (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true) *)
+  (*     -> next_cmd_safe honestk cs u_id froms sents (SignEncrypt k__sign k__enc msg_to msg) *)
+  (* | SafeSign : forall {t} (msg : message t) k msg_to, *)
+  (*     (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true /\ kp = false) *)
+  (*     -> next_cmd_safe honestk cs u_id froms sents (Sign k msg_to msg) *)
+  (* | SafeRecv : forall t pat, *)
+  (*     msg_pattern_safe honestk pat *)
+  (*     -> next_cmd_safe honestk cs u_id froms sents (@Recv t pat) *)
+  (* | SafeSend : forall {t} (msg : crypto t) msg_to, *)
+  (*       msg_honestly_signed honestk cs msg = true *)
+  (*     -> msg_to_this_user cs (Some msg_to) msg = true *)
+  (*     -> msgCiphersSignedOk honestk cs msg *)
+  (*     -> (exists c_id c, msg = SignedCiphertext c_id *)
+  (*               /\ cs $? c_id = Some c *)
+  (*               /\ fst (cipher_nonce c) = (Some u_id)  (* only send my messages *) *)
+  (*               /\ ~ List.In (cipher_nonce c) sents) *)
+  (*     -> next_cmd_safe honestk cs u_id froms sents (Send msg_to msg) *)
+
+  (* (* Boring Commands *) *)
+  (* | SafeReturn : forall {A} (a : <<A>>), next_cmd_safe honestk cs u_id froms sents (Return a) *)
+  (* | SafeGen : next_cmd_safe honestk cs u_id froms sents Gen *)
+  (* | SafeDecrypt : forall {t} (c : crypto t), next_cmd_safe honestk cs u_id froms sents (Decrypt c) *)
+  (* | SafeVerify : forall {t} k (c : crypto t), next_cmd_safe honestk cs u_id froms sents (Verify k c) *)
+  (* | SafeGenerateSymKey : forall usage, next_cmd_safe honestk cs u_id froms sents (GenerateSymKey usage) *)
+  (* | SafeGenerateAsymKey : forall usage, next_cmd_safe honestk cs u_id froms sents (GenerateAsymKey usage) *)
+  (* . *)
 
   Definition honest_cmds_safe {A B} (U : universe A B) : Prop :=
     forall u_id u honestk,
@@ -305,8 +385,8 @@ Section RealWorldUniverseProperties.
     | Silent   => True
     | Action a => action_adversary_safe honestk cs a
     end.
-  
-End RealWorldUniverseProperties.
+
+End SafeActions.
 
 Definition message_queues_ok {A} (cs : RealWorld.ciphers) (usrs : RealWorld.honest_users A) (gks : keys) :=
   Forall_natmap (fun u => message_queue_ok (RealWorld.findUserKeys usrs) cs u.(RealWorld.msg_heap) gks) usrs.
