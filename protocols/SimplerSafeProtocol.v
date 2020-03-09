@@ -523,7 +523,7 @@ Section RealWorldLemmas.
               -> bd2' = (usrs2', adv', cs', gks', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
               (* allow protocol to freely vary, since we won't be looking at it *)
               -> usrs1 $? u_id1 = Some (mkUserData ks1 cmdc1 qmsgs1 mycs1 froms1 sents1 cur_n1)
-              -> usrs1 $? u_id2 = Some (mkUserData ks2 cmdc2 qmsgs2 mycs2 froms2 sents2 cur_n2)
+              -> usrs2 $? u_id2 = Some (mkUserData ks2 cmdc2 qmsgs2 mycs2 froms2 sents2 cur_n2)
               -> usrs2 = usrs1' $+ (u_id1, mkUserData ks1' cmdc1' qmsgs1' mycs1' froms1' sents1' cur_n1')
               -> encrypted_ciphers_ok (findUserKeys usrs1) cs gks
               -> message_queues_ok cs usrs1 gks
@@ -565,51 +565,6 @@ Section RealWorldLemmas.
     ; subst
     ; step_usr u_id1; step_usr u_id2.
 
-    Ltac s1 :=
-      match goal with
-      | [ |- step_user _ _ _ _ ] => econstructor
-      | [ |- context [ findUserKeys (_ $+ (_,_)) ]] => autorewrite with find_user_keys
-      | [ H : message_queue_ok _ _ (_ :: _) _ |- context [ findKeysCrypto (_ $+ (_,_)) _ ]] =>
-        invert H; split_ands
-      | [ H : message_queue_ok _ _ (_ :: _) _ |- context [ updateTrackedNonce _ _ (_ $+ (_,_)) _ ]] =>
-        invert H; split_ands
-      | [ H : message_queue_ok _ _ (_ :: _) _ |- ~ msg_accepted_by_pattern (_ $+ (_,_)) _ _ _ _ ] =>
-        invert H; split_ands
-      | [ |- context [ if msg_signed_addressed ?honk ?cs ?suid ?m then _ else _ ]] =>
-        erewrite <- msg_signed_addressed_addnl_cipher by eauto; 
-        destruct (msg_signed_addressed honk cs suid m); subst
-      | [ H : message_queue_ok _ _ (_ :: _) _ |- context [ msg_signed_addressed (?honk $+ (_,true)) _ _ _ ]] =>
-        invert H; split_ands;
-        erewrite msg_signed_addressed_nochange_addnl_honest_key
-      | [ H : keys_and_permissions_good _ ?usrs _ |- ~ In ?kid (findUserKeys ?usrs) ] =>
-        keys_and_permissions_prop; unfold not; let IN := fresh "IN" in intro IN; rewrite in_find_iff in IN;
-        case_eq (findUserKeys usrs $? kid); intros; try contradiction
-      | [ H : permission_heap_good ?gks ?ks, ARG : ?ks $? ?k = Some _, CONT : ?gks $? ?k = None  |- _ ] =>
-        specialize (H _ _ ARG); split_ex; contra_map_lookup
-      | [ GOOD : keys_and_permissions_good ?gks ?usrs _ ,
-          NIN : ?gks $? ?kid = None ,
-          IN : ?ks $? ?kid = Some _ ,
-          US : _ $? _ = Some (  mkUserData ?ks _ _ _ _ _ _ )
-          |- False ] =>
-        progress (keys_and_permissions_prop; repeat permission_heaps_prop)
-      | [ GOOD : permission_heap_good ?gks ?ks ,
-          NIN : ?gks $? ?kid = None ,
-          IN : ?ks $? ?kid = Some _ 
-          |- False ] =>
-        specialize (GOOD _ _ IN); split_ex; contra_map_lookup
-      | [ H : ~ In ?cid1 (?cs $+ (?cid2,_)) |- ~ In ?cid1 ?cs ] =>
-        rewrite not_find_in_iff in H; destruct (cid1 ==n cid2); subst; clean_map_lookups
-      | [ H : ?m $+ (?k1,_) $? ?k2 = _ |- ?m $? ?k2 = _ ] =>
-        (progress clean_map_lookups)
-         || (destruct (k1 ==n k2); subst)
-      | [ OK : user_cipher_queues_ok ?cs ?honk ?usrs, IN : List.In ?cid _ , CS : ?cs $? ?cid = None |- False ] =>
-        progress user_cipher_queues_prop
-      | [ |- None = Some _ ] => exfalso
-      | [ |- Some _ = None ] => exfalso
-      end.
-
-    all: try solve [ do 11 eexists; (repeat simple apply conj); try reflexivity; repeat s1; eauto; repeat s1; eauto ].
-
     Ltac process_next_cmd_safe :=
       match goal with
       | [ H : next_cmd_safe _ _ _ _ _ ?c |- _] =>
@@ -625,50 +580,82 @@ Section RealWorldLemmas.
         ; split_ex
       end.
 
-    Ltac foo :=
-      repeat 
-        match goal with
-        | [ |- context [ _ $k++ findKeysMessage _ ]] =>
-          (do 2 user_cipher_queues_prop); encrypted_ciphers_prop;
-          rewrite honestk_merge_new_msgs_keys_dec_same by eassumption
-        | [ H : message_queue_ok _ _ (existT _ _ ?m :: _) _ |- msg_accepted_by_pattern _ _ _ _ ?m ] =>
-          invert H; split_ex
+    Ltac solver1 :=
+      match goal with
+      | [ H : msg_accepted_by_pattern _ _ _ ?pat _ |- step_user _ _ (_,_,_,_,_,_,_,_,_,_,Recv ?pat) _ ] =>
+        eapply StepRecv
+      | [ H : ~ msg_accepted_by_pattern _ _ _ ?pat _ |- step_user _ _ (_,_,_,_,_,_,_,_,_,_,Recv ?pat) _ ] =>
+        eapply StepRecvDrop
+      | [ |- step_user _ _ _ _ ] => econstructor
+      | [ |- _ = _ ] => reflexivity
+      | [ |- context [ findUserKeys (_ $+ (_,_)) ]] => autorewrite with find_user_keys
+      | [ |- context [ findKeysCrypto (_ $+ (_,_)) _ ]] => 
+        erewrite <- findKeysCrypto_addnl_cipher by eauto
+      | [ |- context [ updateTrackedNonce _ _ (_ $+ (_,_)) _ ]] => 
+        erewrite <- updateTrackedNonce_addnl_cipher by eauto
+      | [ H : message_queue_ok _ _ (_ :: _) _ |- _ ] => invert H; split_ex
+      | [ |- context [ msg_signed_addressed (?honk $+ (_,true)) _ _ _ ]] =>
+        erewrite msg_signed_addressed_nochange_addnl_honest_key
+      | [ H : ?m $+ (?k1,_) $? ?k2 = _ |- ?m $? ?k2 = _ ] =>
+        (progress clean_map_lookups)
+         || (destruct (k1 ==n k2); subst)
 
-        | [ H : message_no_adv_private _ ?cs ?msg |- context [ _ $k++ findKeysCrypto ?cs ?msg ]] =>
-          rewrite honestk_merge_new_msgs_keys_same by eassumption
-        | [ H : (honest_key _ ?k -> _) ,
-                ARG : honest_key _ ?k
-            |- _ ] =>
-          specialize (H ARG); split_ands
-        | [ H : (forall _, msg_signing_key ?cs ?m = Some _ -> _) ,
-                ARG : msg_signing_key ?cs ?m = Some ?k ,
-                      ARG2 : honest_key _ ?k
-            |- _ ] =>
-          specialize (H _ ARG); split_ands
-        | [ MQOK : message_queue_ok _ _ (existT _ _ ?msg :: _) _ ,
-                   MHS : msg_honestly_signed _ _ ?msg = true
-            |- context [ _ $k++ findKeysCrypto _ ?msg ]] =>
-          invert MQOK;
-          generalize (msg_honestly_signed_has_signing_key_cipher_id _ _ _ MHS); intros; split_ex;
-          eapply msg_honestly_signed_signing_key_honest in MHS; eauto
-        | [ H : msg_accepted_by_pattern ?cs _ _ ?pat ?msg ,
-                NCS : next_cmd_safe ?honk ?cs _ _ _ (Recv ?pat)
-            |- context [ _ $k++ findKeysCrypto _ ?msg ]] =>
-          repeat process_next_cmd_safe; invert NCS; assert (msg_honestly_signed honk cs msg = true) by eauto
-        | [ |- (if ?fi then _ else _) = (if ?fi then _ else _) ] =>
-          destruct fi
-        | [ |- _ = _ ] => solve [ eauto | symmetry; eauto ]
-        end.
+      | [ KPG : keys_and_permissions_good ?gks ?usrs _, GKS : ?gks $? ?kid = None, KS : ?ks $? ?kid = Some _ |- _ ] =>
+        keys_and_permissions_prop; permission_heaps_prop
+      | [ H : ~ In ?cid1 (?cs $+ (?cid2,_)) |- ~ In ?cid1 ?cs ] =>
+        rewrite not_find_in_iff in H; destruct (cid1 ==n cid2); subst; clean_map_lookups
+      | [ |- (if ?fi then _ else _) = (if ?fi then _ else _) ] =>
+        destruct fi
+
+      | [ H : (forall _, msg_signing_key ?cs ?m = Some _ -> _) ,
+          MHS : msg_honestly_signed _ _ ?m = true
+          |- _ ] =>
+        generalize (msg_honestly_signed_has_signing_key_cipher_id _ _ _ MHS); intros; split_ex;
+        eapply msg_honestly_signed_signing_key_honest in MHS; eauto;
+        specialize_simply
+
+      | [ H : msg_accepted_by_pattern ?cs _ _ ?pat ?m , SAFE : next_cmd_safe ?honk _ _ _ _ (Recv ?pat) |- _ ] =>
+        repeat process_next_cmd_safe;
+        assert (msg_honestly_signed honk cs m = true) by eauto
+                                                           
+      | [ H : message_no_adv_private _ ?cs ?msg |- context [ _ $k++ findKeysCrypto ?cs ?msg ]] =>
+        rewrite honestk_merge_new_msgs_keys_same by eassumption
+                 
+      | [ |- context [ if msg_signed_addressed ?honk (?cs $+ (_,_)) ?suid ?m then _ else _ ]] =>
+        erewrite <- msg_signed_addressed_addnl_cipher by eauto; 
+        destruct (msg_signed_addressed honk cs suid m); subst
+
+      | [ |- context [ _ $k++ findKeysMessage _ ]] =>
+        (do 2 user_cipher_queues_prop); encrypted_ciphers_prop;
+        rewrite honestk_merge_new_msgs_keys_dec_same by eassumption
+
+      | [ H : keys_and_permissions_good _ ?usrs _ |- ~ In ?kid (findUserKeys ?usrs) ] =>
+        keys_and_permissions_prop; clean_map_lookups;
+        case_eq (findUserKeys usrs $? kid); intros
+                                                                                
+      | [ GOOD : permission_heap_good ?gks ?ks ,
+          NIN : ?gks $? ?kid = None ,
+          FK : ?ks $? ?kid = Some _
+        |- _ ] =>
+        specialize (GOOD _ _ FK); split_ex; contra_map_lookup
+
+      | [ |- None = Some _ ] => exfalso
+      | [ |- Some _ = None ] => exfalso
+
+      | [ |- False ] =>
+        solve [ user_cipher_queues_prop; user_cipher_queues_prop ]
+      end.
+ 
+    all: try solve [ do 11 eexists; (repeat simple apply conj); repeat solver1; eauto; repeat solver1; eauto ].
+
+    (do 11 eexists); (repeat simple apply conj); repeat solver1; eauto; repeat solver1; eauto.
+     msg_queue_prop; repeat solver1.
+
+    rewrite honestk_merge_new_msgs_keys_same.
 
 
-    (do 11 eexists); (repeat simple apply conj); try reflexivity; repeat s1; eauto; repeat s1; foo; eauto.
-    (do 11 eexists); (repeat simple apply conj); try reflexivity; repeat s1; eauto; repeat s1; foo; eauto.
-    (do 11 eexists); (repeat simple apply conj); try reflexivity; repeat s1; eauto; repeat s1; foo; eauto.
-    (do 11 eexists); (repeat simple apply conj); try reflexivity; repeat s1; eauto; repeat s1; foo; eauto.
-    (do 11 eexists); (repeat simple apply conj); try reflexivity; repeat s1; eauto; repeat s1; foo; eauto.
-    (do 11 eexists); (repeat simple apply conj); try reflexivity; repeat s1; eauto; repeat s1; foo; eauto.
-    (do 11 eexists); (repeat simple apply conj); try reflexivity; repeat s1; eauto; repeat s1; foo; eauto.
-    (do 11 eexists); (repeat simple apply conj); try reflexivity; repeat s1; eauto; repeat s1; foo; eauto.
+    
+
   Qed.
 
   Lemma commutes_sound_send :
@@ -974,6 +961,25 @@ Section RealWorldLemmas.
     - (do 6 eexists); split; [ | econstructor]; eauto.
   Qed.
 
+  Lemma foo :
+    forall {A B} suid1 u_id1 lbl1 (bd1 bd1' : data_step0 A B (Base A)),
+
+      step_user lbl1 suid1 bd1 bd1'
+      -> suid1 = Some u_id1
+      -> forall (bd2 bd2' : data_step0 A B (Base A)) lbl2 suid2 u_id2,
+
+          step_user lbl2 suid2 bd2 bd2'
+          -> suid2 = Some u_id2
+          -> u_id1 <> u_id2
+
+          -> forall cs cs1 cs' (usrs1 usrs1' usrs2 usrs2' : honest_users A) (adv adv1 adv' : user_data B) gks gks1 gks'
+              ks1 ks1' qmsgs1 qmsgs1' mycs1 mycs1' cmd1 cmd1' froms1 froms1' sents1 sents1' cur_n1 cur_n1'
+              ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' cmd2 cmd2' froms2 froms2' sents2 sents2' cur_n2 cur_n2' s,
+
+              bd1  = (usrs1,  adv,  cs,  gks,  ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd1)
+              -> bd1' = (usrs1', adv1, cs1, gks1, ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd1')
+
+
   Lemma commutes_sound_recur' :
     forall {A B} suid1 u_id1 lbl1 (bd1 bd1' : data_step0 A B (Base A)),
 
@@ -1093,6 +1099,11 @@ Section RealWorldLemmas.
           -> u_id1 <> u_id2
           -> U__r'.(users) $? u_id2 = Some userData2
           -> step_user lbl2 (Some u_id2) (build_data_step U__r' userData2) bd1'
+          -> forall C (cmd__n : user_cmd C) s,
+              nextAction userData2.(protocol) cmd__n
+              -> summarize userData1.(protocol) s
+              -> commutes cmd__n s
+
           -> exists u_id2 U__r'' ud1 ud2 bd3 bd3',
               U__r.(users) $? u_id2 = Some ud2
               /\ step_user lbl2 (Some u_id2) (build_data_step U__r ud2) bd3
