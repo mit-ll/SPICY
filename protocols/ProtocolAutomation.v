@@ -354,11 +354,11 @@ Module SimulationAutomation.
     Qed.
 
     Lemma step_user_inv_dec :
-      forall {A B t} (usrs usrs' : honest_users A) (adv adv' : user_data B) c_id
+      forall {A B t} (usrs usrs' : honest_users A) (adv adv' : user_data B) m
         lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' tos tos' cur_n cur_n' (cmd : user_cmd (Message t)),
         step_user lbl
                   u_id
-                  (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cur_n, Decrypt (SignedCiphertext c_id))
+                  (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cur_n, Decrypt m)
                   (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cur_n', cmd)
         -> usrs = usrs'
         /\ adv = adv'
@@ -369,9 +369,10 @@ Module SimulationAutomation.
         /\ tos = tos'
         /\ cur_n = cur_n'
         /\ lbl = Silent
-        /\ List.In c_id mycs
-        /\ exists (msg : message t) k__sign k__enc kt__enc kt__sign kp__sign msg_to nonce,
+        /\ exists (msg : message t) k__sign k__enc kt__enc kt__sign kp__sign msg_to nonce c_id,
             cs $? c_id     = Some (SigEncCipher k__sign k__enc msg_to nonce msg)
+          /\ m = SignedCiphertext c_id
+          /\ List.In c_id mycs
           /\ gks $? k__enc  = Some (MkCryptoKey k__enc Encryption kt__enc)
           /\ gks $? k__sign = Some (MkCryptoKey k__sign Signing kt__sign)
           /\ ks  $? k__enc  = Some true
@@ -414,11 +415,11 @@ Module SimulationAutomation.
     Qed.
 
     Lemma step_user_inv_verify :
-      forall {A B t} (usrs usrs' : honest_users A) (adv adv' : user_data B) k__sign c_id
+      forall {A B t} (usrs usrs' : honest_users A) (adv adv' : user_data B) k__sign m
         lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' tos tos' cur_n cur_n' cmd,
         step_user lbl
                   u_id
-                  (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cur_n, Verify k__sign (SignedCiphertext c_id))
+                  (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cur_n, Verify k__sign m)
                   (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cur_n', cmd)
         -> usrs = usrs'
         /\ adv = adv'
@@ -431,9 +432,10 @@ Module SimulationAutomation.
         /\ tos = tos'
         /\ cur_n = cur_n'
         /\ lbl = Silent
-        /\ List.In c_id mycs
-        /\ exists (msg : message t) kt__sign kp__sign msg_to nonce,
+        /\ exists (msg : message t) kt__sign kp__sign msg_to nonce c_id,
             cs $? c_id     = Some (SigCipher k__sign msg_to nonce msg)
+          /\ m = SignedCiphertext c_id
+          /\ List.In c_id mycs
           /\ cmd = @Return (UPair (Base Bool) (Message t)) (true,msg)
           /\ gks $? k__sign = Some (MkCryptoKey k__sign Signing kt__sign)
           /\ ks  $? k__sign = Some kp__sign.
@@ -1084,7 +1086,10 @@ Module SimulationAutomation.
         | [ |- context [_ $k++ _ $? _ ] ] => progress solve_concrete_perm_merges
         | [ |- context [ ?m $? _ ] ] => unfold m
                                              
-        | [ |- next_cmd_safe _ _ _ _ _ _ ] => econstructor
+        (* | [ |- next_cmd_safe _ _ _ _ _ _ ] => econstructor *)
+        | [ |- next_cmd_safe _ _ _ _ _ _ ] => unfold next_cmd_safe; intros
+        | [ H : nextAction _ _ |- _ ] => invert H
+                                              
         | [ |- Forall _ _ ] => econstructor
         | [ |- _ /\ _ ] => split
         end; simpl).
