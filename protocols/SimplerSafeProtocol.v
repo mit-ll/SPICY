@@ -110,9 +110,6 @@ Section RealWorldLemmas.
     | Bind _ _ => False
     end.
 
-  Definition hstep {A B} (lbl : rlabel) (suid : option user_id) (bd bd' : data_step0 A B (Base A)) :=
-    step_user lbl suid bd bd'.
-
   Lemma step_na_return :
     forall {A B C D} suid lbl bd bd',
 
@@ -770,7 +767,7 @@ Section RealWorldLemmas.
         end
     ; subst; eauto.
 
-    Hint Extern 1 (forall _ _ _ _, nextAction _ _ -> _ <> _ ) => intros * NA; invert NA; congruence.
+    Hint Extern 1 (forall _ _ _ _, nextAction _ _ -> _ <> _ ) => intros * NA; invert NA; congruence : core.
 
     all : try solve [ eapply commutes_sound'; clean_map_lookups; eauto; econstructor; eauto ].
 
@@ -1089,9 +1086,9 @@ Section RealWorldLemmas.
     
     repeat 
       match goal with
-      | [ H : {| users := _ |} = _ |- _ ] => idtac 1; invert H; clean_map_lookups
+      | [ H : {| users := _ |} = _ |- _ ] => invert H; clean_map_lookups
       | [ H : honest_cmds_safe _ , US1 : _ $? u_id1 = _ , US2 : _ $? u_id2 = _ |- _ ] =>
-        idtac 2; generalize (H _ _ _ eq_refl US1)
+        generalize (H _ _ _ eq_refl US1)
         ; generalize (H _ _ _ eq_refl US2)
         ; clear H; intros; simpl in *
       end.
@@ -1105,6 +1102,40 @@ Section RealWorldLemmas.
     all: simpl; clean_map_lookups; eauto.
     simpl; rewrite H24; eauto.
   Qed.
+
+  Definition summarize_univ {A B} (U : universe A B) : Prop :=
+    forall u_id u_d s,
+      U.(users) $? u_id = Some u_d
+      -> summarize u_d.(protocol) s.
+
+  (* rather than just running last user, need some computation that finds next available person to run 
+   * 
+   * does this really do what I want it to?
+   *)
+
+  Inductive step_universeC {A B} (summaries : NatMap.t summary) :
+    universe A B -> rlabel -> universe A B -> Prop :=
+
+  | StepLargest : forall U U' (u_id : user_id) userData usrs adv cs gks ks qmsgs mycs froms sents cur_n cmd lbl,
+      NatMap.O.max_elt U.(users) = Some (u_id, userData)
+      (* -> U.(users) $? u_id = Some userData *)
+      -> step_user lbl (Some u_id)
+                  (build_data_step U userData)
+                  (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+      -> U' = buildUniverse usrs adv cs gks u_id {| key_heap  := ks;
+                                                   msg_heap  := qmsgs;
+                                                   protocol  := cmd;
+                                                   c_heap    := mycs;
+                                                   from_nons := froms;
+                                                   sent_nons := sents;
+                                                   cur_nonce := cur_n; |}
+      -> step_universeC summaries U lbl U'.
+
+
+                    
+
+
+  
 
 
   
