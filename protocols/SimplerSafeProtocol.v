@@ -1173,22 +1173,6 @@ Section RealWorldLemmas.
 
   
 
-  Inductive nextStep {A B} (U : universe A B) : honest_users A -> Prop :=
-  | MaxUser : forall u_id u_d U' lbl,
-      NatMap.O.max_elt U.(users) = Some (u_id,u_d)
-      -> step_user lbl (Some u_id) (build_data_step U u_d) U'
-      -> nextStep U U.(users)
-  | MaxUserNext : forall u_id u_d U' usrs lbl,
-      U.(users) 
-  .
-  
-
-  Fixpoint nextStep {A B} (usrs : honest_users A) (U : universe A B) : option (user_id * user_data A) :=
-    match NatMap.O.max_elt usrs with
-    | Some (u_id,ud) =>
-      exists lbl U', step_user lbl (Some u_id) (build_data_step U ud) U'
-    | None => None
-    end.
     
 
   

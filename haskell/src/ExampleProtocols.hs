@@ -42,8 +42,9 @@ mkrUsr ks p =
 mkrU :: Keys.Coq_keys -> Keys.Coq_key_perms -> Keys.Coq_key_perms -> RealWorld.Coq_user_cmd -> RealWorld.Coq_user_cmd ->
         RealWorld.Coq_user_data -> RealWorld.Coq_universe
 mkrU gks keys__a keys__b p__a p__b adv =
-  RealWorld.Coq_mkUniverse (Maps._NatMap__add coq_B (mkrUsr keys__b p__b) (Maps._NatMap__add coq_A (mkrUsr keys__a p__a) Maps._NatMap__empty))
-    adv Maps._NatMap__empty gks
+  RealWorld.Coq_mkUniverse
+    (Maps._NatMap__Map__add coq_B (mkrUsr keys__b p__b) (Maps._NatMap__Map__add coq_A (mkrUsr keys__a p__a) Maps._NatMap__Map__empty)) adv
+    Maps._NatMap__Map__empty gks
 
 _SignPingSendProtocol__coq_KID1 :: Keys.Coq_key_identifier
 _SignPingSendProtocol__coq_KID1 =
@@ -53,17 +54,17 @@ _SignPingSendProtocol__coq_KEY1 :: Keys.Coq_key
 _SignPingSendProtocol__coq_KEY1 =
   Keys.MkCryptoKey _SignPingSendProtocol__coq_KID1 Keys.Signing Keys.AsymKey
 
-_SignPingSendProtocol__coq_KEYS :: Maps.NatMap__Coq_t Keys.Coq_key
+_SignPingSendProtocol__coq_KEYS :: Maps.NatMap__Map__Coq_t Keys.Coq_key
 _SignPingSendProtocol__coq_KEYS =
-  Maps._NatMap__add _SignPingSendProtocol__coq_KID1 _SignPingSendProtocol__coq_KEY1 Maps._NatMap__empty
+  Maps._NatMap__Map__add _SignPingSendProtocol__coq_KID1 _SignPingSendProtocol__coq_KEY1 Maps._NatMap__Map__empty
 
-_SignPingSendProtocol__coq_A__keys :: Maps.NatMap__Coq_t Prelude.Bool
+_SignPingSendProtocol__coq_A__keys :: Maps.NatMap__Map__Coq_t Prelude.Bool
 _SignPingSendProtocol__coq_A__keys =
-  Maps._NatMap__add _SignPingSendProtocol__coq_KID1 Prelude.True Maps._NatMap__empty
+  Maps._NatMap__Map__add _SignPingSendProtocol__coq_KID1 Prelude.True Maps._NatMap__Map__empty
 
-_SignPingSendProtocol__coq_B__keys :: Maps.NatMap__Coq_t Prelude.Bool
+_SignPingSendProtocol__coq_B__keys :: Maps.NatMap__Map__Coq_t Prelude.Bool
 _SignPingSendProtocol__coq_B__keys =
-  Maps._NatMap__add _SignPingSendProtocol__coq_KID1 Prelude.False Maps._NatMap__empty
+  Maps._NatMap__Map__add _SignPingSendProtocol__coq_KID1 Prelude.False Maps._NatMap__Map__empty
 
 _SignPingSendProtocol__real_univ_start :: RealWorld.Coq_user_data -> RealWorld.Coq_universe
 _SignPingSendProtocol__real_univ_start =
