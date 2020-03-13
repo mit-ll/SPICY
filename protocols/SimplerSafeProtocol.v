@@ -1113,8 +1113,89 @@ Section RealWorldLemmas.
    * does this really do what I want it to?
    *)
 
+  Require Import Classical.
+
+  Lemma has_user_step {A B} (U : universe A B) (u_id : user_id) :
+    forall u_d,
+      U.(users) $? u_id = Some u_d
+      -> (exists lbl U', step_user lbl (Some u_id) (build_data_step U u_d) U')
+        \/ (forall lbl U', ~ step_user lbl (Some u_id) (build_data_step U u_d) U').
+  Proof.
+    intros.
+
+    remember (forall p, let '(lbl,U') := p in ~ step_user lbl (Some u_id) (build_data_step U u_d) U') as PRED.
+    specialize (classic PRED); intros.
+    split_ors; subst.
+    - right; intros.
+      remember (lbl,U') as p.
+      specialize (H0 p); destruct p; invert Heqp; eauto.
+
+    - left.
+      apply not_all_ex_not in H0; split_ex.
+      destruct x; eauto.
+      apply NNPP in H0; eauto.
+  Qed.
+
+
+  Inductive nextStep {A B} (U : universe A B) :
+    forall (usrs : list (user_id * user_data A)), (forall uid ud, List.In (uid,ud) usrs -> U.(users) $? uid = Some ud) -> Prop :=
+
+  | Here : forall us us' mapIn lbl bd' u_id userData,
+      us = (u_id,userData) :: us'
+      -> step_user lbl (Some u_id) (build_data_step U userData) bd'
+      -> nextStep U us mapIn
+
+  | There : forall us us' mapIn mapIn' u_id userData,
+      us = (u_id,userData) :: us'
+      -> (forall lbl bd', ~ step_user lbl (Some u_id) (build_data_step U userData) bd')
+      -> nextStep U us' mapIn'
+      -> nextStep U us mapIn
+  .
+
+  Lemma elements_in {V} (m : NatMap.t V) :
+    forall uid ud,
+      List.In (uid,ud) (elements m)
+      -> m $? uid = Some ud.
+  Proof.
+    intros.
+    rewrite <- find_mapsto_iff, elements_mapsto_iff.
+    rewrite SetoidList.InA_alt;
+      exists (uid,ud); split; eauto.
+    econstructor; eauto.
+  Qed.
+
+  Definition nextStepU {A B} (U : universe A B) :=
+    nextStep U (elements U.(users)) (elements_in U.(users)).
+
+
+
+
+
+  
+
+  Inductive nextStep {A B} (U : universe A B) : honest_users A -> Prop :=
+  | MaxUser : forall u_id u_d U' lbl,
+      NatMap.O.max_elt U.(users) = Some (u_id,u_d)
+      -> step_user lbl (Some u_id) (build_data_step U u_d) U'
+      -> nextStep U U.(users)
+  | MaxUserNext : forall u_id u_d U' usrs lbl,
+      U.(users) 
+  .
+  
+
+  Fixpoint nextStep {A B} (usrs : honest_users A) (U : universe A B) : option (user_id * user_data A) :=
+    match NatMap.O.max_elt usrs with
+    | Some (u_id,ud) =>
+      exists lbl U', step_user lbl (Some u_id) (build_data_step U ud) U'
+    | None => None
+    end.
+    
+
+  
+
   Inductive step_universeC {A B} (summaries : NatMap.t summary) :
     universe A B -> rlabel -> universe A B -> Prop :=
+
 
   | StepLargest : forall U U' (u_id : user_id) userData usrs adv cs gks ks qmsgs mycs froms sents cur_n cmd lbl,
       NatMap.O.max_elt U.(users) = Some (u_id, userData)
