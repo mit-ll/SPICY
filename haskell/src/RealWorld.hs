@@ -34,18 +34,19 @@ data Coq_message__Coq_message =
  | Coq_message__Content Prelude.Int
  | Coq_message__MsgPair Messages.Coq_type Messages.Coq_type Coq_message__Coq_message Coq_message__Coq_message
 
-_Coq_message__message_rect :: (RW_message__Coq_access -> a1) -> (Prelude.Int -> a1) -> (Messages.Coq_type -> Messages.Coq_type ->
-                              Coq_message__Coq_message -> a1 -> Coq_message__Coq_message -> a1 -> a1) -> Messages.Coq_type ->
-                              Coq_message__Coq_message -> a1
+_Coq_message__message_rect :: (RW_message__Coq_access -> a1) -> (Prelude.Int -> a1) -> (Messages.Coq_type ->
+                              Messages.Coq_type -> Coq_message__Coq_message -> a1 -> Coq_message__Coq_message -> a1
+                              -> a1) -> Messages.Coq_type -> Coq_message__Coq_message -> a1
 _Coq_message__message_rect f f0 f1 _ m =
   case m of {
    Coq_message__Permission acc -> f acc;
    Coq_message__Content n -> f0 n;
-   Coq_message__MsgPair t1 t2 m1 m2 -> f1 t1 t2 m1 (_Coq_message__message_rect f f0 f1 t1 m1) m2 (_Coq_message__message_rect f f0 f1 t2 m2)}
+   Coq_message__MsgPair t1 t2 m1 m2 ->
+    f1 t1 t2 m1 (_Coq_message__message_rect f f0 f1 t1 m1) m2 (_Coq_message__message_rect f f0 f1 t2 m2)}
 
-_Coq_message__message_rec :: (RW_message__Coq_access -> a1) -> (Prelude.Int -> a1) -> (Messages.Coq_type -> Messages.Coq_type ->
-                             Coq_message__Coq_message -> a1 -> Coq_message__Coq_message -> a1 -> a1) -> Messages.Coq_type ->
-                             Coq_message__Coq_message -> a1
+_Coq_message__message_rec :: (RW_message__Coq_access -> a1) -> (Prelude.Int -> a1) -> (Messages.Coq_type ->
+                             Messages.Coq_type -> Coq_message__Coq_message -> a1 -> Coq_message__Coq_message -> a1
+                             -> a1) -> Messages.Coq_type -> Coq_message__Coq_message -> a1
 _Coq_message__message_rec =
   _Coq_message__message_rect
 
@@ -63,13 +64,15 @@ _Coq_message__extractPermission msg =
    Coq_message__Permission a -> a;
    _ -> __}
 
-_Coq_message__msgFst :: Messages.Coq_type -> Messages.Coq_type -> Coq_message__Coq_message -> Coq_message__Coq_message
+_Coq_message__msgFst :: Messages.Coq_type -> Messages.Coq_type -> Coq_message__Coq_message ->
+                        Coq_message__Coq_message
 _Coq_message__msgFst _ _ msg =
   case msg of {
    Coq_message__MsgPair _ _ m1 _ -> m1;
    _ -> __}
 
-_Coq_message__msgSnd :: Messages.Coq_type -> Messages.Coq_type -> Coq_message__Coq_message -> Coq_message__Coq_message
+_Coq_message__msgSnd :: Messages.Coq_type -> Messages.Coq_type -> Coq_message__Coq_message ->
+                        Coq_message__Coq_message
 _Coq_message__msgSnd _ _ msg =
   case msg of {
    Coq_message__MsgPair _ _ _ m2 -> m2;
@@ -90,7 +93,8 @@ type Coq_msg_seq = (,) (Prelude.Maybe Common.Coq_user_id) Prelude.Int
 
 data Coq_cipher =
    SigCipher Messages.Coq_type Keys.Coq_key_identifier Common.Coq_user_id Coq_msg_seq Coq_message__Coq_message
- | SigEncCipher Messages.Coq_type Keys.Coq_key_identifier Keys.Coq_key_identifier Common.Coq_user_id Coq_msg_seq Coq_message__Coq_message
+ | SigEncCipher Messages.Coq_type Keys.Coq_key_identifier Keys.Coq_key_identifier Common.Coq_user_id Coq_msg_seq 
+ Coq_message__Coq_message
 
 type Coq_queued_messages = ([]) (Specif.Coq_sigT Messages.Coq_type Coq_crypto)
 
@@ -124,7 +128,8 @@ data Coq_user_cmd =
  | GenerateAsymKey Keys.Coq_key_usage
 
 data Coq_user_data =
-   Coq_mkUserData Keys.Coq_key_perms Coq_user_cmd Coq_queued_messages Coq_my_ciphers Coq_recv_nonces Coq_sent_nonces Prelude.Int
+   Coq_mkUserData Keys.Coq_key_perms Coq_user_cmd Coq_queued_messages Coq_my_ciphers Coq_recv_nonces Coq_sent_nonces 
+ Prelude.Int
 
 type Coq_honest_users = Common.Coq_user_list Coq_user_data
 

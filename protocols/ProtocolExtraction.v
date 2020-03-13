@@ -28,4 +28,17 @@ Cd "../haskell/src".
 
 Require Import ExampleProtocols.
 Import SignPingSendProtocol.
+Print real_univ_start.
+
+Import RealWorld.
+Import RealWorldNotations.
+
+Definition UserProto1 : user_cmd (Base Messages.Nat) :=
+  (* user A *)
+  ( n  <- Gen
+  ; c  <- Sign KID1 B (message.Content n)
+  ; _  <- Send B c
+  ; Return n).
+
+Separate Extraction UserProto1.
 Separate Extraction real_univ_start.

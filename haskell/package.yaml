@@ -48,10 +48,12 @@ library:
    - Effects.Cryptography
    - Effects.Messaging
    - Effects.Types
+   - Interpreter
    # Generated Code
    - Common
    - Datatypes
    - ExampleProtocols
+   - ProtocolExtraction
    - Keys
    - List
    - Logic
