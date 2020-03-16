@@ -48,6 +48,7 @@ library:
  exposed-modules:
    - Effects.Cryptography
    - Effects.Messaging
+   - Effects.PrintingEffects
    - Effects.Types
    - Interpreter
    # Generated Code
