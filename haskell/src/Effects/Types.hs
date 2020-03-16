@@ -32,6 +32,8 @@ module Effects.Types
   , MsgPayload
   , Pattern
 
+  , Protocol
+
   ) where
 
 import qualified Common as C
@@ -50,3 +52,5 @@ type CipherText = R.Coq_cipher
 type MsgPayload = R.Coq_message__Coq_message
 type Msg        = R.Coq_crypto
 type Pattern    = R.Coq_msg_pat
+
+type Protocol   = R.Coq_user_cmd

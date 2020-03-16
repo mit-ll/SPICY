@@ -19,47 +19,57 @@
 module Interpreter
   (
 
-    printingInterpreter
+    protocolInterpreter
   
   ) where
 
 import           Unsafe.Coerce (unsafeCoerce)
 
 import           Polysemy
-import           Polysemy.Internal (send)
 
 import           Effects.Types
+import           Effects.Messaging
+import           Effects.Cryptography
 
+-- Generated Code
 import           RealWorld
-import           Messages
 
 
-ret :: a -> IO b
-ret = pure . unsafeCoerce
-
-printingInterpreter :: Coq_user_cmd -> IO a
-printingInterpreter (Return _ r) =
-  putStrLn "Return" >> ret r
-printingInterpreter (Bind _ _ cmd nxt) = 
+-- | Effectful interpreter for extracted protocols.
+-- Uses the polysemy library to abstract away the effects
+-- interpretation from the actual protocol, allowing us
+-- to re-interpret the same protocols using different
+-- effectful operations.
+--
+-- There is a liberal amount of [unsafeCoerce]s sprinkled
+-- around the implementation.  This is because Coq's type
+-- system is a bit more sophisticated than Haskell's.  We
+-- can be assured that the types will all work out, since
+-- the code was extracted from Coq.
+--
+protocolInterpreter :: Members [ Messaging, Crypto ] r
+  => Protocol -> Sem r a
+protocolInterpreter (Return _ r) =
+  (pure . unsafeCoerce) r
+protocolInterpreter (Bind _ _ cmd nxt) = 
   do
-    _ <- putStrLn "Bind"
-    v <- printingInterpreter cmd
-    printingInterpreter (nxt (unsafeCoerce v))
-printingInterpreter Gen =
-  putStrLn "Gen" >> ret 1
-printingInterpreter (Send _ user_id c) =
-  putStrLn "Send" >> ret ()
-printingInterpreter (Recv _ _) =
-  putStrLn "Recv" >> ret ( SignedCiphertext Nat 1 )
-printingInterpreter (SignEncrypt _ ksign kenc uid msg) =
-  putStrLn "Encrypt" >> ret (SignedCiphertext Nat 1)
-printingInterpreter (Decrypt _ m) =
-  putStrLn "Decrypt" >> ret ( Coq_message__Content 1 )
-printingInterpreter (Sign _ ksign uid msg) =
-  putStrLn "Sign" >> ret (SignedCiphertext Nat 1)
-printingInterpreter (Verify _ ksign msg) =
-  putStrLn "Verify" >> ret (True, Coq_message__Content 1 )
-printingInterpreter (GenerateSymKey _) =
-  putStrLn "GenSym" >> ret (1,True)
-printingInterpreter (GenerateAsymKey _) =
-  putStrLn "GenAsym" >> ret (1,True)
+    v <- protocolInterpreter cmd
+    protocolInterpreter (nxt (unsafeCoerce v))
+protocolInterpreter Gen =
+  (pure . unsafeCoerce) ( 1 :: Int )
+protocolInterpreter (RealWorld.Send typ user_id c) =
+  unsafeCoerce <$> send typ user_id c
+protocolInterpreter (RealWorld.Recv typ pat) =
+  unsafeCoerce <$> recv typ pat
+protocolInterpreter (SignEncrypt typ ksign kenc uid msg) =
+  unsafeCoerce <$> signEncryptMessage typ ksign kenc uid msg
+protocolInterpreter (Decrypt typ m) =
+  unsafeCoerce <$> decryptMessage typ m
+protocolInterpreter (Sign typ ksign uid msg) =
+  unsafeCoerce <$> signMessage typ ksign uid msg
+protocolInterpreter (Verify typ ksign msg) =
+  unsafeCoerce <$> verifyMessage typ ksign msg
+protocolInterpreter (GenerateSymKey u) =
+  unsafeCoerce <$> mkSymmetricKey u
+protocolInterpreter (GenerateAsymKey u) =
+  unsafeCoerce <$> mkAsymmetricKey u

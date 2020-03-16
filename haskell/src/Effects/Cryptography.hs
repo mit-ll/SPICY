@@ -19,7 +19,7 @@
 module Effects.Cryptography
   (
 
-    Crypto
+    Crypto(..)
 
   , mkSymmetricKey
   , mkAsymmetricKey

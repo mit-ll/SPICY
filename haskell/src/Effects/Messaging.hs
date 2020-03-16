@@ -19,7 +19,7 @@
 module Effects.Messaging
   (
 
-    Messaging
+    Messaging(..)
 
   , send
   , recv
@@ -30,7 +30,6 @@ import           Polysemy
 import qualified Polysemy.Internal as P (send)
 
 import           Effects.Types
-
 
 
 data Messaging m a where
