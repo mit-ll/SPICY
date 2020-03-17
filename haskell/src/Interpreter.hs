@@ -27,9 +27,7 @@ import           Unsafe.Coerce (unsafeCoerce)
 
 import           Polysemy
 
-import           Effects.Types
-import           Effects.Messaging
-import           Effects.Cryptography
+import           Effects
 
 -- Generated Code
 import           RealWorld

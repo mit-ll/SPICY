@@ -31,9 +31,7 @@ import           Data.Function ((&))
 
 import           Polysemy
 
-import           Effects.Types
-import           Effects.Messaging
-import           Effects.Cryptography
+import           Effects
 import           Interpreter
 
 import           Messages
@@ -60,7 +58,7 @@ runCryptoAsPrintLn = interpret $ \case
   SignMessage _ _ _ _ -> embed (putStrLn "Sign") >> ret (R.SignedCiphertext Nat 1)
   SignEncryptMessage _ _ _ _ _ -> embed (putStrLn "Encrypt") >> ret (R.SignedCiphertext Nat 1)
   VerifyMessage _ _ _ -> embed (putStrLn "Verify") >> ret (True, R.Coq_message__Content 1)
-  DecryptMessage _ _ -> embed (putStrLn "Decrypt") >> ret (True, R.Coq_message__Content 1)
+  DecryptMessage _ _ -> embed (putStrLn "Decrypt") >> ret (R.Coq_message__Content 1)
 
 printingInterpreterPolysemy :: Protocol -> IO a
 printingInterpreterPolysemy p =

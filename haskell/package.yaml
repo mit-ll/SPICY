@@ -34,10 +34,14 @@ default-extensions:
 
   # Misc extensions
   - OverloadedStrings
+  - RecordWildCards
 
 dependencies:
   - base
+  - bytestring
+  - containers
   - cryptonite
+  - memory
   - polysemy
   # - polysemy-plugin
   - stm
@@ -46,7 +50,9 @@ library:
  source-dirs:
    - src
  exposed-modules:
+   - Effects
    - Effects.Cryptography
+   - Effects.CryptoniteInterpreter
    - Effects.Messaging
    - Effects.PrintingEffects
    - Effects.Types
