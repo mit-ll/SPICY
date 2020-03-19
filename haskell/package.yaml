@@ -84,20 +84,8 @@ executables:
     dependencies:
       - protocol-runner
 
-# executables:
-#   ft:
-#     <<: *exedefaults
-#     main: FrontendTest.main
-#     source-dirs: [frontend, mock]
-#   mock-harness:
-#     <<: *exedefaults
-#     main: QueueMockHarness.main
-#     source-dirs: main
-#   mock-queue:
-#     <<: *exedefaults
-#     main: MockQueue.runQueue
-#     source-dirs: main
-#   psGenerator:
-#     <<: *exedefaults
-#     main: PSGenerator.main
-#     source-dirs: main
+  runProto:
+    main: RunProto.main
+    source-dirs: [app]
+    dependencies:
+      - protocol-runner

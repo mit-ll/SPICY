@@ -69,7 +69,6 @@ type Mailboxes = M.Map Int (TChan QueuedMessage)
 data UserHeaps = UserHeaps {
     me :: Int
   , mailboxes :: Mailboxes
-  , cryptoData :: CryptoData
   }
 
 matchesPattern :: MonadRandom m => CryptoData -> Pattern -> QueuedMessage -> m Bool
@@ -104,20 +103,24 @@ recvUntilAccept cryptoData mbox pat = do
 -- | Here's where the action happens.  Execute each cryptographic command
 -- within our DSL using /cryptonite/ primitives.  All algorithms are currently
 -- hardcoded.  Future work could generalize this.
-runMessagingWithTChan :: (Member (State UserHeaps) r, Member (Embed IO) r)
+runMessagingWithTChan :: (Member (State UserHeaps) r, Member (State CryptoData) r, Member (Embed IO) r)
   => Sem (Messaging : r) a -> Sem r a
 runMessagingWithTChan = interpret $ \case
   Send _ uid msg -> do
     UserHeaps{..} <- get
-    let qm = convertToQueuedMessage (keys cryptoData) msg
+    CryptoData{..} <- get
+    let qm = convertToQueuedMessage keys msg
     let mbox = mailboxes M.! uid
+    _ <- embed (putStrLn $ "Sending to user " ++ show uid)
     _ <- embed (atomically $ writeTChan mbox qm)
     (return . unsafeCoerce) ()
 
   Recv _ pat -> do
-    userHeaps@UserHeaps{..} <- get
+    UserHeaps{..} <- get
+    cryptoData <- get
     let mbox = mailboxes M.! me
     (cryptoData', qm) <- embed (recvUntilAccept cryptoData mbox pat)
-    _ <- put userHeaps { cryptoData = cryptoData' }
+    _ <- put cryptoData'
+    -- _ <- put userHeaps { cryptoData = cryptoData' }
     let msg = convertFromQueuedMessage qm
     (return . unsafeCoerce) msg
