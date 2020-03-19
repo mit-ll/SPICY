@@ -75,6 +75,14 @@ library:
 
  other-modules: []
 
+executables:
+
+  printProto:
+    main: PrintProto.main
+    source-dirs: [app]
+    dependencies:
+      - protocol-runner
+
 # executables:
 #   ft:
 #     <<: *exedefaults

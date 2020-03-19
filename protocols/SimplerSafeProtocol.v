@@ -1103,11 +1103,6 @@ Section RealWorldLemmas.
     simpl; rewrite H24; eauto.
   Qed.
 
-  Definition summarize_univ {A B} (U : universe A B) : Prop :=
-    forall u_id u_d s,
-      U.(users) $? u_id = Some u_d
-      -> summarize u_d.(protocol) s.
-
   (* rather than just running last user, need some computation that finds next available person to run 
    * 
    * does this really do what I want it to?
@@ -1136,22 +1131,50 @@ Section RealWorldLemmas.
       apply NNPP in H0; eauto.
   Qed.
 
+  (* Inductive nextStep {A B} (U : universe A B) : *)
+  (*   forall (usrs : list (user_id * user_data A)), (forall uid ud, List.In (uid,ud) usrs -> U.(users) $? uid = Some ud) -> Prop := *)
+
+  (* | Here : forall us us' mapIn lbl bd' u_id userData, *)
+  (*     us = (u_id,userData) :: us' *)
+  (*     -> step_user lbl (Some u_id) (build_data_step U userData) bd' *)
+  (*     -> nextStep U us mapIn *)
+
+  (* | There : forall us us' mapIn mapIn' u_id userData, *)
+  (*     us = (u_id,userData) :: us' *)
+  (*     -> (forall lbl bd', ~ step_user lbl (Some u_id) (build_data_step U userData) bd') *)
+  (*     -> nextStep U us' mapIn' *)
+  (*     -> nextStep U us mapIn *)
+  (* . *)
+
+  Definition summarize_univ {A B} (U : universe A B) (summaries : NatMap.t summary) : Prop :=
+    forall u_id u_d s,
+      U.(users) $? u_id = Some u_d
+      -> summaries $? u_id = Some s
+      /\ summarize u_d.(protocol) s.
 
   Inductive nextStep {A B} (U : universe A B) :
-    forall (usrs : list (user_id * user_data A)), (forall uid ud, List.In (uid,ud) usrs -> U.(users) $? uid = Some ud) -> Prop :=
+    list (user_id * user_data A) -> Prop :=
 
-  | Here : forall us us' mapIn lbl bd' u_id userData,
+  | Here : forall us us' lbl bd' u_id userData,
       us = (u_id,userData) :: us'
       -> step_user lbl (Some u_id) (build_data_step U userData) bd'
-      -> nextStep U us mapIn
+      -> nextStep U us
 
-  | There : forall us us' mapIn mapIn' u_id userData,
+  | There : forall us us' u_id userData summaries,
       us = (u_id,userData) :: us'
+      -> summarize_univ U summaries
       -> (forall lbl bd', ~ step_user lbl (Some u_id) (build_data_step U userData) bd')
-      -> nextStep U us' mapIn'
-      -> nextStep U us mapIn
+      \/ (exists u_id2 userData2, u_id <> u_id2
+                          /\ U.(users) $? u_id2 = Some userData2
+                          /\ forall t (cmd__n : user_cmd t) s,
+                              nextAction userData2.(protocol) cmd__n
+                              -> summaries $? u_id = Some s
+                              -> commutes cmd__n s
+                              -> False)
+      -> nextStep U us'
+      -> nextStep U us
   .
-
+  
   Lemma elements_in {V} (m : NatMap.t V) :
     forall uid ud,
       List.In (uid,ud) (elements m)
@@ -1164,26 +1187,13 @@ Section RealWorldLemmas.
     econstructor; eauto.
   Qed.
 
-  Definition nextStepU {A B} (U : universe A B) :=
-    nextStep U (elements U.(users)) (elements_in U.(users)).
+  Definition nextStepU {A B} (U : universe A B) := nextStep U (elements U.(users)).
 
-
-
-
-
-  
-
-    
-
-  
-
-  Inductive step_universeC {A B} (summaries : NatMap.t summary) :
+  Inductive step_universeC {A B} :
     universe A B -> rlabel -> universe A B -> Prop :=
-
-
-  | StepLargest : forall U U' (u_id : user_id) userData usrs adv cs gks ks qmsgs mycs froms sents cur_n cmd lbl,
-      NatMap.O.max_elt U.(users) = Some (u_id, userData)
-      (* -> U.(users) $? u_id = Some userData *)
+    
+  | StepNext : forall U U' (u_id : user_id) us userData usrs adv cs gks ks qmsgs mycs froms sents cur_n cmd lbl,
+      nextStep U ((u_id,userData) :: us)
       -> step_user lbl (Some u_id)
                   (build_data_step U userData)
                   (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
@@ -1194,17 +1204,53 @@ Section RealWorldLemmas.
                                                    from_nons := froms;
                                                    sent_nons := sents;
                                                    cur_nonce := cur_n; |}
-      -> step_universeC summaries U lbl U'.
+      -> step_universeC U lbl U'.
 
-
+End RealWorldLemmas.
                     
 
+Inductive stepC (t__hon t__adv : type) :
+    (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon)
+  -> (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon)
+  -> Prop :=
+| RealSilentC : forall ru ru' iu,
+    step_universeC ru Silent ru' -> stepC (ru, iu) (ru', iu)
+| BothLoud : forall ru ru' ra ia iu iu' iu'',
+    step_universeC ru (Action ra) ru'
+    -> istepSilent^* iu iu'
+    -> IdealWorld.lstep_universe iu' (Action ia) iu''
+    -> action_matches ra ru ia iu'
+    -> stepC (ru, iu) (ru', iu'').
+
+From protocols
+     Require Import
+     Sets
+     ModelCheck.
+
+Module Foo <: EMPTY.
+End Foo.
+Module Import SN := SetNotations(Foo).
+
+Definition TrC {t__hon t__adv} (ru0 : RealWorld.universe t__hon t__adv) (iu0 : IdealWorld.universe t__hon) :=
+  {| Initial := {(ru0, iu0)};
+     Step    := @stepC t__hon t__adv |}.
 
   
 
+Theorem step_stepC :
+  forall {t__hon t__adv} (ru0 : RealWorld.universe t__hon t__adv) (iu0 : IdealWorld.universe t__hon),
+  (* summarizeThreads c cs *)
+    (* -> boundRunningTime c n *)
+    invariantFor (TrC ru0 iu0) (fun st => safety st /\ labels_align st)
+    -> invariantFor (S ru0 iu0) (fun st => safety st /\ labels_align st)
+.
+Proof.
+  intros * INV.
+  unfold invariantFor in *; intros * INIT.
+  simpl in *.
+  specialize (INV _ INIT); intros.
 
   
-
 
 
 
