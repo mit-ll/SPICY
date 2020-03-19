@@ -16,18 +16,24 @@
 -- defined by DFARS 252.227-7013 or DFARS 252.227-7014 as detailed above. Use of this work other than
 -- as specifically authorized by the U.S. Government may violate any copyrights that exist in this work.
 
-module Effects.CryptoniteInterpreter
+module Effects.CryptoniteEffects
   (
     CryptoData(..)
+  , CryptoKey(..)
+  , RealMsgPayload(..)
+  , convertFromRealMsg
+  , convertToRealMsg
   , runCryptoWithCryptonite
-
+  , verifyMsgPayload
+  , decryptMsgPayload
+  
   ) where
 
 import           Unsafe.Coerce
 
 import           Crypto.Cipher.AES (AES256)
-import           Crypto.Cipher.Types (BlockCipher(..), Cipher(..), makeIV, IV(..))
-import           Crypto.Error (CryptoFailable(..), CryptoError(..))
+import           Crypto.Cipher.Types (BlockCipher(..), Cipher(..), makeIV, IV)
+import           Crypto.Error (CryptoFailable(..))
 import           Crypto.Hash.Algorithms (SHA256(..))
 -- Symmetric Signagures
 import           Crypto.MAC.HMAC (HMAC(..), hmac)
@@ -38,38 +44,38 @@ import           Crypto.PubKey.RSA (PublicKey, PrivateKey, generate)
 import           Crypto.Random (MonadRandom, SystemDRG, withDRG)
 import           Crypto.Random.Types (getRandomBytes)
 
-import           Data.ByteArray (ByteArray, convert)
+import           Data.ByteArray (convert)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
 
-import           Data.Function ((&))
 import qualified Data.Map.Strict as M
 
 import           Polysemy
 import           Polysemy.State (State(..), get, put)
 
 import           Effects
-import           Interpreter
 
-import qualified Keys as KS
 import           Messages
 import qualified RealWorld as R
 
 
 data CryptoKey =
-    SymmKey ByteString
-  | AsymKey PublicKey PrivateKey
-  -- | SymmSigKey ByteString 
-  -- | AsymSigKey PublicKey PrivateKey
+  SymmKey ByteString
+  | AsymKey PublicKey (Maybe PrivateKey)
+
+data RealMsgPayload =
+  PermissionPayload Key CryptoKey
+  | ContentPayload Int
+  | PairPayload RealMsgPayload RealMsgPayload
 
 data EncMsg =
-  StoredPermission ByteString ByteString
+  StoredPermission ByteString CryptoKey
   | StoredContent ByteString
   | StoredPair EncMsg EncMsg
 
 data StoredCipher =
-  SignedCipher ByteString MsgPayload
+  SignedCipher ByteString RealMsgPayload
   | EncryptedCipher ByteString EncMsg
 
 -- | Simple utility function to create a ByteString out of anything that can
@@ -77,45 +83,66 @@ data StoredCipher =
 showAsBytes :: Show a => a -> ByteString
 showAsBytes = C8.pack . show
 
+convertToRealMsg :: M.Map Key CryptoKey -> MsgPayload -> RealMsgPayload
+convertToRealMsg keyMap (R.Coq_message__Permission (kid,tf)) =
+  let k = keyMap M.! kid
+  in  PermissionPayload kid $
+      case k of
+        SymmKey _ -> k
+        AsymKey pub _ -> if tf then k else AsymKey pub Nothing
+convertToRealMsg _ (R.Coq_message__Content i) =
+  ContentPayload i
+convertToRealMsg keyMap (R.Coq_message__MsgPair _ _ m1 m2) =
+  PairPayload (convertToRealMsg keyMap m1) (convertToRealMsg keyMap m2)
+
+convertFromRealMsg :: RealMsgPayload -> MsgPayload
+convertFromRealMsg (PermissionPayload kid k) =
+  let tf = case k of
+             AsymKey _ Nothing -> False
+             _                 -> True
+  in  R.Coq_message__Permission (kid,tf)
+convertFromRealMsg (ContentPayload i) =
+  R.Coq_message__Content i
+convertFromRealMsg (PairPayload m1 m2) =
+  R.Coq_message__MsgPair Nat Nat (convertFromRealMsg m1) (convertFromRealMsg m2)
+
 -- | Utility te pull out all data from MsgPayloads in order to build
 -- up a ByteString for digital signature purposes
-msgPayloadAsByteString :: MsgPayload -> ByteString
-msgPayloadAsByteString (R.Coq_message__Permission (kid,tf)) =
-  showAsBytes kid `BS.append` showAsBytes tf
-msgPayloadAsByteString (R.Coq_message__Content i) =
+msgPayloadAsByteString :: RealMsgPayload -> ByteString
+msgPayloadAsByteString (PermissionPayload kid _) =
+  showAsBytes kid -- ignore key part for now...
+msgPayloadAsByteString (ContentPayload i) =
   showAsBytes i
-msgPayloadAsByteString (R.Coq_message__MsgPair _ _ m1 m2) =
+msgPayloadAsByteString (PairPayload m1 m2) =
   msgPayloadAsByteString m1 `BS.append` msgPayloadAsByteString m2
 
 -- | Given an encryption function, convert MsgPayload into a EncMsg
 mkEncCipher :: MonadRandom m =>
-  (ByteString -> m ByteString) -> MsgPayload -> m EncMsg
-mkEncCipher enc (R.Coq_message__Permission (kid,tf)) = do
+  (ByteString -> m ByteString) -> RealMsgPayload -> m EncMsg
+mkEncCipher enc (PermissionPayload kid k) = do
   kid' <- (enc . showAsBytes) kid
-  tf'  <- (enc . showAsBytes) tf
-  return $ StoredPermission kid' tf'
-mkEncCipher enc (R.Coq_message__Content i) =
+  return $ StoredPermission kid' k
+mkEncCipher enc (ContentPayload i) =
   StoredContent <$> (enc . showAsBytes $ i)
-mkEncCipher enc (R.Coq_message__MsgPair _ _ m1 m2) =
+mkEncCipher enc (PairPayload m1 m2) =
   do c1 <- mkEncCipher enc m1
      c2 <- mkEncCipher enc m2
      return $ StoredPair c1 c2
 
 -- | Decrypt an EncMsg, given a decryption function
-decryptCipher :: MonadRandom m => (ByteString -> m ByteString) -> EncMsg -> m MsgPayload
-decryptCipher dec (StoredPermission tfenc kidenc) = do
-  tf  <- (read . C8.unpack) <$> dec tfenc
+decryptCipher :: MonadRandom m => (ByteString -> m ByteString) -> EncMsg -> m RealMsgPayload
+decryptCipher dec (StoredPermission kidenc k) = do
   kid <- (read . C8.unpack) <$> dec kidenc
-  return $ R.Coq_message__Permission (kid,tf)
+  return $ PermissionPayload kid k
 decryptCipher dec (StoredContent bs) = do
   content <- dec bs
   case C8.readInt content of
     Nothing    -> error "Decrypting content didn't work"
-    Just (m,_) -> return $ R.Coq_message__Content m
+    Just (m,_) -> return $ ContentPayload m
 decryptCipher dec (StoredPair c1 c2) = do
   m1 <- decryptCipher dec c1
   m2 <- decryptCipher dec c2
-  return $ R.Coq_message__MsgPair Nat Nat m1 m2 -- do I need to track types (that is, little t types?)
+  return $ PairPayload m1 m2
 
 -- | Data structure to pass through State monad which handles redirection of
 -- key ids to the actual keys, and cipher ids to the actual ciphers
@@ -177,7 +204,9 @@ encryptFn (SymmKey k) msg = do
 -- to abstract out the /actual/ algorithms, but that is to be left
 -- for future work.
 decryptFn :: MonadRandom m => CryptoKey -> ByteString -> m ByteString
-decryptFn (AsymKey _ priv) msg = do
+decryptFn (AsymKey _ Nothing) _ =
+  error "You don't have the private key"
+decryptFn (AsymKey _ (Just priv)) msg = do
   eitherMsg <- decryptSafer priv msg
   return $ case eitherMsg of
              Left e -> error $ "Error asymmetrically decrypting: " ++ show e
@@ -191,7 +220,9 @@ decryptFn key msg =
 -- to abstract out the /actual/ algorithms, but that is to be left
 -- for future work.
 signatureFn :: MonadRandom m => CryptoKey -> ByteString -> m ByteString
-signatureFn (AsymKey _ priv) msg = do
+signatureFn (AsymKey _ Nothing) _ =
+  error "You don't have the private key"
+signatureFn (AsymKey _ (Just priv)) msg = do
   eitherMsg <- signSafer (Just SHA256) priv msg
   return $ case eitherMsg of
              Left e -> error $ "Error asymmetrically signing: " ++ show e
@@ -202,7 +233,7 @@ signatureFn (SymmKey k) msg = do
 
 -- | Encrypt and sign a MsgPayload.  Most of the work is deferred to the helper functions
 -- /signatureFn/ and /encryptFn/.  Handles ordering of encryption vs signing.
-encryptMsgPayload :: MonadRandom m => CryptoKey -> CryptoKey -> MsgPayload -> m StoredCipher
+encryptMsgPayload :: MonadRandom m => CryptoKey -> CryptoKey -> RealMsgPayload -> m StoredCipher
 encryptMsgPayload sigKey encKey msg = do
   signed <- signMsgPayload sigKey msg
   case signed of
@@ -213,17 +244,17 @@ encryptMsgPayload sigKey encKey msg = do
 
 -- | Encrypt and sign a MsgPayload.  Most of the work is deferred to the helper functions
 -- /signatureFn/ and /decryptFn/.  Handles ordering of encryption vs signing.
-decryptMsgPayload :: MonadRandom m => CryptoKey -> CryptoKey -> StoredCipher -> m MsgPayload
-decryptMsgPayload sigKey encKey (SignedCipher _ _) =
+decryptMsgPayload :: MonadRandom m => CryptoKey -> CryptoKey -> StoredCipher -> m RealMsgPayload
+decryptMsgPayload _ _ (SignedCipher _ _) =
   error "Already decrypted"
 decryptMsgPayload sigKey encKey (EncryptedCipher sig encMsg) = do
   msg <- decryptCipher (decryptFn encKey) encMsg
-  ver <- verifyMsgPayload sigKey (SignedCipher sig msg)
+  _ <- verifyMsgPayload sigKey (SignedCipher sig msg)
   return msg -- FIXME should probably only return if sig matches
 
 -- | Sign a MsgPayload.  Most of the work is deferred to the helper function
 -- /signatureFn/.  If encryption is to happen, it should happen next.
-signMsgPayload :: MonadRandom m => CryptoKey -> MsgPayload -> m StoredCipher
+signMsgPayload :: MonadRandom m =>  CryptoKey -> RealMsgPayload -> m StoredCipher
 signMsgPayload k msg = do
   sig <- signatureFn k (msgPayloadAsByteString msg)
   return $ SignedCipher sig msg
@@ -260,13 +291,14 @@ runCryptoWithCryptonite = interpret $ \case
     cryptData <- get
     -- generate RSA pub/priv key
     let ((pub,priv), drg') = withDRG (drg cryptData) (generate 4096 0x10001)
-    let (k,cryptData') = addKey drg' (AsymKey pub priv) cryptData
+    let (k,cryptData') = addKey drg' (AsymKey pub (Just priv)) cryptData
     _ <- put cryptData'
     (return . unsafeCoerce) (k,True)
   SignMessage _ kid _ m -> do
     cryptData@CryptoData{..} <- get
     let k = keys M.! kid
-    let (cipher,drg')    = withDRG drg (signMsgPayload k m)
+    let msg = convertToRealMsg keys m
+    let (cipher,drg')    = withDRG drg (signMsgPayload k msg)
     let (cid,cryptData') = addCipher drg' cipher cryptData
     _ <- put cryptData'
     (return . unsafeCoerce) (R.SignedCiphertext Nat cid)
@@ -274,7 +306,8 @@ runCryptoWithCryptonite = interpret $ \case
     cryptData@CryptoData{..} <- get
     let kenc  = keys M.! kencid
     let ksign = keys M.! ksignid
-    let (cipher,drg')    = withDRG drg (encryptMsgPayload ksign kenc m)
+    let msg = convertToRealMsg keys m
+    let (cipher,drg')    = withDRG drg (encryptMsgPayload ksign kenc msg)
     let (cid,cryptData') = addCipher drg' cipher cryptData
     _ <- put cryptData'
     (return . unsafeCoerce) (R.SignedCiphertext Nat cid)

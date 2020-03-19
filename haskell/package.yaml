@@ -52,9 +52,10 @@ library:
  exposed-modules:
    - Effects
    - Effects.Cryptography
-   - Effects.CryptoniteInterpreter
+   - Effects.CryptoniteEffects
    - Effects.Messaging
    - Effects.PrintingEffects
+   - Effects.TChanMessaging
    - Effects.Types
    - Interpreter
    # Generated Code
