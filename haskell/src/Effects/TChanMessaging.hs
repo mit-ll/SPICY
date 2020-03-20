@@ -28,7 +28,8 @@ module Effects.TChanMessaging
 import           Unsafe.Coerce
 
 import           Control.Concurrent.STM
--- import           Control.Concurrent.STM.TChan
+import           Control.Concurrent (threadDelay)
+
 import           Crypto.Random (MonadRandom, withDRG)
 
 import qualified Data.Map.Strict as M
@@ -37,7 +38,8 @@ import           Polysemy
 import           Polysemy.State (State(..), get, put)
 
 import           Effects
-import           Effects.CryptoniteEffects (CryptoData(..), CryptoKey(..), RealMsgPayload(..)
+import           Effects.CryptoniteEffects (CryptoData(..), CryptoKey(..)
+                                           , RealMsgPayload(..), StoredCipher(..)
                                            , decryptMsgPayload, verifyMsgPayload
                                            , convertToRealMsg, convertFromRealMsg
                                            )
@@ -47,21 +49,20 @@ import qualified RealWorld as R
 
 
 
-
 data QueuedMessage =
   QueuedContent RealMsgPayload
-  | QueuedCipher R.Coq_cipher_id
+  | QueuedCipher R.Coq_cipher_id StoredCipher
 
-convertToQueuedMessage :: M.Map Int CryptoKey -> Msg -> QueuedMessage
-convertToQueuedMessage keys (R.Content _ msg) =
+convertToQueuedMessage :: CryptoData -> Msg -> QueuedMessage
+convertToQueuedMessage CryptoData{..} (R.Content _ msg) =
   QueuedContent (convertToRealMsg keys msg)
-convertToQueuedMessage _ (R.SignedCiphertext _ cid) =
-  QueuedCipher cid
+convertToQueuedMessage CryptoData{..} (R.SignedCiphertext _ cid) =
+  QueuedCipher cid (ciphers M.! cid)
 
 convertFromQueuedMessage :: QueuedMessage -> Msg
 convertFromQueuedMessage (QueuedContent payload) =
   (R.Content Nat (convertFromRealMsg payload))
-convertFromQueuedMessage (QueuedCipher cid) =
+convertFromQueuedMessage (QueuedCipher cid c) =
   (R.SignedCiphertext Nat cid)
 
 type Mailboxes = M.Map Int (TChan QueuedMessage)
@@ -74,21 +75,17 @@ data UserHeaps = UserHeaps {
 matchesPattern :: MonadRandom m => CryptoData -> Pattern -> QueuedMessage -> m Bool
 matchesPattern _ R.Accept _            = return True
 matchesPattern _ _ (QueuedContent _) = return False
-matchesPattern CryptoData{..} (R.Signed kid _) (QueuedCipher cid) =
+matchesPattern CryptoData{..} (R.Signed kid _) (QueuedCipher cid c) =
   case M.lookup kid keys of
     Nothing -> return False
-    Just k  -> 
-      case M.lookup cid ciphers of
-        Nothing -> return False
-        Just c  -> verifyMsgPayload k c
-matchesPattern CryptoData{..} (R.SignedEncrypted ksignid kencid _) (QueuedCipher cid) =
+    Just k  -> verifyMsgPayload k c
+matchesPattern CryptoData{..} (R.SignedEncrypted ksignid kencid _) (QueuedCipher cid c) =
   case (M.lookup ksignid keys, M.lookup kencid keys) of
-    (Just ksign, Just kenc) ->
-      case M.lookup cid ciphers of
-        Nothing -> return False
-        Just c  -> do
-          _ <- decryptMsgPayload ksign kenc c
-          return True
+
+    (Just ksign, Just kenc) -> do
+      _ <- decryptMsgPayload ksign kenc c
+      return True
+      
     _ -> return False
 
 recvUntilAccept :: CryptoData -> TChan QueuedMessage -> Pattern -> IO (CryptoData, QueuedMessage)
@@ -96,8 +93,9 @@ recvUntilAccept cryptoData mbox pat = do
   qm <- atomically $ readTChan mbox
   let (done,drg') = withDRG (drg cryptoData) (matchesPattern cryptoData pat qm)
   let cryptoData' = cryptoData { drg = drg' }
+  _ <- putStrLn $ "Read msg.  Done? " ++ show done
   if done
-    then return (cryptoData', qm)
+    then  return (cryptoData', qm)
     else recvUntilAccept cryptoData' mbox pat
 
 -- | Here's where the action happens.  Execute each cryptographic command
@@ -108,19 +106,27 @@ runMessagingWithTChan :: (Member (State UserHeaps) r, Member (State CryptoData) 
 runMessagingWithTChan = interpret $ \case
   Send _ uid msg -> do
     UserHeaps{..} <- get
-    CryptoData{..} <- get
-    let qm = convertToQueuedMessage keys msg
+    cryptoData <- get
+    let qm = convertToQueuedMessage cryptoData msg
     let mbox = mailboxes M.! uid
     _ <- embed (putStrLn $ "Sending to user " ++ show uid)
     _ <- embed (atomically $ writeTChan mbox qm)
+    _ <- embed ( threadDelay 2000000 )
     (return . unsafeCoerce) ()
 
   Recv _ pat -> do
     UserHeaps{..} <- get
     cryptoData <- get
     let mbox = mailboxes M.! me
+    _ <- embed ( threadDelay 1000000 )
+    _ <- embed (putStrLn $ "Waiting on my mailbox " ++ show me)
     (cryptoData', qm) <- embed (recvUntilAccept cryptoData mbox pat)
-    _ <- put cryptoData'
+    let cryptoData'' =
+          case qm of
+            QueuedContent _ -> cryptoData'
+            QueuedCipher cid c -> cryptoData' { ciphers = M.insert cid c (ciphers cryptoData') }
+            
+    _ <- put cryptoData''
     -- _ <- put userHeaps { cryptoData = cryptoData' }
     let msg = convertFromQueuedMessage qm
     (return . unsafeCoerce) msg

@@ -35,9 +35,11 @@ default-extensions:
   # Misc extensions
   - OverloadedStrings
   - RecordWildCards
+  - TupleSections
 
 dependencies:
   - base
+  - async
   - bytestring
   - containers
   - cryptonite
@@ -89,3 +91,6 @@ executables:
     source-dirs: [app]
     dependencies:
       - protocol-runner
+      - base
+      - async
+      - stm

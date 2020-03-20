@@ -21,11 +21,13 @@ module Effects.CryptoniteEffects
     CryptoData(..)
   , CryptoKey(..)
   , RealMsgPayload(..)
+  , StoredCipher(..)
   , convertFromRealMsg
   , convertToRealMsg
+  , decryptMsgPayload
+  , mkKey
   , runCryptoWithCryptonite
   , verifyMsgPayload
-  , decryptMsgPayload
   
   ) where
 
@@ -40,7 +42,7 @@ import           Crypto.MAC.HMAC (HMAC(..), hmac)
 -- Asymmetric Operations
 import           Crypto.PubKey.RSA.PKCS15 (decryptSafer, signSafer, encrypt, verify)
 import           Crypto.PubKey.RSA (PublicKey, PrivateKey, generate)
---import           Crypto.PubKey.Ed25519 (PublicKey, SecretKey, Signature, generateSecretKey, toPublic, sign, verify)
+
 import           Crypto.Random (MonadRandom, SystemDRG, withDRG)
 import           Crypto.Random.Types (getRandomBytes)
 
@@ -57,6 +59,7 @@ import           Polysemy.State (State(..), get, put)
 import           Effects
 
 import           Messages
+import qualified Keys as KS
 import qualified RealWorld as R
 
 
@@ -273,6 +276,16 @@ verifyMsgPayload (SymmKey k) (SignedCipher sig msg) = do
   return (sig == sig')
 verifyMsgPayload _ _ =
   error "Unpack your encrypted cipher first"
+
+
+-- | Helper keygen for initialization
+mkKey :: MonadRandom m => KS.Coq_key -> m (Key,CryptoKey)
+mkKey (KS.MkCryptoKey kid _ KS.SymKey) = do
+  bs <- getRandomBytes 32
+  return $ (kid, SymmKey bs)
+mkKey (KS.MkCryptoKey kid _ KS.AsymKey) = do
+  (pub,priv) <- generate 512 0x10001
+  return $ (kid, AsymKey pub (Just priv))
 
 -- | Here's where the action happens.  Execute each cryptographic command
 -- within our DSL using /cryptonite/ primitives.  All algorithms are currently

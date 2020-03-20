@@ -24,6 +24,10 @@ import           ProtocolExtraction
 
 main :: IO ()
 main = do
-  a <- printingInterpreterPolysemy coq_UserProto1
+  a <- printingInterpreterPolysemy userProto1
   let i :: Int = unsafeCoerce a
-  putStrLn $ "And we have: " ++ show i
+  putStrLn $ "And we have user 1: " ++ show i
+
+  b <- printingInterpreterPolysemy userProto2
+  let j :: Int = unsafeCoerce b
+  putStrLn $ "And we have user 2: " ++ show j

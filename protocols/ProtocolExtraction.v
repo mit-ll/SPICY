@@ -26,19 +26,40 @@ Extraction Language Haskell.
 
 Cd "../haskell/src".
 
+From Coq Require Import
+     List.
+Import ListNotations.
+
 Require Import ExampleProtocols.
 Import SignPingSendProtocol.
-Print real_univ_start.
 
 Import RealWorld.
 Import RealWorldNotations.
 
-Definition UserProto1 : user_cmd (Base Messages.Nat) :=
+Definition akeys := [(KID1, true)].
+Definition bkeys := [(KID1, false)].
+
+Definition userProto1 : user_cmd (Base Messages.Nat) :=
   (* user A *)
   ( n  <- Gen
   ; c  <- Sign KID1 B (message.Content n)
   ; _  <- Send B c
   ; Return n).
 
-Separate Extraction UserProto1.
+Definition userProto2 : user_cmd (Base Messages.Nat) :=
+  (* user B *)
+  ( c  <- @Recv Messages.Nat (Signed KID1 true)
+  ; v  <- Verify KID1 c
+  ; ret (if fst v
+         then match snd v with
+              | message.Content p => p
+              | _                 => 0
+              end
+         else 1)).
+
+Definition simpleSendProto :=
+  ( [KEY1]
+  , [(akeys, userProto1); (bkeys, userProto2)] ).
+
+Separate Extraction simpleSendProto.
 Separate Extraction real_univ_start.

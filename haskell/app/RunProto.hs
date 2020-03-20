@@ -18,14 +18,18 @@
 
 module RunProto where
 
+import           Control.Concurrent (threadDelay)
+import           Control.Concurrent.Async (mapConcurrently)
 import           Control.Concurrent.STM
-import           Crypto.Random (getSystemDRG)
+import           Crypto.Random (MonadRandom, SystemDRG, getSystemDRG, withDRG)
 import           Data.Function ((&))
+import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 
 import           Polysemy
 import           Polysemy.State (evalState)
 
+import           System.IO
 
 import           Effects
 import           Effects.CryptoniteEffects
@@ -33,27 +37,54 @@ import           Effects.TChanMessaging
 import           Interpreter
 import           ProtocolExtraction
 
-buildUserHeaps :: IO UserHeaps
-buildUserHeaps = do
-  mbox1 <- newTChanIO
-  mbox2 <- newTChanIO
 
-  return UserHeaps {
-    me = 0
-    , mailboxes = M.fromList [(0,mbox1), (1,mbox2)]
-    }
+import qualified Keys as KS
 
-buildCryptoData :: IO CryptoData
-buildCryptoData = do
-  drg1 <- getSystemDRG
-  -- drg2 <- getSystemDRG
+
+type Keys = [(Int,CryptoKey)]
+
+data UserData = 
+  UserData Keys Protocol
+
+permToKey :: Map Int CryptoKey -> (Int,Bool) -> (Int,CryptoKey)
+permToKey keys (kid,tf) =
+  let k = keys M.! kid
+  in  (kid, if tf 
+            then k
+            else case k of
+                   AsymKey pub _ ->
+                     AsymKey pub Nothing
+                   _ ->
+                     k)
+
+buildCryptoData :: Keys -> IO CryptoData
+buildCryptoData ks = do
+  sysDrg <- getSystemDRG
   
   return CryptoData {
     ciphers = M.empty
-    , keys = M.fromList []
-    , drg = drg1
+    , keys = M.fromList ks
+    , drg = sysDrg
     }
-      
+
+instance Show (KS.Coq_key) where
+  show (KS.MkCryptoKey kid usage typ) = show kid
+
+parseInitialData :: IO [UserData]
+parseInitialData = do
+  let (keys, permsProtos) = simpleSendProto
+  cryptoKeysList <- traverse mkKey keys
+  let keyMap = M.fromList cryptoKeysList
+  let permsProtos' = (\(perms,proto) -> (permToKey keyMap <$> perms , proto)) <$> permsProtos
+  return $ (uncurry UserData) <$> permsProtos'
+
+
+buildUserHeaps :: Int -> IO [UserHeaps]
+buildUserHeaps n = do
+  tchanPairs <- traverse (\i -> (i,) <$> newTChanIO) [0 .. (n-1)]
+  let mboxes = M.fromList tchanPairs
+  return $ (\(i,_) -> UserHeaps { me = i, mailboxes = mboxes }) <$> tchanPairs
+
 interpreterPolysemy :: UserHeaps -> CryptoData -> Protocol -> IO a
 interpreterPolysemy uh cd p =
   protocolInterpreter p
@@ -63,11 +94,26 @@ interpreterPolysemy uh cd p =
   & evalState cd
   & runM
 
+runUser :: UserHeaps -> UserData -> IO ()
+runUser heaps (UserData keys proto) = do
+  putStrLn $ "Running user: " ++ show (me heaps)
+  _ <- threadDelay 500000
+  cryptoData <- buildCryptoData keys
+  a <- interpreterPolysemy heaps cryptoData proto
+  let i :: Int = unsafeCoerce a
+  putStrLn $ "User: " ++ show (me heaps) ++ " produced " ++ show i   
 
 main :: IO ()
 main = do
-  uh <- buildUserHeaps
-  cd <- buildCryptoData
-  a <- interpreterPolysemy uh cd coq_UserProto1
-  let i :: Int = unsafeCoerce a
-  putStrLn $ "And we have: " ++ show i
+  hSetBuffering stdout NoBuffering
+  putStrLn "Starting"
+  putStrLn "Building Initial Data..."
+  userDatas <- parseInitialData
+  putStrLn "Building Heaps..."
+  uheaps <- buildUserHeaps (length userDatas)
+  _ <- traverse (\ UserHeaps{..} -> putStrLn $ "User id: " ++ show me) uheaps
+
+  putStrLn "Running protocol..."
+  _ <- mapConcurrently (uncurry runUser) (zip uheaps userDatas)
+
+  putStrLn "Done"
