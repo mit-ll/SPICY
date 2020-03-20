@@ -16,15 +16,11 @@
 -- defined by DFARS 252.227-7013 or DFARS 252.227-7014 as detailed above. Use of this work other than
 -- as specifically authorized by the U.S. Government may violate any copyrights that exist in this work.
 
-module Effects.TChanMessaging
+module Effects.SocketTChanMessaging
   (
-
-    UserHeaps(..)
-  , QueuedMessage(..)
-  , convertFromQueuedMessage
-  , convertToQueuedMessage
-  , recvUntilAccept
-  , runMessagingWithTChan
+    UserMailbox(..)
+  , recvHandler
+  , runMessagingWithSocket
     
   ) where
 
@@ -36,9 +32,7 @@ import           Control.Concurrent (threadDelay)
 import           Crypto.Random (MonadRandom, withDRG)
 
 import qualified Data.Map.Strict as M
-import           Data.Serialize (Serialize)
-
-import           GHC.Generics
+import qualified Data.Serialize as Serialize
 
 import           Polysemy
 import           Polysemy.State (State(..), get, put)
@@ -49,87 +43,62 @@ import           Effects.CryptoniteEffects (CryptoData(..)
                                            , decryptMsgPayload, verifyMsgPayload
                                            , convertToRealMsg, convertFromRealMsg
                                            )
+import           Effects.TChanMessaging
+import qualified Network.Simple.TCP as N
 
 import           Messages
 import qualified RealWorld as R
 
-
-
-data QueuedMessage =
-  QueuedContent RealMsgPayload
-  | QueuedCipher R.Coq_cipher_id StoredCipher
-  deriving (Generic)
-
-instance Serialize QueuedMessage
-
-convertToQueuedMessage :: CryptoData -> Msg -> QueuedMessage
-convertToQueuedMessage CryptoData{..} (R.Content _ msg) =
-  QueuedContent (convertToRealMsg keys msg)
-convertToQueuedMessage CryptoData{..} (R.SignedCiphertext _ cid) =
-  QueuedCipher cid (ciphers M.! cid)
-
-convertFromQueuedMessage :: QueuedMessage -> Msg
-convertFromQueuedMessage (QueuedContent payload) =
-  (R.Content Nat (convertFromRealMsg payload))
-convertFromQueuedMessage (QueuedCipher cid _) =
-  (R.SignedCiphertext Nat cid)
-
-type Mailboxes = M.Map Int (TChan QueuedMessage)
-
-data UserHeaps = UserHeaps {
+data UserMailbox = UserMailbox {
     me :: Int
-  , mailboxes :: Mailboxes
+  , mailbox :: TChan QueuedMessage
   }
 
-matchesPattern :: MonadRandom m => CryptoData -> Pattern -> QueuedMessage -> m Bool
-matchesPattern _ R.Accept _            = return True
-matchesPattern _ _ (QueuedContent _) = return False
-matchesPattern CryptoData{..} (R.Signed kid _) (QueuedCipher _ c) =
-  case M.lookup kid keys of
-    Nothing -> return False
-    Just k  -> verifyMsgPayload k c
-matchesPattern CryptoData{..} (R.SignedEncrypted ksignid kencid _) (QueuedCipher _ c) =
-  case (M.lookup ksignid keys, M.lookup kencid keys) of
+uidToSocket :: Int -> String
+uidToSocket = show . (30000 +)
 
-    (Just ksign, Just kenc) -> do
-      _ <- decryptMsgPayload ksign kenc c
-      return True
-      
-    _ -> return False
+recvHandler :: Int -> TChan QueuedMessage -> IO ()
+recvHandler uid mbox =
+  N.serve N.HostAny (uidToSocket uid) $ \(connectionSocket, remoteAddr) -> do
+       putStrLn $ "Connection established to " ++ show remoteAddr
+       msg <- N.recv connectionSocket 1024
+       case msg of
+         Nothing -> putStrLn "Received no data"
+         Just m  ->
+           let (eqm :: Either String QueuedMessage) = Serialize.decode m
+           in  case eqm of
+                 Left err -> putStrLn $ "Error decoding: " ++ err
+                 Right qm -> do
+                   putStrLn "Queueing message"
+                   atomically $ writeTChan mbox qm
 
-recvUntilAccept :: CryptoData -> TChan QueuedMessage -> Pattern -> IO (CryptoData, QueuedMessage)
-recvUntilAccept cryptoData mbox pat = do
-  qm <- atomically $ readTChan mbox
-  let (done,drg') = withDRG (drg cryptoData) (matchesPattern cryptoData pat qm)
-  let cryptoData' = cryptoData { drg = drg' }
-  _ <- putStrLn $ "Read msg.  Done? " ++ show done
-  if done
-    then  return (cryptoData', qm)
-    else recvUntilAccept cryptoData' mbox pat
+sendToSocket :: Int -> QueuedMessage -> IO ()
+sendToSocket uid qm =
+  N.connect "localhost" (uidToSocket uid) $ \(connectionSocket, remoteAddr) -> do
+    putStrLn $ "Connected establishted to " ++ show remoteAddr
+    let msgBytes = Serialize.encode qm
+    N.send connectionSocket msgBytes
 
 -- | Here's where the action happens.  Execute each cryptographic command
 -- within our DSL using /cryptonite/ primitives.  All algorithms are currently
 -- hardcoded.  Future work could generalize this.
-runMessagingWithTChan :: (Member (State UserHeaps) r, Member (State CryptoData) r, Member (Embed IO) r)
+runMessagingWithSocket :: (Member (State UserMailbox) r, Member (State CryptoData) r, Member (Embed IO) r)
   => Sem (Messaging : r) a -> Sem r a
-runMessagingWithTChan = interpret $ \case
+runMessagingWithSocket = interpret $ \case
   Send _ uid msg -> do
-    UserHeaps{..} <- get
     cryptoData <- get
     let qm = convertToQueuedMessage cryptoData msg
-    let mbox = mailboxes M.! uid
     _ <- embed (putStrLn $ "Sending to user " ++ show uid)
-    _ <- embed (atomically $ writeTChan mbox qm)
+    _ <- embed (sendToSocket uid qm)
     _ <- embed ( threadDelay 2000000 )
     (return . unsafeCoerce) ()
 
   Recv _ pat -> do
-    UserHeaps{..} <- get
+    UserMailbox{..} <- get
     cryptoData <- get
-    let mbox = mailboxes M.! me
     _ <- embed ( threadDelay 1000000 )
     _ <- embed (putStrLn $ "Waiting on my mailbox " ++ show me)
-    (cryptoData', qm) <- embed (recvUntilAccept cryptoData mbox pat)
+    (cryptoData', qm) <- embed (recvUntilAccept cryptoData mailbox pat)
     let cryptoData'' =
           case qm of
             QueuedContent _ -> cryptoData'

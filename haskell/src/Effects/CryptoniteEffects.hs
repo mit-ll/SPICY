@@ -41,17 +41,23 @@ import           Crypto.Hash.Algorithms (SHA256(..))
 import           Crypto.MAC.HMAC (HMAC(..), hmac)
 -- Asymmetric Operations
 import           Crypto.PubKey.RSA.PKCS15 (decryptSafer, signSafer, encrypt, verify)
-import           Crypto.PubKey.RSA (PublicKey, PrivateKey, generate)
+import           Crypto.PubKey.RSA (PublicKey(..), PrivateKey(..), generate)
 
 import           Crypto.Random (MonadRandom, SystemDRG, withDRG)
 import           Crypto.Random.Types (getRandomBytes)
 
+-- import qualified Data.Aeson as Aeson
+-- import           Data.Aeson (FromJSON, ToJSON)
 import           Data.ByteArray (convert)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
+import           Data.Serialize (Serialize)
+-- import qualified Data.Text.Encoding as T
 
 import qualified Data.Map.Strict as M
+
+import           GHC.Generics
 
 import           Polysemy
 import           Polysemy.State (State(..), get, put)
@@ -63,23 +69,57 @@ import qualified Keys as KS
 import qualified RealWorld as R
 
 
+deriving instance Generic PublicKey
+deriving instance Generic PrivateKey
+
 data CryptoKey =
   SymmKey ByteString
   | AsymKey PublicKey (Maybe PrivateKey)
+  deriving (Generic)
 
 data RealMsgPayload =
   PermissionPayload Key CryptoKey
   | ContentPayload Int
   | PairPayload RealMsgPayload RealMsgPayload
+  deriving (Generic)
 
 data EncMsg =
   StoredPermission ByteString CryptoKey
   | StoredContent ByteString
   | StoredPair EncMsg EncMsg
+  deriving (Generic)
 
 data StoredCipher =
   SignedCipher ByteString RealMsgPayload
   | EncryptedCipher ByteString EncMsg
+  deriving (Generic)
+
+instance Serialize PublicKey
+instance Serialize PrivateKey
+instance Serialize CryptoKey
+instance Serialize RealMsgPayload
+instance Serialize EncMsg
+instance Serialize StoredCipher
+
+-- instance ToJSON ByteString where
+--   toJSON = Aeson.toJSON . T.decodeUtf8
+
+-- instance FromJSON ByteString where
+--   parseJSON (Aeson.String s) = (pure . T.encodeUtf8) s
+--   parseJSON x = error $ "Can't parse " ++ show x
+
+-- instance ToJSON PublicKey
+-- instance FromJSON PublicKey
+-- instance ToJSON PrivateKey
+-- instance FromJSON PrivateKey
+-- instance ToJSON CryptoKey
+-- instance FromJSON CryptoKey
+-- instance ToJSON RealMsgPayload
+-- instance FromJSON RealMsgPayload
+-- instance ToJSON EncMsg
+-- instance FromJSON EncMsg
+-- instance ToJSON StoredCipher
+-- instance FromJSON StoredCipher
 
 -- | Simple utility function to create a ByteString out of anything that can
 -- be converted to a String

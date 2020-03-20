@@ -29,8 +29,9 @@ default-extensions:
   # - TemplateHaskell
 
   # Deriving extensions
-  - GeneralizedNewtypeDeriving
   - DeriveGeneric
+  - GeneralizedNewtypeDeriving
+  - StandaloneDeriving
 
   # Misc extensions
   - OverloadedStrings
@@ -39,14 +40,20 @@ default-extensions:
 
 dependencies:
   - base
+  - aeson
   - async
   - bytestring
+  - cereal
   - containers
   - cryptonite
+  - directory
   - memory
+  - network-simple
   - polysemy
   # - polysemy-plugin
+  - optparse-generic
   - stm
+  - text
 
 library:
  source-dirs:
@@ -57,6 +64,7 @@ library:
    - Effects.CryptoniteEffects
    - Effects.Messaging
    - Effects.PrintingEffects
+   - Effects.SocketTChanMessaging
    - Effects.TChanMessaging
    - Effects.Types
    - Interpreter
@@ -93,4 +101,14 @@ executables:
       - protocol-runner
       - base
       - async
+      - stm
+
+  runProtoSplit:
+    main: RunProtoSplit.main
+    source-dirs: [app]
+    dependencies:
+      - protocol-runner
+      - base
+      - async
+      - optparse-generic
       - stm

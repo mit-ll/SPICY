@@ -16,26 +16,32 @@
 -- defined by DFARS 252.227-7013 or DFARS 252.227-7014 as detailed above. Use of this work other than
 -- as specifically authorized by the U.S. Government may violate any copyrights that exist in this work.
 
-module RunProto where
+module RunProtoSplit where
 
 import           Control.Concurrent (threadDelay)
-import           Control.Concurrent.Async (mapConcurrently)
+import           Control.Concurrent.Async (async)
 import           Control.Concurrent.STM
 import           Crypto.Random (MonadRandom, SystemDRG, getSystemDRG, withDRG)
+import qualified Data.ByteString as BS
 import           Data.Function ((&))
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
+import qualified Data.Serialize as Serialize
 
 import           Polysemy
 import           Polysemy.State (evalState)
 
+import           Options.Generic
+import           System.Directory (doesFileExist)
 import           System.IO
 
 import           Effects
 import           Effects.CryptoniteEffects
-import           Effects.TChanMessaging
+import           Effects.SocketTChanMessaging
+-- import           Effects.TChanMessaging
 import           Interpreter
 import           ProtocolExtraction
+
 
 
 import qualified Keys as KS
@@ -70,53 +76,73 @@ buildCryptoData ks = do
 instance Show (KS.Coq_key) where
   show (KS.MkCryptoKey kid usage typ) = show kid
 
+loadKeyFromFile :: Key -> FilePath -> IO (Key, CryptoKey)
+loadKeyFromFile kid fname = do
+  keyBytes <- BS.readFile fname
+  case Serialize.decode keyBytes of
+    Left err -> error $ "Error reading file " ++ fname
+    Right k  -> return (kid, k)
+
+mkOrReadKey :: KS.Coq_key -> IO (Key, CryptoKey)
+mkOrReadKey k@(KS.MkCryptoKey kid _ _) = do
+  let fname = show kid ++ ".key"
+  ex <- doesFileExist fname
+  if ex
+    then loadKeyFromFile kid fname
+    else do
+            kp@(kid',ck) <- mkKey k
+            _ <- BS.writeFile fname (Serialize.encode ck)
+            return kp
+
 parseInitialData :: IO [UserData]
 parseInitialData = do
   let (keys, permsProtos) = simpleSendProto
-  cryptoKeysList <- traverse mkKey keys
+  cryptoKeysList <- traverse mkOrReadKey keys
   let keyMap = M.fromList cryptoKeysList
   let permsProtos' = (\(perms,proto) -> (permToKey keyMap <$> perms , proto)) <$> permsProtos
   return $ (uncurry UserData) <$> permsProtos'
 
+buildUserMailbox :: Int -> IO UserMailbox
+buildUserMailbox n = do
+  mbox <- newTChanIO
+  return UserMailbox { me = n, mailbox = mbox }
 
-buildUserHeaps :: Int -> IO [UserHeaps]
-buildUserHeaps n = do
-  tchanPairs <- traverse (\i -> (i,) <$> newTChanIO) [0 .. (n-1)]
-  let mboxes = M.fromList tchanPairs
-  return $ (\(i,_) -> UserHeaps { me = i, mailboxes = mboxes }) <$> tchanPairs
-
-interpreterPolysemy :: UserHeaps -> CryptoData -> Protocol -> IO a
-interpreterPolysemy uh cd p =
+interpreterPolysemy :: UserMailbox -> CryptoData -> Protocol -> IO a
+interpreterPolysemy um cd p =
   protocolInterpreter p
   & runCryptoWithCryptonite
-  & runMessagingWithTChan
-  & evalState uh
+  & runMessagingWithSocket
+  & evalState um
   & evalState cd
   & runM
 
-runUser :: UserHeaps -> UserData -> IO ()
-runUser heaps (UserData keys proto) = do
-  let uid = me heaps
-  _ <- threadDelay (uid * 500000)
+runUser :: Int -> IO ()
+runUser uid = do
   putStrLn $ "Running user: " ++ show uid
-  _ <- threadDelay 500000
+  _ <- threadDelay (uid * 500000)
+  userDatas <- parseInitialData
+  let (UserData keys proto) = userDatas !! uid
   cryptoData <- buildCryptoData keys
-  a <- interpreterPolysemy heaps cryptoData proto
-
+  um <- buildUserMailbox uid
+  thr <- async (recvHandler uid (mailbox um))
+  
+  a <- interpreterPolysemy um cryptoData proto
   let i :: Int = unsafeCoerce a
-  putStrLn $ "User: " ++ show (me heaps) ++ " produced " ++ show i   
+  putStrLn $ "User: " ++ show uid ++ " produced " ++ show i
+
+
+data CLI = CLI {
+  user :: Int
+  } deriving (Generic, Show)
+
+instance ParseRecord CLI
 
 main :: IO ()
 main = do
   hSetBuffering stdout NoBuffering
   putStrLn "Starting"
-  putStrLn "Building Initial Data..."
-  userDatas <- parseInitialData
-  putStrLn "Building Heaps..."
-  uheaps <- buildUserHeaps (length userDatas)
-  _ <- traverse (\ UserHeaps{..} -> putStrLn $ "User id: " ++ show me) uheaps
+  CLI{..} <- getRecord "CLI"
 
-  putStrLn "Running protocol..."
-  _ <- mapConcurrently (uncurry runUser) (zip uheaps userDatas)
+  runUser user
 
   putStrLn "Done"
