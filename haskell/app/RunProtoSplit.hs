@@ -58,8 +58,8 @@ permToKey keys (kid,tf) =
   in  (kid, if tf 
             then k
             else case k of
-                   AsymKey pub _ ->
-                     AsymKey pub Nothing
+                   AsymKey kid' pub _ ->
+                     AsymKey kid' pub Nothing
                    _ ->
                      k)
 
@@ -80,7 +80,7 @@ loadKeyFromFile :: Key -> FilePath -> IO (Key, CryptoKey)
 loadKeyFromFile kid fname = do
   keyBytes <- BS.readFile fname
   case Serialize.decode keyBytes of
-    Left err -> error $ "Error reading file " ++ fname
+    Left _ -> error $ "Error reading file " ++ fname
     Right k  -> return (kid, k)
 
 mkOrReadKey :: KS.Coq_key -> IO (Key, CryptoKey)
@@ -90,9 +90,9 @@ mkOrReadKey k@(KS.MkCryptoKey kid _ _) = do
   if ex
     then loadKeyFromFile kid fname
     else do
-            kp@(kid',ck) <- initKey k
+            ck <- initKey k
             _ <- BS.writeFile fname (Serialize.encode ck)
-            return kp
+            return (getKeyId ck, ck)
 
 buildUserMailbox :: Int -> IO UserMailbox
 buildUserMailbox n = do

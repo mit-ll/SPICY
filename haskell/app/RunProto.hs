@@ -52,8 +52,8 @@ permToKey keys (kid,tf) =
   in  (kid, if tf 
             then k
             else case k of
-                   AsymKey pub _ ->
-                     AsymKey pub Nothing
+                   AsymKey kid' pub _ ->
+                     AsymKey kid' pub Nothing
                    _ ->
                      k)
 
@@ -74,7 +74,7 @@ parseInitialData :: IO [UserData]
 parseInitialData = do
   let (keys, permsProtos) = simpleSendProto
   cryptoKeysList <- traverse initKey keys
-  let keyMap = M.fromList cryptoKeysList
+  let keyMap = M.fromList $ (\k -> (getKeyId k, k)) <$> cryptoKeysList
   let permsProtos' = (\(perms,proto) -> (permToKey keyMap <$> perms , proto)) <$> permsProtos
   return $ (uncurry UserData) <$> permsProtos'
 

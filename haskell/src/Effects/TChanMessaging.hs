@@ -84,9 +84,9 @@ findKeysRealPayload (PairPayload m1 m2) =
 findKeysQueuedMsg :: QueuedMessage -> [(Int,CryptoKey)]
 findKeysQueuedMsg (QueuedContent realPayload) =
   findKeysRealPayload realPayload
-findKeysQueuedMsg (QueuedCipher _ (SignedCipher _ realPayload)) =
+findKeysQueuedMsg (QueuedCipher _ (SignedCipher _ _ realPayload)) =
   findKeysRealPayload realPayload
-findKeysQueuedMsg (QueuedCipher _ (EncryptedCipher _ _)) =
+findKeysQueuedMsg (QueuedCipher _ (EncryptedCipher _ _ _ _)) =
   []
 
 type Mailboxes = M.Map Int (TChan QueuedMessage)
@@ -96,31 +96,39 @@ data UserHeaps = UserHeaps {
   , mailboxes :: Mailboxes
   }
 
-matchesPattern :: MonadRandom m => CryptoData -> Pattern -> QueuedMessage -> m Bool
-matchesPattern _ R.Accept _            = return True
-matchesPattern _ _ (QueuedContent _) = return False
+matchesPattern :: CryptoData -> Pattern -> QueuedMessage -> Bool
+matchesPattern _ R.Accept _            = True
+matchesPattern _ _ (QueuedContent _) = False
 matchesPattern CryptoData{..} (R.Signed kid _) (QueuedCipher _ c) =
-  case M.lookup kid keys of
-    Nothing -> return False
-    Just k  -> verifyMsgPayload k c
+  case c of
+    SignedCipher ksign _ _ ->
+      ksign == kid
+    _ -> False
+  -- case M.lookup kid keys of
+  --   Nothing -> return False
+  --   Just k  -> verifyMsgPayload k c
 matchesPattern CryptoData{..} (R.SignedEncrypted ksignid kencid _) (QueuedCipher _ c) =
-  case (M.lookup ksignid keys, M.lookup kencid keys) of
+  case c of
+    EncryptedCipher ksign kenc _ _ ->
+      ksign == ksignid && kenc == kencid
+    _ -> False
+  
+  -- case (M.lookup ksignid keys, M.lookup kencid keys) of
 
-    (Just ksign, Just kenc) -> do
-      _ <- decryptMsgPayload ksign kenc c
-      return True
+  --   (Just ksign, Just kenc) -> do
+  --     _ <- decryptMsgPayload keys c
+  --     return True
       
-    _ -> return False
+  --   _ -> return False
 
 recvUntilAccept :: CryptoData -> TChan QueuedMessage -> Pattern -> IO (CryptoData, QueuedMessage)
 recvUntilAccept cryptoData mbox pat = do
   qm <- atomically $ readTChan mbox
-  let (done,drg') = withDRG (drg cryptoData) (matchesPattern cryptoData pat qm)
-  let cryptoData' = cryptoData { drg = drg' }
+  let done = matchesPattern cryptoData pat qm
   _ <- putStrLn $ "Read msg.  Done? " ++ show done
   if done
-    then  return (cryptoData', qm)
-    else recvUntilAccept cryptoData' mbox pat
+    then  return (cryptoData, qm)
+    else recvUntilAccept cryptoData mbox pat
 
 -- | Here's where the action happens.  Execute each cryptographic command
 -- within our DSL using /cryptonite/ primitives.  All algorithms are currently
