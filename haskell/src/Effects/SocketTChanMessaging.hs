@@ -28,9 +28,12 @@ import           Unsafe.Coerce
 
 import           Control.Concurrent.STM
 import           Control.Concurrent (threadDelay)
+import           Control.Exception
 
 import           Crypto.Random (MonadRandom, withDRG)
 
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as C8
 import qualified Data.Map.Strict as M
 import qualified Data.Serialize as Serialize
 
@@ -61,7 +64,7 @@ recvHandler :: Int -> TChan QueuedMessage -> IO ()
 recvHandler uid mbox =
   N.serve N.HostAny (uidToSocket uid) $ \(connectionSocket, remoteAddr) -> do
        putStrLn $ "Connection established to " ++ show remoteAddr
-       msg <- N.recv connectionSocket 1024
+       msg <- N.recv connectionSocket 8192
        case msg of
          Nothing -> putStrLn "Received no data"
          Just m  ->
@@ -77,6 +80,7 @@ sendToSocket uid qm =
   N.connect "localhost" (uidToSocket uid) $ \(connectionSocket, remoteAddr) -> do
     putStrLn $ "Connected establishted to " ++ show remoteAddr
     let msgBytes = Serialize.encode qm
+    putStrLn $ "Sending msg of size: " ++ show (BS.length msgBytes)
     N.send connectionSocket msgBytes
 
 -- | Here's where the action happens.  Execute each cryptographic command
@@ -99,12 +103,14 @@ runMessagingWithSocket = interpret $ \case
     _ <- embed ( threadDelay 1000000 )
     _ <- embed (putStrLn $ "Waiting on my mailbox " ++ show me)
     (cryptoData', qm) <- embed (recvUntilAccept cryptoData mailbox pat)
+    let newKeys = findKeysQueuedMsg qm
+    let keys' = foldr (\(kid,k) m -> M.insert kid k m) (keys cryptoData') newKeys
     let cryptoData'' =
           case qm of
-            QueuedContent _ -> cryptoData'
-            QueuedCipher cid c -> cryptoData' { ciphers = M.insert cid c (ciphers cryptoData') }
+            QueuedContent _ -> cryptoData' { keys = keys' }
+            QueuedCipher cid c -> cryptoData' { keys = keys' ,
+                                               ciphers = M.insert cid c (ciphers cryptoData') }
             
     _ <- put cryptoData''
-    -- _ <- put userHeaps { cryptoData = cryptoData' }
     let msg = convertFromQueuedMessage qm
     (return . unsafeCoerce) msg

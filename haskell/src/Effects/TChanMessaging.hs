@@ -23,6 +23,7 @@ module Effects.TChanMessaging
   , QueuedMessage(..)
   , convertFromQueuedMessage
   , convertToQueuedMessage
+  , findKeysQueuedMsg
   , recvUntilAccept
   , runMessagingWithTChan
     
@@ -44,7 +45,7 @@ import           Polysemy
 import           Polysemy.State (State(..), get, put)
 
 import           Effects
-import           Effects.CryptoniteEffects (CryptoData(..)
+import           Effects.CryptoniteEffects (CryptoData(..), CryptoKey
                                            , RealMsgPayload(..), StoredCipher(..)
                                            , decryptMsgPayload, verifyMsgPayload
                                            , convertToRealMsg, convertFromRealMsg
@@ -56,9 +57,9 @@ import qualified RealWorld as R
 
 
 data QueuedMessage =
-  QueuedContent RealMsgPayload
-  | QueuedCipher R.Coq_cipher_id StoredCipher
-  deriving (Generic)
+  QueuedContent !RealMsgPayload
+  | QueuedCipher R.Coq_cipher_id !StoredCipher
+  deriving (Show, Generic)
 
 instance Serialize QueuedMessage
 
@@ -73,6 +74,20 @@ convertFromQueuedMessage (QueuedContent payload) =
   (R.Content Nat (convertFromRealMsg payload))
 convertFromQueuedMessage (QueuedCipher cid _) =
   (R.SignedCiphertext Nat cid)
+
+findKeysRealPayload :: RealMsgPayload -> [(Int,CryptoKey)]
+findKeysRealPayload (PermissionPayload kid k) = [(kid,k)]
+findKeysRealPayload (ContentPayload _) = []
+findKeysRealPayload (PairPayload m1 m2) =
+  findKeysRealPayload m1 ++ findKeysRealPayload m2
+
+findKeysQueuedMsg :: QueuedMessage -> [(Int,CryptoKey)]
+findKeysQueuedMsg (QueuedContent realPayload) =
+  findKeysRealPayload realPayload
+findKeysQueuedMsg (QueuedCipher _ (SignedCipher _ realPayload)) =
+  findKeysRealPayload realPayload
+findKeysQueuedMsg (QueuedCipher _ (EncryptedCipher _ _)) =
+  []
 
 type Mailboxes = M.Map Int (TChan QueuedMessage)
 
@@ -130,11 +145,13 @@ runMessagingWithTChan = interpret $ \case
     _ <- embed ( threadDelay 1000000 )
     _ <- embed (putStrLn $ "Waiting on my mailbox " ++ show me)
     (cryptoData', qm) <- embed (recvUntilAccept cryptoData mbox pat)
+    let newKeys = findKeysQueuedMsg qm
+    let keys' = foldr (\(kid,k) m -> M.insert kid k m) (keys cryptoData') newKeys
     let cryptoData'' =
           case qm of
-            QueuedContent _ -> cryptoData'
-            QueuedCipher cid c -> cryptoData' { ciphers = M.insert cid c (ciphers cryptoData') }
-            
+            QueuedContent _ -> cryptoData' { keys = keys' }
+            QueuedCipher cid c -> cryptoData' { keys = keys' ,
+                                               ciphers = M.insert cid c (ciphers cryptoData') }
     _ <- put cryptoData''
     -- _ <- put userHeaps { cryptoData = cryptoData' }
     let msg = convertFromQueuedMessage qm

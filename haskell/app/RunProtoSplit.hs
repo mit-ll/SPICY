@@ -90,17 +90,9 @@ mkOrReadKey k@(KS.MkCryptoKey kid _ _) = do
   if ex
     then loadKeyFromFile kid fname
     else do
-            kp@(kid',ck) <- mkKey k
+            kp@(kid',ck) <- initKey k
             _ <- BS.writeFile fname (Serialize.encode ck)
             return kp
-
-parseInitialData :: IO [UserData]
-parseInitialData = do
-  let (keys, permsProtos) = simpleSendProto
-  cryptoKeysList <- traverse mkOrReadKey keys
-  let keyMap = M.fromList cryptoKeysList
-  let permsProtos' = (\(perms,proto) -> (permToKey keyMap <$> perms , proto)) <$> permsProtos
-  return $ (uncurry UserData) <$> permsProtos'
 
 buildUserMailbox :: Int -> IO UserMailbox
 buildUserMailbox n = do
@@ -116,11 +108,10 @@ interpreterPolysemy um cd p =
   & evalState cd
   & runM
 
-runUser :: Int -> IO ()
-runUser uid = do
+runUser :: Int -> [UserData] -> IO ()
+runUser uid userDatas = do
   putStrLn $ "Running user: " ++ show uid
   _ <- threadDelay (uid * 500000)
-  userDatas <- parseInitialData
   let (UserData keys proto) = userDatas !! uid
   cryptoData <- buildCryptoData keys
   um <- buildUserMailbox uid
@@ -130,12 +121,26 @@ runUser uid = do
   let i :: Int = unsafeCoerce a
   putStrLn $ "User: " ++ show uid ++ " produced " ++ show i
 
-
 data CLI = CLI {
   user :: Int
+  , proto :: String
   } deriving (Generic, Show)
 
 instance ParseRecord CLI
+
+parseInitialData :: String -> IO [UserData]
+parseInitialData p = do
+  let (keys, permsProtos) =
+        case p of
+          "ping" ->
+            simpleSendProto
+          "sharesec" ->
+            shareSecretProto
+
+  cryptoKeysList <- traverse mkOrReadKey keys
+  let keyMap = M.fromList cryptoKeysList
+  let permsProtos' = (\(perms,proto) -> (permToKey keyMap <$> perms , proto)) <$> permsProtos
+  return $ (uncurry UserData) <$> permsProtos'
 
 main :: IO ()
 main = do
@@ -143,6 +148,7 @@ main = do
   putStrLn "Starting"
   CLI{..} <- getRecord "CLI"
 
-  runUser user
+  datas <- parseInitialData proto
+  runUser user datas
 
   putStrLn "Done"

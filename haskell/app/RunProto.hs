@@ -73,7 +73,7 @@ instance Show (KS.Coq_key) where
 parseInitialData :: IO [UserData]
 parseInitialData = do
   let (keys, permsProtos) = simpleSendProto
-  cryptoKeysList <- traverse mkKey keys
+  cryptoKeysList <- traverse initKey keys
   let keyMap = M.fromList cryptoKeysList
   let permsProtos' = (\(perms,proto) -> (permToKey keyMap <$> perms , proto)) <$> permsProtos
   return $ (uncurry UserData) <$> permsProtos'

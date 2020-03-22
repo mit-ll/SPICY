@@ -34,6 +34,7 @@ default-extensions:
   - StandaloneDeriving
 
   # Misc extensions
+  - BangPatterns
   - OverloadedStrings
   - RecordWildCards
   - TupleSections
