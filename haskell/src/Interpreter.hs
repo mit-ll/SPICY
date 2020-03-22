@@ -54,7 +54,7 @@ protocolInterpreter (Bind _ _ cmd nxt) =
     v <- protocolInterpreter cmd
     protocolInterpreter (nxt (unsafeCoerce v))
 protocolInterpreter Gen =
-  (pure . unsafeCoerce) ( 1 :: Int )
+  unsafeCoerce <$> genRand
 protocolInterpreter (RealWorld.Send typ user_id c) =
   unsafeCoerce <$> send typ user_id c
 protocolInterpreter (RealWorld.Recv typ pat) =

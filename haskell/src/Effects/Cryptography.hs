@@ -21,6 +21,7 @@ module Effects.Cryptography
 
     Crypto(..)
 
+  , genRand
   , mkSymmetricKey
   , mkAsymmetricKey
   , signMessage
@@ -36,8 +37,9 @@ import           Polysemy.Internal (send)
 import           Effects.Types
 
 
-
 data Crypto m a where
+  GenRand :: Crypto m Int
+  
   MkSymmetricKey :: KeyUsage -> Crypto m Permission
   MkAsymmetricKey :: KeyUsage -> Crypto m Permission
 
@@ -46,6 +48,9 @@ data Crypto m a where
 
   VerifyMessage :: Typ -> Key -> Msg -> Crypto m (Bool, MsgPayload)
   DecryptMessage :: Typ -> Msg -> Crypto m MsgPayload
+
+genRand :: Member Crypto r => Sem r Int
+genRand = send ( GenRand :: Crypto (Sem r) Int )
 
 mkSymmetricKey :: Member Crypto r => KeyUsage -> Sem r Permission
 mkSymmetricKey ku = send ( MkSymmetricKey ku :: Crypto (Sem r) Permission )

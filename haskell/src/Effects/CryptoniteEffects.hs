@@ -49,6 +49,8 @@ import           Crypto.Random.Types (getRandomBytes)
 
 -- import qualified Data.Aeson as Aeson
 -- import           Data.Aeson (FromJSON, ToJSON)
+import           Data.Bits (shift, (.|.))
+
 import           Data.ByteArray (convert)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
@@ -324,7 +326,7 @@ initKey (KS.MkCryptoKey kid _ kt) = mkKey kid kt
 -- | Helper keygen for initialization
 mkKey :: MonadRandom m => Key -> KS.Coq_key_type -> m CryptoKey
 mkKey kid KS.SymKey = do
-  -- generate the key (23*8 = 256 bits)
+  -- generate the key (32*8 = 256 bits)
   bs <- getRandomBytes 32
   return $ SymmKey kid bs
 mkKey kid KS.AsymKey = do
@@ -337,13 +339,27 @@ nextKey m =
   case M.lookupMax m of
     Nothing -> 0
     Just (k,_) -> k+10
- 
+
+readInt :: ByteString -> Int
+readInt bs = (byte 0 `shift` 24)
+             .|. (byte 1 `shift` 16)
+             .|. (byte 2 `shift` 8)
+             .|. byte 3
+  where byte n = fromIntegral $ (bs `BS.index` n)
+  
 -- | Here's where the action happens.  Execute each cryptographic command
 -- within our DSL using /cryptonite/ primitives.  All algorithms are currently
 -- hardcoded.  Future work could generalize this.
 runCryptoWithCryptonite :: Member (State CryptoData) r
   => Sem (Crypto : r) a -> Sem r a
 runCryptoWithCryptonite = interpret $ \case
+  GenRand -> do
+    cryptData@CryptoData{..} <- get
+    let (r :: BS.ByteString , drg') = withDRG drg (getRandomBytes 4)
+    let n = readInt r
+    _ <- put $ cryptData { drg = drg' }
+    (return . unsafeCoerce) n
+    
   MkSymmetricKey _  -> do
     cryptData@CryptoData{..} <- get
     let kid = nextKey keys

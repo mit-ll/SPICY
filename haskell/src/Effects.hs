@@ -38,7 +38,8 @@ module Effects
   , Effects.Cryptography.Crypto(..)
   , send
   , recv
-  
+
+  , genRand
   , mkSymmetricKey
   , mkAsymmetricKey
   , signMessage
