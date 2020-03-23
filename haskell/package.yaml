@@ -41,7 +41,8 @@ default-extensions:
 
 dependencies:
   - base
-  - aeson
+  # - aeson
+  - ansi-terminal
   - async
   - bytestring
   - cereal
@@ -61,6 +62,7 @@ library:
    - src
  exposed-modules:
    - Effects
+   - Effects.ColorizedOutput
    - Effects.Cryptography
    - Effects.CryptoniteEffects
    - Effects.Messaging

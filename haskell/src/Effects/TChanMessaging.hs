@@ -34,8 +34,6 @@ import           Unsafe.Coerce
 import           Control.Concurrent.STM
 import           Control.Concurrent (threadDelay)
 
-import           Crypto.Random (MonadRandom, withDRG)
-
 import qualified Data.Map.Strict as M
 import           Data.Serialize (Serialize)
 
@@ -45,6 +43,7 @@ import           Polysemy
 import           Polysemy.State (State(..), get, put)
 
 import           Effects
+import           Effects.ColorizedOutput
 import           Effects.CryptoniteEffects (CryptoData(..), CryptoKey
                                            , RealMsgPayload(..), StoredCipher(..)
                                            , decryptMsgPayload, verifyMsgPayload
@@ -125,10 +124,13 @@ recvUntilAccept :: CryptoData -> TChan QueuedMessage -> Pattern -> IO (CryptoDat
 recvUntilAccept cryptoData mbox pat = do
   qm <- atomically $ readTChan mbox
   let done = matchesPattern cryptoData pat qm
-  _ <- putStrLn $ "Read msg.  Done? " ++ show done
   if done
-    then  return (cryptoData, qm)
-    else recvUntilAccept cryptoData mbox pat
+    then  do
+      printMessage "Processed message"
+      return (cryptoData, qm)
+    else do
+      printErrorLn "Dropping potentially malicious message"
+      recvUntilAccept cryptoData mbox pat
 
 -- | Here's where the action happens.  Execute each cryptographic command
 -- within our DSL using /cryptonite/ primitives.  All algorithms are currently

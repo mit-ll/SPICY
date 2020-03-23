@@ -28,12 +28,8 @@ import           Unsafe.Coerce
 
 import           Control.Concurrent.STM
 import           Control.Concurrent (threadDelay)
-import           Control.Exception
-
-import           Crypto.Random (MonadRandom, withDRG)
 
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as C8
 import qualified Data.Map.Strict as M
 import qualified Data.Serialize as Serialize
 
@@ -41,16 +37,12 @@ import           Polysemy
 import           Polysemy.State (State(..), get, put)
 
 import           Effects
-import           Effects.CryptoniteEffects (CryptoData(..)
-                                           , RealMsgPayload(..), StoredCipher(..)
-                                           , decryptMsgPayload, verifyMsgPayload
-                                           , convertToRealMsg, convertFromRealMsg
-                                           )
+import           Effects.ColorizedOutput
+import           Effects.CryptoniteEffects (CryptoData(..))
+
 import           Effects.TChanMessaging
 import qualified Network.Simple.TCP as N
 
-import           Messages
-import qualified RealWorld as R
 
 data UserMailbox = UserMailbox {
     me :: Int
@@ -63,24 +55,24 @@ uidToSocket = show . (30000 +)
 recvHandler :: Int -> TChan QueuedMessage -> IO ()
 recvHandler uid mbox =
   N.serve N.HostAny (uidToSocket uid) $ \(connectionSocket, remoteAddr) -> do
-       putStrLn $ "Connection established to " ++ show remoteAddr
+       printInfoLn $ "Connection established to " ++ show remoteAddr
        msg <- N.recv connectionSocket 8192
        case msg of
-         Nothing -> putStrLn "Received no data"
+         Nothing -> printErrorLn "Received no data"
          Just m  ->
            let (eqm :: Either String QueuedMessage) = Serialize.decode m
            in  case eqm of
-                 Left err -> putStrLn $ "Error decoding: " ++ err
+                 Left err -> printErrorLn $ "Error decoding: " ++ err
                  Right qm -> do
-                   putStrLn "Queueing message"
+                   printInfoLn "Queueing message"
                    atomically $ writeTChan mbox qm
 
 sendToSocket :: Int -> QueuedMessage -> IO ()
 sendToSocket uid qm =
   N.connect "localhost" (uidToSocket uid) $ \(connectionSocket, remoteAddr) -> do
-    putStrLn $ "Connected establishted to " ++ show remoteAddr
+    printInfoLn $ "Connected establishted to " ++ show remoteAddr
     let msgBytes = Serialize.encode qm
-    putStrLn $ "Sending msg of size: " ++ show (BS.length msgBytes)
+    printMessage $ "Sending msg of size: " ++ show (BS.length msgBytes)
     N.send connectionSocket msgBytes
 
 -- | Here's where the action happens.  Execute each cryptographic command
@@ -92,8 +84,8 @@ runMessagingWithSocket = interpret $ \case
   Send _ uid msg -> do
     cryptoData <- get
     let qm = convertToQueuedMessage cryptoData msg
-    _ <- embed (putStrLn $ "Sending to user " ++ show uid)
-    _ <- embed (sendToSocket uid qm)
+    _ <- embed ( printMessage $ "Sending to user " ++ show uid )
+    _ <- embed ( sendToSocket uid qm )
     _ <- embed ( threadDelay 2000000 )
     (return . unsafeCoerce) ()
 
@@ -101,7 +93,7 @@ runMessagingWithSocket = interpret $ \case
     UserMailbox{..} <- get
     cryptoData <- get
     _ <- embed ( threadDelay 1000000 )
-    _ <- embed (putStrLn $ "Waiting on my mailbox " ++ show me)
+    _ <- embed ( printInfoLn $ "Waiting on my mailbox " ++ show me)
     (cryptoData', qm) <- embed (recvUntilAccept cryptoData mailbox pat)
     let newKeys = findKeysQueuedMsg qm
     let keys' = foldr (\(kid,k) m -> M.insert kid k m) (keys cryptoData') newKeys

@@ -36,9 +36,9 @@ import           System.Directory (doesFileExist)
 import           System.IO
 
 import           Effects
+import           Effects.ColorizedOutput
 import           Effects.CryptoniteEffects
 import           Effects.SocketTChanMessaging
--- import           Effects.TChanMessaging
 import           Interpreter
 import           ProtocolExtraction
 
@@ -74,7 +74,7 @@ buildCryptoData ks = do
     }
 
 instance Show (KS.Coq_key) where
-  show (KS.MkCryptoKey kid usage typ) = show kid
+  show (KS.MkCryptoKey kid _ _) = show kid
 
 loadKeyFromFile :: Key -> FilePath -> IO (Key, CryptoKey)
 loadKeyFromFile kid fname = do
@@ -110,7 +110,7 @@ interpreterPolysemy um cd p =
 
 runUser :: Int -> [UserData] -> IO ()
 runUser uid userDatas = do
-  putStrLn $ "Running user: " ++ show uid
+  printMessage $ "Running user: " ++ show uid
   _ <- threadDelay (uid * 500000)
   let (UserData keys proto) = userDatas !! uid
   cryptoData <- buildCryptoData keys
@@ -119,7 +119,7 @@ runUser uid userDatas = do
   
   a <- interpreterPolysemy um cryptoData proto
   let i :: Int = unsafeCoerce a
-  putStrLn $ "User: " ++ show uid ++ " produced " ++ show i
+  printMessage $ "User: " ++ show uid ++ " produced " ++ show i
 
 data CLI = CLI {
   user :: Int
@@ -145,10 +145,10 @@ parseInitialData p = do
 main :: IO ()
 main = do
   hSetBuffering stdout NoBuffering
-  putStrLn "Starting"
+  printInfoLn "Starting"
   CLI{..} <- getRecord "CLI"
 
   datas <- parseInitialData proto
   runUser user datas
 
-  putStrLn "Done"
+  printInfoLn "Done"
