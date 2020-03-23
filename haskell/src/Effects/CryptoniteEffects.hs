@@ -27,7 +27,9 @@ module Effects.CryptoniteEffects
   , decryptMsgPayload
   , getKeyId
   , initKey
+  , mkKey
   , runCryptoWithCryptonite
+  , signMsgPayload
   , verifyMsgPayload
   
   ) where
@@ -80,7 +82,7 @@ deriving instance Generic PrivateKey
 data CryptoKey =
   SymmKey Int ByteString
   | AsymKey Int PublicKey (Maybe PrivateKey)
-  deriving (Show, Generic)
+  deriving (Show, Eq, Generic)
 
 getKeyId :: CryptoKey -> Int
 getKeyId (SymmKey kid _) = kid

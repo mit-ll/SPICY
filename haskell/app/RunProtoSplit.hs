@@ -111,19 +111,20 @@ interpreterPolysemy um cd p =
 runUser :: Int -> [UserData] -> IO ()
 runUser uid userDatas = do
   printMessage $ "Running user: " ++ show uid
-  _ <- threadDelay (uid * 500000)
   let (UserData keys proto) = userDatas !! uid
   cryptoData <- buildCryptoData keys
   um <- buildUserMailbox uid
   thr <- async (recvHandler uid (mailbox um))
-  
+
+  _ <- threadDelay ((uid+1) * 10000000)
   a <- interpreterPolysemy um cryptoData proto
   let i :: Int = unsafeCoerce a
   printMessage $ "User: " ++ show uid ++ " produced " ++ show i
 
 data CLI = CLI {
-  user :: Int
+    user :: Int
   , proto :: String
+  , adv :: Bool
   } deriving (Generic, Show)
 
 instance ParseRecord CLI

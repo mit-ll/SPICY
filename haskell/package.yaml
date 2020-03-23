@@ -115,3 +115,13 @@ executables:
       - async
       - optparse-generic
       - stm
+
+  adversary:
+    main: Adversary.main
+    source-dirs: [app]
+    dependencies:
+      - protocol-runner
+      - base
+      - async
+      - optparse-generic
+      - stm

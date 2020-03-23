@@ -21,6 +21,7 @@ module Effects.SocketTChanMessaging
     UserMailbox(..)
   , recvHandler
   , runMessagingWithSocket
+  , sendToSocket
     
   ) where
 
