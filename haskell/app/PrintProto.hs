@@ -26,8 +26,8 @@ main :: IO ()
 main = do
   a <- printingInterpreterPolysemy userProto1
   let i :: Int = unsafeCoerce a
-  putStrLn $ "And we have user 1: " ++ show i
+  putStrLn $ "User 1 returns: " ++ show i
 
   b <- printingInterpreterPolysemy userProto2
   let j :: Int = unsafeCoerce b
-  putStrLn $ "And we have user 2: " ++ show j
+  putStrLn $ "User 2 returns: " ++ show j

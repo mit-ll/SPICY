@@ -53,6 +53,7 @@ runMessagingAsPrintLn = interpret $ \case
 runCryptoAsPrintLn :: Member (Embed IO) r
   => Sem (Crypto : r) a -> Sem r a
 runCryptoAsPrintLn = interpret $ \case
+  GenRand -> embed (putStrLn "Gen") >> ret (1::Int)
   MkSymmetricKey _  -> embed (putStrLn "MkSym") >> ret (1::Int,True)
   MkAsymmetricKey _ -> embed (putStrLn "MkAsym") >> ret (1::Int,True)
   SignMessage _ _ _ _ -> embed (putStrLn "Sign") >> ret (R.SignedCiphertext Nat 1)
