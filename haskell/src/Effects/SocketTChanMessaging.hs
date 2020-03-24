@@ -47,6 +47,7 @@ import qualified Network.Simple.TCP as N
 
 data UserMailbox = UserMailbox {
     me :: Int
+  , mayAdv  :: Maybe Int
   , mailbox :: TChan QueuedMessage
   }
 
@@ -70,8 +71,7 @@ recvHandler uid mbox =
 
 sendToSocket :: Int -> QueuedMessage -> IO ()
 sendToSocket uid qm =
-  N.connect "localhost" (uidToSocket uid) $ \(connectionSocket, remoteAddr) -> do
-    printInfoLn $ "Connected establishted to " ++ show remoteAddr
+  N.connect "localhost" (uidToSocket uid) $ \(connectionSocket, _) -> do
     let msgBytes = Serialize.encode qm
     printMessage $ "Sending msg of size: " ++ show (BS.length msgBytes)
     N.send connectionSocket msgBytes
@@ -83,18 +83,21 @@ runMessagingWithSocket :: (Member (State UserMailbox) r, Member (State CryptoDat
   => Sem (Messaging : r) a -> Sem r a
 runMessagingWithSocket = interpret $ \case
   Send _ uid msg -> do
+    UserMailbox{..} <- get
     cryptoData <- get
     let qm = convertToQueuedMessage cryptoData msg
+    _ <- embed ( threadDelay 2000000 )
     _ <- embed ( printMessage $ "Sending to user " ++ show uid )
     _ <- embed ( sendToSocket uid qm )
-    _ <- embed ( threadDelay 2000000 )
+    -- also send message to adversary, if one exists -- for demo purposes!!
+    _ <- embed ( traverse (\advId -> sendToSocket advId qm ) mayAdv )
     (return . unsafeCoerce) ()
 
   Recv _ pat -> do
     UserMailbox{..} <- get
     cryptoData <- get
-    _ <- embed ( threadDelay 1000000 )
     _ <- embed ( printInfoLn $ "Waiting on my mailbox " ++ show me)
+    _ <- embed ( threadDelay 10000000 )
     (cryptoData', qm) <- embed (recvUntilAccept cryptoData mailbox pat)
     let newKeys = findKeysQueuedMsg qm
     let keys' = foldr (\(kid,k) m -> M.insert kid k m) (keys cryptoData') newKeys
@@ -103,7 +106,7 @@ runMessagingWithSocket = interpret $ \case
             QueuedContent _ -> cryptoData' { keys = keys' }
             QueuedCipher cid c -> cryptoData' { keys = keys' ,
                                                ciphers = M.insert cid c (ciphers cryptoData') }
-            
+
     _ <- put cryptoData''
     let msg = convertFromQueuedMessage qm
     (return . unsafeCoerce) msg

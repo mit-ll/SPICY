@@ -18,22 +18,13 @@
 
 module Adversary where
 
-import           Control.Concurrent (threadDelay)
 import           Control.Concurrent.Async
 import           Control.Concurrent.STM
+import           Data.Foldable (traverse_)
 import           Control.Monad (when, forever)
-import           Crypto.Random (MonadRandom, SystemDRG, getSystemDRG, withDRG)
-import qualified Data.ByteString as BS
-import           Data.Function ((&))
-import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
-import qualified Data.Serialize as Serialize
-
-import           Polysemy
-import           Polysemy.State (evalState)
 
 import           Options.Generic
-import           System.Directory (doesFileExist)
 import           System.IO
 
 import           Effects
@@ -43,21 +34,8 @@ import           Effects.SocketTChanMessaging
 import           Effects.TChanMessaging
 
 
-import qualified RealWorld as R
 import qualified Keys as KS
 
-
--- buildCryptoData ks = do
---   sysDrg <- getSystemDRG
-  
---   return CryptoData {
---     ciphers = M.empty
---     , keys = M.fromList ks
---     , drg = sysDrg
---     }
-
--- instance Show (KS.Coq_key) where
---   show (KS.MkCryptoKey kid _ _) = show kid
 
 data CLI = CLI {
   port :: Int
@@ -89,18 +67,31 @@ main = do
       atomically (modifyTVar keys (\ks -> foldr (\(kid,k) m -> M.insert kid k m) ks newKeys))
 
     case qm of
-      QueuedContent payload -> printMessage (show payload)
-      QueuedCipher _ c -> printMessage "Ciphertext"
+      QueuedContent payload -> printMessage $ "Plaintext message: " ++ show payload
+      QueuedCipher _ c@(EncryptedCipher ksigid kencid _ _) -> do
+        ks <- readTVarIO keys
+        case (M.lookup ksigid ks, M.lookup kencid ks) of
+          (Just _, Just _) -> do
+            printMessage "Decrypting message"
+            msg <- decryptMsgPayload ks c
+            printMessage $ "Decrypted message: " ++ show msg
 
-  sendThread <- async $ forever $ do
-    let m = ContentPayload 100
-    ksig <- mkKey 1 KS.AsymKey
-    c <- signMsgPayload ksig m
-    let qm = QueuedCipher 1 c
+          _ ->
+            printMessage "Couldn't decrypt message"
 
-    printMessage $ "Sending to users: " ++ show usrs
+      QueuedCipher _ (SignedCipher _ _ msg) -> 
+        printMessage $ "Signed message: " ++ show msg
 
-    traverse (\uid -> sendToSocket uid qm) usrs
+  sendThread <-
+    async $ forever $ do
+      let m = ContentPayload 100
+      ksig <- mkKey 1 KS.AsymKey
+      c <- signMsgPayload ksig m
+      let qm = QueuedCipher 1 c
+      
+      printMessage $ "Sending to users: " ++ show usrs
+      traverse_ (\uid -> sendToSocket uid qm) usrs
 
-  _ <- waitEither recvThread sendThread
+  _ <- waitEitherCatch recvThread sendThread
+  
   printInfoLn "Done"

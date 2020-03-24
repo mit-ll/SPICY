@@ -21,7 +21,7 @@ module RunProtoSplit where
 import           Control.Concurrent (threadDelay)
 import           Control.Concurrent.Async (async)
 import           Control.Concurrent.STM
-import           Crypto.Random (MonadRandom, SystemDRG, getSystemDRG, withDRG)
+import           Crypto.Random (getSystemDRG)
 import qualified Data.ByteString as BS
 import           Data.Function ((&))
 import           Data.Map.Strict (Map)
@@ -94,10 +94,10 @@ mkOrReadKey k@(KS.MkCryptoKey kid _ _) = do
             _ <- BS.writeFile fname (Serialize.encode ck)
             return (getKeyId ck, ck)
 
-buildUserMailbox :: Int -> IO UserMailbox
-buildUserMailbox n = do
+buildUserMailbox :: Int -> Maybe Int -> IO UserMailbox
+buildUserMailbox n mayInt = do
   mbox <- newTChanIO
-  return UserMailbox { me = n, mailbox = mbox }
+  return UserMailbox { me = n, mayAdv = mayInt, mailbox = mbox }
 
 interpreterPolysemy :: UserMailbox -> CryptoData -> Protocol -> IO a
 interpreterPolysemy um cd p =
@@ -108,23 +108,24 @@ interpreterPolysemy um cd p =
   & evalState cd
   & runM
 
-runUser :: Int -> [UserData] -> IO ()
-runUser uid userDatas = do
+runUser :: Int -> Maybe Int -> [UserData] -> IO ()
+runUser uid mayAdv userDatas = do
   printMessage $ "Running user: " ++ show uid
   let (UserData keys proto) = userDatas !! uid
   cryptoData <- buildCryptoData keys
-  um <- buildUserMailbox uid
+  um <- buildUserMailbox uid mayAdv
   thr <- async (recvHandler uid (mailbox um))
 
   _ <- threadDelay ((uid+1) * 10000000)
   a <- interpreterPolysemy um cryptoData proto
+
   let i :: Int = unsafeCoerce a
   printMessage $ "User: " ++ show uid ++ " produced " ++ show i
 
 data CLI = CLI {
-    user :: Int
-  , proto :: String
-  , adv :: Bool
+    user    :: Int
+  , proto   :: String
+  , advPort :: Maybe Int
   } deriving (Generic, Show)
 
 instance ParseRecord CLI
@@ -150,6 +151,6 @@ main = do
   CLI{..} <- getRecord "CLI"
 
   datas <- parseInitialData proto
-  runUser user datas
+  runUser user advPort datas
 
   printInfoLn "Done"
