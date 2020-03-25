@@ -1204,8 +1204,41 @@ Section RealWorldLemmas.
                                                    from_nons := froms;
                                                    sent_nons := sents;
                                                    cur_nonce := cur_n; |}
-      -> step_universeC U lbl U'.
+      -> step_universeC U lbl U'. 
 
+  (* Definition universeStepCommutes {A B} (U U' : universe A B) : Prop := *)
+  (*   forall lbl1 lbl2 U'' u_id1 u_id2 ud1 ud2 bd1 bd2 summaries, *)
+  (*     step_universe U lbl1 U' *)
+  (*     -> step_universe U' lbl2 U'' *)
+  (*     -> U.(users) $? u_id1 = Some ud1 *)
+  (*     -> step_user lbl1 (Some u_id1) (build_data_step U ud1) bd1 *)
+  (*     -> U'.(users) $? u_id2 = Some ud2 *)
+  (*     -> step_user lbl2 (Some u_id2) (build_data_step U' ud2) bd2 *)
+  (*     -> u_id1 <> u_id2 *)
+  (*     -> summarize_univ U summaries *)
+  (*     -> (forall C (cmd__n : user_cmd C) s, *)
+  (*         nextAction ud2.(protocol) cmd__n *)
+  (*         -> forall uid ud, *)
+  (*           uid <> u_id2 *)
+  (*           -> U.(users) $? uid = Some ud *)
+  (*           -> summarize ud.(protocol) s *)
+  (*           -> commutes cmd__n s) *)
+  (*     -> True. *)
+
+  (* Lemma commutes_sound_universe : *)
+  (*   forall {A B} (U U' U'' : universe A B) lbl1 lbl2, *)
+  (*     step_universe U lbl1 U' *)
+  (*     -> step_universe U' lbl2 U'' *)
+  (*     -> universeStepCommutes U U' *)
+  (*     -> exists U''' lbl3 lbl4, *)
+  (*         step_user lbl3 (Some u_id2) (build_data_step U__r userData2) bd3 *)
+  (*             /\ U__r'' = buildUniverse_step bd3 u_id2 *)
+  (*             /\ U__r''.(users) $? u_id1 = Some userData1' *)
+  (*             /\ step_user lbl4 (Some u_id1) (build_data_step U__r'' userData1') bd3' *)
+  (*             /\ buildUniverse_step bd3' u_id1 = buildUniverse_step bd1' u_id2 *)
+
+  
+  
 End RealWorldLemmas.
                     
 
@@ -1214,10 +1247,13 @@ Inductive stepC (t__hon t__adv : type) :
   -> (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon)
   -> Prop :=
 | RealSilentC : forall ru ru' iu,
-    step_universeC ru Silent ru' -> stepC (ru, iu) (ru', iu)
+    step_universeC ru Silent ru'
+    -> stepC (ru, iu) (ru', iu)
 | BothLoud : forall ru ru' ra ia iu iu' iu'',
     step_universeC ru (Action ra) ru'
     -> istepSilent^* iu iu'
+    (* step silently as far as we can *)
+    -> (forall iu''', istepSilent iu iu''' -> False)
     -> IdealWorld.lstep_universe iu' (Action ia) iu''
     -> action_matches ra ru ia iu'
     -> stepC (ru, iu) (ru', iu'').
@@ -1235,7 +1271,71 @@ Definition TrC {t__hon t__adv} (ru0 : RealWorld.universe t__hon t__adv) (iu0 : I
   {| Initial := {(ru0, iu0)};
      Step    := @stepC t__hon t__adv |}.
 
-  
+
+Lemma safety_violation_step :
+  forall t__hon t__adv st st',
+    @step t__hon t__adv st st'
+    -> ~ safety st
+    -> ~ safety st'.
+Proof.
+  induct 1; unfold safety; simpl; intros.
+
+Admitted.
+
+Lemma safety_violation_steps :
+  forall t__hon t__adv st st',
+    (@step t__hon t__adv)^* st st'
+    -> ~ safety st
+    -> ~ safety st'.
+Proof.
+  induct 1; eauto using safety_violation_step.
+Qed.
+
+Lemma alignment_violation_step :
+  forall t__hon t__adv st st',
+    @step t__hon t__adv st st'
+    -> ~ labels_align st
+    -> ~ labels_align st'.
+Proof.
+  induct 1; unfold labels_align; simpl; intros.
+
+Admitted.
+
+Lemma alignment_violation_steps :
+  forall t__hon t__adv st st',
+    (@step t__hon t__adv)^* st st'
+    -> ~ labels_align st
+    -> ~ labels_align st'.
+Proof.
+  induct 1; eauto using alignment_violation_step.
+Qed.
+
+(* Will probably need to add indexed step relation here for induction 
+ * i.e., perform bounded running time analysis and update step to stepi
+ * 
+ *)
+
+Lemma safety_violations_translate :
+  forall t__hon t__adv st st',
+    (@step t__hon t__adv)^* st st'
+    -> (forall st'', step st' st'' -> False)
+    -> ~ safety st'
+    -> exists st'',
+        (@stepC t__hon t__adv)^* st st''
+        /\ ~ safety st''.
+Proof.
+Admitted.
+
+Lemma alignment_violations_translate :
+  forall t__hon t__adv st st',
+    (@step t__hon t__adv)^* st st'
+    -> (forall st'', step st' st'' -> False)
+    -> ~ labels_align st'
+    -> exists st'',
+        (@stepC t__hon t__adv)^* st st''
+        /\ ~ labels_align st''.
+Proof.
+Admitted.
 
 Theorem step_stepC :
   forall {t__hon t__adv} (ru0 : RealWorld.universe t__hon t__adv) (iu0 : IdealWorld.universe t__hon),
