@@ -120,7 +120,9 @@ runUser uid mayAdv userDatas = do
   a <- interpreterPolysemy um cryptoData proto
 
   let i :: Int = unsafeCoerce a
-  printMessage $ "User: " ++ show uid ++ " produced " ++ show i
+  printMessage $ "******************************************"
+  printMessage $ "****** Final answer is: " ++ show i
+  printMessage $ "******************************************"
 
 data CLI = CLI {
     user    :: Int

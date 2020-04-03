@@ -63,7 +63,7 @@ main = do
 
     when (newKeys /= []) $ do
       printMessage "Reading unencrypted keys out of message:"
-      _ <- traverse (\(kid,_) -> printMessage $ "Key id : " ++ show kid) newKeys
+      -- _ <- traverse (\(kid,_) -> printMessage $ "Key id : " ++ show kid) newKeys
       atomically (modifyTVar keys (\ks -> foldr (\(kid,k) m -> M.insert kid k m) ks newKeys))
 
     case qm of
@@ -79,8 +79,14 @@ main = do
           _ ->
             printMessage "Couldn't decrypt message"
 
-      QueuedCipher _ (SignedCipher _ _ msg) -> 
-        printMessage $ "Signed message: " ++ show msg
+      QueuedCipher _ (SignedCipher _ _ msg) ->
+        let msgText = case msg of
+                        PermissionPayload kid (SymmKey _ _) -> "Read private key: " ++ show kid
+                        PermissionPayload kid (AsymKey _ _ Nothing) -> "Read public key: " ++ show kid
+                        PermissionPayload kid (AsymKey _ _ (Just _)) -> "Read private key: " ++ show kid
+                        ContentPayload c -> "Read message: " ++ show c
+                        PairPayload m1 m2 -> show m1 ++ show m2
+        in  printMessage $ "Signed message: " ++ msgText
 
   sendThread <-
     async $ forever $ do
