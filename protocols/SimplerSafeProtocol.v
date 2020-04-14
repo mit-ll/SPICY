@@ -1291,24 +1291,146 @@ Proof.
   induct 1; eauto using safety_violation_step.
 Qed.
 
-Lemma alignment_violation_step :
-  forall t__hon t__adv st st',
-    @step t__hon t__adv st st'
-    -> ~ labels_align st
-    -> ~ labels_align st'.
-Proof.
-  induct 1; unfold labels_align; simpl; intros.
+Definition almostEqual {A}  (ud ud' : user_data A) :=
+  ud = ud' \/
+  (exists msg, ud = 
+  {|
+  key_heap := key_heap ud';
+  protocol := protocol ud';
+  msg_heap := msg_heap ud' ++ [msg];
+  c_heap := c_heap ud';
+  from_nons := from_nons ud';
+  sent_nons := sent_nons ud';
+  cur_nonce := cur_nonce ud' |}).
 
+Lemma non_stepped_ud_almost_equal :
+  forall { A B C } suid lbl bd1 bd2,
+    step_user lbl suid bd1 bd2
+    -> forall (users1 users2 : honest_users A) (adv1 adv2 : user_data B) cs1 cs2 gks1 gks2
+        stepper ks1 ks2 qmsgs1 qmsgs2 mycs1 mycs2 froms1 froms2 sents1 sents2 cur_n1 cur_n2
+        (cmdc1 cmdc2 : user_cmd C) cmd1,
+      bd1 = (users1, adv1, cs1, gks1, ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmdc1)
+      -> bd2 = (users2, adv2, cs2, gks2, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmdc2)
+      -> suid = Some stepper
+    -> users1 $? stepper = Some {| key_heap := ks1
+                               ; protocol := cmd1
+                               ; msg_heap := qmsgs1
+                               ; c_heap := mycs1
+                               ; from_nons := froms1
+                               ; sent_nons := sents1
+                               ; cur_nonce := cur_n1 |}
+    -> (forall uid ud1 ud2,
+          uid <> stepper
+          -> users1 $? uid = Some ud1
+          -> users2 $? uid = Some ud2
+          -> almostEqual ud2 ud1).
+Proof.
+  induct 1; inversion 1; inversion 1; intros; subst; clean_context; clean_map_lookups; eauto;
+    unfold almostEqual; eauto.
+  
+  destruct (rec_u_id ==n uid); subst; clean_map_lookups; eauto.
+Qed.
+
+Lemma different_steps_must_be_by_different_users :
+  forall { A B } (ru1 ru2 ru__other : RealWorld.universe A B) lbl1 lbl2 b,
+    lameAdv b ru1.(adversary)
+    -> step_universe ru1 lbl1 ru2
+    -> step_universe ru1 lbl2 ru__other
+    -> lbl1 <> lbl2
+    -> exists {C} (bd1 bd2 bd__other : data_step0 A B C) uid1 uid2,
+        step_user lbl1 (Some uid1) bd1 bd2
+        /\ step_user lbl2 (Some uid2) bd1 bd__other
+        /\ uid1 <> uid2.
+Proof.
+  inversion 2; inversion 1; intros; subst; eauto.
+
+  destruct ru1.  unfold build_data_step in *. destruct userData. destruct userData0. simpl in *.
+  clean_map_lookups.
+                         
+                         
+  
+
+  unfold lameAdv in *.
+  (* destruct ru1. destruct adversary. simpl in *. unfold build_data_step in *. simpl in *. *)
+  (* rewrite H in H8. invert H8. admit. admit. *)
 Admitted.
 
-Lemma alignment_violation_steps :
-  forall t__hon t__adv st st',
-    (@step t__hon t__adv)^* st st'
-    -> ~ labels_align st
-    -> ~ labels_align st'.
+
+        (* relation between ru__other ru'' : only A and global state are different *)
+Definition only_global_or_single_user_state_changed {A B} (ru1 ru2 : RealWorld.universe A B) u_id :=
+  forall u_id' u_d1 u_d2,
+    ru1.(users) $? u_id' = Some u_d1
+    -> ru2.(users) $? u_id' = Some u_d2
+    -> u_id' <> u_id
+    -> u_d1 = u_d2.
+
+Lemma silent_leading_step_preserves_action_matches :
+  forall {A B} (ru ru' ru__other : RealWorld.universe A B) ra u_id1 u_id2 bd bd' bd__other,
+    ru = buildUniverse_step bd u_id1
+    -> step_user Silent (Some u_id1) bd bd'
+    -> step_universe ru Silent ru'
+    -> step_user (Action ra) (Some u_id2) bd bd__other
+    -> step_universe ru (Action ra) ru__other
+    -> exists ru'',
+        step_universe ru' (Action ra) ru''
+        -> only_global_or_single_user_state_changed ru__other ru'' u_id1.
 Proof.
-  induct 1; eauto using alignment_violation_step.
+  (* inversion 2; inversion 2;  intros; subst; eauto; simpl in *. *)
+  inversion 3; inversion 2;  intros; subst; eauto; simpl in *.
+  (* eexists. destruct (nextStep cmd). *)
+  (* invert H13. destruct iu; simpl in *. econstructor. *)
+  (* eauto. eauto. eauto.  *)
+Admitted.
+
+
+Lemma alignment_preservation_step :
+  forall t__hon t__adv st st',
+    @step t__hon t__adv st st'
+    (* -> lameAdv b (fst st).(adversary) *)
+    -> labels_align st'
+    -> labels_align st.
+Proof.
+
+
+  induct 1; unfold labels_align.  
+  - intros.  eapply silent_leading_step_preserves_action_matches in H. eexists. eexists. eexists.
+    
+  (*   eapply silent_leading_step_preserves_action_matches; eauto.  *)
+  (*   eapply silent_leading_step_preserves_action_matches in H. *)
+  (*   invert H. invert H1. shelve. shelve. *)
+  (* - intros. invert H. *)
+
+  (*   invert H. invert H0. *)
+
+ (*   specialize (H0 _ ra). admit. *)
+  (* - intros. *)
+  (*   eapply H0. invert H1. invert H. eapply H0. specialize (H0 _ _ H1). *)
+
+
+  (*   intro. intro ru''. intros. specialize (H0 ru'' ra). invert H.    admit. admit. *)
+          
+  (* - intro. intro ru''. intro ra'. specialize (H3 ru'' ra').  *)
+Admitted.
+
+
+Lemma alignment_perservation_steps :
+  forall t__hon t__adv st st' ,
+    (@step t__hon t__adv)^* st st'
+    (* -> lameAdv b (fst st).(adversary) *)
+    -> labels_align st'
+    -> labels_align st.
+(* a user either has only changed in that it has new messages or a user already had label alignment in st *)
+Proof.
+  induct 1; eauto using alignment_preservation_step.
 Qed.
+
+
+
+(*       intros. eapply IHtrc in H1. invert H. destruct z as (ru'', iu''). *)
+(*     eauto using alignment_preservation_step. *)
+
+(* Admitted. *)
+
 
 (* Will probably need to add indexed step relation here for induction 
  * i.e., perform bounded running time analysis and update step to stepi
