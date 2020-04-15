@@ -46,6 +46,7 @@ protocols/UniverseEqAutomation.v
 protocols/SafeProtocol.v
 protocols/Sets.v
 protocols/ModelCheck.v
+protocols/SyntacticallySafe.v
 
 protocols/ExampleProtocols.v
 protocols/ExampleProtocolsAutomated.v

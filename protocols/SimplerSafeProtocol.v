@@ -17,6 +17,7 @@
  * as specifically authorized by the U.S. Government may violate any copyrights that exist in this work. *)
 
 From Coq Require Import
+     Classical
      List.
 
 From KeyManagement Require Import
@@ -25,6 +26,7 @@ From KeyManagement Require Import
      Automation
      Maps
      Keys
+     KeysTheory
      Messages
      Tactics
      Simulation
@@ -32,10 +34,18 @@ From KeyManagement Require Import
      AdversarySafety.
 
 From protocols Require Import
+     ExampleProtocols
+     ModelCheck
+     ProtocolAutomation
      SafeProtocol
-     ProtocolAutomation.
+     SyntacticallySafe.
 
 From protocols Require Sets.
+
+(* For later import of set notations inside sections *)
+Module Foo <: Sets.EMPTY.
+End Foo.
+Module SN := Sets.SetNotations(Foo).
 
 Require IdealWorld.
 
@@ -1108,7 +1118,6 @@ Section RealWorldLemmas.
    * does this really do what I want it to?
    *)
 
-  Require Import Classical.
 
   Lemma has_user_step {A B} (U : universe A B) (u_id : user_id) :
     forall u_d,
@@ -1238,6 +1247,7 @@ Section RealWorldLemmas.
   (*             /\ buildUniverse_step bd3' u_id1 = buildUniverse_step bd1' u_id2 *)
 
   
+
   
 End RealWorldLemmas.
                     
@@ -1253,23 +1263,37 @@ Inductive stepC (t__hon t__adv : type) :
     step_universeC ru (Action ra) ru'
     -> istepSilent^* iu iu'
     (* step silently as far as we can *)
-    -> (forall iu''', istepSilent iu iu''' -> False)
+    (* -> (forall iu''', istepSilent iu' iu''' -> False) *)
     -> IdealWorld.lstep_universe iu' (Action ia) iu''
     -> action_matches ra ru ia iu'
     -> stepC (ru, iu) (ru', iu'').
 
-From protocols
-     Require Import
-     Sets
-     ModelCheck.
-
-Module Foo <: EMPTY.
-End Foo.
-Module Import SN := SetNotations(Foo).
+(* Load the set notations *)
+Import SN.
 
 Definition TrC {t__hon t__adv} (ru0 : RealWorld.universe t__hon t__adv) (iu0 : IdealWorld.universe t__hon) :=
   {| Initial := {(ru0, iu0)};
      Step    := @stepC t__hon t__adv |}.
+
+Lemma syntactically_safe_implies_safety :
+  forall t__hon t__adv st st',
+    U_syntactically_safe (fst st)
+    -> (fst st).(all_ciphers) = $0
+    -> @step t__hon t__adv st st'
+    -> ~ safety st
+    -> ~ safety st'.
+
+
+
+Lemma safety_violation_step :
+  forall t__hon t__adv st st',
+    @step t__hon t__adv st st'
+    -> ~ safety st
+    -> ~ safety st'.
+Proof.
+  induct 1; unfold safety; simpl; intros.
+
+Admitted.
 
 
 Lemma safety_violation_step :
@@ -1670,7 +1694,6 @@ Lemma alignment_preservation_step :
     -> labels_align st.
 Proof.
 
-
   induct 1; unfold labels_align.
   - intros.  eapply silent_leading_step_preserves_action_matches in H. eexists. eexists. eexists.
     
@@ -1751,7 +1774,7 @@ Proof.
   simpl in *.
   specialize (INV _ INIT); intros.
 
-  
+Admitted.
 
 
 

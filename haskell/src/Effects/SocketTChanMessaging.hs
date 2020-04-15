@@ -56,24 +56,24 @@ uidToSocket = show . (30000 +)
 
 recvHandler :: Int -> TChan QueuedMessage -> IO ()
 recvHandler uid mbox =
-  N.serve N.HostAny (uidToSocket uid) $ \(connectionSocket, remoteAddr) -> do
-       printInfoLn $ "Connection established to " ++ show remoteAddr
+  N.serve N.HostAny (uidToSocket uid) $ \(connectionSocket, _) -> do
+       -- printInfoLn $ "Connection established to " ++ show remoteAddr
        msg <- N.recv connectionSocket 8192
        case msg of
          Nothing -> printErrorLn "Received no data"
          Just m  ->
            let (eqm :: Either String QueuedMessage) = Serialize.decode m
            in  case eqm of
-                 Left err -> printErrorLn $ "Error decoding: " ++ err
-                 Right qm -> do
-                   printInfoLn "Queueing message"
+                 Left err ->
+                   printErrorLn $ "Error decoding: " ++ err
+                 Right qm ->
                    atomically $ writeTChan mbox qm
 
 sendToSocket :: Int -> QueuedMessage -> IO ()
 sendToSocket uid qm =
   N.connect "localhost" (uidToSocket uid) $ \(connectionSocket, _) -> do
     let msgBytes = Serialize.encode qm
-    printMessage $ "Sending msg of size: " ++ show (BS.length msgBytes)
+    -- printMessage $ "Sending msg of size: " ++ show (BS.length msgBytes)
     N.send connectionSocket msgBytes
 
 -- | Here's where the action happens.  Execute each cryptographic command
@@ -96,7 +96,7 @@ runMessagingWithSocket = interpret $ \case
   Recv _ pat -> do
     UserMailbox{..} <- get
     cryptoData <- get
-    _ <- embed ( printInfoLn $ "Waiting on my mailbox " ++ show me)
+    _ <- embed ( printInfoLn $ "Reading mailbox... " )
     _ <- embed ( threadDelay 10000000 )
     (cryptoData', qm) <- embed (recvUntilAccept cryptoData mailbox pat)
     let newKeys = findKeysQueuedMsg qm
