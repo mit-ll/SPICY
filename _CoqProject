@@ -46,7 +46,9 @@ protocols/UniverseEqAutomation.v
 protocols/SafeProtocol.v
 protocols/Sets.v
 protocols/ModelCheck.v
+protocols/PartialOrderReduction.v
 protocols/SyntacticallySafe.v
+protocols/LabelsAlign.v
 
 protocols/ExampleProtocols.v
 protocols/ExampleProtocolsAutomated.v

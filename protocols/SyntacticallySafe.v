@@ -1,3 +1,21 @@
+(* DISTRIBUTION STATEMENT A. Approved for public release. Distribution is unlimited.
+ *
+ * This material is based upon work supported by the Department of the Air Force under Air Force
+ * Contract No. FA8702-15-D-0001. Any opinions, findings, conclusions or recommendations expressed
+ * in this material are those of the author(s) and do not necessarily reflect the views of the
+ * Department of the Air Force.
+ *
+ * © 2020 Massachusetts Institute of Technology.
+ *
+ * MIT Proprietary, Subject to FAR52.227-11 Patent Rights - Ownership by the contractor (May 2014)
+ *
+ * The software/firmware is provided to you on an As-Is basis
+ *
+ * Delivered to the U.S. Government with Unlimited Rights, as defined in DFARS Part 252.227-7013
+ * or 7014 (Feb 2014). Notwithstanding any copyright notice, U.S. Government rights in this work are
+ * defined by DFARS 252.227-7013 or DFARS 252.227-7014 as detailed above. Use of this work other than
+ * as specifically authorized by the U.S. Government may violate any copyrights that exist in this work. *)
+
 From Coq Require Import
      Classical
      List.
@@ -19,7 +37,8 @@ From KeyManagement Require Import
 From protocols Require Import
      ExampleProtocols
      ProtocolAutomation
-     SafeProtocol.
+     SafeProtocol
+     PartialOrderReduction.
 
 Set Implicit Arguments.
 Import RealWorld RealWorldNotations.
@@ -905,3 +924,33 @@ Proof.
   - intros; pr; eauto.
     
 Admitted.
+
+Lemma syntactically_safe_implies_safety :
+  forall t__hon t__adv st st',
+    U_syntactically_safe (fst st)
+    -> (fst st).(all_ciphers) = $0
+    -> @step t__hon t__adv st st'
+    -> ~ safety st
+    -> ~ safety st'.
+Admitted.
+
+
+Lemma safety_violation_step :
+  forall t__hon t__adv st st',
+    @step t__hon t__adv st st'
+    -> ~ safety st
+    -> ~ safety st'.
+Proof.
+  induct 1; unfold safety; simpl; intros.
+
+Admitted.
+
+
+Lemma safety_violation_steps :
+  forall t__hon t__adv st st',
+    (@step t__hon t__adv)^* st st'
+    -> ~ safety st
+    -> ~ safety st'.
+Proof.
+  induct 1; eauto using safety_violation_step.
+Qed.
