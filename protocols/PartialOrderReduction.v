@@ -1245,8 +1245,110 @@ Section RealWorldLemmas.
   (*             /\ step_user lbl4 (Some u_id1) (build_data_step U__r'' userData1') bd3' *)
   (*             /\ buildUniverse_step bd3' u_id1 = buildUniverse_step bd1' u_id2 *)
 
-  
+  Lemma silent_step_nochange_other_user :
+    forall {A B C} suid lbl bd bd',
+      step_user lbl suid bd bd'
+      -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks'
+          (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs'
+          froms froms' sents sents' cur_n cur_n',
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+        -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+        -> lbl = Silent
+        -> forall cmdc cmdc' u_id1 u_id2 ud2 usrs'',
+            suid = Some u_id1
+            -> u_id1 <> u_id2
+            -> usrs $? u_id1 = Some {| key_heap := ks;
+                                      protocol := cmdc;
+                                      msg_heap := qmsgs;
+                                      c_heap   := mycs;
+                                      from_nons := froms;
+                                      sent_nons := sents;
+                                      cur_nonce := cur_n |}
+            -> usrs $? u_id2 = Some ud2
+            -> usrs'' = usrs' $+ (u_id1, {| key_heap := ks';
+                                           protocol := cmdc';
+                                           msg_heap := qmsgs';
+                                           c_heap   := mycs';
+                                           from_nons := froms';
+                                           sent_nons := sents';
+                                           cur_nonce := cur_n' |})
+            -> usrs'' $? u_id2 = Some ud2.
+  Proof.
+    induction 1; inversion 1; inversion 1;
+      intros; subst;
+        try discriminate;
+        try solve [ clean_map_lookups; trivial ].
+    specialize (IHstep_user _ _ _ _ _ _ _ _ _ _ _
+                            _ _ _ _ _ _ _ _ _ _ _
+                            eq_refl eq_refl eq_refl).
+    specialize (IHstep_user cmdc cmdc').
+    specialize (IHstep_user _ _ _ _ eq_refl H26 H27 H28 eq_refl).
+    clean_map_lookups; eauto.
+  Qed.
 
+  Lemma step_limited_change_other_user :
+    forall {A B C} suid lbl bd bd',
+      step_user lbl suid bd bd'
+      -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks'
+          (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs'
+          froms froms' sents sents' cur_n cur_n',
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+        -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+        -> forall cmdc cmdc' u_id1 u_id2 usrs'' ks2 cmdc2 qmsgs2 mycs2 froms2 sents2 cur_n2,
+            suid = Some u_id1
+            -> u_id1 <> u_id2
+            -> usrs $? u_id1 = Some {| key_heap := ks;
+                                      protocol := cmdc;
+                                      msg_heap := qmsgs;
+                                      c_heap   := mycs;
+                                      from_nons := froms;
+                                      sent_nons := sents;
+                                      cur_nonce := cur_n |}
+            -> usrs $? u_id2 = Some {| key_heap := ks2;
+                                      protocol := cmdc2;
+                                      msg_heap := qmsgs2;
+                                      c_heap   := mycs2;
+                                      from_nons := froms2;
+                                      sent_nons := sents2;
+                                      cur_nonce := cur_n2 |}
+            -> usrs'' = usrs' $+ (u_id1, {| key_heap := ks';
+                                           protocol := cmdc';
+                                           msg_heap := qmsgs';
+                                           c_heap   := mycs';
+                                           from_nons := froms';
+                                           sent_nons := sents';
+                                           cur_nonce := cur_n' |})
+            -> usrs'' $? u_id2 = Some {| key_heap := ks2;
+                                        protocol := cmdc2;
+                                        msg_heap := qmsgs2;
+                                        c_heap   := mycs2;
+                                        from_nons := froms2;
+                                        sent_nons := sents2;
+                                        cur_nonce := cur_n2 |}
+              \/ exists m,
+                usrs'' $? u_id2 = Some {| key_heap := ks2;
+                                          protocol := cmdc2;
+                                          msg_heap := qmsgs2 ++ [m];
+                                          c_heap   := mycs2;
+                                          from_nons := froms2;
+                                          sent_nons := sents2;
+                                          cur_nonce := cur_n2 |}
+  .
+  Proof.
+    induction 1; inversion 1; inversion 1;
+      intros; subst;
+        try solve [ left; clean_map_lookups; trivial ].
+    
+    - specialize (IHstep_user _ _ _ _ _ _ _ _ _ _ _
+                              _ _ _ _ _ _ _ _ _ _ _
+                              eq_refl eq_refl).
+      specialize (IHstep_user cmdc cmdc').
+      specialize (IHstep_user _ _ _ _ _ _ _ _ _ _ eq_refl H25 H26 H27 eq_refl).
+      split_ors; eauto.
+
+    - clean_context; clean_map_lookups.
+      destruct (rec_u_id ==n u_id2); subst; eauto.
+  Qed.
   
 End RealWorldLemmas.
                     
