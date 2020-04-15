@@ -86,6 +86,23 @@ Fixpoint init_context (ks : list key_permission) : list safe_typ :=
     {| cmd_type := Base Access ; cmd_val := kp ; safetyTy := TyHonestKey |} :: init_context kps
   end.
 
+Lemma foo : 
+  forall cs cid c t (msg : crypto t) msg_to u_id k,
+    msg_cipher_id msg = Some cid
+    -> cs $? cid = Some c
+    -> k = cipher_signing_key c
+    -> msg_to = cipher_to_user c
+    -> fst (cipher_nonce c) = Some u_id
+    -> msg_to_this_user cs (Some msg_to) msg = true (* only send my messages *)
+.
+Proof.
+  intros; subst.
+  unfold msg_to_this_user, msg_destination_user.
+  unfold msg_cipher_id in H; destruct msg; try discriminate.
+  invert H; context_map_rewrites.
+  destruct (cipher_to_user c ==n cipher_to_user c); subst; try contradiction; eauto.
+Qed.
+
 Inductive syntactically_safe (u_id : user_id) :
   list safe_typ -> forall t, user_cmd t -> ty -> Prop :=
 
@@ -115,17 +132,6 @@ Inductive syntactically_safe (u_id : user_id) :
 | SafeSend : forall context t (msg : crypto t) msg_to k,
     (* ~ List.In {| cmd_type := Crypto t ; cmd_val := msg ; safetyTy := TySent |} context *)
     List.In {| cmd_type := Crypto t ; cmd_val := msg ; safetyTy := (TyMyCphr msg_to k) |} context
-
-    -> (forall cs cid c,
-          msg_cipher_id msg = Some cid
-          -> cs $? cid = Some c
-          -> k = cipher_signing_key c
-          -> msg_to = cipher_to_user c
-          -> fst (cipher_nonce c) = Some u_id
-          -> HonestKey context k
-          /\ msg_to_this_user cs (Some msg_to) msg = true (* only send my messages *)
-      )
-
     -> syntactically_safe u_id context (Send msg_to msg) TyDontCare
 
 | SafeReturn : forall {A} context (a : << A >>) sty,
@@ -220,11 +226,6 @@ Proof.
     econstructor; simpl; eauto.
 
     intros; econstructor; subst; eauto.
-    unfold msg_cipher_id in H; dependent destruction a0; try discriminate.
-    invert H.
-    unfold msg_to_this_user, msg_destination_user; context_map_rewrites; simpl.
-    rewrite <- H2; simpl; trivial.
-
     econstructor; simpl; eauto 8.
 
   - eexists.
@@ -244,18 +245,6 @@ Proof.
 
     eapply HonestKeyFromMsgVerify; eauto.
     intros; clean_map_lookups.
-
-    econstructor; eauto.
-    econstructor; eauto.
-    
-    intros.
-    unfold msg_cipher_id in H.
-    dependent destruction a2; try discriminate.
-    invert H.
-    econstructor; eauto.
-    econstructor; simpl; eauto 8.
-    unfold msg_to_this_user, msg_destination_user; context_map_rewrites.
-    rewrite <- H2; simpl; trivial.
 Qed.
 
 Lemma HonestKey_split :
@@ -376,11 +365,6 @@ Proof.
     
   - econstructor; intros; eauto.
     specialize (H _ _ H1); split_ands; split; eauto 8.
-
-  - econstructor.
-    rewrite Forall_forall in *; intros; eauto.
-    intros.
-    specialize (H0 _ _ _ H2 H3 H4 H5 H6); split_ands; eauto.
 Qed.
 
 Lemma step_user_steps_syntactically_safe :
@@ -421,16 +405,17 @@ Proof.
   - invert H24; eauto.
 Qed.
 
-Definition typechecker_sound (ctx : list safe_typ) (honestk : key_perms) (u_id : user_id) :=
+Definition typechecker_sound (ctx : list safe_typ) (honestk : key_perms) (cs : ciphers) (u_id : user_id) :=
   (forall kid, HonestKey ctx kid <-> honestk $? kid = Some true)
 /\ (forall t msg msg_to k,
       List.In {| cmd_type := Crypto t ; cmd_val := msg ; safetyTy := (TyMyCphr msg_to k) |} ctx
-      -> exists c_id cs c,
+      -> exists c_id c,
         msg = SignedCiphertext c_id
         /\ cs $? c_id = Some c
         /\ cipher_to_user c = msg_to
         /\ cipher_signing_key c = k
-        /\ fst (cipher_nonce c) = Some u_id).
+        /\ fst (cipher_nonce c) = Some u_id
+        /\ HonestKey ctx k).
 
 Lemma syntactically_safe_honest_keys_preservation' :
   forall {A B C} suid lbl bd bd',
@@ -454,7 +439,7 @@ Lemma syntactically_safe_honest_keys_preservation' :
                                    from_nons := froms;
                                    sent_nons := sents;
                                    cur_nonce := cur_n |}
-          -> typechecker_sound ctx honestk u_id
+          -> typechecker_sound ctx honestk cs u_id
           -> honestk  = findUserKeys usrs
           -> message_queue_ok honestk cs qmsgs gks
           -> encrypted_ciphers_ok honestk cs gks
@@ -469,7 +454,7 @@ Lemma syntactically_safe_honest_keys_preservation' :
 
           -> exists ctx',
               List.Forall (fun styp => List.In styp ctx') ctx
-              /\ typechecker_sound ctx' honestk' u_id
+              /\ typechecker_sound ctx' honestk' cs' u_id
               /\ syntactically_safe u_id ctx' cmd' sty
 .
 Proof.
@@ -498,6 +483,9 @@ Proof.
     eapply safe_typ_eq in H2; split_ands; subst.
     invert H7.
     invert H31; eauto.
+
+    specialize (e _ _ _ _ H8); split_ex; eauto 12.
+    specialize (e _ _ _ _ H2); split_ex; eauto 12.
     
     intros; split; intros;
       specialize (i kid); invert i; eauto.
@@ -527,6 +515,8 @@ Proof.
     simpl in H17; split_ors; eauto.
     eapply safe_typ_eq in H17; split_ands; subst; discriminate.
 
+    specialize (H9 _ _ _ _ H17); split_ex; eauto 12.
+
   - invert H2; split_ands.
     clear H10.
     generalize (H0 k__sign); intros IFF; destruct IFF; eauto.
@@ -548,6 +538,8 @@ Proof.
     intros.
     simpl in H17; split_ors; eauto.
     eapply safe_typ_eq in H17; split_ands; subst; discriminate.
+
+    specialize (H9 _ _ _ _ H17); split_ex; eauto 12.
     
   - eexists; repeat simple apply conj; split_ands; eauto.
     intros; specialize (i kid); destruct i; split; intros; eauto.
@@ -555,15 +547,17 @@ Proof.
 
     intros.
     simpl in H6; split_ors; eauto.
-    eapply safe_typ_eq in H6; split_ands; subst.
-    invert H6.
-    invert H7.
-    (do 3 eexists); repeat simple apply conj; eauto.
-    assert (cs0 $+ (c_id, SigEncCipher k k__encid msg_to0 (Some u_id0, cur_n0) msg) $? c_id = Some (SigEncCipher k k__encid msg_to0 (Some u_id0, cur_n0) msg)) as CS by (clean_map_lookups; eauto).
-    exact CS.
-    simpl; eauto.
-    simpl; eauto.
-    simpl; eauto.
+
+    + eapply safe_typ_eq in H6; split_ands; subst.
+      invert H6.
+      invert H7.
+      (do 2 eexists); repeat simple apply conj; eauto.
+
+      specialize (i k); destruct i.
+      assert (HonestKey ctx k) by eauto; eauto.
+      
+    + specialize (e _ _ _ _ H6); split_ex; subst.
+      (do 2 eexists); repeat simple apply conj; eauto.
 
   - unfold honest_users_only_honest_keys in *.
     specialize (H12 _ _ H4 _ _ H3); simpl in *.
@@ -578,6 +572,8 @@ Proof.
     intros.
     simpl in H5; split_ors; eauto.
     eapply safe_typ_eq in H5; split_ands; subst; discriminate.
+
+    specialize (e _ _ _ _ H5); split_ex; eauto 12.
     
   - eexists; repeat simple apply conj; split_ands; eauto.
     intros KID; specialize (i KID); destruct i; split; intros; eauto.
@@ -585,16 +581,18 @@ Proof.
 
     intros.
     simpl in H3; split_ors; eauto.
-    eapply safe_typ_eq in H3; split_ands; subst.
-    invert H3; invert H10; eauto.
+    
+    + eapply safe_typ_eq in H3; split_ands; subst.
+      invert H3; invert H10; eauto.
+      invert H4.
 
-    intros.
-    (do 3 eexists); repeat simple apply conj; eauto.
-    assert (cs0 $+ (c_id, SigCipher k msg_to0 (Some u_id0, cur_n0) msg) $? c_id = Some (SigCipher k msg_to0 (Some u_id0, cur_n0) msg)) as CS by (clean_map_lookups; eauto).
-    exact CS.
-    simpl; eauto.
-    simpl; eauto.
-    simpl; eauto.
+      (do 2 eexists); repeat simple apply conj; simpl; eauto.
+
+      specialize (i k); destruct i;
+        assert (HonestKey ctx k) by eauto; eauto.
+      
+    + specialize (e _ _ _ _ H3); split_ex; subst.
+      (do 2 eexists); repeat simple apply conj; eauto.
     
   - unfold honest_users_only_honest_keys in *.
     specialize (H10 _ _ H5 _ _ H0); simpl in *.
@@ -618,6 +616,8 @@ Proof.
     intros.
     simpl in H6; split_ors; eauto.
     eapply safe_typ_eq in H6; split_ands; subst; discriminate.
+
+    specialize (e _ _ _ _ H6); split_ex; subst; eauto 12.
     
   - eexists; repeat simple apply conj; split_ands; eauto.
     intros KID; specialize (i KID); destruct i; split; intros.
@@ -633,7 +633,9 @@ Proof.
     + intros.
       simpl in H1; split_ors; eauto.
       eapply safe_typ_eq in H1; split_ands; subst; discriminate.
-    
+
+      specialize (e _ _ _ _ H1); split_ex; subst; eauto 12.
+
   - eexists; repeat simple apply conj; split_ands; eauto.
     intros KID; specialize (i KID); destruct i; split; intros.
     + eapply HonestKey_split with (t := Base Access) in H8; eauto.
@@ -648,273 +650,9 @@ Proof.
     + intros.
       simpl in H1; split_ors; eauto.
       eapply safe_typ_eq in H1; split_ands; subst; discriminate.
-    
+
+      specialize (e _ _ _ _ H1); split_ex; subst; eauto 12.
 Qed.
-
-
-
-(* Lemma syntactically_safe_honest_keys_preservation_binder' : *)
-(*   forall {A B C} suid lbl bd bd', *)
-
-(*     step_user lbl suid bd bd' *)
-
-(*     -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks' *)
-(*         (cmd1 cmd1' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs' *)
-(*         froms froms' sents sents' cur_n cur_n' ctx sty, *)
-
-(*       bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd1) *)
-(*       -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd1') *)
-
-(*       -> forall honestk honestk' (cmd2 : <<C>> -> user_cmd (Base A)) cmd cmd' u_id, *)
-(*           suid = Some u_id *)
-(*           -> cmd  = (x <- cmd1  ; cmd2 x) *)
-(* `          -> cmd' = (x <- cmd1' ; cmd2 x) *)
-(*           -> syntactically_safe u_id ctx cmd sty *)
-(*           -> usrs $? u_id = Some {| key_heap := ks; *)
-(*                                    protocol := cmd; *)
-(*                                    msg_heap := qmsgs; *)
-(*                                    c_heap   := mycs; *)
-(*                                    from_nons := froms; *)
-(*                                    sent_nons := sents; *)
-(*                                    cur_nonce := cur_n |} *)
-(*           -> typechecker_sound ctx honestk u_id *)
-(*           -> honestk  = findUserKeys usrs *)
-(*           -> message_queue_ok honestk cs qmsgs gks *)
-(*           -> encrypted_ciphers_ok honestk cs gks *)
-(*           -> honest_users_only_honest_keys usrs *)
-(*           -> honestk' = findUserKeys (usrs' $+ (u_id, {| key_heap := ks'; *)
-(*                                                         protocol := cmd'; *)
-(*                                                         msg_heap := qmsgs'; *)
-(*                                                         c_heap   := mycs'; *)
-(*                                                         from_nons := froms'; *)
-(*                                                         sent_nons := sents'; *)
-(*                                                         cur_nonce := cur_n' |})) *)
-
-(*           -> exists ctx', *)
-(*               List.Forall (fun styp => List.In styp ctx') ctx *)
-(*               /\ typechecker_sound ctx' honestk' u_id *)
-(*               /\ syntactically_safe u_id ctx' cmd' sty *)
-(* . *)
-(* Proof. *)
-(*   induction 1; inversion 1; inversion 1; *)
-(*     (* invert 4; *) *)
-(*     unfold typechecker_sound; *)
-(*     intros; subst; *)
-(*       autorewrite with find_user_keys; *)
-(*       eauto 8. *)
-      
-(*   - admit. *)
-(*   - admit. *)
-(*   - (do 2 match goal with *)
-(*           | [ H : syntactically_safe _ _ _ _ |- _] => invert H *)
-(*           end); *)
-(*       eexists; repeat simple apply conj; split_ands; swap 1 4; eauto. *)
-
-(*   - invert H34. *)
-(*     admit. *)
-
-(*   - admit. *)
-(*   -  *)
-
-(*     (do 2 match goal with *)
-(*           | [ H : syntactically_safe _ _ _ _ |- _] => invert H *)
-(*           end); split_ands. *)
-
-(*     match goal with *)
-(*     | [ H : (forall a, syntactically_safe _ _ _ _) |- exists _, _ /\ _ /\ ?ss ] => *)
-(*       idtac ss *)
-(*       (* exists ctx'; repeat simple apply conj; eauto *) *)
-(*     end. *)
-
-    
-(*       split_ands; eexists;  *)
-(*     econstructor. *)
-(*     eapply SafeReturn. *)
-(*       eexists; repeat simple apply conj; split_ands; swap 1 4. *)
-
-
-    
-(*   - invert H34. *)
-(*     eexists; repeat simple apply conj; split_ands; swap 1 4; eauto. *)
-(*     invert H34. *)
-(*     invert H5; econstructor; eauto. *)
-(*     econstructor.; eauto. *)
-
-
-(*   - clean_context. *)
-(*     eapply IHstep_user in H32; eauto. *)
-(*     clear IHstep_user. *)
-(*     split_ex; eauto. *)
-(*     unfold typechecker_sound in H1; split_ands. *)
-(*     eexists; repeat simple apply conj; eauto. *)
-(*     econstructor; eauto. *)
-(*     intros. *)
-(*     eapply syntactically_safe_add_ctx; eauto. *)
-(*     econstructor; eauto. *)
-(*     rewrite Forall_forall in *; eauto. *)
-    
-(*   - eexists; repeat simple apply conj; swap 1 4; swap 2 4; split_ands; eauto 8. *)
-
-(*     intros; simpl in H2; split_ors; eauto. *)
-(*     eapply safe_typ_eq in H2; split_ands; subst. *)
-(*     invert H7. *)
-(*     invert H31; eauto. *)
-    
-(*     intros; split; intros; *)
-(*       specialize (i kid); invert i; eauto. *)
-
-(*     invert H31; eauto. *)
-(*     eapply HonestKey_split in H2; split_ors; eauto. *)
-
-(*   - invert H2; split_ands. *)
-(*     clear H10. *)
-(*     generalize (H0 k); intros IFF; destruct IFF; eauto. *)
-(*     assert (msg_pattern_safe (findUserKeys usrs') (Signed k true)) as MPS; eauto. *)
-(*     assert (msg_honestly_signed (findUserKeys usrs') cs' msg = true) as MHS by *)
-(*         (eauto using accepted_safe_msg_pattern_honestly_signed). *)
-
-(*     pose proof (msg_honestly_signed_has_signing_key_cipher_id _ _ _ MHS); split_ex. *)
-(*     pose proof (msg_honestly_signed_signing_key_honest _ _ _ MHS H12). *)
-(*     specialize (H5 _ H12); split_ands. *)
-(*     specialize (H15 H14); split_ands. *)
-(*     rewrite message_no_adv_private_merge; eauto. *)
-    
-(*     eexists; repeat simple apply conj; eauto. *)
-(*     intros KID; specialize (H0 KID); destruct H0; split; intros; eauto. *)
-(*     eapply HonestKey_split with (t := Crypto t0) in H18; eauto. *)
-(*     split_ors; split_ex; eauto. *)
-
-(*     intros. *)
-(*     simpl in H17; split_ors; eauto. *)
-(*     eapply safe_typ_eq in H17; split_ands; subst; discriminate. *)
-
-(*   - invert H2; split_ands. *)
-(*     clear H10. *)
-(*     generalize (H0 k__sign); intros IFF; destruct IFF; eauto. *)
-(*     assert (msg_pattern_safe (findUserKeys usrs') (SignedEncrypted k__sign k__enc true)) as MPS; eauto. *)
-(*     assert (msg_honestly_signed (findUserKeys usrs') cs' msg = true) as MHS by *)
-(*         (eauto using accepted_safe_msg_pattern_honestly_signed). *)
-
-(*     pose proof (msg_honestly_signed_has_signing_key_cipher_id _ _ _ MHS); split_ex. *)
-(*     pose proof (msg_honestly_signed_signing_key_honest _ _ _ MHS H12). *)
-(*     specialize (H5 _ H12); split_ands. *)
-(*     specialize (H15 H14); split_ands. *)
-(*     rewrite message_no_adv_private_merge; eauto. *)
-    
-(*     eexists; repeat simple apply conj; eauto. *)
-(*     intros KID; specialize (H0 KID); destruct H0; split; intros; eauto. *)
-(*     eapply HonestKey_split with (t := Crypto t0) in H18; eauto. *)
-(*     split_ors; split_ex; eauto. *)
-
-(*     intros. *)
-(*     simpl in H17; split_ors; eauto. *)
-(*     eapply safe_typ_eq in H17; split_ands; subst; discriminate. *)
-    
-(*   - eexists; repeat simple apply conj; split_ands; eauto. *)
-(*     intros; specialize (i kid); destruct i; split; intros; eauto. *)
-(*     eapply HonestKey_split_drop in H13; eauto; unfold not; intros; discriminate. *)
-
-(*     intros. *)
-(*     simpl in H6; split_ors; eauto. *)
-(*     eapply safe_typ_eq in H6; split_ands; subst. *)
-(*     invert H6. *)
-(*     invert H7. *)
-(*     (do 3 eexists); repeat simple apply conj; eauto. *)
-(*     assert (cs0 $+ (c_id, SigEncCipher k k__encid msg_to0 (Some u_id0, cur_n0) msg) $? c_id = Some (SigEncCipher k k__encid msg_to0 (Some u_id0, cur_n0) msg)) as CS by (clean_map_lookups; eauto). *)
-(*     exact CS. *)
-(*     simpl; eauto. *)
-(*     simpl; eauto. *)
-(*     simpl; eauto. *)
-
-(*   - unfold honest_users_only_honest_keys in *. *)
-(*     specialize (H12 _ _ H4 _ _ H3); simpl in *. *)
-(*     encrypted_ciphers_prop. *)
-(*     rewrite message_only_honest_merge; eauto. *)
-
-(*     eexists; repeat simple apply conj; split_ands; eauto. *)
-(*     intros KID; specialize (i KID); destruct i; split; intros; eauto. *)
-(*     eapply HonestKey_split with (t := Message t0) in H13; eauto. *)
-(*     split_ors; eauto. *)
-    
-(*     intros. *)
-(*     simpl in H5; split_ors; eauto. *)
-(*     eapply safe_typ_eq in H5; split_ands; subst; discriminate. *)
-    
-(*   - eexists; repeat simple apply conj; split_ands; eauto. *)
-(*     intros KID; specialize (i KID); destruct i; split; intros; eauto. *)
-(*     eapply HonestKey_split_drop in H10; eauto; unfold not; intros; discriminate. *)
-
-(*     intros. *)
-(*     simpl in H3; split_ors; eauto. *)
-(*     eapply safe_typ_eq in H3; split_ands; subst. *)
-(*     invert H3; invert H10; eauto. *)
-
-(*     intros. *)
-(*     (* simpl in H5; split_ors; eauto. *) *)
-(*     (* eapply safe_typ_eq in H5; split_ands; subst. *) *)
-(*     (* invert H5. *) *)
-(*     (* invert H7. *) *)
-(*     (do 3 eexists); repeat simple apply conj; eauto. *)
-(*     assert (cs0 $+ (c_id, SigCipher k msg_to0 (Some u_id0, cur_n0) msg) $? c_id = Some (SigCipher k msg_to0 (Some u_id0, cur_n0) msg)) as CS by (clean_map_lookups; eauto). *)
-(*     exact CS. *)
-(*     simpl; eauto. *)
-(*     simpl; eauto. *)
-(*     simpl; eauto. *)
-    
-(*   - unfold honest_users_only_honest_keys in *. *)
-(*     specialize (H10 _ _ H5 _ _ H0); simpl in *. *)
-(*     encrypted_ciphers_prop. *)
-
-(*     eexists; repeat simple apply conj; split_ands; eauto. *)
-(*     intros KID; specialize (i KID); destruct i; split; intros; eauto. *)
-(*     eapply HonestKey_split with (t := UPair (Base Bool) (Message t0)) in H11; eauto. *)
-(*     split_ors; eauto. *)
-(*     simpl in *. *)
-(*     apply safe_typ_eq in H11; split_ands. *)
-(*     invert H11. *)
-(*     invert H15. *)
-(*     simpl in *. *)
-(*     dependent destruction msg; simpl in *. *)
-(*     specialize (H18 (fst acc) (snd acc)). *)
-(*     rewrite add_eq_o in H18. *)
-(*     specialize (H18 eq_refl); split_ands; eauto. *)
-(*     auto. *)
-    
-(*     intros. *)
-(*     simpl in H6; split_ors; eauto. *)
-(*     eapply safe_typ_eq in H6; split_ands; subst; discriminate. *)
-    
-(*   - eexists; repeat simple apply conj; split_ands; eauto. *)
-(*     intros KID; specialize (i KID); destruct i; split; intros. *)
-(*     + eapply HonestKey_split with (t := Base Access) in H8; eauto. *)
-(*       split_ors; eauto. *)
-(*       * apply safe_typ_eq in H8; split_ands. *)
-(*         invert H10. *)
-(*         invert H12; eauto. *)
-(*       * destruct (k_id ==n KID); subst; eauto. *)
-
-(*     + destruct (k_id ==n KID); subst; eauto. *)
-
-(*     + intros. *)
-(*       simpl in H1; split_ors; eauto. *)
-(*       eapply safe_typ_eq in H1; split_ands; subst; discriminate. *)
-    
-(*   - eexists; repeat simple apply conj; split_ands; eauto. *)
-(*     intros KID; specialize (i KID); destruct i; split; intros. *)
-(*     + eapply HonestKey_split with (t := Base Access) in H8; eauto. *)
-(*       split_ors; eauto. *)
-(*       * apply safe_typ_eq in H8; split_ands. *)
-(*         invert H10. *)
-(*         invert H12; eauto. *)
-(*       * destruct (k_id ==n KID); subst; eauto. *)
-
-(*     + destruct (k_id ==n KID); subst; eauto. *)
-
-(*     + intros. *)
-(*       simpl in H1; split_ors; eauto. *)
-(*       eapply safe_typ_eq in H1; split_ands; subst; discriminate. *)
-    
-(* Qed. *)
 
 Lemma step_na_return :
   forall {A B C D} suid lbl bd bd',
@@ -1035,7 +773,7 @@ Lemma syntactically_safe_honest_keys_preservation :
                                    cur_nonce := cur_n |}
           -> syntactically_safe u_id ctx cmd sty
           (* -> next_cmd_safe honestk cs u_id froms sents cmd *)
-          -> typechecker_sound ctx honestk u_id
+          -> typechecker_sound ctx honestk cs u_id
           -> honestk  = findUserKeys usrs
           -> message_queue_ok honestk cs qmsgs gks
           -> encrypted_ciphers_ok honestk cs gks
@@ -1050,7 +788,7 @@ Lemma syntactically_safe_honest_keys_preservation :
 
           -> exists ctx',
               List.Forall (fun styp => List.In styp ctx') ctx
-              /\ typechecker_sound ctx' honestk' u_id
+              /\ typechecker_sound ctx' honestk' cs' u_id
               /\ syntactically_safe u_id ctx' cmd' sty
 .
 Proof.
@@ -1109,17 +847,16 @@ Proof.
 Qed.
 
 Lemma syntactically_safe_implies_next_cmd_safe'' :
-  forall t (p : user_cmd t) ctx styp honestk u_id froms sents,
+  forall t (p : user_cmd t) ctx styp honestk u_id cs froms sents,
     syntactically_safe u_id ctx p styp
-    -> typechecker_sound ctx honestk u_id
-    -> exists cs,
-        next_cmd_safe honestk cs u_id froms sents p.
+    -> typechecker_sound ctx honestk cs u_id
+    -> next_cmd_safe honestk cs u_id froms sents p.
 Proof.
   Ltac pr :=
     repeat
       match goal with
       | [ H : nextAction _ _ |- _ ] => invert H
-      | [ H : typechecker_sound _ _ _ |- _ ] => unfold typechecker_sound in H; split_ands
+      | [ H : typechecker_sound _ _ _ _ |- _ ] => unfold typechecker_sound in H; split_ands
       | [ H : forall k, _ <-> _ |- _ $? ?k = _ ] =>
         specialize (H k); destruct H; split_ands
       | [ FKM : findKeysMessage _ $? _ = Some _ , H : (forall _ _, findKeysMessage _ $? _ = _ -> _)
@@ -1132,170 +869,39 @@ Proof.
   induction 1; unfold next_cmd_safe; intros;
     split_ands.
 
-  - specialize (IHsyntactically_safe H2); split_ex.
-    eexists; intros.
-    invert H4.
-    specialize (H3 _ _ H8); eauto.
-
-  - eexists; intros; pr; eauto.
-  - eexists; intros; pr; eauto.
-  - eexists; intros; pr; eauto.
+  - invert H3; eapply IHsyntactically_safe; eauto.
+  - intros; pr; eauto.
+  - intros; pr; eauto.
+  - intros; pr; eauto.
     econstructor; econstructor; pr; eauto.
-  - eexists; intros; pr; eauto.
+  - intros; pr; eauto.
     econstructor; econstructor; pr; eauto.
-  - pr.
-    specialize (H2 _ _ _ _ H); split_ex; subst.
-    simpl in H0.
-    specialize (H0 _ _ _ eq_refl H3 eq_refl eq_refl H6); split_ands.
-    eexists; intros; pr; eauto.
-    + unfold msg_honestly_signed, msg_signing_key; context_map_rewrites.
-      unfold honest_keyb.
-      specialize (H1 (cipher_signing_key x1)); destruct H1; eauto.
-      specialize (H1 H0); context_map_rewrites; trivial.
+  - pr; specialize (H1 _ _ _ _ H); split_ex; subst.
+       
+    unfold msg_honestly_signed, msg_signing_key; context_map_rewrites.
+    unfold honest_keyb.
+    specialize (H0 (cipher_signing_key x0)); destruct H0; eauto.
+    specialize (H0 H6); context_map_rewrites; trivial.
 
-      + econstructor; eauto.
-        unfold msg_honestly_signed, msg_signing_key; context_map_rewrites.
-        unfold honest_keyb.
-        specialize (H1 (cipher_signing_key x1)); destruct H1; eauto.
-        specialize (H1 H0); context_map_rewrites; trivial.
+    unfold msg_to_this_user, msg_destination_user; context_map_rewrites.
+    destruct (cipher_to_user x0 ==n cipher_to_user x0); subst; try contradiction; trivial.
 
-      + (do 2 eexists); repeat simple apply conj; eauto.
+    econstructor; eauto.
+    unfold msg_honestly_signed, msg_signing_key; context_map_rewrites.
+    unfold honest_keyb.
+    specialize (H0 (cipher_signing_key x0)); destruct H0; eauto.
+    specialize (H0 H6); context_map_rewrites; trivial.
+    
+    (do 2 eexists); repeat simple apply conj; eauto.
 
-        admit.
+    admit.
 
-  - eexists; intros; pr; eauto.
-  - eexists; intros; pr; eauto.
-  - eexists; intros; pr; eauto.
-  - eexists; intros; pr; eauto.
-  - eexists; intros; pr; eauto.
-  - eexists; intros; pr; eauto.
-  - eexists; intros; pr; eauto.
-
-    Unshelve.
-    all: exact $0.
+  - intros; pr; eauto.
+  - intros; pr; eauto.
+  - intros; pr; eauto.
+  - intros; pr; eauto.
+  - intros; pr; eauto.
+  - intros; pr; eauto.
+  - intros; pr; eauto.
     
 Admitted.
-
-Lemma syntactically_safe_preserves_next_cmd_safe' :
-  forall {A B C} suid lbl bd bd',
-
-    step_user lbl suid bd bd'
-
-    -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks'
-        (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs'
-        froms froms' sents sents' cur_n cur_n' ctx sty,
-
-      bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
-      -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
-
-      -> forall honestk honestk' u_id cmdu cmdu',
-          suid = Some u_id
-
-          (* no recursion *)
-          -> nextAction cmd cmd
-          -> usrs $? u_id = Some {| key_heap := ks;
-                                   protocol := cmdu;
-                                   msg_heap := qmsgs;
-                                   c_heap   := mycs;
-                                   from_nons := froms;
-                                   sent_nons := sents;
-                                   cur_nonce := cur_n |}
-          -> syntactically_safe u_id ctx cmd sty
-          -> typechecker_sound ctx honestk u_id
-          -> next_cmd_safe honestk cs u_id froms sents cmd
-          -> honestk  = findUserKeys usrs
-          -> message_queue_ok honestk cs qmsgs gks
-          -> encrypted_ciphers_ok honestk cs gks
-          -> honest_users_only_honest_keys usrs
-          -> honestk' = findUserKeys (usrs' $+ (u_id, {| key_heap := ks';
-                                                        protocol := cmdu';
-                                                        msg_heap := qmsgs';
-                                                        c_heap   := mycs';
-                                                        from_nons := froms';
-                                                        sent_nons := sents';
-                                                        cur_nonce := cur_n' |}))
-
-          -> next_cmd_safe honestk' cs' u_id froms' sents' cmd'
-.
-Proof.
-  induction 1; inversion 1; inversion 1; intros; subst;
-    unfold next_cmd_safe; intros;
-      try solve [
-            match goal with
-            | [ H : nextAction _ _ |- _ ] => invert H
-            end;
-            autorewrite with find_user_keys;
-            eauto
-          ].
-
-  - apply nextAction_couldBe in H25; contradiction.
-  - apply nextAction_couldBe in H24; contradiction.
-  - invert H.
-    autorewrite with find_user_keys.
-    unfold typechecker_sound in *; split_ands.
-    invert H30; econstructor; eauto.
-    + specialize (H k); destruct H; eauto.
-    + specialize (H k__sign); destruct H; eauto.
-Qed.
-
-Lemma nextAction_synct_safe :
-  forall t t' (cmd : user_cmd t) (cmd' : user_cmd t') u_id ctx,
-    nextAction cmd cmd'
-    -> forall sty,
-      syntactically_safe u_id ctx cmd sty
-      (* -> syntactically_safe ctx cmd' sty *)
-      -> exists sty', syntactically_safe u_id ctx cmd' sty'
-.
-Proof.
-  induction 1; intros; eauto.
-  invert H0; eauto.
-Qed.
-
-
-Lemma findUserKeys_has_user_key_or_better :
-  forall {A} (usrs : honest_users A) u_id u_d ks k kp,
-    usrs $? u_id = Some u_d
-    -> ks = key_heap u_d
-    -> ks $? k = Some kp
-    -> findUserKeys usrs $? k = Some kp
-      \/ findUserKeys usrs $? k = Some true.
-Proof.
-  intros.
-  induction usrs using map_induction_bis; intros; Equal_eq;
-    subst; clean_map_lookups; eauto;
-      unfold findUserKeys.
-
-  rewrite fold_add; auto 2.
-  rewrite !findUserKeys_notation.
-  destruct (x ==n u_id); subst; clean_map_lookups.
-  - cases (findUserKeys usrs $? k).
-    destruct b; [right | left]; solve_perm_merges.
-    left; solve_perm_merges.
-    
-  - split_ors; try solve [ right; solve_perm_merges ].
-    cases (key_heap e $? k).
-    destruct b; [right | left]; solve_perm_merges.
-    left; solve_perm_merges.
-Qed.
-
-(*
- * If we can prove that some simple syntactic symbolic execution implies
- * the honest_cmds_safe predicate...
- *)
-(* Lemma syntactically_safe_implies_next_cmd_safe : *)
-(*   forall {A B} (U : universe A B), *)
-(*     U_syntactically_safe U *)
-(*     -> honest_cmds_safe U. *)
-(* Proof. *)
-(*   unfold U_syntactically_safe, honest_cmds_safe; intros. *)
-(*   generalize (H _ _ H1 _ eq_refl); intros. *)
-(*   split_ex; subst. *)
-
-(*   pose proof (syntactically_safe_implies_next_cmd_safe'' _ _ _ H2). *)
-(*   eapply syntactically_safe_implies_next_cmd_safe''. *)
-(*   exact H2. *)
-(*   unfold sum_init; reflexivity. *)
-(*   intros * KH; eapply findUserKeys_has_user_key_or_better in KH; eauto. *)
-
-(*   intros; eauto. *)
-(* Qed. *)
