@@ -37,7 +37,8 @@ From protocols Require Import
      ExampleProtocols
      ModelCheck
      ProtocolAutomation
-     SafeProtocol.
+     SafeProtocol
+     SyntacticallySafe.
 
 From protocols Require Sets.
 
@@ -1273,6 +1274,26 @@ Import SN.
 Definition TrC {t__hon t__adv} (ru0 : RealWorld.universe t__hon t__adv) (iu0 : IdealWorld.universe t__hon) :=
   {| Initial := {(ru0, iu0)};
      Step    := @stepC t__hon t__adv |}.
+
+Lemma syntactically_safe_implies_safety :
+  forall t__hon t__adv st st',
+    U_syntactically_safe (fst st)
+    -> (fst st).(all_ciphers) = $0
+    -> @step t__hon t__adv st st'
+    -> ~ safety st
+    -> ~ safety st'.
+
+
+
+Lemma safety_violation_step :
+  forall t__hon t__adv st st',
+    @step t__hon t__adv st st'
+    -> ~ safety st
+    -> ~ safety st'.
+Proof.
+  induct 1; unfold safety; simpl; intros.
+
+Admitted.
 
 
 Lemma safety_violation_step :
