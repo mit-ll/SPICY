@@ -673,101 +673,6 @@ Proof.
       specialize (e _ _ _ _ H1); split_ex; subst; eauto 12.
 Qed.
 
-Lemma step_na_return :
-  forall {A B C D} suid lbl bd bd',
-
-    step_user lbl suid bd bd'
-
-    -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks'
-        (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs'
-        froms froms' sents sents' cur_n cur_n' r,
-
-      bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
-      -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
-      -> @nextAction C D cmd (Return r)
-      -> usrs = usrs'
-        /\ adv = adv'
-        /\ cs = cs'
-        /\ gks = gks'
-        /\ ks = ks'
-        /\ qmsgs = qmsgs'
-        /\ mycs = mycs'
-        /\ froms = froms'
-        /\ sents = sents'
-        /\ cur_n = cur_n'
-        /\ (forall cs'' (usrs'': honest_users A) (adv'' : user_data B) gks'' ks'' qmsgs'' mycs'' froms'' sents'' cur_n'',
-              step_user lbl suid
-                        (usrs'', adv'', cs'', gks'', ks'', qmsgs'', mycs'', froms'', sents'', cur_n'', cmd)
-                        (usrs'', adv'', cs'', gks'', ks'', qmsgs'', mycs'', froms'', sents'', cur_n'', cmd')).
-Proof.
-  induction 1; inversion 1; inversion 1; intros; subst;
-    match goal with
-    | [ H : nextAction _ _ |- _ ] => invert H
-    end; eauto.
-
-  - eapply IHstep_user in H5; eauto; intuition (subst; eauto).
-    econstructor; eauto.
-
-  - invert H4.
-    intuition idtac.
-    econstructor.
-Qed.
-
-Lemma step_na_not_return :
-  forall {A B C D} suid lbl bd bd',
-
-    step_user lbl suid bd bd'
-
-    -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks'
-        (cmd cmd' : user_cmd C) (cmd__n : user_cmd D) ks ks' qmsgs qmsgs' mycs mycs'
-        froms froms' sents sents' cur_n cur_n',
-
-      bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
-      -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
-      -> nextAction cmd cmd__n
-      -> (forall r, cmd__n <> Return r)
-      -> exists f cmd__n',
-          step_user lbl suid
-                    (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd__n)
-                    (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd__n')
-          /\ cmd = f cmd__n
-          /\ cmd' = f cmd__n'
-          /\ forall lbl1 suid1 (usrs1 usrs1' : honest_users A) (adv1 adv1' : user_data B)
-              cs1 cs1' gks1 gks1'
-              ks1 ks1' qmsgs1 qmsgs1' mycs1 mycs1' (cmd__n'' : user_cmd D)
-              froms1 froms1' sents1 sents1' cur_n1 cur_n1',
-
-              step_user lbl1 suid1
-                        (usrs1, adv1, cs1, gks1, ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd__n)
-                        (usrs1', adv1', cs1', gks1', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd__n'')
-              -> step_user lbl1 suid1
-                          (usrs1, adv1, cs1, gks1, ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, f cmd__n)
-                          (usrs1', adv1', cs1', gks1', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', f cmd__n'').
-Proof.
-  Hint Constructors step_user.
-
-  induction 1; inversion 1; inversion 1; invert 1; intros.
-
-  - eapply IHstep_user in H28; eauto.
-    split_ex.
-    exists (fun CD => x <- x CD; cmd2 x).
-    eexists; subst; split; eauto.
-  - invert H27.
-    unfold not in *; exfalso; eauto.
-  - exists (fun x => x); eexists; repeat simple apply conj; swap 1 3; eauto.
-  - exists (fun x => x); eexists; repeat simple apply conj; swap 1 3; eauto.
-  - exists (fun x => x); eexists; repeat simple apply conj; swap 1 3; eauto.
-  - exists (fun x => x); eexists; repeat simple apply conj; swap 1 3; eauto.
-  - exists (fun x => x); eexists; repeat simple apply conj; swap 1 3; eauto.
-  - exists (fun x => x); eexists; repeat simple apply conj; swap 1 3; eauto.
-  - exists (fun x => x); eexists; repeat simple apply conj; swap 1 3; eauto.
-  - exists (fun x => x); eexists; repeat simple apply conj; swap 1 3; eauto.
-  - exists (fun x => x); eexists; repeat simple apply conj; swap 1 3; eauto.
-  - exists (fun x => x); eexists; repeat simple apply conj; swap 1 3; eauto.
-Qed.
-
-Hint Resolve syntactically_safe_honest_keys_preservation'.
-
 Lemma syntactically_safe_honest_keys_preservation :
   forall {A B} suid lbl bd bd',
 
@@ -780,9 +685,8 @@ Lemma syntactically_safe_honest_keys_preservation :
       bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
       -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
 
-      -> forall C honestk honestk' (cmd__n cmd__n' : user_cmd C) u_id,
+      -> forall honestk honestk' u_id,
           suid = Some u_id
-          -> nextAction cmd cmd__n
           -> usrs $? u_id = Some {| key_heap := ks;
                                    protocol := cmd;
                                    msg_heap := qmsgs;
@@ -791,7 +695,6 @@ Lemma syntactically_safe_honest_keys_preservation :
                                    sent_nons := sents;
                                    cur_nonce := cur_n |}
           -> syntactically_safe u_id ctx cmd sty
-          (* -> next_cmd_safe honestk cs u_id froms sents cmd *)
           -> typechecker_sound ctx honestk cs u_id
           -> honestk  = findUserKeys usrs
           -> message_queue_ok honestk cs qmsgs gks
@@ -811,64 +714,45 @@ Lemma syntactically_safe_honest_keys_preservation :
               /\ syntactically_safe u_id ctx' cmd' sty
 .
 Proof.
-  intros; subst.
-
-  specialize (nextAction_couldBe H3); intros.
-  cases cmd__n; intros; try contradiction; clean_context.
-
-  - eapply step_na_return in H3;
-      eauto; split_ands; subst; eauto.
-
-  - eapply step_na_not_return in H3; intros; eauto.
-    split_ex; subst; eauto.
-
-    unfold not; intros; discriminate.
-
-  - eapply step_na_not_return in H3; intros; eauto.
-    split_ex; subst; eauto.
-
-    unfold not; intros; discriminate.
-
-  - eapply step_na_not_return in H3; intros; eauto.
-    split_ex; subst; eauto.
-
-    unfold not; intros; discriminate.
-
-  - eapply step_na_not_return in H3; intros; eauto.
-    split_ex; subst; eauto.
-
-    unfold not; intros; discriminate.
-
-  - eapply step_na_not_return in H3; intros; eauto.
-    split_ex; subst; eauto.
-
-    unfold not; intros; discriminate.
-
-  - eapply step_na_not_return in H3; intros; eauto.
-    split_ex; subst; eauto.
-
-    unfold not; intros; discriminate.
-
-  - eapply step_na_not_return in H3; intros; eauto.
-    split_ex; subst; eauto.
-
-    unfold not; intros; discriminate.
-
-  - eapply step_na_not_return in H3; intros; eauto.
-    split_ex; subst; eauto.
-
-    unfold not; intros; discriminate.
-
-  - eapply step_na_not_return in H3; intros; eauto.
-    split_ex; subst; eauto.
-
-    unfold not; intros; discriminate.
+  intros; subst; eapply syntactically_safe_honest_keys_preservation'; eauto.
 Qed.
 
-Lemma syntactically_safe_implies_next_cmd_safe'' :
+Definition message_not_resent (cs : ciphers) (sents : sent_nonces) {A} (cmd : user_cmd A) :=
+  forall {B} (cmd__n : user_cmd B),
+    nextAction cmd cmd__n
+    -> match cmd__n with
+      | Return _ => True
+      | Gen => True
+      | Send _ msg =>
+        exists c_id c,
+          msg = SignedCiphertext c_id
+        /\ cs $? c_id = Some c
+        /\ ~ List.In (cipher_nonce c) sents
+      | Recv _ => True
+      | SignEncrypt _ _ _ _ => True
+      | Decrypt _ => True
+      | Sign _ _ msg => True
+      | Verify _ _ => True
+      | GenerateAsymKey _ => True
+      | GenerateSymKey _ => True
+      | Bind _ _ => False
+      end.
+
+Lemma next_action_same_first_arg_same_seconds :
+  forall t1 t2 t3 (cmd1 : user_cmd t1) (cmd2 : user_cmd t2) (cmd3 : user_cmd t3),
+    nextAction cmd1 cmd2
+    -> nextAction cmd1 cmd3
+    -> t2 = t3 /\ cmd2 ~= cmd3.
+Proof.
+  induction 1; intros * NA;
+    try solve [ dependent destruction NA; eauto ].
+Qed.
+
+Lemma syntactically_safe_message_not_resent_implies_next_cmd_safe :
   forall t (p : user_cmd t) ctx styp honestk u_id cs froms sents,
     syntactically_safe u_id ctx p styp
     -> typechecker_sound ctx honestk cs u_id
+    -> message_not_resent cs sents p
     -> next_cmd_safe honestk cs u_id froms sents p.
 Proof.
   Ltac pr :=
@@ -888,33 +772,46 @@ Proof.
   induction 1; unfold next_cmd_safe; intros;
     split_ands.
 
-  - invert H3; eapply IHsyntactically_safe; eauto.
+  - unfold message_not_resent in H3.
+    specialize (H3 _ _ H4).
+    invert H4.
+    assert (message_not_resent cs sents cmd1).
+    unfold message_not_resent; intros; eauto.
+    assert (B = B0 /\ cmd__n ~= cmd__n0) as EQ by (eauto using next_action_same_first_arg_same_seconds).
+    split_ands; subst.
+    invert H6.
+    destruct cmd__n0; try contradiction; eauto.
+
+    eapply IHsyntactically_safe; eauto.
+
   - intros; pr; eauto.
   - intros; pr; eauto.
   - intros; pr; eauto.
     econstructor; econstructor; pr; eauto.
   - intros; pr; eauto.
     econstructor; econstructor; pr; eauto.
-  - pr; specialize (H1 _ _ _ _ H); split_ex; subst.
+  - specialize (H1 _ _ H2).
+    pr; specialize (H2 _ _ _ _ H); split_ex; subst.
        
     unfold msg_honestly_signed, msg_signing_key; context_map_rewrites.
     unfold honest_keyb.
-    specialize (H0 (cipher_signing_key x0)); destruct H0; eauto.
-    specialize (H0 H6); context_map_rewrites; trivial.
+    invert H1.
+    specialize (H0 (cipher_signing_key x2)); destruct H0; eauto.
+    specialize (H0 H10); context_map_rewrites; trivial.
 
     unfold msg_to_this_user, msg_destination_user; context_map_rewrites.
-    destruct (cipher_to_user x0 ==n cipher_to_user x0); subst; try contradiction; trivial.
+    destruct (cipher_to_user x2 ==n cipher_to_user x2); subst; try contradiction; trivial.
 
     econstructor; eauto.
     unfold msg_honestly_signed, msg_signing_key; context_map_rewrites.
     unfold honest_keyb.
-    specialize (H0 (cipher_signing_key x0)); destruct H0; eauto.
-    specialize (H0 H6); context_map_rewrites; trivial.
-    
+    specialize (H0 (cipher_signing_key x2)); destruct H0; eauto.
+    invert H1.
+    specialize (H0 H10); context_map_rewrites; trivial.
+
+    invert H1; clean_map_lookups.
     (do 2 eexists); repeat simple apply conj; eauto.
 
-    admit.
-
   - intros; pr; eauto.
   - intros; pr; eauto.
   - intros; pr; eauto.
@@ -923,15 +820,122 @@ Proof.
   - intros; pr; eauto.
   - intros; pr; eauto.
     
-Admitted.
+Qed.
 
-Lemma syntactically_safe_implies_safety :
+(* Lemma syntactically_safe_implies_safety : *)
+(*   forall t__hon t__adv st st', *)
+(*     U_syntactically_safe (fst st) *)
+(*     -> (fst st).(all_ciphers) = $0 *)
+(*     -> @step t__hon t__adv st st' *)
+(*     -> ~ safety st *)
+(*     -> ~ safety st'. *)
+(* Admitted. *)
+
+Definition messages_not_resent {A B} (U : universe A B) : Prop :=
+  forall u_id u,
+    U.(users) $? u_id = Some u
+    -> message_not_resent U.(all_ciphers) u.(sent_nons) u.(protocol).
+
+Definition bds {A B C} (usrs : honest_users A) (adv : user_data B)
+           (cs : ciphers) (gks : keys) (ud : user_data C) :=
+  let '(mkUserData ks cmd qmsgs mycs froms sents cur_n) := ud
+  in  (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd).
+
+Lemma silent_step_then_other_step_messages_not_resent : 
+  forall {A B} u_id1 suid2 lbl1 bd1 ud1 ud2 (usrs : honest_users A) (adv : user_data B) cs gks,
+    step_user lbl1 (Some u_id1) (bds usrs adv cs gks ud1) bd1
+    -> usrs $? u_id1 = Some ud1
+    -> forall C lbl2 bd2 bd2' bd,
+        step_user lbl2 suid2 bd2 bd2'
+        -> forall usrs' adv' cs' gks' ks1 qmsgs1 mycs1 froms1 sents1 cur_n1 cmd1
+            cmdc2 u_id2 ra usrs'' usrs''' adv'' cs'' gks''
+            (cmd2 cmd2' : user_cmd C) ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2'
+            froms2 froms2' sents2 sents2' cur_n2 cur_n2'
+            ks qmsgs mycs froms sents cur_n,
+
+          bd1 = (usrs', adv', cs', gks', ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd1)
+          -> step_user (Action ra) suid2 (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd2) bd
+          -> suid2 = Some u_id2
+          -> usrs $? u_id2 = Some ud2
+
+          -> lbl2 = Action ra
+          -> usrs'' = usrs' $+ (u_id1, {| key_heap := ks1;
+                                           protocol := cmd1;
+                                           msg_heap := qmsgs1;
+                                           c_heap   := mycs1;
+                                           from_nons := froms1;
+                                           sent_nons := sents1;
+                                           cur_nonce := cur_n1 |})
+            -> bd2 = (usrs'', adv', cs', gks', ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
+            -> bd2' = (usrs''', adv'', cs'', gks'', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
+            -> u_id1 <> u_id2
+            -> user_cipher_queue_ok cs (findUserKeys usrs) mycs
+            -> message_not_resent cs' sents2 cmd2
+            -> usrs'' $? u_id2 = Some {| key_heap := ks2;
+                                        protocol := cmdc2;
+                                        msg_heap := qmsgs2;
+                                        c_heap   := mycs2;
+                                        from_nons := froms2;
+                                        sent_nons := sents2;
+                                        cur_nonce := cur_n2 |}
+            -> message_not_resent cs ud2.(sent_nons) cmd2
+.
+Proof.
+  induction 3; inversion 7; inversion 1; intros; subst; try discriminate; clean_context.
+
+  - specialize (IHstep_user _ _ ud2 _ _ H H0).
+    invert H3.
+    specialize (IHstep_user _ _ _ _ _ _ _ _ _ _
+                            _ _ cmdc2 _ _ _ usrs''' _ _ _
+                            _ _ _ _ _ _ _ _ _ _
+                            _ _ _ _ _ _ _ _ _ _
+                            eq_refl H10 eq_refl H5 eq_refl eq_refl eq_refl eq_refl H21 H33).
+
+    unfold message_not_resent; intros.
+    assert (message_not_resent cs'0 sents2 cmd1).
+    specialize (H34 _ _ H2); unfold message_not_resent; intros.
+    invert H2. eapply next_action_same_first_arg_same_seconds in H3; eauto; split_ands; subst.
+    invert H3; eauto.
+
+    specialize (IHstep_user H3 H35).
+    invert H2.
+    specialize (IHstep_user _ _ H8); eauto.
+    
+  - unfold message_not_resent; intros.
+    match goal with | [ H : nextAction _ _ |- _ ] => dependent destruction H end; trivial.
+  - unfold message_not_resent in *.
+    intros.
+    specialize (H41 _ _ H1).
+    match goal with | [ H : nextAction _ _ |- _ ] => dependent destruction H end; trivial.
+    split_ex; subst; simpl in *.
+    unfold bds in *; destruct ud1; destruct ud2; simpl in *.
+    eapply step_limited_change_other_user in H; split_ands; eauto.
+
+    clean_map_lookups.
+    invert H10; clean_context.
+    simpl in H31.
+    unfold user_cipher_queue_ok in H40; rewrite Forall_forall in H40.
+    assert (List.In x mycs0) as LIN by eauto.
+    specialize (H40 _ LIN); split_ex; clean_map_lookups.
+    specialize (H _ _ H5); clean_map_lookups.
+    (* specialize (CS _ _ H5); clean_map_lookups. *)
+    (do 2 eexists); repeat simple apply conj; eauto.
+    split_ors; clean_map_lookups; simpl in *; eauto.
+Qed.
+
+Lemma resend_violation_step :
   forall t__hon t__adv st st',
-    U_syntactically_safe (fst st)
-    -> (fst st).(all_ciphers) = $0
-    -> @step t__hon t__adv st st'
-    -> ~ safety st
-    -> ~ safety st'.
+    @step t__hon t__adv st st'
+    -> messages_not_resent (fst st')
+    -> messages_not_resent (fst st).
+Proof.
+  induction 1; unfold messages_not_resent; simpl; intros.
+
+  invert H; simpl in *.
+
+
+
+
 Admitted.
 
 

@@ -1350,13 +1350,14 @@ Section RealWorldLemmas.
                                            from_nons := froms';
                                            sent_nons := sents';
                                            cur_nonce := cur_n' |})
-            -> usrs'' $? u_id2 = Some {| key_heap := ks2;
-                                        protocol := cmdc2;
-                                        msg_heap := qmsgs2;
-                                        c_heap   := mycs2;
-                                        from_nons := froms2;
-                                        sent_nons := sents2;
-                                        cur_nonce := cur_n2 |}
+            -> (forall cid c, cs $? cid = Some c -> cs' $? cid = Some c)
+            /\ ( usrs'' $? u_id2 = Some {| key_heap := ks2;
+                                          protocol := cmdc2;
+                                          msg_heap := qmsgs2;
+                                          c_heap   := mycs2;
+                                          from_nons := froms2;
+                                          sent_nons := sents2;
+                                          cur_nonce := cur_n2 |}
               \/ exists m,
                 usrs'' $? u_id2 = Some {| key_heap := ks2;
                                           protocol := cmdc2;
@@ -1364,12 +1365,12 @@ Section RealWorldLemmas.
                                           c_heap   := mycs2;
                                           from_nons := froms2;
                                           sent_nons := sents2;
-                                          cur_nonce := cur_n2 |}
+                                          cur_nonce := cur_n2 |} )
   .
   Proof.
     induction 1; inversion 1; inversion 1;
       intros; subst;
-        try solve [ left; clean_map_lookups; trivial ].
+        try solve [ split; [intros | left; clean_map_lookups; trivial]; eauto ].
     
     - specialize (IHstep_user _ _ _ _ _ _ _ _ _ _ _
                               _ _ _ _ _ _ _ _ _ _ _
@@ -1378,7 +1379,7 @@ Section RealWorldLemmas.
       specialize (IHstep_user _ _ _ _ _ _ _ _ _ _ eq_refl H25 H26 H27 eq_refl).
       split_ors; eauto.
 
-    - clean_context; clean_map_lookups.
+    - split; [ | clean_context; clean_map_lookups]; eauto.
       destruct (rec_u_id ==n u_id2); subst; eauto.
   Qed.
 
@@ -1415,13 +1416,14 @@ Section RealWorldLemmas.
                                            from_nons := froms';
                                            sent_nons := sents';
                                            cur_nonce := cur_n' |})
-            -> usrs'' $? u_id2 = Some {| key_heap := ks2;
-                                        protocol := cmd2;
-                                        msg_heap := qmsgs2;
-                                        c_heap   := mycs2;
-                                        from_nons := froms2;
-                                        sent_nons := sents2;
-                                        cur_nonce := cur_n2 |}
+            -> (forall cid c, cs $? cid = Some c -> cs' $? cid = Some c)
+            /\ ( usrs'' $? u_id2 = Some {| key_heap := ks2;
+                                         protocol := cmd2;
+                                         msg_heap := qmsgs2;
+                                         c_heap   := mycs2;
+                                         from_nons := froms2;
+                                         sent_nons := sents2;
+                                         cur_nonce := cur_n2 |}
               \/ exists m,
                 usrs'' $? u_id2 = Some {| key_heap := ks2;
                                           protocol := cmd2;
@@ -1429,7 +1431,7 @@ Section RealWorldLemmas.
                                           c_heap   := mycs2;
                                           from_nons := froms2;
                                           sent_nons := sents2;
-                                          cur_nonce := cur_n2 |}
+                                          cur_nonce := cur_n2 |})
   .
   Proof.
     intros; subst; eapply step_limited_change_other_user'; eauto.
