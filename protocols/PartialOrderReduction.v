@@ -1245,7 +1245,7 @@ Section RealWorldLemmas.
   (*             /\ step_user lbl4 (Some u_id1) (build_data_step U__r'' userData1') bd3' *)
   (*             /\ buildUniverse_step bd3' u_id1 = buildUniverse_step bd1' u_id2 *)
 
-  Lemma silent_step_nochange_other_user :
+  Lemma silent_step_nochange_other_user' :
     forall {A B C} suid lbl bd bd',
       step_user lbl suid bd bd'
       -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks'
@@ -1286,7 +1286,39 @@ Section RealWorldLemmas.
     clean_map_lookups; eauto.
   Qed.
 
-  Lemma step_limited_change_other_user :
+  Lemma silent_step_nochange_other_user :
+    forall {A B} suid lbl bd bd',
+      step_user lbl suid bd bd'
+      -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks'
+          cmd cmd' ks ks' qmsgs qmsgs' mycs mycs'
+          froms froms' sents sents' cur_n cur_n',
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+        -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+        -> lbl = Silent
+        -> forall u_id1 u_id2 ud2 usrs'',
+            suid = Some u_id1
+            -> u_id1 <> u_id2
+            -> usrs $? u_id1 = Some {| key_heap := ks;
+                                      protocol := cmd;
+                                      msg_heap := qmsgs;
+                                      c_heap   := mycs;
+                                      from_nons := froms;
+                                      sent_nons := sents;
+                                      cur_nonce := cur_n |}
+            -> usrs $? u_id2 = Some ud2
+            -> usrs'' = usrs' $+ (u_id1, {| key_heap := ks';
+                                           protocol := cmd';
+                                           msg_heap := qmsgs';
+                                           c_heap   := mycs';
+                                           from_nons := froms';
+                                           sent_nons := sents';
+                                           cur_nonce := cur_n' |})
+            -> usrs'' $? u_id2 = Some ud2.
+  Proof.
+    intros; subst; eapply silent_step_nochange_other_user'; eauto.
+  Qed.
+
+  Lemma step_limited_change_other_user' :
     forall {A B C} suid lbl bd bd',
       step_user lbl suid bd bd'
       -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks'
@@ -1348,6 +1380,59 @@ Section RealWorldLemmas.
 
     - clean_context; clean_map_lookups.
       destruct (rec_u_id ==n u_id2); subst; eauto.
+  Qed.
+
+  Lemma step_limited_change_other_user :
+    forall {A B} suid lbl bd bd',
+      step_user lbl suid bd bd'
+      -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks'
+          cmd cmd' ks ks' qmsgs qmsgs' mycs mycs'
+          froms froms' sents sents' cur_n cur_n',
+
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+        -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+        -> forall u_id1 u_id2 usrs'' ks2 qmsgs2 mycs2 froms2 sents2 cur_n2 cmd2,
+            suid = Some u_id1
+            -> u_id1 <> u_id2
+            -> usrs $? u_id1 = Some {| key_heap := ks;
+                                      protocol := cmd;
+                                      msg_heap := qmsgs;
+                                      c_heap   := mycs;
+                                      from_nons := froms;
+                                      sent_nons := sents;
+                                      cur_nonce := cur_n |}
+            -> usrs $? u_id2 = Some {| key_heap := ks2;
+                                      protocol := cmd2;
+                                      msg_heap := qmsgs2;
+                                      c_heap   := mycs2;
+                                      from_nons := froms2;
+                                      sent_nons := sents2;
+                                      cur_nonce := cur_n2 |}
+            -> usrs'' = usrs' $+ (u_id1, {| key_heap := ks';
+                                           protocol := cmd';
+                                           msg_heap := qmsgs';
+                                           c_heap   := mycs';
+                                           from_nons := froms';
+                                           sent_nons := sents';
+                                           cur_nonce := cur_n' |})
+            -> usrs'' $? u_id2 = Some {| key_heap := ks2;
+                                        protocol := cmd2;
+                                        msg_heap := qmsgs2;
+                                        c_heap   := mycs2;
+                                        from_nons := froms2;
+                                        sent_nons := sents2;
+                                        cur_nonce := cur_n2 |}
+              \/ exists m,
+                usrs'' $? u_id2 = Some {| key_heap := ks2;
+                                          protocol := cmd2;
+                                          msg_heap := qmsgs2 ++ [m];
+                                          c_heap   := mycs2;
+                                          from_nons := froms2;
+                                          sent_nons := sents2;
+                                          cur_nonce := cur_n2 |}
+  .
+  Proof.
+    intros; subst; eapply step_limited_change_other_user'; eauto.
   Qed.
   
 End RealWorldLemmas.
