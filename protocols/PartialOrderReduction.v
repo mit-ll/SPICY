@@ -50,6 +50,9 @@ Require IdealWorld.
 
 Set Implicit Arguments.
 
+Ltac dt bd :=
+  destruct bd as [[[[[[[[[[?usrs ?adv] ?cs] ?gks] ?ks] ?qmsgs] ?mycs] ?froms] ?sents] ?cur_n] ?cmd].
+
 Section RealWorldLemmas.
 
   Import RealWorld RealWorldNotations.
@@ -190,7 +193,7 @@ Section RealWorldLemmas.
                             (usrs1, adv1, cs1, gks1, ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, f cmd__n)
                             (usrs1', adv1', cs1', gks1', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', f cmd__n'').
   Proof.
-    Hint Constructors step_user.
+    Hint Constructors step_user : core.
 
     induction 1; inversion 1; inversion 1; invert 1; intros.
 
@@ -1087,9 +1090,6 @@ Section RealWorldLemmas.
     unfold universe_ok, adv_universe_ok in *; split_ands.
     unfold build_data_step, buildUniverse_step, buildUniverse in *; simpl in *.
 
-    Ltac dt bd :=
-      destruct bd as [[[[[[[[[[?usrs ?adv] ?cs] ?gks] ?ks] ?qmsgs] ?mycs] ?froms] ?sents] ?cur_n] ?cmd].
-
     dt bd1; dt bd1'.
     clean_context; subst.
     
@@ -1436,9 +1436,890 @@ Section RealWorldLemmas.
   Proof.
     intros; subst; eapply step_limited_change_other_user'; eauto.
   Qed.
+
+  (* Lemma step_limited_change_other_user_func' : *)
+  (*   forall {A B C} suid lbl bd bd', *)
+  (*     step_user lbl suid bd bd' *)
+  (*     -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks' *)
+  (*         (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs' *)
+  (*         froms froms' sents sents' cur_n cur_n', *)
+  (*       bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
+  (*       -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd') *)
+  (*       -> forall cmdc cmdc' u_id1, *)
+  (*           suid = Some u_id1 *)
+  (*           -> usrs $? u_id1 = Some {| key_heap := ks; *)
+  (*                                     protocol := cmdc; *)
+  (*                                     msg_heap := qmsgs; *)
+  (*                                     c_heap   := mycs; *)
+  (*                                     from_nons := froms; *)
+  (*                                     sent_nons := sents; *)
+  (*                                     cur_nonce := cur_n |} *)
+  (*           -> (forall uid u, *)
+  (*                 usrs $? uid = Some u *)
+  (*                 ->  *)
+
+
+  (*           -> ( usrs'' $? u_id2 = Some {| key_heap := ks2; *)
+  (*                                         protocol := cmdc2; *)
+  (*                                         msg_heap := qmsgs2; *)
+  (*                                         c_heap   := mycs2; *)
+  (*                                         from_nons := froms2; *)
+  (*                                         sent_nons := sents2; *)
+  (*                                         cur_nonce := cur_n2 |} *)
+  (*             \/ exists m, *)
+  (*               usrs'' $? u_id2 = Some {| key_heap := ks2; *)
+  (*                                         protocol := cmdc2; *)
+  (*                                         msg_heap := qmsgs2 ++ [m]; *)
+  (*                                         c_heap   := mycs2; *)
+  (*                                         from_nons := froms2; *)
+  (*                                         sent_nons := sents2; *)
+  (*                                         cur_nonce := cur_n2 |} ) *)
+  (* . *)
+  (* Proof. *)
+  (*   induction 1; inversion 1; inversion 1; *)
+  (*     intros; subst; *)
+  (*       try solve [ split; [intros | left; clean_map_lookups; trivial]; eauto ]. *)
+    
+  (*   - specialize (IHstep_user _ _ _ _ _ _ _ _ _ _ _ *)
+  (*                             _ _ _ _ _ _ _ _ _ _ _ *)
+  (*                             eq_refl eq_refl). *)
+  (*     specialize (IHstep_user cmdc cmdc'). *)
+  (*     specialize (IHstep_user _ _ _ _ _ _ _ _ _ _ eq_refl H25 H26 H27 eq_refl). *)
+  (*     split_ors; eauto. *)
+
+  (*   - split; [ | clean_context; clean_map_lookups]; eauto. *)
+  (*     destruct (rec_u_id ==n u_id2); subst; eauto. *)
+  (* Qed. *)
   
+
 End RealWorldLemmas.
-                    
+
+Section AuxDefinitions.
+  Import RealWorld.
+  
+  Inductive boundRunningTime : forall {A}, user_cmd A -> nat -> Prop :=
+  | BrtReturn : forall t (r : <<t>>) n,
+      boundRunningTime (Return r) n
+  | BrtGen : forall n,
+      boundRunningTime Gen (2 + n)
+  | BrtSend : forall {t} (msg : crypto t) uid n,
+      boundRunningTime (Send uid msg) (2 + n)
+  | BrtRecv : forall t pat n,
+      boundRunningTime (@Recv t pat) (2 + n)
+  | BrtSignEncrypt : forall t k__s k__e u_id (msg : message t) n,
+      boundRunningTime (SignEncrypt k__s k__e u_id msg) (2 + n)
+  | BrtDecrypt : forall t (msg : crypto t) n,
+      boundRunningTime (Decrypt msg) (2 + n)
+  | BrtSign : forall t k u_id (msg : message t) n,
+      boundRunningTime (Sign k u_id msg) (2 + n)
+  | BrtVerify : forall t k (msg : crypto t) n,
+      boundRunningTime (Verify k msg) (2 + n)
+  | BrtGenSymKey : forall usg n,
+      boundRunningTime (GenerateSymKey usg) (2 + n)
+  | BrtGenAsymKey : forall usg n,
+      boundRunningTime (GenerateAsymKey usg) (2 + n)
+  | BrtBind : forall t1 t2 (c1 : user_cmd t1) (c2 : << t1 >> -> user_cmd t2) n1 n2,
+      boundRunningTime c1 n1
+      -> (forall t, boundRunningTime (c2 t) n2)
+      -> boundRunningTime (Bind c1 c2) (2 + (n1 + n2)).
+
+  Hint Constructors boundRunningTime : core.
+
+  Hint Extern 1 (_ < _) => Omega.omega : core.
+  Hint Extern 1 (_ <= _) => Omega.omega : core.
+
+  From Coq Require Import Morphisms.
+
+  Definition queues_size {A} (usrs : honest_users A) : nat :=
+    fold (fun uid ud acc => acc + length ud.(msg_heap)) usrs 0.
+
+  Lemma queues_size_proper :
+    forall {A},
+      Proper (eq ==> eq ==> eq ==> eq) (fun (_ : Map.key) (u : user_data A) (acc : nat) => acc + length (msg_heap u)).
+  Proof.
+    solve_proper.
+  Qed.
+
+  Lemma queues_size_transpose_neqkey :
+    forall {A},
+      transpose_neqkey eq (fun (_ : Map.key) (u : user_data A) (acc : nat) => acc + length (msg_heap u)).
+  Proof.
+    unfold transpose_neqkey; intros; Omega.omega.
+  Qed.
+
+  Hint Resolve queues_size_proper queues_size_transpose_neqkey : core.
+
+  Lemma queues_size_readd_user_same_queue_idem :
+    forall A (usrs usrs' : honest_users A) uid ud ud',
+      usrs $? uid = Some ud
+      -> usrs' = usrs $+ (uid, ud')
+      -> ud'.(msg_heap) = ud.(msg_heap)
+      -> queues_size usrs = queues_size usrs'.
+  Proof.
+    induction usrs using map_induction_bis;
+      intros; Equal_eq; subst; clean_map_lookups; eauto.
+
+    destruct (x ==n uid); subst; clean_map_lookups; eauto.
+    - rewrite map_add_eq; unfold queues_size.
+      rewrite !fold_add; eauto.
+      rewrite H2; trivial.
+    - unfold queues_size.
+      rewrite map_ne_swap by eauto.
+      progress (rewrite !fold_add by eauto).
+      specialize (IHusrs _ _ _ _ H0 eq_refl H2).
+      unfold queues_size in IHusrs.
+      rewrite IHusrs.
+      trivial.
+  Qed.
+
+  Lemma queues_size_readd_user_addnl_msg :
+    forall A (usrs usrs' : honest_users A) uid ud ud' m,
+      usrs $? uid = Some ud
+      -> usrs' = usrs $+ (uid, ud')
+      -> ud'.(msg_heap) = ud.(msg_heap) ++ [m]
+      -> queues_size usrs' = 1 + queues_size usrs.
+  Proof.
+    induction usrs using map_induction_bis;
+      intros; Equal_eq; subst; clean_map_lookups; eauto.
+
+    destruct (x ==n uid); subst; clean_map_lookups; eauto.
+    - rewrite map_add_eq; unfold queues_size.
+      rewrite !fold_add; eauto.
+      rewrite H2.
+      rewrite app_length; simpl; Omega.omega.
+      
+    - unfold queues_size.
+      rewrite map_ne_swap by eauto.
+      progress (rewrite !fold_add by eauto).
+      specialize (IHusrs _ _ _ _ _ H0 eq_refl H2).
+      unfold queues_size in IHusrs.
+      rewrite IHusrs.
+      rewrite fold_add by eauto.
+      trivial.
+  Qed.
+
+  Lemma queues_size_readd_user_popped_msg :
+    forall A (usrs usrs' : honest_users A) uid ud ud' m,
+      usrs $? uid = Some ud
+      -> usrs' = usrs $+ (uid, ud')
+      -> ud.(msg_heap) = m :: ud'.(msg_heap)
+      -> queues_size usrs = 1 + queues_size usrs'.
+  Proof.
+    induction usrs using map_induction_bis;
+      intros; Equal_eq; subst; clean_map_lookups; eauto.
+
+    destruct (x ==n uid); subst; clean_map_lookups; eauto.
+    - rewrite map_add_eq; unfold queues_size.
+      rewrite !fold_add; eauto.
+      rewrite H2; simpl; Omega.omega.
+      
+    - unfold queues_size.
+      rewrite map_ne_swap by eauto.
+      rewrite !fold_add by eauto.
+      specialize (IHusrs _ _ _ _ _ H0 eq_refl H2).
+      unfold queues_size in IHusrs.
+      rewrite IHusrs.
+      trivial.
+  Qed.
+  
+  Hint Resolve queues_size_readd_user_same_queue_idem : core.
+
+  Lemma boundRunningTime_step :
+    forall C (cmd : user_cmd C) n,
+      boundRunningTime cmd n
+
+      -> forall A B cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks'
+          (cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs'
+          froms froms' sents sents' cur_n cur_n' lbl cmda cmda' uid,
+        
+        step_user lbl (Some uid)
+                  (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+                  (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+        -> usrs $? uid = Some (mkUserData ks cmda qmsgs mycs froms sents cur_n)
+
+        -> exists n',
+          boundRunningTime cmd' n'
+          /\ n' + queues_size (usrs' $+ (uid, mkUserData ks' cmda' qmsgs' mycs' froms' sents' cur_n' ))
+            < n + queues_size usrs.
+  Proof.
+    induction 1;
+      invert 1;
+      intros;
+      try solve [ exists n; simpl; erewrite <- queues_size_readd_user_same_queue_idem by eauto; split; eauto ].
+
+    - assert (uid <> uid0) by (unfold not; intros RW; rewrite RW in *; contradiction).
+      rewrite map_ne_swap by eauto.
+
+      erewrite queues_size_readd_user_addnl_msg with (uid := uid).
+      3: reflexivity.
+      2: clean_map_lookups; reflexivity.
+      2: simpl; reflexivity.
+      
+      erewrite <- queues_size_readd_user_same_queue_idem by eauto.
+
+      exists n; split; eauto.
+      
+    - exists (n + 1); split; eauto.
+      rewrite <- plus_assoc.
+      erewrite <- queues_size_readd_user_popped_msg; eauto; eauto.
+      simpl; eauto.
+      
+    - exists (2 + n); split; eauto.
+
+      rewrite <- plus_assoc.
+      rewrite plus_comm with (n := n).
+      rewrite plus_assoc.
+      rewrite <- plus_assoc with (n := 1).
+      erewrite <- queues_size_readd_user_popped_msg; eauto; eauto.
+      simpl; eauto.
+
+    - eapply IHboundRunningTime in H9; split_ex; eauto.
+      eexists; split; eauto.
+      rewrite plus_comm with (n := x).
+      rewrite plus_comm with (n := n1).
+      rewrite !plus_assoc.
+      rewrite <- plus_assoc.
+      rewrite <- plus_assoc with (m := n1).
+      apply Nat.add_lt_mono_l; eauto.
+      
+    - erewrite <- queues_size_readd_user_same_queue_idem by eauto.
+      eexists; split; eauto.
+      
+  Qed.
+
+  (* (* This encoding sucks *) *)
+  (* Inductive boundRunningTimeUniv {A} : list (user_id * user_data A) -> nat -> Prop := *)
+  (* | BrtEmpty : boundRunningTimeUniv [] 0 *)
+  (* | BrtRecur : forall uid u us n n', *)
+  (*     boundRunningTime u.(protocol) n *)
+  (*     -> boundRunningTimeUniv us n' *)
+  (*     -> boundRunningTimeUniv ((uid,u) :: us) (n + n') *)
+  (* . *)
+
+  Inductive boundRunningTimeUniv {A} : honest_users A -> nat -> Prop :=
+  | BrtEmpty : boundRunningTimeUniv $0 0
+  | BrtRecur : forall uid u us n n',
+      boundRunningTime u.(protocol) n
+      -> us $? uid = Some u
+      -> boundRunningTimeUniv (us $- uid) n'
+      -> boundRunningTimeUniv us (n + n')
+  .
+
+  Hint Constructors boundRunningTimeUniv : core.
+
+  (* Lemma boundRunningTime_for_element' : *)
+  (*   forall A (usrs : list (user_id * user_data A)) n__rt, *)
+  (*     boundRunningTimeUniv usrs n__rt *)
+  (*     -> forall uid u, *)
+  (*       List.In (uid,u) usrs *)
+  (*       -> exists n, *)
+  (*         boundRunningTime u.(protocol) n. *)
+  (* Proof. *)
+  (*   induction usrs; intros; simpl in *; try contradiction. *)
+  (*   invert H. *)
+  (*   split_ors; eauto. *)
+  (*   invert H; eauto. *)
+  (* Qed. *)
+
+  (* Lemma ina_in : *)
+  (*   forall X Y (x : X) (y : Y) (l : list (X * Y)), *)
+  (*     SetoidList.InA (fun p p' : X * Y => fst p = fst p' /\ snd p = snd p') (x,y) l *)
+  (*     -> List.In (x,y) l. *)
+  (* Proof. *)
+  (*   induction 1; simpl in *; eauto. *)
+  (*   destruct y0;  *)
+  (*     split_ands; subst; eauto. *)
+  (* Qed. *)
+
+  (* Lemma in_ina : *)
+  (*   forall X Y (x : X) (y : Y) (l : list (X * Y)), *)
+  (*     List.In (x,y) l *)
+  (*     -> SetoidList.InA (fun p p' : X * Y => fst p = fst p' /\ snd p = snd p') (x,y) l. *)
+  (* Proof. *)
+  (*   induction l; intros; simpl in *; try contradiction; eauto. *)
+  (*   split_ors; subst; eauto. *)
+  (* Qed. *)
+
+  (* Lemma eqlistA_eq : *)
+  (*   forall Y n (y : Y) (m : NatMap.t Y), *)
+  (*     SetoidList.eqlistA *)
+  (*       (fun p p' : nat * Y => fst p = fst p' /\ snd p = snd p') (elements (m $+ (n, y))) *)
+  (*       (O.elements_lt (n,y) m ++ (n,y) :: O.elements_ge (n,y) m) *)
+  (*     -> elements (m $+ (n,y)) = O.elements_lt (n,y) m ++ (n,y) :: O.elements_ge (n,y) m. *)
+  (* Proof. *)
+  (*   induction 1; simpl in *; subst; eauto. *)
+  (*   destruct x; destruct x'; simpl in *; split_ands; subst; trivial. *)
+  (* Qed. *)
+
+  Lemma boundRunningTime_for_element :
+    forall A (usrs : honest_users A) n__rt,
+      boundRunningTimeUniv usrs n__rt
+      -> forall uid u,
+        usrs $? uid = Some u
+        -> exists n,
+          boundRunningTime u.(protocol) n.
+  Proof.
+    induction 1; intros; clean_map_lookups; eauto.
+    destruct (uid ==n uid0); subst; clean_map_lookups; eauto.
+    assert (us $- uid $? uid0 = Some u0) by (clean_map_lookups; trivial).
+    eapply IHboundRunningTimeUniv in H3; split_ex; eauto.
+  Qed.
+
+  Lemma boundRunningTime_for_element' :
+    forall A (usrs : honest_users A) n__rt,
+      boundRunningTimeUniv usrs n__rt
+      -> forall uid u,
+        usrs $? uid = Some u
+        -> exists n,
+          boundRunningTime u.(protocol) n
+        /\ boundRunningTimeUniv (usrs $- uid) (n__rt - n)
+        /\ n__rt >= n.
+  Proof.
+    induction 1; intros; clean_map_lookups; eauto.
+    destruct (uid ==n uid0); subst; clean_map_lookups; eauto.
+    - eexists; repeat simple apply conj; eauto.
+      rewrite plus_comm. rewrite <- Nat.add_sub_assoc by Omega.omega.
+      rewrite Nat.sub_diag, Nat.add_0_r; auto.
+
+    - assert (us $- uid $? uid0 = Some u0) by (clean_map_lookups; trivial).
+      eapply IHboundRunningTimeUniv in H3; split_ex; eauto.
+      eexists; repeat simple apply conj; eauto.
+      rewrite <- Nat.add_sub_assoc by Omega.omega.
+      eapply BrtRecur with (uid1 := uid); eauto.
+
+      assert (RW : us $- uid0 $- uid = us $- uid $- uid0).
+      apply map_eq_Equal; unfold Equal; intros.
+      destruct (y ==n uid); destruct (y ==n uid0); subst; clean_map_lookups; eauto.
+      rewrite RW; auto.
+  Qed.
+
+  (* Lemma boundRunningTimeUniv_split' : *)
+  (*   forall A (usrs : list (user_id * user_data A)) n__rt, *)
+  (*     boundRunningTimeUniv usrs n__rt *)
+  (*     -> forall usrs1 usrs2 uid u, *)
+  (*       usrs = usrs1 ++ (uid,u) :: usrs2 *)
+  (*       -> exists n, *)
+  (*         boundRunningTime u.(protocol) n *)
+  (*       /\ n <= n__rt *)
+  (*       /\ boundRunningTimeUniv (usrs1 ++ usrs2) (n__rt - n). *)
+  (* Proof. *)
+  (*   induction usrs; intros; simpl in *; try discriminate. *)
+  (*   - destruct usrs1. *)
+  (*     rewrite app_nil_l in H0; invert H0. *)
+  (*     rewrite <- app_comm_cons in H0; invert H0. *)
+
+  (*   - invert H. *)
+  (*     specialize (IHusrs _ H5). *)
+  (*     destruct usrs1. *)
+  (*     * rewrite app_nil_l in *. *)
+  (*       invert H0. *)
+  (*       destruct usrs2. *)
+  (*       ** invert H5. *)
+  (*          eexists; rewrite plus_0_r; repeat simple apply conj; eauto. *)
+  (*          rewrite Nat.sub_diag; eauto. *)
+  (*       ** invert H5. *)
+  (*          specialize (IHusrs [] usrs2 uid0 u0). *)
+  (*          rewrite app_nil_l in IHusrs. *)
+  (*          specialize (IHusrs eq_refl); split_ex. *)
+  (*          eexists; repeat simple apply conj; eauto. *)
+
+  (*          rewrite Nat.add_comm. *)
+  (*          rewrite <- Nat.add_assoc. *)
+  (*          rewrite <- Nat.add_sub_assoc; eauto. *)
+
+  (*          econstructor; eauto. *)
+  (*          rewrite <- Nat.add_sub_assoc; eauto. *)
+  (*          rewrite Nat.sub_diag. *)
+  (*          rewrite plus_0_r; eauto. *)
+
+  (*     * rewrite <- app_comm_cons in *. *)
+  (*       invert H0. *)
+  (*       specialize (IHusrs usrs1 usrs2 uid u eq_refl); split_ex. *)
+  (*       eexists; repeat simple apply conj; eauto. *)
+  (*       rewrite <- Nat.add_sub_assoc; eauto. *)
+  (* Qed. *)
+
+  (* Lemma map_remove_add_eq : *)
+  (*   forall {V} (m : Map.t V) k v, *)
+  (*     m $- k $+ (k, v) = m $+ (k, v). *)
+  (* Proof. *)
+  (*   intros. apply map_eq_Equal; unfold Equal; intros. *)
+  (*   destruct (k ==n y); subst; clean_map_lookups; auto. *)
+  (* Qed. *)
+
+  (* Lemma update_map_list' : *)
+  (*   forall V (m : NatMap.t V) k v, *)
+  (*     m $? k = Some v *)
+  (*     -> exists usrs1 usrs2, *)
+  (*       elements m = usrs1 ++ (k,v) :: usrs2 *)
+  (*     /\ usrs1 = O.elements_lt (k,v) (m $- k) *)
+  (*     /\ usrs2 = O.elements_ge (k,v) (m $- k) *)
+  (*     /\ (forall v', ~ List.In (k,v') usrs2). *)
+  (* Proof. *)
+  (*   intros. *)
+
+  (*   assert (ADD: Add k v (m $- k) (m $- k $+ (k,v))). *)
+  (*   unfold Add; intros; destruct (y ==n k); subst; clean_map_lookups; trivial. *)
+
+  (*   apply O.elements_Add in ADD; eauto. *)
+  (*   apply eqlistA_eq in ADD; eauto. *)
+
+  (*   assert (RW : m $- k $+ (k,v) = m). *)
+  (*   apply map_eq_Equal; unfold Equal; intros; destruct (y ==n k); subst; clean_map_lookups; auto. *)
+
+  (*   rewrite RW in *. *)
+  (*   exists (O.elements_lt (k, v) (m $- k)). *)
+  (*   exists (O.elements_ge (k, v) (m $- k)). *)
+  (*   repeat simple apply conj; eauto. *)
+
+  (*   unfold not; intros. *)
+  (*   unfold O.elements_ge in H0. *)
+  (*   rewrite filter_In in H0; split_ands. *)
+  (*   apply in_ina in H0. *)
+  (*   rewrite <- elements_mapsto_iff in H0. *)
+  (*   rewrite remove_mapsto_iff in H0; split_ands; contradiction. *)
+  (* Qed. *)
+
+  (* Lemma elements_lt_val_nomatter' : *)
+  (*   forall V (l : list (nat * V)) k v v', *)
+  (*     List.filter (O.gtb (k, v)) l = List.filter (O.gtb (k, v')) l. *)
+  (* Proof. *)
+  (*   induction l; eauto. *)
+  (* Qed. *)
+
+  (* Lemma elements_lt_val_nomatter : *)
+  (*   forall V (m : NatMap.t V) k v v', *)
+  (*     O.elements_lt (k,v) m = O.elements_lt (k,v') m. *)
+  (* Proof. *)
+  (*   intros; eauto using elements_lt_val_nomatter'. *)
+  (* Qed. *)
+  
+  (* Lemma update_map_list : *)
+  (*   forall V (m : NatMap.t V) k v v', *)
+  (*     m $? k = Some v *)
+  (*     -> exists usrs1 usrs2, *)
+  (*       elements m = usrs1 ++ (k,v) :: usrs2 *)
+  (*     /\ elements (m $+ (k,v')) = usrs1 ++ (k,v') :: usrs2. *)
+  (* Proof. *)
+  (*   intros; subst. *)
+  (*   assert (M' : m $+ (k,v') $? k = Some v') by (clean_map_lookups; trivial). *)
+
+  (*   generalize (update_map_list' _ _ H); intros; split_ex; subst. *)
+  (*   generalize (update_map_list' _ _ M'); intros; split_ex; subst. *)
+  (*   rewrite !map_add_remove_eq in H1. *)
+  (*   rewrite !elements_lt_val_nomatter with (v := v') (v' := v) in H1; eauto. *)
+  (* Qed. *)
+
+  (* Lemma boundRunningTimeUniv_app : *)
+  (*   forall A (l1 l2 : list (nat * user_data A)) n, *)
+  (*     boundRunningTimeUniv (l1 ++ l2) n *)
+  (*     -> exists n1 n2, *)
+  (*       boundRunningTimeUniv l1 n1 *)
+  (*     /\ boundRunningTimeUniv l2 n2 *)
+  (*     /\ n = n1 + n2. *)
+  (* Proof. *)
+  (*   induction l1; intros; eauto. *)
+  (*   rewrite <- app_comm_cons in H. *)
+  (*   invert H. *)
+  (*   specialize (IHl1 _ _ H4); split_ex. *)
+  (*   (do 2 eexists); repeat simple apply conj; eauto. *)
+  (*   Omega.omega. *)
+  (* Qed. *)
+
+  (* Lemma listIn_iff_false : *)
+  (*   forall A (usrs : list (nat * user_data A)), *)
+  (*     (forall uid ud, List.In (uid,ud) usrs <-> False) *)
+  (*     -> usrs = []. *)
+  (* Proof. *)
+  (*   induction usrs; intros; eauto. *)
+  (*   exfalso. *)
+  (*   destruct a. *)
+  (*   specialize (H n u). *)
+  (*   destruct H; eauto. *)
+  (* Qed. *)
+
+  (* Lemma listIn_false : *)
+  (*   forall A (usrs : list (nat * user_data A)), *)
+  (*     (forall uid ud, List.In (uid,ud) usrs -> exists (ud : user_data A), False) *)
+  (*     -> usrs = []. *)
+  (* Proof. *)
+  (*   induction usrs; intros; eauto. *)
+  (*   exfalso. *)
+  (*   destruct a. *)
+  (*   specialize (H n u); eauto. *)
+  (*   assert (IN : List.In (n,u) ((n,u)::usrs)) by eauto. *)
+  (*   specialize (H IN); split_ex; contradiction. *)
+  (* Qed. *)
+
+  Lemma map_no_entries_empty :
+    forall A (usrs : honest_users A),
+      (forall uid u, usrs $? uid = Some u -> exists u', False /\ u.(protocol) = u'.(protocol))
+      -> usrs = $0.
+  Proof.
+    induction usrs using map_induction_bis;
+      intros; Equal_eq; subst; clean_map_lookups; eauto.
+
+    exfalso.
+    assert (LKP : usrs $+ (x, e) $? x = Some e) by (clean_map_lookups; trivial).
+    specialize (H0 _ _ LKP); split_ex; contradiction.
+  Qed.
+
+  Lemma boundedRunningTimeUniv_generalize' :
+    forall A (usrs : honest_users A) n,
+      boundRunningTimeUniv usrs n
+      -> forall usrs',
+        (forall uid u, usrs' $? uid = Some u -> exists u', usrs $? uid = Some u' /\ u.(protocol) = u'.(protocol))
+        -> (forall uid u, usrs $? uid = Some u -> exists u', usrs' $? uid = Some u' /\ u.(protocol) = u'.(protocol))
+        -> boundRunningTimeUniv usrs' n.
+  Proof.
+    induction 1; intros; subst.
+
+    - assert (usrs' = $0).
+      apply map_no_entries_empty; intros; eauto.
+      apply H in H1; split_ex; clean_map_lookups.
+
+      subst; eauto.
+
+    - generalize (H3 _ _ H0); intros; split_ex.
+
+      assert (ARG : (forall uid0 u,
+                        usrs' $- uid $? uid0 = Some u ->
+                        exists u' : user_data A, us $- uid $? uid0 = Some u' /\ protocol u = protocol u')).
+      intros; destruct (uid ==n uid0); subst; clean_map_lookups; eauto.
+      rewrite remove_eq_o in H6 by congruence; discriminate.
+      rewrite remove_neq_o in H6 by congruence; eauto.
+
+      specialize (IHboundRunningTimeUniv _ ARG); clear ARG.
+
+      eapply BrtRecur with (uid0 := uid) (u0 := x); try assumption.
+      rewrite <- H5; assumption.
+      eapply IHboundRunningTimeUniv; intros; eauto.
+
+      destruct (uid ==n uid0); subst.
+      rewrite remove_eq_o in H6 by congruence; discriminate.
+      rewrite remove_neq_o in * by congruence.
+      eapply H3 in H6; split_ex.
+      
+      eexists; split; eauto.
+  Qed.
+
+  (* Definition appendMsg {A} (ud : user_data A) (m : {x : type & crypto x} ) := *)
+  (*   {| key_heap := ud.(key_heap); *)
+  (*      protocol := ud.(protocol); *)
+  (*      msg_heap := ud.(msg_heap) ++ [m]; *)
+  (*      c_heap   := ud.(c_heap); *)
+  (*      from_nons := ud.(from_nons); *)
+  (*      sent_nons := ud.(sent_nons); *)
+  (*      cur_nonce := ud.(cur_nonce) |}. *)
+
+  (* Lemma boundedRunningTimeUniv_generalize : *)
+  (*   forall A (usrs : list (nat * user_data A)) n, *)
+  (*     boundRunningTimeUniv usrs n *)
+  (*     -> forall (f : user_data A -> user_data A) usrs', *)
+  (*       (forall ud, (f ud).(protocol) = ud.(protocol)) *)
+  (*       -> usrs' = List.map (fun '(uid,u) => (uid, f u)) usrs *)
+  (*       -> boundRunningTimeUniv usrs' n. *)
+  (* Proof. *)
+  (*   induction 1; intros; subst; simpl; eauto. *)
+  (*   econstructor; eauto. *)
+  (*   rewrite (H1 u); eauto. *)
+  (* Qed. *)
+
+  Lemma user_step_removes_no_users_keeps_proto :
+    forall {A B C} cs cs' lbl u_id (usrs usrs' : honest_users A) (adv adv' : user_data B)
+      gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd',
+      step_user lbl u_id bd bd'
+      -> forall (cmd : user_cmd C),
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+        -> forall cmd',
+          bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+          -> forall u_id' u_d,
+            usrs $? u_id' = Some u_d
+            -> exists u_d',
+              usrs' $? u_id' = Some u_d'
+            /\ u_d.(protocol) = u_d'.(protocol).
+  Proof.
+    induction 1; inversion 1; inversion 1; intros; subst; eauto.
+
+    case (u_id' ==n rec_u_id); intro; subst; unfold not; intros; clean_map_lookups; eauto.
+  Qed.
+
+  Lemma user_step_adds_no_users_keeps_proto :
+    forall {A B C} cs cs' lbl u_id (usrs usrs' : honest_users A) (adv adv' : user_data B)
+      gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd',
+      step_user lbl u_id bd bd'
+      -> forall (cmd : user_cmd C),
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+        -> forall cmd',
+          bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+          -> forall u_id' u_d,
+            usrs' $? u_id' = Some u_d
+            -> exists u_d',
+              usrs $? u_id' = Some u_d'
+            /\ u_d.(protocol) = u_d'.(protocol).
+  Proof.
+    induction 1; inversion 1; inversion 1; intros; subst; eauto.
+
+    case (u_id' ==n rec_u_id); intro; subst; unfold not; intros; clean_map_lookups; eauto.
+  Qed.
+
+  Lemma user_step_boundRunningTimeUniv_impact :
+    forall A B cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks'
+      (cmd cmd' : user_cmd (Base A)) ks ks' qmsgs qmsgs' mycs mycs'
+      froms froms' sents sents' cur_n cur_n' lbl uid,
+        
+      step_user lbl (Some uid)
+                (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+                (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+      -> usrs $? uid = Some (mkUserData ks cmd qmsgs mycs froms sents cur_n)
+                
+      -> forall n,
+          boundRunningTimeUniv usrs n
+          -> boundRunningTimeUniv usrs' n.
+  Proof.
+    intros * STEP USR1 * BRT.
+    generalize (user_step_removes_no_users_keeps_proto STEP eq_refl eq_refl); intros.
+    generalize (user_step_adds_no_users_keeps_proto STEP eq_refl eq_refl); intros.
+    eapply boundedRunningTimeUniv_generalize'; eauto.
+  Qed.
+
+  Lemma user_step_boundRunningTimeUniv_impact_minus_stepped :
+    forall A B cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks'
+      (cmd cmd' : user_cmd (Base A)) ks ks' qmsgs qmsgs' mycs mycs'
+      froms froms' sents sents' cur_n cur_n' lbl uid,
+        
+      step_user lbl (Some uid)
+                (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+                (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+      -> usrs $? uid = Some (mkUserData ks cmd qmsgs mycs froms sents cur_n)
+                
+      -> forall n,
+          boundRunningTimeUniv (usrs $- uid) n
+          -> boundRunningTimeUniv (usrs' $- uid) n.
+  Proof.
+    intros * STEP USR1 * BRT.
+    generalize (user_step_removes_no_users_keeps_proto STEP eq_refl eq_refl); intros.
+    generalize (user_step_adds_no_users_keeps_proto STEP eq_refl eq_refl); intros.
+    eapply boundedRunningTimeUniv_generalize'; eauto.
+
+    - intros; destruct (uid ==n uid0); subst.
+      rewrite remove_eq_o in H1 by congruence; discriminate.
+      rewrite remove_neq_o in * by congruence; eauto.
+    
+    - intros; destruct (uid ==n uid0); subst.
+      rewrite remove_eq_o in H1 by congruence; discriminate.
+      rewrite remove_neq_o in * by congruence; eauto.
+  Qed.
+
+    
+  (* Lemma boundRunningTime_univ_update : *)
+  (*   forall A (usrs : honest_users A) n__rt, *)
+  (*     boundRunningTimeUniv (elements usrs) n__rt *)
+  (*     -> forall uid u1 u2 p1 p2 n1 n2, *)
+  (*       usrs $? uid = Some u1 *)
+  (*       -> p1 = u1.(protocol) *)
+  (*       -> p2 = u2.(protocol) *)
+  (*       -> boundRunningTime p1 n1 *)
+  (*       -> boundRunningTime p2 n2 *)
+  (*       -> boundRunningTimeUniv (elements (usrs $+ (uid,u2))) (n__rt + n2 - n1). *)
+  (* Proof. *)
+  (*   intros. *)
+    
+  (* Admitted. *)
+
+  (*   H2 : boundRunningTimeUniv (elements (elt:=user_data A) (users U)) n__rt *)
+  (* H3 : queues_size (users U) = n__qs *)
+  (* x : nat *)
+  (* H4 : boundRunningTime protocol x *)
+  (* STEP : step_user lbl (Some u_id) *)
+  (*          (users U, adversary U, all_ciphers U, all_keys U, key_heap, msg_heap, c_heap, from_nons, sent_nons, *)
+  (*          cur_nonce, protocol) (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
+  (* x0 : nat *)
+  (* H1 : boundRunningTime cmd x0 *)
+
+  (* Lemma boundRunningTimeUniv_step' : *)
+  (*   forall A B cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks' *)
+  (*     (cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs' *)
+  (*     froms froms' sents sents' cur_n cur_n' lbl cmda cmda' uid, *)
+        
+  (*     step_user lbl (Some uid) *)
+  (*               (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
+  (*               (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd') *)
+  (*     -> forall cmda n__rt, *)
+  (*       usrs $? uid = Some (mkUserData ks cmda qmsgs mycs froms sents cur_n) *)
+  (*       -> boundRunningTimeUniv (elements usrs) n__rt *)
+  (*       -> forall other_id other p, *)
+  (*           other_id <> uid *)
+  (*           -> usrs $? other_id = Some other *)
+  (*           ->  *)
+
+
+  (*       -> exists n', *)
+  (*         boundRunningTime cmd' n' *)
+  (*         /\ n' + queues_size (usrs' $+ (uid, mkUserData ks' cmda' qmsgs' mycs' froms' sents' cur_n' )) *)
+  (*           < n + queues_size usrs. *)
+  (* Proof. *)
+  (*   induction 1; *)
+  (*     invert 1; *)
+  (*     intros; *)
+  (*     try solve [ exists n; simpl; erewrite <- queues_size_readd_user_same_queue_idem by eauto; split; eauto ]. *)
+
+  (*   - assert (uid <> uid0) by (unfold not; intros RW; rewrite RW in *; contradiction). *)
+  (*     rewrite map_ne_swap by eauto. *)
+
+  (*     erewrite queues_size_readd_user_addnl_msg with (uid := uid). *)
+  (*     3: reflexivity. *)
+  (*     2: clean_map_lookups; reflexivity. *)
+  (*     2: simpl; reflexivity. *)
+      
+  (*     erewrite <- queues_size_readd_user_same_queue_idem by eauto. *)
+
+  (*     exists n; split; eauto. *)
+      
+  (*   - exists (n + 1); split; eauto. *)
+  (*     rewrite <- plus_assoc. *)
+  (*     erewrite <- queues_size_readd_user_popped_msg; eauto; eauto. *)
+  (*     simpl; eauto. *)
+      
+  (*   - exists (2 + n); split; eauto. *)
+
+  (*     rewrite <- plus_assoc. *)
+  (*     rewrite plus_comm with (n := n). *)
+  (*     rewrite plus_assoc. *)
+  (*     rewrite <- plus_assoc with (n := 1). *)
+  (*     erewrite <- queues_size_readd_user_popped_msg; eauto; eauto. *)
+  (*     simpl; eauto. *)
+
+  (*   - eapply IHboundRunningTime in H9; split_ex; eauto. *)
+  (*     eexists; split; eauto. *)
+  (*     rewrite plus_comm with (n := x). *)
+  (*     rewrite plus_comm with (n := n1). *)
+  (*     rewrite !plus_assoc. *)
+  (*     rewrite <- plus_assoc. *)
+  (*     rewrite <- plus_assoc with (m := n1). *)
+  (*     apply Nat.add_lt_mono_l; eauto. *)
+      
+  (*   - erewrite <- queues_size_readd_user_same_queue_idem by eauto. *)
+  (*     eexists; split; eauto. *)
+      
+  (* Qed. *)
+
+  Lemma boundRunningTime_univ_step :
+    forall A B (U U' : universe A B) lbl b n__rt n__qs,
+      step_universe U lbl U'
+      -> lameAdv b U.(adversary)
+      -> boundRunningTimeUniv U.(users) n__rt
+      -> queues_size U.(users) = n__qs
+      -> exists n',
+          boundRunningTimeUniv U'.(users) n'
+        /\ n' + queues_size U'.(users) < n__rt + n__qs.
+  Proof.
+    invert 1; intros.
+    - unfold buildUniverse; unfold users.
+
+      destruct U; destruct userData; unfold build_data_step in *; simpl in *.
+      generalize (user_step_boundRunningTimeUniv_impact H1 H0 H2); intros.
+      generalize (boundRunningTime_for_element' H2 _ H0); simpl; intros; split_ex.
+      generalize (boundRunningTime_step H5 cmd H1 H0); intros; split_ex.
+
+      eexists; split.
+
+      eapply BrtRecur with (uid := u_id); simpl; eauto.
+      simpl; eauto.
+      eapply user_step_boundRunningTimeUniv_impact_minus_stepped in H1; eauto.
+
+      rewrite map_add_remove_eq; eauto.
+
+      Omega.omega.
+      
+    - unfold lameAdv, build_data_step in *; destruct U; destruct adversary; simpl in *; rewrite H in *.
+      invert H0.
+  Qed.
+
+  Inductive runningTimeMeasure {A B} (U : universe A B) : nat -> Prop :=
+  | Measure : forall n__qs n__rt,
+        boundRunningTimeUniv U.(users) n__rt
+      -> queues_size U.(users) = n__qs
+      -> runningTimeMeasure U (n__rt + n__qs).
+
+  Hint Constructors runningTimeMeasure : core.
+
+  Lemma runningTimeMeasure_step :
+    forall A B (U U' : universe A B) lbl b n,
+      step_universe U lbl U'
+      -> lameAdv b U.(adversary)
+      -> runningTimeMeasure U n
+      -> exists n',
+          runningTimeMeasure U' n'
+          /\ n' < n.
+  Proof.
+    inversion 3; subst; eauto.
+    eapply boundRunningTime_univ_step in H; eauto; split_ex; eauto.
+  Qed.
+
+  Notation "R ^ P ^^*" := (trc3 R P) (at level 0).
+
+  Definition ign_lbl : rlabel -> Prop :=
+    fun _ => True.
+
+  Lemma adversary_remains_lame :
+    forall A B (U U' : universe A B) b lbl,
+      lameAdv b U.(adversary)
+      -> step_universe U lbl U'
+      -> lameAdv b U'.(adversary).
+  Proof.
+    unfold lameAdv; invert 2; subst; simpl in *; subst; 
+      unfold build_data_step, buildUniverse, buildUniverseAdv in *; simpl in *.
+
+    - destruct lbl.
+      + simpl in *; eapply honest_silent_step_nochange_adversaries in H2; eauto.
+        subst; auto.
+      + simpl in *; eapply honest_labeled_step_nochange_adversary_protocol in H2; eauto.
+        rewrite <- H2; auto.
+        
+    - rewrite H in H1; invert H1.
+  Qed.
+
+  Lemma runningTimeMeasure_steps :
+    forall A B (U U' : universe A B),
+      trc3 step_universe ign_lbl U U'
+      -> forall b n,
+        lameAdv b U.(adversary)
+        -> runningTimeMeasure U n
+        -> exists n',
+            runningTimeMeasure U' n'
+          /\ n' <= n.
+  Proof.
+    induction 1; intros; eauto.
+    generalize H0; intros STEP.
+    eapply runningTimeMeasure_step in H0; eauto; split_ex.
+
+    assert (lameAdv b0 (adversary y)).
+    eapply adversary_remains_lame; eauto.
+
+    specialize (IHtrc3 _ _ H5 H0); split_ex; eauto.
+  Qed.
+
+  Inductive stepsi {A B} :
+    nat -> universe A B  -> universe A B -> Prop :=
+  | StepsiO : forall U,
+      stepsi O U U
+  | StepsiS : forall lbl U U' U'' i,
+      step_universe U lbl U'
+      -> stepsi i U' U''
+      -> stepsi (1 + i) U U''.
+
+  Hint Constructors stepsi : core.
+
+  Lemma steps_stepsi :
+    forall A B pr (U U' : universe A B),
+      trc3 step_universe pr U U'
+      -> exists i, stepsi i U U'.
+  Proof.
+    induct 1; split_ex; eauto.
+  Qed.
+
+End AuxDefinitions.
 
 Inductive stepC (t__hon t__adv : type) :
     (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon)
@@ -1450,8 +2331,6 @@ Inductive stepC (t__hon t__adv : type) :
 | BothLoud : forall ru ru' ra ia iu iu' iu'',
     step_universeC ru (Action ra) ru'
     -> istepSilent^* iu iu'
-    (* step silently as far as we can *)
-    (* -> (forall iu''', istepSilent iu' iu''' -> False) *)
     -> IdealWorld.lstep_universe iu' (Action ia) iu''
     -> action_matches ra ru ia iu'
     -> stepC (ru, iu) (ru', iu'').
@@ -1497,17 +2376,19 @@ Lemma alignment_violations_translate :
 Proof.
 Admitted.
 
-Theorem step_stepC :
-  forall {t__hon t__adv} (ru0 : RealWorld.universe t__hon t__adv) (iu0 : IdealWorld.universe t__hon),
-  (* summarizeThreads c cs *)
-    (* -> boundRunningTime c n *)
-    invariantFor (TrC ru0 iu0) (fun st => safety st /\ labels_align st)
-    -> invariantFor (S ru0 iu0) (fun st => safety st /\ labels_align st)
-.
-Proof.
-  intros * INV.
-  unfold invariantFor in *; intros * INIT.
-  simpl in *.
-  specialize (INV _ INIT); intros.
+(* Theorem step_stepC : *)
+(*   forall {t__hon t__adv} (ru0 : RealWorld.universe t__hon t__adv) (iu0 : IdealWorld.universe t__hon), *)
+(*   (* summarizeThreads c cs *) *)
+(*     (* -> boundRunningTime c n *) *)
 
-Admitted.
+(*     (* typechecked protocol + typechecker sound *) *)
+(*     invariantFor (TrC ru0 iu0) (fun st => msg_not_resent st /\ labels_align st) *)
+(*     -> invariantFor (S ru0 iu0) (fun st => safety st /\ labels_align st) *)
+(* . *)
+(* Proof. *)
+(*   intros * INV. *)
+(*   unfold invariantFor in *; intros * INIT. *)
+(*   simpl in *. *)
+(*   specialize (INV _ INIT); intros. *)
+
+(* Admitted. *)
