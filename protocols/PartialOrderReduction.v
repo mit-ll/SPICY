@@ -60,24 +60,6 @@ Section RealWorldLemmas.
 
   Import RealWorld RealWorldNotations.
 
-  Lemma universe_predicates_preservation :
-    forall {A B} (U U' : universe A B) lbl,
-      universe_ok U
-      -> adv_universe_ok U
-      -> honest_cmds_safe U
-      -> step_universe U lbl U'
-      -> universe_ok U'
-        /\ adv_universe_ok U'.
-  Proof.
-    intros * UOK AUOK HCS STEP.
-    destruct lbl;
-      intuition eauto.
-
-    unfold adv_universe_ok in *; split_ands;
-      eapply honest_labeled_step_univ_ok;
-      eauto using honest_cmds_implies_safe_actions.
-  Qed.
-
   (* Partial order reduction *)
 
   Record summary := { sending_to : Sets.set user_id }.
@@ -1227,21 +1209,21 @@ Section AuxDefinitions.
 
   Hint Constructors boundRunningTimeUniv : core.
 
-  Lemma boundRunningTime_for_element :
-    forall A (usrs : honest_users A) n__rt,
-      boundRunningTimeUniv usrs n__rt
-      -> forall uid u,
-        usrs $? uid = Some u
-        -> exists n,
-          boundRunningTime u.(protocol) n.
-  Proof.
-    induction 1; intros; clean_map_lookups; eauto.
-    destruct (uid ==n uid0); subst; clean_map_lookups; eauto.
-    assert (us $- uid $? uid0 = Some u0) by (clean_map_lookups; trivial).
-    eapply IHboundRunningTimeUniv in H3; split_ex; eauto.
-  Qed.
+  (* Lemma boundRunningTime_for_element : *)
+  (*   forall A (usrs : honest_users A) n__rt, *)
+  (*     boundRunningTimeUniv usrs n__rt *)
+  (*     -> forall uid u, *)
+  (*       usrs $? uid = Some u *)
+  (*       -> exists n, *)
+  (*         boundRunningTime u.(protocol) n. *)
+  (* Proof. *)
+  (*   induction 1; intros; clean_map_lookups; eauto. *)
+  (*   destruct (uid ==n uid0); subst; clean_map_lookups; eauto. *)
+  (*   assert (us $- uid $? uid0 = Some u0) by (clean_map_lookups; trivial). *)
+  (*   eapply IHboundRunningTimeUniv in H3; split_ex; eauto. *)
+  (* Qed. *)
 
-  Lemma boundRunningTime_for_element' :
+  Lemma boundRunningTime_for_element :
     forall A (usrs : honest_users A) n__rt,
       boundRunningTimeUniv usrs n__rt
       -> forall uid u,
@@ -1249,7 +1231,7 @@ Section AuxDefinitions.
         -> exists n,
           boundRunningTime u.(protocol) n
         /\ boundRunningTimeUniv (usrs $- uid) (n__rt - n)
-        /\ n__rt >= n.
+        /\ n <= n__rt.
   Proof.
     induction 1; intros; clean_map_lookups; eauto.
     destruct (uid ==n uid0); subst; clean_map_lookups; eauto.
@@ -1268,6 +1250,33 @@ Section AuxDefinitions.
       destruct (y ==n uid); destruct (y ==n uid0); subst; clean_map_lookups; eauto.
       rewrite RW; auto.
   Qed.
+  (* Lemma boundRunningTime_for_element' : *)
+  (*   forall A (usrs : honest_users A) n__rt, *)
+  (*     boundRunningTimeUniv usrs n__rt *)
+  (*     -> forall uid u, *)
+  (*       usrs $? uid = Some u *)
+  (*       -> exists n, *)
+  (*         boundRunningTime u.(protocol) n *)
+  (*       /\ boundRunningTimeUniv (usrs $- uid) (n__rt - n) *)
+  (*       /\ n__rt >= n. *)
+  (* Proof. *)
+  (*   induction 1; intros; clean_map_lookups; eauto. *)
+  (*   destruct (uid ==n uid0); subst; clean_map_lookups; eauto. *)
+  (*   - eexists; repeat simple apply conj; eauto. *)
+  (*     rewrite plus_comm. rewrite <- Nat.add_sub_assoc by Omega.omega. *)
+  (*     rewrite Nat.sub_diag, Nat.add_0_r; auto. *)
+
+  (*   - assert (us $- uid $? uid0 = Some u0) by (clean_map_lookups; trivial). *)
+  (*     eapply IHboundRunningTimeUniv in H3; split_ex; eauto. *)
+  (*     eexists; repeat simple apply conj; eauto. *)
+  (*     rewrite <- Nat.add_sub_assoc by Omega.omega. *)
+  (*     eapply BrtRecur with (uid1 := uid); eauto. *)
+
+  (*     assert (RW : us $- uid0 $- uid = us $- uid $- uid0). *)
+  (*     apply map_eq_Equal; unfold Equal; intros. *)
+  (*     destruct (y ==n uid); destruct (y ==n uid0); subst; clean_map_lookups; eauto. *)
+  (*     rewrite RW; auto. *)
+  (* Qed. *)
 
   Lemma map_no_entries_empty :
     forall A (usrs : honest_users A),
@@ -1422,7 +1431,7 @@ Section AuxDefinitions.
 
       destruct U; destruct userData; unfold build_data_step in *; simpl in *.
       generalize (user_step_boundRunningTimeUniv_impact H1 H0 H2); intros.
-      generalize (boundRunningTime_for_element' H2 _ H0); simpl; intros; split_ex.
+      generalize (boundRunningTime_for_element H2 _ H0); simpl; intros; split_ex.
       generalize (boundRunningTime_step H5 cmd H1 H0); intros; split_ex.
 
       eexists; split.
@@ -1552,8 +1561,8 @@ Section AuxDefinitions.
   Hint Constructors step stepsi : core.
     
   Lemma steps_stepsi :
-    forall t__hon t__adv (st st' : RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon),
-      step st st'
+    forall t__hon t__adv st st',
+      (@step t__hon t__adv) ^* st st'
       -> exists i, stepsi i st st'.
   Proof.
     induction 1; split_ex; eauto.
@@ -1594,20 +1603,20 @@ Definition TrC {t__hon t__adv} (ru0 : RealWorld.universe t__hon t__adv) (iu0 : I
  * i.e., perform bounded running time analysis and update step to stepi
  * 
  *)
-Lemma safety_violations_translate :
-  forall t__hon t__adv st st',
-    (@step t__hon t__adv)^* st st'
+Lemma resend_violation_translate :
+  forall t__hon t__adv n st st',
+    stepsi n st st'
     -> (forall st'', step st' st'' -> False)
-    -> ~ safety st'
+    -> ~ no_resends_U (fst st')
     -> exists st'',
         (@stepC t__hon t__adv)^* st st''
-        /\ ~ safety st''.
+        /\ ~ no_resends_U (fst st'').
 Proof.
 Admitted.
 
-Lemma alignment_violations_translate :
-  forall t__hon t__adv st st',
-    (@step t__hon t__adv)^* st st'
+Lemma alignment_violation_translate :
+  forall t__hon t__adv st st' n,
+    stepsi n st st'
     -> (forall st'', step st' st'' -> False)
     -> ~ labels_align st'
     -> exists st'',
@@ -1616,16 +1625,172 @@ Lemma alignment_violations_translate :
 Proof.
 Admitted.
 
+(* Lemma translate_trace_commute : *)
+(*   forall i h l c1 c2 h' l' c', *)
+(*     stepsi (S i) (h, l, c1 || c2) (h', l', c') *)
+(*     -> (forall h'' l'' c'', step (h', l', c') (h'', l'', c'') -> False) *)
+(*     -> forall s, summarize c2 s *)
+(*     -> forall x, nextAction c1 x *)
+(*     -> commutes x s *)
+(*     -> forall x0 x1 x2, step (h, l, c1) (x0, x1, x2) *)
+(*     -> exists h'' l'', step (h, l, c1) (h'', l'', x2) *)
+(*                        /\ stepsi i (h'', l'', x2 || c2) (h', l', c'). *)
+(* Proof. *)
+(*   induct 1; simplify. *)
+(*   invert H0. *)
+  
+(*   invert H. *)
+
+(*   eapply nextAction_det in H5; try eapply H6; eauto; propositional; subst. *)
+(*   eauto 10. *)
+
+(*   eapply commutes_noblock in H3; eauto. *)
+(*   first_order. *)
+(*   exfalso; eauto. *)
+
+(*   invert H. *)
+
+(*   eapply nextAction_det in H5; try eapply H12; eauto; propositional; subst. *)
+(*   eauto 10. *)
+
+(*   assert (Hnext : nextAction c1 x) by assumption. *)
+(*   eapply commutes_noblock in Hnext; eauto. *)
+(*   first_order. *)
+(*   eapply IHstepsi in H; clear IHstepsi; eauto using summarize_step. *)
+(*   first_order. *)
+(*   eapply commutes_sound with (c1 := c1) (c2 := c2) (c0 := x) in H; eauto. *)
+(*   first_order. *)
+(*   eauto 10. *)
+(* Qed. *)
+
+
+(* Lemma translate_trace : forall i h l c1 c2 h' l' c', *)
+(*     stepsi i (h, l, c1 || c2) (h', l', c') *)
+(*     -> (forall h'' l'' c'', step (h', l', c') (h'', l'', c'') -> False) *)
+(*     -> notAboutToFail c' = false *)
+(*     -> forall s, summarize c2 s *)
+(*     -> exists h' l' c'', (stepC s)^* (h, l, c1 || c2) (h', l', c'') *)
+(*                          /\ notAboutToFail c'' = false. *)
+(* Proof. *)
+(*   induct i; simplify. *)
+
+(*   invert H. *)
+(*   eauto 10. *)
+
+(*   excluded_middle (exists c0 h' l' c', nextAction c1 c0 *)
+(*                                        /\ commutes c0 s *)
+(*                                        /\ step (h, l, c1) (h', l', c')). *)
+
+(*   first_order. *)
+(*   eapply translate_trace_commute in H; eauto. *)
+(*   first_order. *)
+(*   eapply IHi in H6; eauto. *)
+(*   first_order. *)
+(*   eauto 7. *)
+
+(*   invert H. *)
+(*   invert H5. *)
+
+(*   eapply IHi in H6; eauto. *)
+(*   first_order. *)
+(*   eauto 7. *)
+
+(*   eapply IHi in H6; eauto using summarize_step. *)
+(*   first_order. *)
+(*   do 3 eexists; propositional. *)
+(*   2: apply H4. *)
+(*   eauto 10. *)
+(* Qed. *)
+
+
+Lemma complete_trace :
+  forall t__hon t__adv n' n st b,
+    runningTimeMeasure (fst st) n
+    -> n <= n'
+    -> lameAdv b (fst st).(adversary)
+    -> exists st',
+        (@step t__hon t__adv) ^* st st'
+        /\ (forall st'', step st' st'' -> False).
+
+Proof.
+  induct n'; intros.
+  - invert H; simpl in *.
+
+    exists st; split; intros; eauto.
+    destruct st.
+    destruct u; simpl in *; subst.
+    destruct n__rt; try Omega.omega.
+    
+    invert H.
+
+    invert H6; dismiss_adv; simpl in *.
+    eapply boundRunningTime_for_element in H2; eauto; split_ex.
+    destruct x; try Omega.omega.
+    invert H2.
+    unfold build_data_step in *; rewrite <- H8 in H3; invert H3.
+    
+    invert H5; simpl in *.
+    eapply boundRunningTime_for_element in H2; eauto; split_ex.
+    destruct x; try Omega.omega.
+    invert H2.
+    unfold build_data_step in *; rewrite <- H11 in H3; invert H3.
+
+  - destruct (classic (exists st', step st st')).
+    + split_ex.
+      rename x into st'.
+      generalize H2; intros STEP; invert H2; simpl in *.
+
+      * eapply runningTimeMeasure_stepU in H; eauto.
+        split_ex.
+        eapply adversary_remains_lame in H1; eauto.
+
+        specialize (IHn' x (ru',iu)).
+        simpl in IHn'.
+        eapply IHn' in H; try Omega.omega; eauto.
+        split_ex.
+
+        exists x0; split; intros; eauto.
+        eapply TrcFront; eauto.
+
+      * eapply runningTimeMeasure_stepU in H; eauto.
+        split_ex.
+        eapply adversary_remains_lame in H1; eauto.
+
+        specialize (IHn' x (ru',iu'')).
+        simpl in IHn'.
+        eapply IHn' in H; try Omega.omega; eauto.
+        split_ex.
+
+        exists x0; split; intros; eauto.
+        eapply TrcFront; eauto.
+
+
+    + assert (forall st', ~ step st st') by eauto using not_ex_all_not.
+      exists st; split; intros; eauto.
+Qed.
+
+Lemma many_steps_stays_lame :
+  forall t__hon t__adv st st' b,
+    (@step t__hon t__adv) ^* st st'
+    -> lameAdv b (adversary (fst st))
+    -> lameAdv b (adversary (fst st')).
+Proof.
+  induction 1;
+    intros;
+    simpl in *;
+    eauto using single_step_stays_lame.
+Qed.
+
 Theorem step_stepC :
-  forall {t__hon t__adv} (ru0 : RealWorld.universe t__hon t__adv) (iu0 : IdealWorld.universe t__hon) b,
-    (* -> boundRunningTime c n *)
+  forall {t__hon t__adv} (ru0 : RealWorld.universe t__hon t__adv) (iu0 : IdealWorld.universe t__hon) b n,
     syntactically_safe_U ru0
+    -> runningTimeMeasure ru0 n
     -> lameAdv b ru0.(adversary)
     -> invariantFor (TrC ru0 iu0) (fun st => no_resends_U (fst st) /\ labels_align st)
-    -> invariantFor (S ru0 iu0) (fun st => safety st /\ labels_align st)
+    -> invariantFor (S ru0 iu0) (fun st => no_resends_U (fst st) /\ labels_align st)
 .
 Proof.
-  intros * SYN_SAFE LAME INV.
+  intros * SYN_SAFE RUNTIME LAME INV.
 
   apply NNPP; unfold not; intros INV'.
   unfold invariantFor in INV'.
@@ -1636,32 +1801,29 @@ Proof.
   simpl in H; split_ors; try contradiction.
   destruct x0 as [?ru ?iu].
 
+  subst; simpl in *.
+
+  assert (exists n', runningTimeMeasure (fst (ru, iu)) n' /\ n' <= n)
+    by eauto using runningTimeMeasure_steps; split_ex.
+  eapply complete_trace in H; eauto; split_ex.
+  specialize (trc_trans H0 H); intros.
+  apply steps_stepsi in H4; split_ex.
+
   apply not_and_or in H1; split_ors.
-  unfold safety in H1.
+  - assert (~ no_resends_U (fst x0))
+      by eauto using resend_violation_steps, many_steps_stays_lame.
 
+    unfold invariantFor in INV; simpl in *.
+    eapply resend_violation_translate in H4; eauto; split_ex.
+    apply INV in H4; eauto; split_ex.
+    contradiction.
+    
+  - assert (~ labels_align x0) by admit.
+      (* by eauto using labels_align_violation_steps, many_steps_stays_lame. *)
 
-  (* subst. *)
-  (* simplify. *)
-  (* cases (notAboutToFail c); propositional. *)
-  (* assert (exists n', boundRunningTime c n' /\ n' <= n) by eauto using boundRunningTime_steps. *)
-  (* first_order. *)
-  (* eapply complete_trace in H2; eauto. *)
-  (* first_order. *)
-  (* specialize (trc_trans H4 H2); simplify. *)
-  (* assert (notAboutToFail x2 = false) by eauto using notAboutToFail_steps. *)
-  (* unfold invariantFor in H1; simplify. *)
-  (* apply steps_stepsi in H7; first_order. *)
-  (* eapply translate_trace in H7; eauto. *)
-  (* first_order. *)
-  (* apply H1 in H7; auto. *)
-  (* equality. *)
-
-
-
-
-  
-  (* unfold invariantFor in *; intros * INIT. *)
-  (* simpl in *. *)
-  (* specialize (INV _ INIT); intros. *)
+    unfold invariantFor in INV; simpl in *.
+    eapply alignment_violation_translate in H4; eauto; split_ex.
+    apply INV in H4; eauto; split_ex.
+    contradiction.
 
 Admitted.

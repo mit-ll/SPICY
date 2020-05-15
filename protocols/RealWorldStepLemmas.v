@@ -31,7 +31,26 @@ From KeyManagement Require Import
 
 From protocols Require Import
      ProtocolAutomation
+     SafeProtocol
 .
+
+Lemma universe_predicates_preservation :
+  forall {A B} (U U' : universe A B) lbl,
+    universe_ok U
+    -> adv_universe_ok U
+    -> honest_cmds_safe U
+    -> step_universe U lbl U'
+    -> universe_ok U'
+      /\ adv_universe_ok U'.
+Proof.
+  intros * UOK AUOK HCS STEP.
+  destruct lbl;
+    intuition eauto.
+
+  unfold adv_universe_ok in *; split_ands;
+    eapply honest_labeled_step_univ_ok;
+    eauto using honest_cmds_implies_safe_actions.
+Qed.
 
 Lemma step_user_nochange_that_user_in_honest_users :
   forall {A B C} suid lbl bd bd',

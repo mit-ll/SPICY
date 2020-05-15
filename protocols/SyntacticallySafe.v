@@ -562,8 +562,7 @@ Lemma typingcontext_sound_other_user_step :
       -> message_queues_ok cs usrs gks
       -> encrypted_ciphers_ok (findUserKeys usrs) cs gks
       -> user_cipher_queues_ok cs (findUserKeys usrs) usrs
-      -> (forall a, lbl = Action a -> action_adversary_safe (findUserKeys usrs) cs a)
-      -> forall cmdc cmdc' u_id1 u_id2 ctx, 
+      -> forall cmdc cmdc' u_id1 u_id2 ctx ctx__step sty, 
           suid = Some u_id1
           -> u_id1 <> u_id2
           -> usrs $? u_id1 = Some {| key_heap := ks;
@@ -573,32 +572,38 @@ Lemma typingcontext_sound_other_user_step :
                                     from_nons := froms;
                                     sent_nons := sents;
                                     cur_nonce := cur_n |}
+          -> syntactically_safe u_id1 ctx__step cmd sty
+          -> typingcontext_sound ctx__step (findUserKeys usrs) cs u_id1
           -> typingcontext_sound ctx (findUserKeys usrs) cs u_id2
           -> typingcontext_sound ctx (findUserKeys (usrs' $+ (u_id1,
                                                            mkUserData ks' cmdc' qmsgs' mycs' froms' sents' cur_n'))) cs' u_id2.
 Proof.
-  induction 1; inversion 1; inversion 1;
+  induction 1; inversion 1; inversion 1; 
     intros; subst; autorewrite with find_user_keys; eauto.
 
+  - invert H30; eauto.
+
   - msg_queue_prop.
-    specialize (H34 _ eq_refl); invert H34.
+    unfold typingcontext_sound in *; repeat simple apply conj; intros; split_ands; eauto.
+    assert (msg_pattern_safe (findUserKeys usrs') pat) by (invert H37; eauto).
+
     assert (msg_honestly_signed (findUserKeys usrs') cs' msg = true) by eauto.
-    unfold msg_honestly_signed in H5.
+    unfold msg_honestly_signed in H12.
     destruct (msg_signing_key cs' msg); try discriminate.
-    rewrite <- honest_key_honest_keyb in H5.
+    rewrite <- honest_key_honest_keyb in H12.
     specialize (H1 _ eq_refl); split_ands.
-    specialize (H9 H5); split_ands.
+    specialize (H13 H12); split_ands.
     rewrite message_no_adv_private_merge by eauto; eauto.
     
   - unfold typingcontext_sound in *; split_ands; split; intros; eauto.
-    apply H6 in H7; eauto; split_ex; subst; eauto 8.
+    apply H6 in H11; eauto; split_ex; subst; eauto 8.
   - user_cipher_queues_prop.
     encrypted_ciphers_prop.
 
     rewrite message_only_honest_merge by eauto; eauto.
     
   - unfold typingcontext_sound in *; split_ands; split; intros; eauto.
-    apply H3 in H4; eauto; split_ex; subst; eauto 8.
+    apply H3 in H8; eauto; split_ex; subst; eauto 8.
   - unfold typingcontext_sound in *; split_ands; split; intros; eauto.
     destruct (k_id ==n kid); subst; clean_map_lookups; eauto.
   - unfold typingcontext_sound in *; split_ands; split; intros; eauto.
@@ -606,17 +611,16 @@ Proof.
 
 Qed.
 
-Lemma syntactically_safe_U_preservation_step :
+Lemma syntactically_safe_U_preservation_stepU :
   forall A B (U U' : universe A B) lbl b,
     step_universe U lbl U'
     -> universe_ok U
     -> adv_universe_ok U
-    -> (forall a, lbl = Action a -> action_adversary_safe (findUserKeys U.(users)) U.(all_ciphers) a)
     -> lameAdv b U.(adversary)
     -> syntactically_safe_U U
     -> syntactically_safe_U U'.
 Proof.
-  intros * STEP UOK AUOK SAFE LAME SS.
+  intros * STEP UOK AUOK LAME SS.
   invert STEP; dismiss_adv.
 
   unfold syntactically_safe_U, build_data_step in *; destruct U; destruct userData;
@@ -638,14 +642,28 @@ Proof.
     
     split_ors; split_ex; subst.
     + subst.
-      specialize (SS _ _ H11); split_ex; simpl in *; eauto.
+      generalize (SS _ _ H); intros; split_ex.
+      specialize (SS _ _ H11); split_ex; simpl in *.
       (do 2 eexists); split; eauto.
       eapply typingcontext_sound_other_user_step; eauto.
     + subst.
-      specialize (SS _ _ H12); split_ex; simpl in *; eauto.
+      generalize (SS _ _ H); intros; split_ex.
+      specialize (SS _ _ H12); split_ex; simpl in *.
       (do 2 eexists); split; eauto.
       eapply typingcontext_sound_other_user_step; eauto.
 
+Qed.
+
+Lemma syntactically_safe_U_preservation_step :
+  forall t__hon t__adv (st st' : universe t__hon t__adv * IdealWorld.universe t__hon) b,
+    step st st'
+    -> universe_ok (fst st)
+    -> adv_universe_ok (fst st)
+    -> lameAdv b (fst st).(adversary)
+    -> syntactically_safe_U (fst st)
+    -> syntactically_safe_U (fst st').
+Proof.
+  inversion 1; intros; subst; simpl in *; eapply syntactically_safe_U_preservation_stepU; eauto.
 Qed.
 
 Definition no_resends (sents : sent_nonces) :=
@@ -688,9 +706,6 @@ Qed.
 Lemma resend_violation_step' :
   forall t__hon t__adv st st' b,
     @step t__hon t__adv st st'
-    -> syntactically_safe_U (fst st)
-    -> universe_ok (fst st)
-    -> adv_universe_ok (fst st)
     -> lameAdv b (fst st).(adversary)
     -> no_resends_U (fst st')
     -> no_resends_U (fst st).
@@ -700,36 +715,60 @@ Proof.
   - invert H; unfold build_data_step in *; simpl in *; dismiss_adv.
   
     destruct (u_id ==n k); subst; clean_map_lookups; simpl in *; eauto.
+    + specialize (H1 k); rewrite add_eq_o in H1 by trivial.
+      specialize (H1 _ eq_refl); simpl in *.
+      eapply no_resends_user_step; eauto.
+    + specialize (H1 k); rewrite add_neq_o in H1 by congruence.
+      destruct userData; eapply silent_step_nochange_other_user with (u_id2 := k) in H4; eauto.
+      clean_map_lookups; simpl in *.
+      specialize (H1 _ H4); eauto.
+
+  - invert H; unfold build_data_step in *; simpl in *.
+    destruct (u_id ==n k); subst; clean_map_lookups; simpl in *; eauto.
     + specialize (H4 k); rewrite add_eq_o in H4 by trivial.
       specialize (H4 _ eq_refl); simpl in *.
       eapply no_resends_user_step; eauto.
     + specialize (H4 k); rewrite add_neq_o in H4 by congruence.
-      destruct userData; eapply silent_step_nochange_other_user with (u_id2 := k) in H7; eauto.
-      clean_map_lookups; simpl in *.
-      specialize (H4 _ H7); eauto.
-
-  - invert H; unfold build_data_step in *; simpl in *.
-    destruct (u_id ==n k); subst; clean_map_lookups; simpl in *; eauto.
-    + specialize (H7 k); rewrite add_eq_o in H7 by trivial.
-      specialize (H7 _ eq_refl); simpl in *.
-      eapply no_resends_user_step; eauto.
-    + specialize (H7 k); rewrite add_neq_o in H7 by congruence.
-      destruct userData; eapply step_limited_change_other_user with (u_id2 := k) in H10; eauto.
+      destruct userData; eapply step_limited_change_other_user with (u_id2 := k) in H7; eauto.
       split_ex; split_ors; clean_map_lookups; simpl in *.
-      specialize (H7 _ H10); eauto.
-      specialize (H7 _ H10); eauto.
+      specialize (H4 _ H7); eauto.
+      specialize (H4 _ H7); eauto.
 Qed.
 
 Lemma resend_violation_step :
   forall t__hon t__adv st st' b,
     @step t__hon t__adv st st'
-    -> syntactically_safe_U (fst st)
-    -> universe_ok (fst st)
-    -> adv_universe_ok (fst st)
     -> lameAdv b (fst st).(adversary)
     -> ~ no_resends_U (fst st)
     -> ~ no_resends_U (fst st').
 Proof.
   unfold not; intros.
   eauto using resend_violation_step'.
+Qed.
+
+Lemma single_step_stays_lame :
+  forall t__hon t__adv st st' b,
+    (@step t__hon t__adv) st st'
+    -> lameAdv b (adversary (fst st))
+    -> lameAdv b (adversary (fst st')).
+Proof.
+  intros.
+  invert H;
+    simpl in *;
+    eauto using universe_step_preserves_lame_adv.
+Qed.
+
+Lemma resend_violation_steps :
+  forall t__hon t__adv st st' b,
+    (@step t__hon t__adv) ^* st st'
+    -> lameAdv b (fst st).(adversary)
+    -> ~ no_resends_U (fst st)
+    -> ~ no_resends_U (fst st').
+Proof.
+  induction 1; intros; eauto.
+
+  specialize (single_step_stays_lame H H1); intros.
+  destruct x, y, z; simpl in *.
+
+  generalize H; intros VIOL; eapply resend_violation_step in VIOL; eauto.
 Qed.
