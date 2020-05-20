@@ -35,9 +35,10 @@ From KeyManagement Require Import
 
 From protocols Require Import
      ExampleProtocols
-     ModelCheck
      ProtocolAutomation
-     SafeProtocol.
+     SafeProtocol
+     RealWorldStepLemmas
+.
 
 From protocols Require Sets SyntacticallySafe.
 
