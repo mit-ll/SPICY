@@ -47,11 +47,10 @@ protocols/SafeProtocol.v
 protocols/Sets.v
 protocols/ModelCheck.v
 protocols/RealWorldStepLemmas.v
-protocols/PartialOrderReduction.v
 protocols/SyntacticallySafe.v
+protocols/PartialOrderReduction.v
 protocols/LabelsAlign.v
 
-protocols/ExampleProtocols.v
 protocols/ExampleProtocolsAutomated.v
 
 protocols/SimplePingProtocol.v

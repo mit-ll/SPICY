@@ -40,6 +40,7 @@ From protocols Require Import
      ProtocolAutomation
      SafeProtocol
      SyntacticallySafe
+     (* LabelsAlign *)
      RealWorldStepLemmas.
 
 From protocols Require Sets.
@@ -166,6 +167,7 @@ Section CommutationLemmas.
                       (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd__n')
             /\ cmd = f cmd__n
             /\ cmd' = f cmd__n'
+            (* /\ (forall ctx sty uid, suid = Some uid -> syntactically_safe uid ctx cmd sty -> syntactically_safe uid ctx cmd__n sty) *)
             /\ forall lbl1 suid1 (usrs1 usrs1' : honest_users A) (adv1 adv1' : user_data B)
                 cs1 cs1' gks1 gks1'
                 ks1 ks1' qmsgs1 qmsgs1' mycs1 mycs1' (cmd__n'' : user_cmd D)
@@ -178,14 +180,15 @@ Section CommutationLemmas.
                             (usrs1, adv1, cs1, gks1, ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, f cmd__n)
                             (usrs1', adv1', cs1', gks1', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', f cmd__n'').
   Proof.
-    Hint Constructors step_user : core.
+    Hint Constructors step_user syntactically_safe : core.
 
     induction 1; inversion 1; inversion 1; invert 1; intros.
 
     - eapply IHstep_user in H28; eauto.
       split_ex.
       exists (fun CD => x <- x CD; cmd2 x).
-      eexists; subst; split; eauto.
+      eexists; subst; repeat simple apply conj; eauto.
+      
     - invert H27.
       unfold not in *; exfalso; eauto.
     - exists (fun x => x); eexists; repeat simple apply conj; swap 1 3; eauto.
@@ -297,8 +300,12 @@ Section CommutationLemmas.
               -> message_queues_ok cs usrs1 gks
               -> keys_and_permissions_good gks usrs1 adv.(key_heap)
               -> user_cipher_queues_ok cs (findUserKeys usrs1) usrs1
-              -> next_cmd_safe (findUserKeys usrs1) cs u_id1 froms1 sents1 cmd1
-              -> next_cmd_safe (findUserKeys usrs1) cs u_id2 froms2 sents2 cmd2
+              (* -> forall ctx1 styp1, syntactically_safe u_id1 ctx1 cmd1 styp1 *)
+              (* -> typingcontext_sound ctx1 (findUserKeys usrs1) cs u_id1 *)
+              (* -> forall ctx2 styp2, syntactically_safe u_id2 ctx2 cmd2 styp2 *)
+              (* -> typingcontext_sound ctx2 (findUserKeys usrs2) cs1 u_id2 *)
+              (* -> next_cmd_safe (findUserKeys usrs1) cs u_id1 froms1 sents1 cmd1 *)
+              (* -> next_cmd_safe (findUserKeys usrs1) cs u_id2 froms2 sents2 cmd2 *)
                                   
               (* no recursion *)
               -> nextAction cmd1 cmd1
@@ -346,21 +353,6 @@ Section CommutationLemmas.
         ; simpl; intros
       end.
 
-    Ltac process_next_cmd_safe :=
-      match goal with
-      | [ H : next_cmd_safe _ _ _ _ _ ?c |- _] =>
-        let NA := fresh "NA" in 
-        match c with
-        | (Bind (Return ?r) ?c2) =>
-          assert (nextAction c (Return r)) as NA by (repeat econstructor)
-        | _ =>
-          assert (nextAction c c) as NA by econstructor
-        end
-        ; specialize (H _ _ NA)
-        ; simpl in H
-        ; split_ex
-      end.
-
     Ltac solver1 :=
       match goal with
       | [ H : msg_accepted_by_pattern _ _ _ ?pat _ |- step_user _ _ (_,_,_,_,_,_,_,_,_,_,Recv ?pat) _ ] =>
@@ -396,10 +388,6 @@ Section CommutationLemmas.
         eapply msg_honestly_signed_signing_key_honest in MHS; eauto;
         specialize_simply
 
-      | [ H : msg_accepted_by_pattern ?cs _ _ ?pat ?m , SAFE : next_cmd_safe ?honk _ _ _ _ (Recv ?pat) |- _ ] =>
-        repeat process_next_cmd_safe;
-        assert (msg_honestly_signed honk cs m = true) by eauto
-                                                           
       | [ H : message_no_adv_private _ ?cs ?msg |- context [ _ $k++ findKeysCrypto ?cs ?msg ]] =>
         rewrite honestk_merge_new_msgs_keys_same by eassumption
                  
@@ -467,8 +455,12 @@ Section CommutationLemmas.
               -> message_queues_ok cs usrs1 gks
               -> keys_and_permissions_good gks usrs1 adv.(key_heap)
               -> user_cipher_queues_ok cs (findUserKeys usrs1) usrs1
-              -> next_cmd_safe (findUserKeys usrs1) cs u_id1 froms1 sents1 cmd1
-              -> next_cmd_safe (findUserKeys usrs1) cs u_id2 froms2 sents2 cmd2
+              -> forall ctx1 styp1, syntactically_safe u_id1 ctx1 cmd1 styp1
+              -> typingcontext_sound ctx1 (findUserKeys usrs1) cs u_id1
+              -> forall ctx2 styp2, syntactically_safe u_id2 ctx2 cmd2 styp2
+              -> typingcontext_sound ctx2 (findUserKeys usrs2) cs1 u_id2
+              (* -> next_cmd_safe (findUserKeys usrs1) cs u_id1 froms1 sents1 cmd1 *)
+              (* -> next_cmd_safe (findUserKeys usrs1) cs u_id2 froms2 sents2 cmd2 *)
                                   
               (* no recursion *)
               (* -> nextAction cmd1 cmd1 *)
@@ -498,6 +490,8 @@ Section CommutationLemmas.
         | [ H : nextAction ?c1 ?c2 |- _ ] => apply nextAction_couldBe in H; try contradiction
         | [ H : commutes (Send _ _) _ |- _ ] => unfold commutes in H; contradiction
         | [ H : commutes (Recv _) _ |- _ ] => unfold commutes in H; contradiction
+        | [ H : syntactically_safe _ _ _ _ |- _ ] => invert H
+        | [ H : typingcontext_sound _ _ _ _ |- _ ] => unfold typingcontext_sound in H
         end
     ; subst
     ; destruct (u ==n u_id2); subst
@@ -508,7 +502,10 @@ Section CommutationLemmas.
     Ltac stuff :=
       repeat
         match goal with
-        | [ H : next_cmd_safe _ _ _ _ _ (Send _ _) |- _ ] => process_next_cmd_safe; subst
+        (* | [ H : next_cmd_safe _ _ _ _ _ (Send _ _) |- _ ] => process_next_cmd_safe; subst *)
+        | [ H : List.In {| cmd_type := Crypto ?t ; cmd_val := ?msg ; safetyTy := TyMyCphr _ _ |} ?ctx,
+                FN : (forall _ _ _ _, List.In {| cmd_type := Crypto _ |} ?ctx -> _)
+            |- context [ ?msg ] ] => specialize (FN _ _ _ _ H); split_ex; subst
         | [ |- context [ findKeysCrypto (_ $+ (?cid1,_)) (SignedCiphertext ?cid2) ]] =>
           destruct (cid1 ==n cid2); subst; clean_map_lookups; rewrite findKeysCrypto_addnl_cipher'
         | [ |- context [ updateTrackedNonce _ _ (_ $+ (?cid1,_)) (SignedCiphertext ?cid2) ]] =>
@@ -553,8 +550,12 @@ Section CommutationLemmas.
               -> message_queues_ok cs usrs1 gks
               -> keys_and_permissions_good gks usrs1 adv.(key_heap)
               -> user_cipher_queues_ok cs (findUserKeys usrs1) usrs1
-              -> next_cmd_safe (findUserKeys usrs1) cs u_id1 froms1 sents1 cmd1
-              -> next_cmd_safe (findUserKeys usrs1) cs u_id2 froms2 sents2 cmd2
+              -> forall ctx1 styp1, syntactically_safe u_id1 ctx1 cmd1 styp1
+              -> typingcontext_sound ctx1 (findUserKeys usrs1) cs u_id1
+              -> forall ctx2 styp2, syntactically_safe u_id2 ctx2 cmd2 styp2
+              -> typingcontext_sound ctx2 (findUserKeys usrs2) cs1 u_id2
+              (* -> next_cmd_safe (findUserKeys usrs1) cs u_id1 froms1 sents1 cmd1 *)
+              (* -> next_cmd_safe (findUserKeys usrs1) cs u_id2 froms2 sents2 cmd2 *)
                                   
               (* no recursion *)
               (* -> nextAction cmd1 cmd1 *)
@@ -602,8 +603,10 @@ Section CommutationLemmas.
                               _ _ _ _ _ _ _ _ _ _ _ _ cmdc1' _ _ s
                               eq_refl eq_refl eq_refl eq_refl H30 H31).
       specialize_simply.
-      apply next_action_next_cmd_safe_bind in H38.
-      invert H41.
+      invert H38.
+      specialize (IHstep_user _ _ H8 H39 _ _ H40 H41).
+      (* apply next_action_next_cmd_safe_bind in H38. *)
+      invert H43.
       specialize_simply.
       specialize (IHstep_user _ cmdc2' eq_refl).
       split_ex; subst.
@@ -705,8 +708,12 @@ Section CommutationLemmas.
               -> message_queues_ok cs usrs1 gks
               -> keys_and_permissions_good gks usrs1 adv.(key_heap)
               -> user_cipher_queues_ok cs (findUserKeys usrs1) usrs1
-              -> next_cmd_safe (findUserKeys usrs1) cs u_id1 froms1 sents1 cmd1
-              -> next_cmd_safe (findUserKeys usrs1) cs u_id2 froms2 sents2 cmd2
+              -> forall ctx1 styp1, syntactically_safe u_id1 ctx1 cmd1 styp1
+              -> typingcontext_sound ctx1 (findUserKeys usrs1) cs u_id1
+              -> forall ctx2 styp2, syntactically_safe u_id2 ctx2 cmd2 styp2
+              -> typingcontext_sound ctx2 (findUserKeys usrs2) cs1 u_id2
+              (* -> next_cmd_safe (findUserKeys usrs1) cs u_id1 froms1 sents1 cmd1 *)
+              (* -> next_cmd_safe (findUserKeys usrs1) cs u_id2 froms2 sents2 cmd2 *)
 
               -> forall E (cmd__i2 : user_cmd E),
                   nextAction cmd2 cmd__i2
@@ -728,10 +735,10 @@ Section CommutationLemmas.
   Proof.
     intros; subst; clean_map_lookups.
 
-    specialize (nextAction_couldBe H18).
+    specialize (nextAction_couldBe H20).
     cases cmd__i2; intros; try contradiction; clean_context.
 
-    - eapply step_na_return in H18; eauto; split_ands; subst.
+    - eapply step_na_return in H20; eauto; split_ands; subst.
       eapply step_no_depend_other_usrs_program in H; eauto; split_ex.
       (do 12 eexists); repeat simple apply conj; eauto.
       maps_equal; eauto.
@@ -740,41 +747,37 @@ Section CommutationLemmas.
         match goal with
         | [ NA : nextAction ?c2 ?c
           , STEP : step_user _ (Some uid) _ _
-          , NCS : next_cmd_safe _ _ _ _ _ ?c2 |- _ ] => 
+          , SS : syntactically_safe _ _ ?c2 _
+          (* , NCS : next_cmd_safe _ _ _ _ _ ?c2 *)
+            |- _ ] => 
           let NACMD2 := fresh "NACMD2" in
           generalize NA; intros NACMD2
         ; eapply step_na_not_return in NA; eauto; split_ex; subst; try congruence
+        ; eapply syntactically_safe_na in SS; eauto; split_ex
         ; eapply commutes_sound_recur_cmd1' with (cmd2 := cmd1) (cmd3 := c) in STEP; eauto
-        ; specialize (NCS _ _ NACMD2); simpl in NCS
+        (* ; specialize (NCS _ _ NACMD2); simpl in NCS *)
         end.
 
     - setup u_id1 cmd1; split_ex; subst.
       (do 12 eexists); repeat simple apply conj; try reflexivity; eauto.
-      unfold next_cmd_safe; intros * NCSNA; invert NCSNA; eauto.
       
     - setup u_id1 cmd1; split_ex; subst.
       (do 12 eexists); repeat simple apply conj; try reflexivity; eauto.
-      unfold next_cmd_safe; intros * NCSNA; invert NCSNA; eauto.
-      
+
     - setup u_id1 cmd1; split_ex; subst.
       (do 12 eexists); repeat simple apply conj; try reflexivity; eauto.
-      unfold next_cmd_safe; intros * NCSNA; invert NCSNA; eauto.
-      
+
     - setup u_id1 cmd1; split_ex; subst.
       (do 12 eexists); repeat simple apply conj; try reflexivity; eauto.
-      unfold next_cmd_safe; intros * NCSNA; invert NCSNA; eauto.
-      
+
     - setup u_id1 cmd1; split_ex; subst.
       (do 12 eexists); repeat simple apply conj; try reflexivity; eauto.
-      unfold next_cmd_safe; intros * NCSNA; invert NCSNA; eauto.
-      
+
     - setup u_id1 cmd1; split_ex; subst.
       (do 12 eexists); repeat simple apply conj; try reflexivity; eauto.
-      unfold next_cmd_safe; intros * NCSNA; invert NCSNA; eauto.
-      
+
     - setup u_id1 cmd1; split_ex; subst.
       (do 12 eexists); repeat simple apply conj; try reflexivity; eauto.
-      unfold next_cmd_safe; intros * NCSNA; invert NCSNA; eauto.
       
   Qed.
 
@@ -868,12 +871,14 @@ Section CommutationLemmas.
   Qed.
 
   Hint Resolve step_addnl_msgs : core.
+  Hint Resolve typingcontext_sound_other_user_step : core.
 
   Lemma commutes_sound :
     forall {A B} (U__r : universe A B) lbl1 u_id1 u_id2 userData1 userData2 bd1,
       U__r.(users) $? u_id1 = Some userData1
       -> U__r.(users) $? u_id2 = Some userData2
-      -> honest_cmds_safe U__r
+      (* -> honest_cmds_safe U__r *)
+      -> syntactically_safe_U U__r
       -> universe_ok U__r
       -> adv_universe_ok U__r
       -> step_user lbl1 (Some u_id1) (build_data_step U__r userData1) bd1
@@ -907,20 +912,20 @@ Section CommutationLemmas.
     repeat 
       match goal with
       | [ H : {| users := _ |} = _ |- _ ] => invert H; clean_map_lookups
-      | [ H : honest_cmds_safe _ , US1 : _ $? u_id1 = _ , US2 : _ $? u_id2 = _ |- _ ] =>
-        generalize (H _ _ _ eq_refl US1)
-        ; generalize (H _ _ _ eq_refl US2)
-        ; clear H; intros; simpl in *
+      | [ H : syntactically_safe_U _ , US1 : _ $? u_id1 = _ , US2 : _ $? u_id2 = _ |- _ ] =>
+        generalize (H _ _ US1)
+        ; generalize (H _ _ US2)
+        ; clear H; intros; simpl in *; split_ex
       end.
 
     specialize (impact_from_other_user_step H4 eq_refl eq_refl eq_refl H6 H0); intros; split_ex; clean_map_lookups.
     assert (u_id2 <> u_id1) as UNE by congruence.
 
-    eapply commutes_sound_recur' in H8; try reflexivity; try eassumption; split_ex; subst.
+    eapply commutes_sound_recur' in H8; try reflexivity; try eassumption; split_ex; subst; eauto.
     (do 6 eexists); repeat simple apply conj; simpl; eauto.
     specialize (impact_from_other_user_step_commutes H8 s eq_refl eq_refl eq_refl UNE H9 H11 H); intros; eauto.
     all: simpl; clean_map_lookups; eauto.
-    simpl; rewrite H24; eauto.
+    simpl; rewrite H26; eauto.
   Qed.
   
 End CommutationLemmas.
@@ -1484,12 +1489,41 @@ Section NextSteps.
       -> summaries $? u_id = Some s
         /\ summarize u_d.(protocol) s.
 
-  Inductive nextStep {A B} (us : honest_users A) (u_id : user_id) (userData : user_data A)
+  Inductive nextStep {A B} (* (us : honest_users A) *)
+            (u_id : user_id) (userData : user_data A)
     : universe A B -> rlabel -> universe A B  -> Prop :=
 
   | Here : forall U U' lbl usrs adv cs gks ks qmsgs mycs froms sents cur_n cmd,
 
-      NatMap.O.max_elt us = Some (u_id, userData)
+      NatMap.O.max_elt U.(users) = Some (u_id, userData)
+      (* NatMap.O.max_elt us = Some (u_id, userData) *)
+      -> U' = buildUniverse usrs adv cs gks u_id {| key_heap  := ks
+                                                   ; msg_heap  := qmsgs
+                                                   ; protocol  := cmd
+                                                   ; c_heap    := mycs
+                                                   ; from_nons := froms
+                                                   ; sent_nons := sents
+                                                   ; cur_nonce := cur_n |}
+      (* -> U.(users) $? u_id = Some userData *)
+      -> step_user lbl (Some u_id) (build_data_step U userData)
+                  (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+      -> nextStep (* us *) u_id userData U lbl U'
+
+  | There : forall (U U' : universe A B) lbl summaries u_id' userData'
+              usrs adv cs gks ks qmsgs mycs froms sents cur_n cmd,
+
+      NatMap.O.max_elt U.(users) = Some (u_id', userData')
+      (* NatMap.O.max_elt us = Some (u_id', userData') *)
+      -> summarize_univ U summaries
+      -> (forall lbl bd', ~ step_user lbl (Some u_id') (build_data_step U userData') bd')
+      \/ (exists u_id2 userData2, u_id' <> u_id2
+                          /\ U.(users) $? u_id2 = Some userData2
+                          /\ (forall t (cmd__n : user_cmd t) s,
+                                nextAction userData2.(protocol) cmd__n
+                                -> summaries $? u_id' = Some s
+                                -> commutes cmd__n s
+                                -> False))
+      -> u_id <> u_id'
       -> U' = buildUniverse usrs adv cs gks u_id {| key_heap  := ks
                                                    ; msg_heap  := qmsgs
                                                    ; protocol  := cmd
@@ -1500,21 +1534,8 @@ Section NextSteps.
       -> U.(users) $? u_id = Some userData
       -> step_user lbl (Some u_id) (build_data_step U userData)
                   (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
-      -> nextStep us u_id userData U lbl U'
-
-  | There : forall (U U' : universe A B) lbl summaries u_id' userData',
-      NatMap.O.max_elt us = Some (u_id', userData')
-      -> summarize_univ U summaries
-      -> (forall lbl bd', ~ step_user lbl (Some u_id') (build_data_step U userData') bd')
-      \/ (exists u_id2 userData2, u_id' <> u_id2
-                          /\ U.(users) $? u_id2 = Some userData2
-                          /\ forall t (cmd__n : user_cmd t) s,
-                              nextAction userData2.(protocol) cmd__n
-                              -> summaries $? u_id' = Some s
-                              -> commutes cmd__n s
-                              -> False)
-      -> nextStep (us $- u_id') u_id userData U lbl U'
-      -> nextStep us u_id userData U lbl U'.
+      (* -> nextStep (us $- u_id') u_id userData U lbl U' *)
+      -> nextStep (* us *) u_id userData U lbl U'.
 
   Inductive stepC (t__hon t__adv : type) :
     (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon)
@@ -1522,32 +1543,12 @@ Section NextSteps.
     -> Prop :=
 
   | StepNextC : forall ru ru' rlbl iu iu' u_id ud st st',
-      nextStep ru.(users) u_id ud ru rlbl ru'
+      nextStep (* ru.(users) *) u_id ud ru rlbl ru'
       -> st = (ru,iu)
       -> st' = (ru',iu')
       -> step  st st'
       -> stepC st st'.
   
-  (* Inductive step_universeC {A B} : *)
-  (*   universe A B -> rlabel -> universe A B -> Prop := *)
-    
-  (* | StepNext : forall U U' lbl u_id userData, *)
-  (*     nextStep U.(users) u_id userData U lbl U' *)
-  (*     -> step_universeC U lbl U'.  *)
-
-  (* Inductive stepC (t__hon t__adv : type) : *)
-  (*   (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon) *)
-  (*   -> (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon) *)
-  (*   -> Prop := *)
-  (* | RealSilentC : forall ru ru' iu, *)
-  (*     step_universeC ru Silent ru' *)
-  (*     -> stepC (ru, iu) (ru', iu) *)
-  (* | BothLoud : forall ru ru' ra ia iu iu' iu'', *)
-  (*     step_universeC ru (Action ra) ru' *)
-  (*     -> istepSilent^* iu iu' *)
-  (*     -> IdealWorld.lstep_universe iu' (Action ia) iu'' *)
-  (*     -> action_matches ra ru ia iu' *)
-  (*     -> stepC (ru, iu) (ru', iu''). *)
 
 End NextSteps.
 
@@ -1702,87 +1703,87 @@ Proof.
   destruct l; eauto.
 Qed.
 
-Lemma no_stepC_no_step' :
-    forall A B cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks'
-      (cmd cmd' : user_cmd (Base A)) ks ks' qmsgs qmsgs' mycs mycs'
-      froms froms' sents sents' cur_n cur_n' lbl uid U summaries,
+(* Lemma no_stepC_no_step' : *)
+(*     forall A B cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks' *)
+(*       (cmd cmd' : user_cmd (Base A)) ks ks' qmsgs qmsgs' mycs mycs' *)
+(*       froms froms' sents sents' cur_n cur_n' lbl uid U summaries, *)
         
-      step_user lbl (Some uid)
-                (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
-                (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
-      -> usrs $? uid = Some (mkUserData ks cmd qmsgs mycs froms sents cur_n)
-      -> U = mkUniverse usrs adv cs gks
-      -> summarize_univ U summaries
-      -> forall us,
-          us $? uid = Some (mkUserData ks cmd qmsgs mycs froms sents cur_n)
-          -> (forall uid' ud', us $? uid' = Some ud' -> usrs $? uid' = Some ud')
-          -> exists uid' ud' lbl' U',
-            nextStep us uid' ud' U lbl' U'.
-Proof.
-  induction us using NatMap.O.map_induction_max;
-    intros; Equal_eq.
+(*       step_user lbl (Some uid) *)
+(*                 (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
+(*                 (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd') *)
+(*       -> usrs $? uid = Some (mkUserData ks cmd qmsgs mycs froms sents cur_n) *)
+(*       -> U = mkUniverse usrs adv cs gks *)
+(*       -> summarize_univ U summaries *)
+(*       -> forall us, *)
+(*           us $? uid = Some (mkUserData ks cmd qmsgs mycs froms sents cur_n) *)
+(*           -> (forall uid' ud', us $? uid' = Some ud' -> usrs $? uid' = Some ud') *)
+(*           -> exists uid' ud' lbl' U', *)
+(*             nextStep us uid' ud' U lbl' U'. *)
+(* Proof. *)
+(*   induction us using NatMap.O.map_induction_max; *)
+(*     intros; Equal_eq. *)
 
-  - eapply Empty_eq_empty in H3; subst; clean_map_lookups.
-  - destruct (x ==n uid).
-    + rewrite e0 in *; clear e0; clear x.
-      generalize H4; intros ADD.
-      specialize (H4 uid); rewrite add_eq_o in H4 by auto; clean_map_lookups.
-      unfold Add in ADD; apply fold_Equal in ADD; apply map_eq_Equal in ADD; subst.
-      (do 4 eexists).
-      eapply Here with (u_id := uid); eauto.
+(*   - eapply Empty_eq_empty in H3; subst; clean_map_lookups. *)
+(*   - destruct (x ==n uid). *)
+(*     + rewrite e0 in *; clear e0; clear x. *)
+(*       generalize H4; intros ADD. *)
+(*       specialize (H4 uid); rewrite add_eq_o in H4 by auto; clean_map_lookups. *)
+(*       unfold Add in ADD; apply fold_Equal in ADD; apply map_eq_Equal in ADD; subst. *)
+(*       (do 4 eexists). *)
+(*       eapply Here with (u_id := uid); eauto. *)
 
-      eapply add_above_max_elt; eauto.
-      unfold Add; intros.
-      destruct (uid ==n y); clean_map_lookups; eauto.
+(*       eapply add_above_max_elt; eauto. *)
+(*       unfold Add; intros. *)
+(*       destruct (uid ==n y); clean_map_lookups; eauto. *)
 
-    + pose proof (user_step_or_not U).
+(*     + pose proof (user_step_or_not U). *)
 
-      generalize H4; intros ADD; unfold Add in ADD; apply fold_Equal in ADD; apply map_eq_Equal in ADD.
-      assert (us2 $? x = Some e) as USX by
-            (rewrite ADD; clean_map_lookups; trivial).
+(*       generalize H4; intros ADD; unfold Add in ADD; apply fold_Equal in ADD; apply map_eq_Equal in ADD. *)
+(*       assert (us2 $? x = Some e) as USX by *)
+(*             (rewrite ADD; clean_map_lookups; trivial). *)
       
-      generalize (H6 _ _ USX); intros USERX.
-      rewrite H1 in H7; simpl in H7; eapply H7 in USERX; split_ors.
+(*       generalize (H6 _ _ USX); intros USERX. *)
+(*       rewrite H1 in H7; simpl in H7; eapply H7 in USERX; split_ors. *)
 
-      * rewrite H1.
-        dt x1.
-        (do 4 eexists).
-        eapply Here.
-        eapply add_above_max_elt; eauto.
-        eauto.
-        simpl; eauto.
-        eauto.
+(*       * rewrite H1. *)
+(*         dt x1. *)
+(*         (do 4 eexists). *)
+(*         eapply Here. *)
+(*         eapply add_above_max_elt; eauto. *)
+(*         eauto. *)
+(*         simpl; eauto. *)
+(*         eauto. *)
 
-      * generalize H4; intros.
-        unfold Add in H4. specialize (H4 uid). rewrite add_neq_o in H4 by auto.
-        rewrite <- H4 in IHus1.
-        apply IHus1 in H5; split_ex; eauto 8.
+(*       * generalize H4; intros. *)
+(*         unfold Add in H4. specialize (H4 uid). rewrite add_neq_o in H4 by auto. *)
+(*         rewrite <- H4 in IHus1. *)
+(*         apply IHus1 in H5; split_ex; eauto 8. *)
 
-        assert (us1 $? x = None).
-        cases (us1 $? x); eauto.
-        exfalso.
-        assert (us1 $? x <> None) as NOTNONE by (unfold not; intros; clean_map_lookups).
-        rewrite <- in_find_iff in NOTNONE.
-        eapply H3 in NOTNONE; Omega.omega.
+(*         assert (us1 $? x = None). *)
+(*         cases (us1 $? x); eauto. *)
+(*         exfalso. *)
+(*         assert (us1 $? x <> None) as NOTNONE by (unfold not; intros; clean_map_lookups). *)
+(*         rewrite <- in_find_iff in NOTNONE. *)
+(*         eapply H3 in NOTNONE; Omega.omega. *)
 
-        assert (us1 = us2 $- x).
-        apply map_eq_Equal; unfold Equal; intros.
-        destruct (x ==n y); subst; clean_map_lookups; eauto.
+(*         assert (us1 = us2 $- x). *)
+(*         apply map_eq_Equal; unfold Equal; intros. *)
+(*         destruct (x ==n y); subst; clean_map_lookups; eauto. *)
 
-        (do 4 eexists).
-        eapply There.
-        eapply add_above_max_elt; eauto.
-        eassumption.
-        rewrite H1; left; intros; eauto.
+(*         (do 4 eexists). *)
+(*         eapply There. *)
+(*         eapply add_above_max_elt; eauto. *)
+(*         eassumption. *)
+(*         rewrite H1; left; intros; eauto. *)
 
-        rewrite <- H11; eassumption.
+(*         rewrite <- H11; eassumption. *)
 
-        intros.
-        eapply H6; subst.
-        destruct (x ==n uid'); subst; clean_map_lookups; eauto.
-        assert (us1 $? uid' <> None) by (unfold not; intros; clean_map_lookups).
-        rewrite <- in_find_iff in H1; eapply H3 in H1; Omega.omega.
-Qed.
+(*         intros. *)
+(*         eapply H6; subst. *)
+(*         destruct (x ==n uid'); subst; clean_map_lookups; eauto. *)
+(*         assert (us1 $? uid' <> None) by (unfold not; intros; clean_map_lookups). *)
+(*         rewrite <- in_find_iff in H1; eapply H3 in H1; Omega.omega. *)
+(* Qed. *)
        
 (* Lemma no_stepC_no_step : *)
 (*   forall t__hon t__adv st summaries, *)
@@ -1821,7 +1822,7 @@ Lemma no_stepC_no_step :
 Proof.
 Admitted.
 
-Hint Constructors stepC : core.
+Hint Constructors stepC nextStep : core.
 
 Lemma summarize_step_other :
   forall A B C suid lbl bd bd',
@@ -1926,6 +1927,52 @@ Qed.
 
 Hint Resolve summarize_univ_step : core.
 
+Lemma max_element_some :
+  forall V (m : NatMap.t V) k v,
+    m $? k = Some v
+    -> exists k' v',
+      NatMap.O.max_elt m = Some (k',v').
+Proof.
+  intros.
+  cases (O.max_elt m).
+  destruct p; eauto.
+
+  apply NatMap.O.max_elt_Empty in Heq.
+  unfold Empty, Raw.Empty in Heq.
+  specialize (Heq k v).
+  rewrite <- find_mapsto_iff in H.
+  contradiction.
+Qed.
+
+Lemma translate_trace_commute :
+  forall t__hon t__adv i st st',
+    @stepsi t__hon t__adv (1 + i) st st'
+    -> (forall st'', ~ step st' st'')
+    -> forall summaries, summarize_univ (fst st) summaries
+    -> forall uid ud, NatMap.O.max_elt (fst st).(users) = Some (uid,ud)
+    -> (forall u_id2 userData2,
+          uid <> u_id2
+          -> users (fst st) $? u_id2 = Some userData2 
+          -> exists t (cmd__n : user_cmd t) s,
+              nextAction (protocol userData2) cmd__n
+              /\ summaries $? uid = Some s
+              /\ commutes cmd__n s)
+    -> forall lbl bd, step_user lbl (Some uid) (build_data_step (fst st) ud) bd
+    -> exists lbl' bd' iu st0,
+          step_user lbl' (Some uid) (build_data_step (fst st) ud) bd'
+          /\ st0 = (buildUniverse_step bd' uid, iu)
+          /\ step st st0
+          /\ stepsi i st0 st'.
+Proof.
+  induct 1; intros; eauto.
+
+  invert H0.
+
+  invert H.
+
+  
+Admitted.
+
 Lemma resend_violation_translate' :
   forall t__hon t__adv n st st' b summaries,
     stepsi n st st'
@@ -1944,47 +1991,103 @@ Proof.
 
   destruct (
       classic (
-          exists uid ud lbl bd,
+          exists uid ud,
             NatMap.O.max_elt (fst st).(users) = Some (uid,ud)
-          /\ step_user lbl (Some uid) (build_data_step (fst st) ud) bd
+          /\ (exists lbl bd, step_user lbl (Some uid) (build_data_step (fst st) ud) bd)
           /\ (forall u_id2 userData2,
                 uid <> u_id2
-              /\ (fst st).(users) $? u_id2 = Some userData2
-              /\ (forall t (cmd__n : user_cmd t) s,
-                    nextAction userData2.(protocol) cmd__n
-                  /\ summaries $? uid = Some s
-                  /\ commutes cmd__n s)))).
+              -> (fst st).(users) $? u_id2 = Some userData2
+              -> exists t (cmd__n : user_cmd t) s,
+                  nextAction userData2.(protocol) cmd__n
+                /\ summaries $? uid = Some s
+                /\ commutes cmd__n s))).
 
   - firstorder idtac.
-    admit.
 
+    eapply translate_trace_commute in H; eauto.
+    firstorder idtac.
+    eapply IHn in H9; eauto.
+    firstorder idtac.
+
+    exists x7; split; eauto.
+    eapply TrcFront; eauto.
+    destruct st; econstructor; eauto.
+    dt x4; simpl in *; econstructor 1; eauto.
+    
   - invert H.
     eapply IHn in H7; eauto.
     firstorder idtac.
-    simpl in H4.
-  
+    simpl in *.
 
+    exists x.
+    split; eauto.
+    eapply TrcFront; eauto.
+    destruct st, st'0.
 
+    generalize H6; intros STEP; invert H6;
+      match goal with
+      | [ H : step_universe _ _ _ |- _ ] => invert H
+      end.
 
-  
-  (* destruct (classic (exists st''0, stepC st st''0)); split_ex. *)
-  (* - admit. *)
-  (* - invert H. *)
-  (*   eapply IHn in H6; eauto. *)
-  (*   firstorder idtac. *)
+    + pose proof (max_element_some _ _ H6); firstorder idtac.
+      specialize (H4 x0); firstorder idtac.
+      specialize (H4 x1); simpl in H4; split_ands.
+      eapply not_and_or in H4; split_ors; try contradiction.
+      eapply not_and_or in H4.
 
-  (*   destruct st, st'0. *)
-  (*   exists x; split; eauto. *)
+      destruct (x0 ==n u_id); subst; clean_map_lookups.
+      * generalize (O.max_elt_MapsTo H8); intros MT.
+        rewrite find_mapsto_iff in MT.
+        clean_map_lookups.
+        econstructor; eauto.
 
-  (*   eapply trc_one; eauto. *)
-  (*   econstructor; eauto. *)
+      * econstructor; eauto.
+        econstructor 2; eauto.
+        split_ors.
+        left; unfold not; intros; eauto.
+        right; intros.
+        apply not_all_ex_not in H4; split_ex.
+        apply not_all_ex_not in H4; split_ex.
 
-    
+        apply imply_to_and in H4; split_ands.
+        apply imply_to_and in H9; split_ands.
+        firstorder idtac.
 
-  
+        exists x2; exists x3; repeat simple apply conj; eauto; intros; simpl in *.
+        eapply H10; eauto.
+
+    + destruct u; unfold build_data_step, lameAdv in *; simpl in *.
+      rewrite H0 in H6; invert H6.
+
+    + pose proof (max_element_some _ _ H6); firstorder idtac.
+      specialize (H4 x0); firstorder idtac.
+      specialize (H4 x1); simpl in H4; split_ands.
+      eapply not_and_or in H4; split_ors; try contradiction.
+      eapply not_and_or in H4.
+
+      destruct (x0 ==n u_id); subst; clean_map_lookups.
+      * generalize (O.max_elt_MapsTo H8); intros MT.
+        rewrite find_mapsto_iff in MT.
+        clean_map_lookups.
+        econstructor; eauto.
+
+      * econstructor; eauto.
+        econstructor 2; eauto.
+        split_ors.
+        left; unfold not; intros; eauto.
+        right; intros.
+        apply not_all_ex_not in H4; split_ex.
+        apply not_all_ex_not in H4; split_ex.
+
+        apply imply_to_and in H4; split_ands.
+        apply imply_to_and in H9; split_ands.
+        firstorder idtac.
+
+        exists x2; exists x3; repeat simple apply conj; eauto; intros; simpl in *.
+        eapply H10; eauto.
+
 Admitted.
-
-
+  
 Lemma complete_trace :
   forall t__hon t__adv n' n st b,
     runningTimeMeasure (fst st) n
