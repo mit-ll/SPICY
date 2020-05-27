@@ -1518,8 +1518,9 @@ Section NextSteps.
       -> (forall lbl bd', ~ step_user lbl (Some u_id') (build_data_step U userData') bd')
       \/ (exists u_id2 userData2, u_id' <> u_id2
                           /\ U.(users) $? u_id2 = Some userData2
-                          /\ (forall t (cmd__n : user_cmd t) s,
-                                nextAction userData2.(protocol) cmd__n
+                          /\ (forall t (cmd__n : user_cmd t) s bd' lbl,
+                                step_user lbl (Some u_id2) (build_data_step U userData2) bd'
+                                -> nextAction userData2.(protocol) cmd__n
                                 -> summaries $? u_id' = Some s
                                 -> commutes cmd__n s
                                 -> False))
@@ -1813,14 +1814,14 @@ Qed.
 
 Hint Resolve adversary_remains_lame_step : core.
 
-Lemma no_stepC_no_step :
-  forall t__hon t__adv st st',
+(* Lemma no_stepC_no_step : *)
+(*   forall t__hon t__adv st st', *)
     
-    @step t__hon t__adv st st'
-    -> (forall st'', ~ stepC st st'')
-    -> False.
-Proof.
-Admitted.
+(*     @step t__hon t__adv st st' *)
+(*     -> (forall st'', ~ stepC st st'') *)
+(*     -> False. *)
+(* Proof. *)
+(* Admitted. *)
 
 Hint Constructors stepC nextStep : core.
 
@@ -1944,15 +1945,114 @@ Proof.
   contradiction.
 Qed.
 
+Lemma commutes_noblock :
+  forall t t__n2 (cmd2 : user_cmd (Base t)) (cmd__n2 : user_cmd t__n2),
+    nextAction cmd2 cmd__n2
+  -> forall t__adv (usrs usrs' : honest_users t) (adv adv' : user_data t__adv) cs cs' gks gks'
+      ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' froms2 froms2' sents2 sents2' cur_n2 cur_n2' cmd2' uid2 lbl2,
+      
+      usrs $? uid2 = Some (mkUserData ks2 cmd2 qmsgs2 mycs2 froms2 sents2 cur_n2)
+    -> step_user lbl2 (Some uid2)
+              (usrs, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
+              (usrs', adv', cs', gks', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
+    -> forall (cmd1 : user_cmd (Base t)) s1, summarize cmd1 s1
+    -> forall uid1 summaries, summaries $? uid1 = Some s1
+    -> commutes cmd__n2 s1
+    -> uid1 <> uid2
+    -> forall (usrs1' : honest_users t) (adv1' : user_data t__adv) cs1' gks1'
+        ks1 ks1' qmsgs1 qmsgs1' mycs1 mycs1' froms1 froms1' sents1 sents1' cur_n1 cur_n1' cmd1' lbl1,
+
+        usrs $? uid1 = Some (mkUserData ks1 cmd1 qmsgs1 mycs1 froms1 sents1 cur_n1)
+        -> step_user lbl1 (Some uid1)
+                  (usrs, adv, cs, gks, ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd1)
+                  (usrs1', adv1', cs1', gks1', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd1')
+        -> forall ks2'' qmsgs2'' mycs2'' froms2'' sents2'' cur_n2'',
+          usrs1' $? uid2 = Some (mkUserData ks2'' cmd2 qmsgs2'' mycs2'' froms2'' sents2'' cur_n2'')
+        -> exists usrs2' adv2' cs2' gks2' lbl2' ks2''' qmsgs2''' mycs2''' froms2''' sents2''' cur_n2''',
+          step_user lbl2' (Some uid2)
+                    (usrs1' $+ (uid1, mkUserData ks1' cmd1' qmsgs1' mycs1' froms1' sents1' cur_n1'),
+                     adv1', cs1', gks1', ks2'', qmsgs2'', mycs2'', froms2'', sents2'', cur_n2'', cmd2)
+                    (usrs2', adv2', cs2', gks2', ks2''', qmsgs2''', mycs2''', froms2''', sents2''', cur_n2''', cmd2')
+.
+Proof.
+Admitted.
+
+Inductive model_step_user (t__hon t__adv : type) (uid : user_id) :
+  (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon)
+  -> (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon)
+  -> Prop :=
+| MSSilent :
+    forall ru ru' iu userData usrs adv cs gks ks qmsgs mycs froms sents cur_n cmd,
+      ru.(users) $? uid = Some userData
+    -> step_user Silent (Some uid)
+                (build_data_step ru userData)
+                (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+    -> ru' = buildUniverse usrs adv cs gks uid {| key_heap  := ks
+                                               ; msg_heap  := qmsgs
+                                               ; protocol  := cmd
+                                               ; c_heap    := mycs
+                                               ; from_nons := froms
+                                               ; sent_nons := sents
+                                               ; cur_nonce := cur_n |}
+    -> model_step_user uid (ru, iu) (ru', iu)
+| MSLoud :
+    forall ru ru' iu iu' iu'' userData usrs adv cs gks ks qmsgs mycs froms sents cur_n cmd ra ia,
+      ru.(users) $? uid = Some userData
+    -> step_user (Action ra) (Some uid)
+                (build_data_step ru userData)
+                (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+    -> ru' = buildUniverse usrs adv cs gks uid {| key_heap  := ks
+                                               ; msg_heap  := qmsgs
+                                               ; protocol  := cmd
+                                               ; c_heap    := mycs
+                                               ; from_nons := froms
+                                               ; sent_nons := sents
+                                               ; cur_nonce := cur_n |}
+    -> istepSilent^* iu iu'
+    -> IdealWorld.lstep_universe iu' (Action ia) iu''
+    -> action_matches ra ru ia iu'
+    -> model_step_user uid (ru, iu) (ru', iu'')
+.
+
+Lemma step_implies_model_step_user :
+  forall t__hon t__adv st st' b,
+    @step t__hon t__adv st st'
+    -> lameAdv b (fst st).(adversary)
+    -> exists uid,
+        model_step_user uid st st'.
+Proof.
+  invert 1; intros; subst; simpl in *.
+
+  invert H0; dismiss_adv; unfold buildUniverse, build_data_step in *; simpl in *.
+  eexists; econstructor 1; eauto.
+
+  invert H0; dismiss_adv; unfold buildUniverse, build_data_step in *; simpl in *.
+  eexists; econstructor 2; eauto.
+Qed.
+
+Lemma model_step_user_implies_step :
+  forall t__hon t__adv st st' uid,
+    @model_step_user t__hon t__adv uid st st'
+    -> step st st'.
+Proof.
+  invert 1.
+  econstructor 1; econstructor 1; eauto.
+
+  econstructor 2; eauto.
+  econstructor; eauto.
+Qed.
+      
 Lemma translate_trace_commute :
-  forall t__hon t__adv i st st',
+  forall t__hon t__adv i st st' b,
     @stepsi t__hon t__adv (1 + i) st st'
+    -> lameAdv b (fst st).(adversary)
     -> (forall st'', ~ step st' st'')
     -> forall summaries, summarize_univ (fst st) summaries
     -> forall uid ud, NatMap.O.max_elt (fst st).(users) = Some (uid,ud)
     -> (forall u_id2 userData2,
           uid <> u_id2
-          -> users (fst st) $? u_id2 = Some userData2 
+          -> users (fst st) $? u_id2 = Some userData2
+          -> forall bd' lbl, step_user lbl (Some u_id2) (build_data_step (fst st) userData2) bd'
           -> exists t (cmd__n : user_cmd t) s,
               nextAction (protocol userData2) cmd__n
               /\ summaries $? uid = Some s
@@ -1968,8 +2068,53 @@ Proof.
 
   invert H0.
 
-  invert H.
+  - clear IHstepsi.
+    invert H; simpl in *.
 
+    + invert H0; dismiss_adv.
+      destruct (uid ==n u_id); subst; clean_map_lookups.
+      admit.
+
+      assert (LK : users ru $? u_id = Some userData) by assumption.
+      eapply H5 in LK; eauto; split_ex.
+
+      apply NatMap.O.max_elt_MapsTo in H4;
+        rewrite find_mapsto_iff in H4.
+      destruct userData, ud; unfold build_data_step in *; simpl in *.
+
+      specialize (H3 _ _ x1 H4); split_ex.
+      dt bd.
+
+      generalize H6; intros STEP.
+      eapply step_limited_change_other_user in STEP; eauto; split_ex.
+      split_ors; clean_map_lookups; eauto.
+
+      eapply commutes_noblock with (usrs := users ru) (usrs1' := usrs0) in H0; eauto; split_ex.
+      unfold buildUniverse in H2.
+
+      destruct x6;
+        exfalso; eapply H2.
+      * econstructor 1.
+        unfold buildUniverse.
+        clear H7.
+        eapply StepUser with (u_id0 := u_id); eauto.
+
+        unfold buildUniverse; simpl; clean_map_lookups; eauto.
+
+        admit.
+
+      * admit.
+      * admit.
+
+    + admit.
+
+  - assert (LAME: lameAdv b (adversary (fst st))) by assumption.
+    eapply adversary_remains_lame_step in LAME; eauto.
+
+    assert (SUMMARIES : summarize_univ (fst st) summaries) by assumption.
+    eapply summarize_univ_step in SUMMARIES; eauto.
+
+    specialize (IHstepsi _ _ eq_refl LAME H2 _ SUMMARIES).
   
 Admitted.
 
@@ -1997,6 +2142,7 @@ Proof.
           /\ (forall u_id2 userData2,
                 uid <> u_id2
               -> (fst st).(users) $? u_id2 = Some userData2
+              -> forall bd lbl, step_user lbl (Some u_id2) (build_data_step (fst st) userData2) bd
               -> exists t (cmd__n : user_cmd t) s,
                   nextAction userData2.(protocol) cmd__n
                 /\ summaries $? uid = Some s
@@ -2051,10 +2197,12 @@ Proof.
 
         apply imply_to_and in H4; split_ands.
         apply imply_to_and in H9; split_ands.
-        firstorder idtac.
-
+        apply not_all_ex_not in H10; split_ex.
+        apply not_all_ex_not in H10; split_ex.
+        apply imply_to_and in H10; split_ands.
+        firstorder idtac; simpl in *.
         exists x2; exists x3; repeat simple apply conj; eauto; intros; simpl in *.
-        eapply H10; eauto.
+        eapply H11; eauto.
 
     + destruct u; unfold build_data_step, lameAdv in *; simpl in *.
       rewrite H0 in H6; invert H6.
@@ -2081,12 +2229,13 @@ Proof.
 
         apply imply_to_and in H4; split_ands.
         apply imply_to_and in H9; split_ands.
-        firstorder idtac.
-
+        apply not_all_ex_not in H10; split_ex.
+        apply not_all_ex_not in H10; split_ex.
+        apply imply_to_and in H10; split_ands.
+        firstorder idtac; simpl in *.
         exists x2; exists x3; repeat simple apply conj; eauto; intros; simpl in *.
-        eapply H10; eauto.
-
-Admitted.
+        eapply H11; eauto.
+Qed.
   
 Lemma complete_trace :
   forall t__hon t__adv n' n st b,
