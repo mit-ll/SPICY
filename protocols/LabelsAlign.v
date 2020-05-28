@@ -40,67 +40,76 @@ From protocols Require Import
      RealWorldStepLemmas
 .
 
-From protocols Require Sets SyntacticallySafe.
 
 Require IdealWorld.
 
 Set Implicit Arguments.
 
-Definition almostEqual {A}  (ud ud' : user_data A) :=
-  ud = ud' \/
-  (exists msg, ud = 
-  {|
-  key_heap := key_heap ud';
-  protocol := protocol ud';
-  msg_heap := msg_heap ud' ++ [msg];
-  c_heap := c_heap ud';
-  from_nons := from_nons ud';
-  sent_nons := sent_nons ud';
-  cur_nonce := cur_nonce ud' |}).
 
-Lemma non_stepped_ud_almost_equal :
-  forall { A B C } suid lbl bd1 bd2,
-    step_user lbl suid bd1 bd2
-    -> forall (users1 users2 : honest_users A) (adv1 adv2 : user_data B) cs1 cs2 gks1 gks2
-        stepper ks1 ks2 qmsgs1 qmsgs2 mycs1 mycs2 froms1 froms2 sents1 sents2 cur_n1 cur_n2
-        (cmdc1 cmdc2 : user_cmd C) cmd1,
-      bd1 = (users1, adv1, cs1, gks1, ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmdc1)
-      -> bd2 = (users2, adv2, cs2, gks2, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmdc2)
-      -> suid = Some stepper
-    -> users1 $? stepper = Some {| key_heap := ks1
-                               ; protocol := cmd1
-                               ; msg_heap := qmsgs1
-                               ; c_heap := mycs1
-                               ; from_nons := froms1
-                               ; sent_nons := sents1
-                               ; cur_nonce := cur_n1 |}
-    -> (forall uid ud1 ud2,
-          uid <> stepper
-          -> users1 $? uid = Some ud1
-          -> users2 $? uid = Some ud2
-          -> almostEqual ud2 ud1).
-Proof.
-  induct 1; inversion 1; inversion 1; intros; subst; clean_context; clean_map_lookups; eauto;
-    unfold almostEqual; eauto.
+(* forall reachable states labels align *)
+Inductive labels_align' {A B} : (universe A B * IdealWorld.universe A) -> Prop :=
+| StepLabelsAlign : 
+    forall st,
+      (forall st', step st st'
+      -> labels_align' st')
+      -> labels_align st
+      -> labels_align' st.
+ 
+
+(* Definition almostEqual {A}  (ud ud' : user_data A) := *)
+(*   ud = ud' \/ *)
+(*   (exists msg, ud =  *)
+(*   {| *)
+(*   key_heap := key_heap ud'; *)
+(*   protocol := protocol ud'; *)
+(*   msg_heap := msg_heap ud' ++ [msg]; *)
+(*   c_heap := c_heap ud'; *)
+(*   from_nons := from_nons ud'; *)
+(*   sent_nons := sent_nons ud'; *)
+(*   cur_nonce := cur_nonce ud' |}). *)
+
+(* Lemma non_stepped_ud_almost_equal : *)
+(*   forall { A B C } suid lbl bd1 bd2, *)
+(*     step_user lbl suid bd1 bd2 *)
+(*     -> forall (users1 users2 : honest_users A) (adv1 adv2 : user_data B) cs1 cs2 gks1 gks2 *)
+(*         stepper ks1 ks2 qmsgs1 qmsgs2 mycs1 mycs2 froms1 froms2 sents1 sents2 cur_n1 cur_n2 *)
+(*         (cmdc1 cmdc2 : user_cmd C) cmd1, *)
+(*       bd1 = (users1, adv1, cs1, gks1, ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmdc1) *)
+(*       -> bd2 = (users2, adv2, cs2, gks2, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmdc2) *)
+(*       -> suid = Some stepper *)
+(*     -> users1 $? stepper = Some {| key_heap := ks1 *)
+(*                                ; protocol := cmd1 *)
+(*                                ; msg_heap := qmsgs1 *)
+(*                                ; c_heap := mycs1 *)
+(*                                ; from_nons := froms1 *)
+(*                                ; sent_nons := sents1 *)
+(*                                ; cur_nonce := cur_n1 |} *)
+(*     -> (forall uid ud1 ud2, *)
+(*           uid <> stepper *)
+(*           -> users1 $? uid = Some ud1 *)
+(*           -> users2 $? uid = Some ud2 *)
+(*           -> almostEqual ud2 ud1). *)
+(* Proof. *)
+(*   induct 1; inversion 1; inversion 1; intros; subst; clean_context; clean_map_lookups; eauto; unfold almostEqual; eauto. *)
   
-  destruct (rec_u_id ==n uid); subst; clean_map_lookups; eauto.
-Qed.
+(*   destruct (rec_u_id ==n uid); subst; clean_map_lookups; eauto. *)
+(* Qed. *)
 
-Lemma different_steps_must_be_by_different_users :
-  forall { A B C } (bd1 bd2 bd__other : data_step0 A B C ) lbl1 lbl2 u_id1 u_id2,
-    (* lameAdv b bd1.(adversary) *)
-    step_user lbl1 (Some u_id1) bd1 bd2
-    -> step_user lbl2 (Some u_id2) bd1 bd__other
-    -> lbl1 <> lbl2
-    -> u_id1 <> u_id2.
-Proof.
-  (* inversion 2; inversion 1; intros; subst; eauto. *)
+(* Lemma different_steps_must_be_by_different_users : *)
+(*   forall { A B C } (bd1 bd2 bd__other : data_step0 A B C ) lbl1 lbl2 u_id1 u_id2, *)
+(*     (* lameAdv b bd1.(adversary) *) *)
+(*     step_user lbl1 (Some u_id1) bd1 bd2 *)
+(*     -> step_user lbl2 (Some u_id2) bd1 bd__other *)
+(*     -> lbl1 <> lbl2 *)
+(*     -> u_id1 <> u_id2. *)
+(* Proof. *)
+(*   (* inversion 2; inversion 1; intros; subst; eauto. *) *)
 
-  (* destruct ru1.  unfold build_data_step in *. destruct userData. destruct userData0. simpl in *. *)
-  (* clean_map_lookups. *)
-  (* destruct ru1. destruct adversary. simpl in *. unfold build_data_step in *. simpl in *. *)
-  (* rewrite H in H8. invert H8. admit. admit. *)
-Admitted.
+(*   (* destruct ru1.  unfold build_data_step in *. destruct userData. destruct userData0. simpl in *. *) *)
+(*   (* clean_map_lookups. *) *)
+(*   (* destruct ru1. destruct adversary. simpl in *. unfold build_data_step in *. simpl in *. *) *)
+(*   (* rewrite H in H8. invert H8. admit. admit. *) *)
+(* Admitted. *)
 
 
 
@@ -134,46 +143,46 @@ Admitted.
 (*   clear H1. clear H2. eexists.  *)
   
   
-Lemma silent_step_blah :     
-  forall {A B C} suid lbl bd bd',
-    step_user lbl suid bd bd'
-    -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks'
-        (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs'
-        froms froms' sents sents' cur_n cur_n',
-      bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
-      -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
-      -> lbl = Silent
-      -> forall cmdc cmdc' u_id1 u_id2 ud2 usrs'',
-          suid = Some u_id1
-          -> u_id1 <> u_id2
-          -> usrs $? u_id1 = Some {| key_heap := ks;
-                                    protocol := cmdc;
-                                    msg_heap := qmsgs;
-                                    c_heap   := mycs;
-                                    from_nons := froms;
-                                    sent_nons := sents;
-                                    cur_nonce := cur_n |}
-          -> usrs $? u_id2 = Some ud2
-          -> usrs'' = usrs' $+ (u_id1, {| key_heap := ks';
-                                         protocol := cmdc';
-                                         msg_heap := qmsgs';
-                                         c_heap   := mycs';
-                                         from_nons := froms';
-                                         sent_nons := sents';
-                                         cur_nonce := cur_n' |})
-          -> usrs'' $? u_id2 = Some ud2.
-Proof.
-  induction 1; inversion 1; inversion 1;
-    intros; subst;
-      try discriminate;
-      try solve [ clean_map_lookups; trivial ].
-  specialize (IHstep_user _ _ _ _ _ _ _ _ _ _ _
-                          _ _ _ _ _ _ _ _ _ _ _
-                          eq_refl eq_refl eq_refl).
-  specialize (IHstep_user cmdc cmdc').
-  specialize (IHstep_user _ _ _ _ eq_refl H26 H27 H28 eq_refl).
-  clean_map_lookups; eauto.
-Qed.
+(* Lemma silent_step_blah :      *)
+(*   forall {A B C} suid lbl bd bd', *)
+(*     step_user lbl suid bd bd' *)
+(*     -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks' *)
+(*         (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs' *)
+(*         froms froms' sents sents' cur_n cur_n', *)
+(*       bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
+(*       -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd') *)
+(*       -> lbl = Silent *)
+(*       -> forall cmdc cmdc' u_id1 u_id2 ud2 usrs'', *)
+(*           suid = Some u_id1 *)
+(*           -> u_id1 <> u_id2 *)
+(*           -> usrs $? u_id1 = Some {| key_heap := ks; *)
+(*                                     protocol := cmdc; *)
+(*                                     msg_heap := qmsgs; *)
+(*                                     c_heap   := mycs; *)
+(*                                     from_nons := froms; *)
+(*                                     sent_nons := sents; *)
+(*                                     cur_nonce := cur_n |} *)
+(*           -> usrs $? u_id2 = Some ud2 *)
+(*           -> usrs'' = usrs' $+ (u_id1, {| key_heap := ks'; *)
+(*                                          protocol := cmdc'; *)
+(*                                          msg_heap := qmsgs'; *)
+(*                                          c_heap   := mycs'; *)
+(*                                          from_nons := froms'; *)
+(*                                          sent_nons := sents'; *)
+(*                                          cur_nonce := cur_n' |}) *)
+(*           -> usrs'' $? u_id2 = Some ud2. *)
+(* Proof. *)
+(*   induction 1; inversion 1; inversion 1; *)
+(*     intros; subst; *)
+(*       try discriminate; *)
+(*       try solve [ clean_map_lookups; trivial ]. *)
+(*   specialize (IHstep_user _ _ _ _ _ _ _ _ _ _ _ *)
+(*                           _ _ _ _ _ _ _ _ _ _ _ *)
+(*                           eq_refl eq_refl eq_refl). *)
+(*   specialize (IHstep_user cmdc cmdc'). *)
+(*   specialize (IHstep_user _ _ _ _ eq_refl H26 H27 H28 eq_refl). *)
+(*   clean_map_lookups; eauto. *)
+(* Qed. *)
 
 Lemma syntactically_safe_honest_keys_' :
   forall {A B C} suid lbl bd bd',
@@ -337,171 +346,171 @@ Proof.
 
   - invert H6.
         
-   - assert (findUserKeys usrs' $? k__sign = Some true); eauto.  eapply findUserKeys_has_private_key_of_user; eauto.
+(*    - assert (findUserKeys usrs' $? k__sign = Some true); eauto.  eapply findUserKeys_has_private_key_of_user; eauto. *)
 
-  - specialize (H17 u). rewrite add_eq_o in H17; eauto. specialize (H17 _ _ eq_refl H5). simpl in H17.
-    invert H6. apply merge_perms_split in H10. eauto; split_ors. eapply HonestKey in H6.
+(*   - specialize (H17 u). rewrite add_eq_o in H17; eauto. specialize (H17 _ _ eq_refl H5). simpl in H17. *)
+(*     invert H6. apply merge_perms_split in H10. eauto; split_ors. eapply HonestKey in H6. *)
     
-    specialize (H17 H6). destruct H17. eapply H10. admit.
-    assert (findUserKeys usrs' $? k__sign = Some true). invert H6. trivial.
-    assert (honest_key (findUserKeys usrs') k__sign); eauto.
-    
-
-    destruct H17; eauto. eauto.
-
-
-
-    destruct H17. eapply HonestKey. trivial.
-    eapply H10. admit
-
-    
-    
-    specialize (H17 H4).
+(*     specialize (H17 H6). destruct H17. eapply H10. admit. *)
+(*     assert (findUserKeys usrs' $? k__sign = Some true). invert H6. trivial. *)
+(*     assert (honest_key (findUserKeys usrs') k__sign); eauto. *)
     
 
-    assert (findUserKeys usrs' $? k__sign = Some true); eauto. eapply findUserKeys_has_private_key_of_user; eauto.
-
-
-    unfold honest_key. invert H.
-
-    specialize (H12 H4). solve_perm_merges.
-
-    assert (honest_key (findUserKeys usrs') k__sign); eauto. specialize (H17 H10). destruct H17. eapply H11. eauto.
-
-    assert (findUserKeys usrs' $? k__sign = Some true); eauto. eapply findUserKeys_has_private_key_of_user; eauto.
-    assert (honest_key (findUserKeys usrs') k__sign); eauto. destruct H17; eauto. eauto.
-
-    assert (honest_key (findUserKeys usrs') k__sign); eauto. specialize (H17 H10). destruct H17. admit.
-    destruct H17. invert H4. specialize (H12 H4). solve_perm_merges.
-
-    solve_perm_merges. eauto.
+(*     destruct H17; eauto. eauto. *)
 
 
 
-    assert (user_cipher_queue_ok cs' (findUserKeys usrs') mycs'0) by admit. unfold user_cipher_queue_ok in H10. rewrite Forall_forall in H10. specialize (H10 _ H7). split_ex; eauto.
-    - admit. 
-    - admit.
-  * admit. (* same as above but u_id1 <> u *)
-  * erewrite cipher_message_keys_already_in_honest; eauto. eapply H17 with (data__rw := {|
-        key_heap := ks0;
-        protocol := cmdc;
-        msg_heap := qmsgs';
-        c_heap := mycs'0;
-        from_nons := froms';
-        sent_nons := sents';
-        cur_nonce := cur_n' |}); clean_map_lookups; eauto.
-    admit. admit. (* also honest key is in heap not message goals *)
-    admit. (* talking about global user heap, is that in scope *)
-    admit. admit.
-  * admit. (* same as above but u_id1 <> u *)
+(*     destruct H17. eapply HonestKey. trivial. *)
+(*     eapply H10. admit *)
 
-(* key generation *)
-  * specialize (H12 u). admit. (* adding permission does not violate ksign originally in key_heap *)
-  * admit. (* generate symetric key; ksign is still honest despite new honest key *)
-  * admit. (* same as above but ra is encrypted, different goal *)
-  * admit. (* same as above but u <> u_id *)
-  * admit. (* more add key perm *)
-  * admit. (* another honest key  *)
-  * admit. (* local heap extended with generated key *)
-  * admit.
+    
+    
+(*     specialize (H17 H4). *)
+    
+
+(*     assert (findUserKeys usrs' $? k__sign = Some true); eauto. eapply findUserKeys_has_private_key_of_user; eauto. *)
+
+
+(*     unfold honest_key. invert H. *)
+
+(*     specialize (H12 H4). solve_perm_merges. *)
+
+(*     assert (honest_key (findUserKeys usrs') k__sign); eauto. specialize (H17 H10). destruct H17. eapply H11. eauto. *)
+
+(*     assert (findUserKeys usrs' $? k__sign = Some true); eauto. eapply findUserKeys_has_private_key_of_user; eauto. *)
+(*     assert (honest_key (findUserKeys usrs') k__sign); eauto. destruct H17; eauto. eauto. *)
+
+(*     assert (honest_key (findUserKeys usrs') k__sign); eauto. specialize (H17 H10). destruct H17. admit. *)
+(*     destruct H17. invert H4. specialize (H12 H4). solve_perm_merges. *)
+
+(*     solve_perm_merges. eauto. *)
+
+
+
+(*     assert (user_cipher_queue_ok cs' (findUserKeys usrs') mycs'0) by admit. unfold user_cipher_queue_ok in H10. rewrite Forall_forall in H10. specialize (H10 _ H7). split_ex; eauto. *)
+(*     - admit.  *)
+(*     - admit. *)
+(*   * admit. (* same as above but u_id1 <> u *) *)
+(*   * erewrite cipher_message_keys_already_in_honest; eauto. eapply H17 with (data__rw := {| *)
+(*         key_heap := ks0; *)
+(*         protocol := cmdc; *)
+(*         msg_heap := qmsgs'; *)
+(*         c_heap := mycs'0; *)
+(*         from_nons := froms'; *)
+(*         sent_nons := sents'; *)
+(*         cur_nonce := cur_n' |}); clean_map_lookups; eauto. *)
+(*     admit. admit. (* also honest key is in heap not message goals *) *)
+(*     admit. (* talking about global user heap, is that in scope *) *)
+(*     admit. admit. *)
+(*   * admit. (* same as above but u_id1 <> u *) *)
+
+(* (* key generation *) *)
+(*   * specialize (H12 u). admit. (* adding permission does not violate ksign originally in key_heap *) *)
+(*   * admit. (* generate symetric key; ksign is still honest despite new honest key *) *)
+(*   * admit. (* same as above but ra is encrypted, different goal *) *)
+(*   * admit. (* same as above but u <> u_id *) *)
+(*   * admit. (* more add key perm *) *)
+(*   * admit. (* another honest key  *) *)
+(*   * admit. (* local heap extended with generated key *) *)
+(*   * admit. *)
   
-  Search user_cipher_queues_ok.
-  Search user_cipher_queue_ok.
-  Search encrypted_ciphers_ok.
-  Import SyntacticallySafe.
-  Search encrypted_ciphers_ok.
-  Print syntactically_safe_honest_keys_preservation'.
+(*   Search user_cipher_queues_ok. *)
+(*   Search user_cipher_queue_ok. *)
+(*   Search encrypted_ciphers_ok. *)
+(*   Import SyntacticallySafe. *)
+(*   Search encrypted_ciphers_ok. *)
+(*   Print syntactically_safe_honest_keys_preservation'. *)
 Admitted.
 
-Lemma silent_step_then_labeled_step : 
-  forall {A B C} suid lbl bd bd',
-    step_user lbl suid bd bd'
-    -> forall cs cs' (usrs usrs' usrs'': honest_users A) (adv adv' : user_data B) gks gks'
-        (cmd cmd' : user_cmd C) u_id1 cmdc cmdc'
-        ks ks' qmsgs qmsgs' mycs mycs'
-        froms froms' sents sents' cur_n cur_n' suid2 lbl2,
-      bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
-      -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
-      -> lbl = Silent
-      -> usrs $? u_id1 = Some {| key_heap := ks;
-                                protocol := cmdc;
-                                msg_heap := qmsgs;
-                                c_heap   := mycs;
-                                from_nons := froms;
-                                sent_nons := sents;
-                                cur_nonce := cur_n |}
-      -> usrs'' = users' $+ (u_id1, {| key_heap := ks';
-                                protocol := cmdc';
-                                msg_heap := qmsgs';
-                                c_heap   := mycs';
-                                from_nons := froms';
-                                sent_nons := sents';
-                                cur_nonce := cur_n' |})
-      -> forall D bd2 bd2',
-          step_user lbl2 suid2 bd2 bd2'
-          -> forall cmdc2 u_id2 ru ia iu ra
-              (cmd2 cmd2' : user_cmd D) ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2'
-              froms2 froms2' sents2 sents2' cur_n2 cur_n2',
-            suid = Some u_id1
-            -> suid2 = Some u_id2
-            -> lbl2 = Action ra
-            -> bd2 = (usrs'', adv', cs', gks', ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
-            -> bd2' = (usrs''', adv'', cs'', gks'', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
-            -> u_id1 <> u_id2
-            -> ru = buildUniverse usrs adv cs gks u_id1 {| key_heap  := ks
-                                                          ; msg_heap  := qmsgs
-                                                          ; protocol  := cmdc
-                                                          ; c_heap    := mycs
-                                                          ; from_nons := froms
-                                                          ; sent_nons := sents
-                                                          ; cur_nonce := cur_n |}
-            -> action_matches ra ru ia iu
-            -> usrs $? u_id2 = Some {| key_heap := ks2;
-                                      protocol := cmdc2;
-                                      msg_heap := qmsgs2;
-                                      c_heap   := mycs2;
-                                      from_nons := froms2;
-                                      sent_nons := sents2;
-                                      cur_nonce := cur_n2 |}
-            -> forall ru',
-                  (* step_user (Action ra) (Some u_id2) *)
-                  (*           (usrs'', adv', cs', gks', ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2) *)
-                  (*           bd2'' *)
-                  ru' = buildUniverse usrs' adv' cs' gks' u_id1 {| key_heap  := ks'
-                                                                     ; msg_heap  := qmsgs'
-                                                                     ; protocol  := cmdc'
-                                                                     ; c_heap    := mycs'
-                                                                     ; from_nons := froms'
-                                                                     ; sent_nons := sents'
-                                                                     ; cur_nonce := cur_n' |}
-                  ->  action_matches ra ru' ia iu.
-Proof.
-  induction 6; inversion 4; inversion 1; intros; subst; try discriminate; clean_context.
-  - specialize (IHstep_user _ _ H).
-    specialize (IHstep_user _ _ _ _ _ cmdc' eq_refl eq_refl H3).
-    specialize (IHstep_user _ _ _ _ _ _ _ _ _ _
-                            _ _ _ _ _ _ _ _ _ _
-                            eq_refl eq_refl eq_refl eq_refl eq_refl H21 eq_refl H34 H35).
-    eapply IHstep_user; eauto.
-  - generalize H; intros STEP1.
-    eapply silent_step_blah in H; eauto.
-    clean_map_lookups.
-    invert H41; eauto.
-    econstructor; eauto.
-    invert H1.
-    unfold buildUniverse in *; simpl in *.
-    eapply silent_step_message_eq with (u_id3 := u_id1); eauto.
-  - generalize H; intros STEP1.
-    eapply silent_step_blah in H; eauto.
-    clean_map_lookups.
-    invert H41; eauto.
-    eapply Out; eauto.
-    invert H2.
-    unfold buildUniverse in *; simpl in *.
-    eapply silent_step_message_eq with (u_id3 := u_id1); eauto.
-    Unshelve.
-    all: try discriminate; eauto.
-Qed.
+(* Lemma silent_step_then_labeled_step :  *)
+(*   forall {A B C} suid lbl bd bd', *)
+(*     step_user lbl suid bd bd' *)
+(*     -> forall cs cs' (usrs usrs' usrs'': honest_users A) (adv adv' : user_data B) gks gks' *)
+(*         (cmd cmd' : user_cmd C) u_id1 cmdc cmdc' *)
+(*         ks ks' qmsgs qmsgs' mycs mycs' *)
+(*         froms froms' sents sents' cur_n cur_n' suid2 lbl2, *)
+(*       bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
+(*       -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd') *)
+(*       -> lbl = Silent *)
+(*       -> usrs $? u_id1 = Some {| key_heap := ks; *)
+(*                                 protocol := cmdc; *)
+(*                                 msg_heap := qmsgs; *)
+(*                                 c_heap   := mycs; *)
+(*                                 from_nons := froms; *)
+(*                                 sent_nons := sents; *)
+(*                                 cur_nonce := cur_n |} *)
+(*       -> usrs'' = users' $+ (u_id1, {| key_heap := ks'; *)
+(*                                 protocol := cmdc'; *)
+(*                                 msg_heap := qmsgs'; *)
+(*                                 c_heap   := mycs'; *)
+(*                                 from_nons := froms'; *)
+(*                                 sent_nons := sents'; *)
+(*                                 cur_nonce := cur_n' |}) *)
+(*       -> forall D bd2 bd2', *)
+(*           step_user lbl2 suid2 bd2 bd2' *)
+(*           -> forall cmdc2 u_id2 ru ia iu ra *)
+(*               (cmd2 cmd2' : user_cmd D) ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' *)
+(*               froms2 froms2' sents2 sents2' cur_n2 cur_n2', *)
+(*             suid = Some u_id1 *)
+(*             -> suid2 = Some u_id2 *)
+(*             -> lbl2 = Action ra *)
+(*             -> bd2 = (usrs'', adv', cs', gks', ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2) *)
+(*             -> bd2' = (usrs''', adv'', cs'', gks'', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2') *)
+(*             -> u_id1 <> u_id2 *)
+(*             -> ru = buildUniverse usrs adv cs gks u_id1 {| key_heap  := ks *)
+(*                                                           ; msg_heap  := qmsgs *)
+(*                                                           ; protocol  := cmdc *)
+(*                                                           ; c_heap    := mycs *)
+(*                                                           ; from_nons := froms *)
+(*                                                           ; sent_nons := sents *)
+(*                                                           ; cur_nonce := cur_n |} *)
+(*             -> action_matches ra ru ia iu *)
+(*             -> usrs $? u_id2 = Some {| key_heap := ks2; *)
+(*                                       protocol := cmdc2; *)
+(*                                       msg_heap := qmsgs2; *)
+(*                                       c_heap   := mycs2; *)
+(*                                       from_nons := froms2; *)
+(*                                       sent_nons := sents2; *)
+(*                                       cur_nonce := cur_n2 |} *)
+(*             -> forall ru', *)
+(*                   (* step_user (Action ra) (Some u_id2) *) *)
+(*                   (*           (usrs'', adv', cs', gks', ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2) *) *)
+(*                   (*           bd2'' *) *)
+(*                   ru' = buildUniverse usrs' adv' cs' gks' u_id1 {| key_heap  := ks' *)
+(*                                                                      ; msg_heap  := qmsgs' *)
+(*                                                                      ; protocol  := cmdc' *)
+(*                                                                      ; c_heap    := mycs' *)
+(*                                                                      ; from_nons := froms' *)
+(*                                                                      ; sent_nons := sents' *)
+(*                                                                      ; cur_nonce := cur_n' |} *)
+(*                   ->  action_matches ra ru' ia iu. *)
+(* Proof. *)
+(*   induction 6; inversion 4; inversion 1; intros; subst; try discriminate; clean_context. *)
+(*   - specialize (IHstep_user _ _ H). *)
+(*     specialize (IHstep_user _ _ _ _ _ cmdc' eq_refl eq_refl H3). *)
+(*     specialize (IHstep_user _ _ _ _ _ _ _ _ _ _ *)
+(*                             _ _ _ _ _ _ _ _ _ _ *)
+(*                             eq_refl eq_refl eq_refl eq_refl eq_refl H21 eq_refl H34 H35). *)
+(*     eapply IHstep_user; eauto. *)
+(*   - generalize H; intros STEP1. *)
+(*     eapply silent_step_blah in H; eauto. *)
+(*     clean_map_lookups. *)
+(*     invert H41; eauto. *)
+(*     econstructor; eauto. *)
+(*     invert H1. *)
+(*     unfold buildUniverse in *; simpl in *. *)
+(*     eapply silent_step_message_eq with (u_id3 := u_id1); eauto. *)
+(*   - generalize H; intros STEP1. *)
+(*     eapply silent_step_blah in H; eauto. *)
+(*     clean_map_lookups. *)
+(*     invert H41; eauto. *)
+(*     eapply Out; eauto. *)
+(*     invert H2. *)
+(*     unfold buildUniverse in *; simpl in *. *)
+(*     eapply silent_step_message_eq with (u_id3 := u_id1); eauto. *)
+(*     Unshelve. *)
+(*     all: try discriminate; eauto. *)
+(* Qed. *)
 
 
 
@@ -517,13 +526,20 @@ Lemma alignment_preservation_step :
   forall t__hon t__adv st st',
     @step t__hon t__adv st st'
     (* -> lameAdv b (fst st).(adversary) *)
-    -> labels_align st'
-    -> labels_align st.
+    -> labels_align' st'
+    -> labels_align' st.
 Proof.
 
-  induct 1; unfold labels_align.
-  - intros.  eapply silent_leading_step_preserves_action_matches in H. eexists. eexists. eexists.
-    
+  induct 1.
+  - intros.  (* eapply silent_leading_step_preserves_action_matches in H. eexists. eexists. eexists. *)
+    admit.
+  - intros. invert H3. eapply StepLabelsAlign.
+    * admit.
+    * unfold labels_align in *. intros. do 3 eexists. split. eassumption. split
+
+
+      do 3 eexists; repeat (split; try eassumption).
+      (* two lemmas: step_universe H3 and H are same and different users *)
   (*   eapply silent_leading_step_preserves_action_matches; eauto.  *)
   (*   eapply silent_leading_step_preserves_action_matches in H. *)
   (*   invert H. invert H1. shelve. shelve. *)
