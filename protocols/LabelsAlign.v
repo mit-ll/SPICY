@@ -521,6 +521,32 @@ Admitted.
 (* Admitted. *)
 
 
+Lemma step_then_step :
+  forall A B C lbl1 suid1 bd1 bd1',
+    step_user lbl1 suid1 bd1 bd1'
+    -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks'
+        (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs'
+        froms froms' sents sents' cur_n cur_n' uid1,
+      bd1 = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+      -> bd1' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+      -> suid1 = Some uid1
+      -> forall cmdc cmdc',
+          usrs $? uid1 = Some (mkUserData ks cmdc qmsgs mycs froms sents cur_n)
+      -> forall ks2 qmsgs2 mycs2 froms2 sents2 cur_n2 cmd2 uid2,
+          usrs $? uid2 = Some (mkUserData ks2 cmd2 qmsgs2 mycs2 froms2 sents2 cur_n2)
+      -> uid1 <> uid2
+      -> forall bd2' lbl2 ,
+          step_user lbl2 (Some uid2) (usrs, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2) bd2'
+      -> exists lbl3 bd3 qmsgs3,
+            usrs' $? uid2 = Some (mkUserData ks2 cmd2 qmsgs3 mycs2 froms2 sents2 cur_n2)
+          -> step_user lbl3 (Some uid2) (usrs' $+ (uid1, (mkUserData ks' cmdc' qmsgs' mycs' froms' sents' cur_n')),
+                                        adv', cs', gks', ks2, qmsgs3, mycs2, froms2, sents2, cur_n2, cmd2) bd3.
+Proof.
+  induction 1; inversion 1; inversion 1; intros; subst; eauto.
+Admitted.
+
+
+
 Lemma labels_align_silent_step' :
   forall A B C suid lbl bd bd',
 
@@ -558,7 +584,9 @@ Lemma labels_align_silent_step' :
 Proof.
   induction 1; inversion 1; inversion 1; intros; subst; eauto.
   - admit.
-  -
+  - unfold labels_align in *; intros.
+    invert H1; simpl in *.
+    destruct userData; unfold build_data_step in *; simpl in *.
 
 Admitted.
 
