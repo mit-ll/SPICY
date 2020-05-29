@@ -47,13 +47,12 @@ Set Implicit Arguments.
 
 
 (* forall reachable states labels align *)
-Inductive labels_align' {A B} : (universe A B * IdealWorld.universe A) -> Prop :=
+Inductive labels_always_align {A B} : (universe A B * IdealWorld.universe A) -> Prop :=
 | StepLabelsAlign : 
     forall st,
-      (forall st', step st st'
-      -> labels_align' st')
+      (forall st', step st st' -> labels_always_align st')
       -> labels_align st
-      -> labels_align' st.
+      -> labels_always_align st.
  
 
 (* Definition almostEqual {A}  (ud ud' : user_data A) := *)
@@ -522,19 +521,87 @@ Admitted.
 (* Admitted. *)
 
 
+Lemma labels_align_silent_step' :
+  forall A B C suid lbl bd bd',
+
+    step_user lbl suid bd bd'
+
+    -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks'
+        (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs'
+        froms froms' sents sents' cur_n cur_n' uid,
+
+      bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+      -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+      -> suid = Some uid
+      -> forall cmdc,
+          usrs $? uid = Some (mkUserData ks cmdc qmsgs mycs froms sents cur_n)
+
+      -> forall cmdc' iu,
+          labels_align ({|
+                         users := usrs $+ (uid,
+                                           {|
+                                             key_heap := ks';
+                                             protocol := cmdc';
+                                             msg_heap := qmsgs';
+                                             c_heap := mycs';
+                                             from_nons := froms';
+                                             sent_nons := sents';
+                                             cur_nonce := cur_n' |});
+                         adversary := adv';
+                         all_ciphers := cs';
+                         all_keys := gks' |}, iu)
+       -> labels_align ({|
+                         users := usrs;
+                         adversary := adv;
+                         all_ciphers := cs;
+                         all_keys := gks |}, iu).
+Proof.
+  induction 1; inversion 1; inversion 1; intros; subst; eauto.
+  - admit.
+  -
+
+Admitted.
+
+
 Lemma alignment_preservation_step :
   forall t__hon t__adv st st',
     @step t__hon t__adv st st'
     (* -> lameAdv b (fst st).(adversary) *)
-    -> labels_align' st'
-    -> labels_align' st.
+    -> labels_always_align st'
+    -> labels_always_align st.
 Proof.
 
-  induct 1.
-  - intros.  (* eapply silent_leading_step_preserves_action_matches in H. eexists. eexists. eexists. *)
-    admit.
-  - intros. invert H3. eapply StepLabelsAlign.
-    * admit.
+  induct 1; intros;
+    match goal with
+    | [ H : labels_always_align _ |- _ ] => invert H
+    end.
+  - econstructor; intros.
+    * econstructor; intros.
+      ** admit.
+      ** admit.
+    * invert H.
+      2:admit. (* adversary step, so ignore *)
+      unfold buildUniverse in *.
+      admit.
+
+  - 
+
+
+    
+      
+  (* we know that we have stepped from (ru,iu) to (ru',iu).  we know that if the user
+   * that stepped was the one from H, then we can use H1 to discharge.
+   * However, if it was another user, stepping from (ru,iu) to st', then
+   * we need to know that the other user wouldn't have messed us up if it went first, but we
+   * know that to be true because of H2 (labels_align (ru',iu)), but we will need to prove that
+   * as a lemma  *)
+
+
+  - invert H3.
+    econstructor; intros.
+    * econstructor; intros.
+      ** admit.
+      ** 
     * unfold labels_align in *. intros. do 3 eexists. split. eassumption. split
 
 
