@@ -311,13 +311,13 @@ Section CommutationLemmas.
 
               -> forall bd3 cmdc2',
                   bd3 = (usrs1,   adv,  cs,  gks,  ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
-                  -> exists bd3' bd4 bd4' lbl3 lbl4 adv2 cs2 gks2 usrs3' usrs4 usrs4' qmsgs3,
-                      step_user lbl3 suid2 bd3 bd3'
+                  -> exists bd3' bd4 bd4' (* lbl3 lbl4 *) adv2 cs2 gks2 usrs3' usrs4 usrs4' qmsgs3,
+                      step_user lbl2 suid2 bd3 bd3'
                       /\ bd3' = (usrs3', adv2, cs2, gks2, ks2', qmsgs3, mycs2', froms2', sents2', cur_n2', cmd2')
                       /\ usrs4 = usrs3' $+ (u_id2, mkUserData ks2' cmdc2' qmsgs3 mycs2' froms2' sents2' cur_n2')
                       /\ bd4 = (usrs4,   adv2, cs2, gks2, ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd1)
                       /\ bd4' = (usrs4', adv', cs', gks', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd1')
-                      /\ step_user lbl4 suid1 bd4 bd4'
+                      /\ step_user lbl1 suid1 bd4 bd4'
                       /\ ( usrs4' $+ (u_id1, mkUserData ks1' cmdc1' qmsgs1' mycs1' froms1' sents1' cur_n1') = 
                           usrs2' $+ (u_id2, mkUserData ks2' cmdc2' qmsgs2' mycs2' froms2' sents2' cur_n2') )
   .
@@ -414,7 +414,7 @@ Section CommutationLemmas.
         solve [ user_cipher_queues_prop; user_cipher_queues_prop ]
       end.
     
-    all: solve [ (do 12 eexists); (repeat simple apply conj); repeat solver1; eauto; repeat solver1; eauto ].
+    all: solve [ (do 10 eexists); (repeat simple apply conj); repeat solver1; eauto; repeat solver1; eauto ].
   Qed.
 
   Lemma commutes_sound_send :
@@ -461,13 +461,13 @@ Section CommutationLemmas.
 
               -> forall bd3 cmdc2',
                   bd3 = (usrs1,   adv,  cs,  gks,  ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
-                  -> exists bd3' bd4 bd4' lbl3 lbl4 adv2 cs2 gks2 usrs3' usrs4 usrs4' qmsgs3,
-                    step_user lbl3 suid2 bd3 bd3'
+                  -> exists bd3' bd4 bd4' (* lbl3 lbl4 *) adv2 cs2 gks2 usrs3' usrs4 usrs4' qmsgs3,
+                    step_user lbl2 suid2 bd3 bd3'
                     /\ bd3' = (usrs3', adv2, cs2, gks2, ks2', qmsgs3, mycs2', froms2', sents2', cur_n2', cmd2')
                     /\ usrs4 = usrs3' $+ (u_id2, mkUserData ks2' cmdc2' qmsgs3 mycs2' froms2' sents2' cur_n2')
                     /\ bd4 = (usrs4,   adv2, cs2, gks2, ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd1)
                     /\ bd4' = (usrs4', adv', cs', gks', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd1')
-                    /\ step_user lbl4 suid1 bd4 bd4'
+                    /\ step_user lbl1 suid1 bd4 bd4'
                     /\ ( usrs4' $+ (u_id1, mkUserData ks1' cmdc1' qmsgs1' mycs1' froms1' sents1' cur_n1') =
                         usrs2' $+ (u_id2, mkUserData ks2' cmdc2' qmsgs2' mycs2' froms2' sents2' cur_n2') )
   .
@@ -507,7 +507,7 @@ Section CommutationLemmas.
     all :
       try
         solve [
-          (do 12 eexists); (repeat simple apply conj); repeat solver1; eauto; repeat solver1; try congruence; eauto; stuff ] .
+          (do 10 eexists); (repeat simple apply conj); repeat solver1; eauto; repeat solver1; try congruence; eauto; stuff ] .
   Qed.
 
   Lemma commutes_sound_recur_cmd1' :
@@ -552,13 +552,13 @@ Section CommutationLemmas.
 
               -> forall bd3 cmdc2',
                   bd3 = (usrs1,   adv,  cs,  gks,  ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
-                  -> exists bd3' bd4 bd4' lbl3 lbl4 adv2 cs2 gks2 usrs3' usrs4 usrs4' qmsgs3,
-                      step_user lbl3 suid2 bd3 bd3'
+                  -> exists bd3' bd4 bd4' (* lbl3 lbl4 *) adv2 cs2 gks2 usrs3' usrs4 usrs4' qmsgs3,
+                      step_user lbl2 suid2 bd3 bd3'
                       /\ bd3' = (usrs3', adv2, cs2, gks2, ks2', qmsgs3, mycs2', froms2', sents2', cur_n2', cmd2')
                       /\ usrs4 = usrs3' $+ (u_id2, mkUserData ks2' cmdc2' qmsgs3 mycs2' froms2' sents2' cur_n2')
                       /\ bd4 = (usrs4,   adv2, cs2, gks2, ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd1)
                       /\ bd4' = (usrs4', adv', cs', gks', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd1')
-                      /\ step_user lbl4 suid1 bd4 bd4'
+                      /\ step_user lbl1 suid1 bd4 bd4'
                       /\ ( usrs4' $+ (u_id1, mkUserData ks1' cmdc1' qmsgs1' mycs1' froms1' sents1' cur_n1') = 
                           usrs2' $+ (u_id2, mkUserData ks2' cmdc2' qmsgs2' mycs2' froms2' sents2' cur_n2') )
   .
@@ -595,7 +595,7 @@ Section CommutationLemmas.
       specialize_simply.
       specialize (IHstep_user _ cmdc2' eq_refl).
       split_ex; subst.
-      (do 12 eexists); repeat simple apply conj; eauto.
+      (do 10 eexists); repeat simple apply conj; eauto.
       econstructor; eauto.
 
     - cases cmd2;
@@ -605,7 +605,7 @@ Section CommutationLemmas.
         | [ H : commutes (Send _ _) _ |- _ ] => unfold commutes in H; contradiction
         | [ H : commutes (Recv _) _ |- _ ] => unfold commutes in H; contradiction
         end; step_usr u_id2
-        ; (do 12 eexists); (repeat simple apply conj); repeat solver1; eauto; repeat solver1; eauto.
+        ; (do 10 eexists); (repeat simple apply conj); repeat solver1; eauto; repeat solver1; eauto.
 
     - simpl.
       eapply commutes_sound_send; eauto.
@@ -705,13 +705,13 @@ Section CommutationLemmas.
 
                   -> forall bd3,
                       bd3 = (usrs1,   adv,  cs,  gks,  ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
-                      -> exists bd3' bd4 bd4' lbl3 lbl4 adv2 cs2 gks2 usrs3' usrs4 usrs4' qmsgs3,
-                        step_user lbl3 suid2 bd3 bd3'
+                      -> exists bd3' bd4 bd4' (* lbl3 lbl4 *) adv2 cs2 gks2 usrs3' usrs4 usrs4' qmsgs3,
+                        step_user lbl2 suid2 bd3 bd3'
                         /\ bd3' = (usrs3', adv2, cs2, gks2, ks2', qmsgs3, mycs2', froms2', sents2', cur_n2', cmd2')
                         /\ usrs4 = usrs3' $+ (u_id2, mkUserData ks2' cmd2' qmsgs3 mycs2' froms2' sents2' cur_n2')
                         /\ bd4 = (usrs4,   adv2, cs2, gks2, ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd1)
                         /\ bd4' = (usrs4', adv', cs', gks', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd1')
-                        /\ step_user lbl4 suid1 bd4 bd4'
+                        /\ step_user lbl1 suid1 bd4 bd4'
                         /\ ( usrs4' $+ (u_id1, mkUserData ks1' cmd1' qmsgs1' mycs1' froms1' sents1' cur_n1') =
                             usrs2' $+ (u_id2, mkUserData ks2' cmd2' qmsgs2' mycs2' froms2' sents2' cur_n2') )
   .
@@ -721,46 +721,27 @@ Section CommutationLemmas.
     specialize (nextAction_couldBe H20).
     cases cmd__i2; intros; try contradiction; clean_context.
 
-    - eapply step_na_return in H20; eauto; split_ands; subst.
-      eapply step_no_depend_other_usrs_program in H; eauto; split_ex.
-      (do 12 eexists); repeat simple apply conj; eauto.
-      maps_equal; eauto.
+    eapply step_na_return in H20; eauto; split_ands; subst.
+    eapply step_no_depend_other_usrs_program in H; eauto; split_ex.
+    (do 10 eexists); repeat simple apply conj; eauto.
+    maps_equal; eauto.
 
-      Ltac setup uid cmd1 :=
-        match goal with
-        | [ NA : nextAction ?c2 ?c
-          , STEP : step_user _ (Some uid) _ _
-          , SS : syntactically_safe _ _ ?c2 _
+    Ltac setup uid cmd1 :=
+      match goal with
+      | [ NA : nextAction ?c2 ?c
+               , STEP : step_user _ (Some uid) _ _
+                        , SS : syntactically_safe _ _ ?c2 _
           (* , NCS : next_cmd_safe _ _ _ _ _ ?c2 *)
-            |- _ ] => 
-          let NACMD2 := fresh "NACMD2" in
-          generalize NA; intros NACMD2
+          |- _ ] => 
+        let NACMD2 := fresh "NACMD2" in
+        generalize NA; intros NACMD2
         ; eapply step_na_not_return in NA; eauto; split_ex; subst; try congruence
         ; eapply syntactically_safe_na in SS; eauto; split_ex
         ; eapply commutes_sound_recur_cmd1' with (cmd2 := cmd1) (cmd3 := c) in STEP; eauto
-        (* ; specialize (NCS _ _ NACMD2); simpl in NCS *)
-        end.
+      end.
 
-    - setup u_id1 cmd1; split_ex; subst.
-      (do 12 eexists); repeat simple apply conj; try reflexivity; eauto.
-      
-    - setup u_id1 cmd1; split_ex; subst.
-      (do 12 eexists); repeat simple apply conj; try reflexivity; eauto.
-
-    - setup u_id1 cmd1; split_ex; subst.
-      (do 12 eexists); repeat simple apply conj; try reflexivity; eauto.
-
-    - setup u_id1 cmd1; split_ex; subst.
-      (do 12 eexists); repeat simple apply conj; try reflexivity; eauto.
-
-    - setup u_id1 cmd1; split_ex; subst.
-      (do 12 eexists); repeat simple apply conj; try reflexivity; eauto.
-
-    - setup u_id1 cmd1; split_ex; subst.
-      (do 12 eexists); repeat simple apply conj; try reflexivity; eauto.
-
-    - setup u_id1 cmd1; split_ex; subst.
-      (do 12 eexists); repeat simple apply conj; try reflexivity; eauto.
+    all: setup u_id1 cmd1; split_ex; subst;
+        (do 10 eexists); repeat simple apply conj; try reflexivity; eauto.
       
   Qed.
 
@@ -877,11 +858,11 @@ Section CommutationLemmas.
               -> summarize userData1.(protocol) s
               -> commutes cmd__n s
 
-          -> exists U__r'' lbl3 lbl4 bd3 bd3' userData1',
-                step_user lbl3 (Some u_id2) (build_data_step U__r userData2) bd3
+          -> exists U__r'' (* lbl3 lbl4 *) bd3 bd3' userData1',
+                step_user lbl2 (Some u_id2) (build_data_step U__r userData2) bd3
               /\ U__r'' = buildUniverse_step bd3 u_id2
               /\ U__r''.(users) $? u_id1 = Some userData1'
-              /\ step_user lbl4 (Some u_id1) (build_data_step U__r'' userData1') bd3'
+              /\ step_user lbl1 (Some u_id1) (build_data_step U__r'' userData1') bd3'
               /\ buildUniverse_step bd3' u_id1 = buildUniverse_step bd2' u_id2
   .
   Proof.
@@ -908,7 +889,7 @@ Section CommutationLemmas.
     assert (u_id2 <> u_id1) as UNE by congruence.
 
     eapply commutes_sound_recur' in H8; try reflexivity; try eassumption; split_ex; subst; eauto.
-    (do 6 eexists); repeat simple apply conj; simpl; eauto.
+    (do 4 eexists); repeat simple apply conj; simpl; eauto.
 
     specialize (impact_from_other_user_step_commutes H8 s eq_refl eq_refl eq_refl UNE H11 H13 H); intros; eauto.
     all: simpl; clean_map_lookups; eauto.
@@ -1398,22 +1379,36 @@ Section TimeMeasures.
   Definition ign_lbl : rlabel -> Prop :=
     fun _ => True.
 
+  Lemma adversary_remains_lame_user_step :
+    forall {A B} cs cs' lbl u_id (usrs usrs' : honest_users A) (adv adv' : user_data B) (cmd cmd' : user_cmd (Base A))
+      gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' b,
+
+      lameAdv b adv
+      -> step_user lbl (Some u_id)
+                  (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+                  (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+      -> lameAdv b adv'.
+  Proof.
+    unfold lameAdv; intros; simpl in *.
+
+    - destruct lbl.
+      + eapply honest_silent_step_nochange_adversaries in H0; eauto.
+        subst; eauto.
+      + eapply honest_labeled_step_nochange_adversary_protocol in H0; eauto.
+        rewrite <- H0; auto.
+  Qed.
+
   Lemma adversary_remains_lame :
     forall A B (U U' : universe A B) b lbl,
       lameAdv b U.(adversary)
       -> step_universe U lbl U'
       -> lameAdv b U'.(adversary).
   Proof.
-    unfold lameAdv; invert 2; subst; simpl in *; subst; 
-      unfold build_data_step, buildUniverse, buildUniverseAdv in *; simpl in *.
+    inversion 2; subst; simpl in *; subst; 
+      unfold build_data_step, buildUniverse, buildUniverseAdv in *; simpl in *;
+        eauto using adversary_remains_lame_user_step.
 
-    - destruct lbl.
-      + simpl in *; eapply honest_silent_step_nochange_adversaries in H2; eauto.
-        subst; auto.
-      + simpl in *; eapply honest_labeled_step_nochange_adversary_protocol in H2; eauto.
-        rewrite <- H2; auto.
-        
-    - rewrite H in H1; invert H1.
+    dismiss_adv.
   Qed.
 
   Lemma adversary_remains_lame_step :
@@ -1757,6 +1752,32 @@ Proof.
   eapply summarize_user_step'; eauto.
 Qed.
 
+Lemma summarize_univ_user_step :
+  forall A B (U : universe A B)  bd uid ud summaries lbl,
+
+    step_user lbl (Some uid)
+              (build_data_step U ud)
+              bd
+    -> U.(users) $? uid = Some ud
+    -> summarize_univ U summaries
+    -> summarize_univ (buildUniverse_step bd uid) summaries.
+Proof.
+  unfold summarize_univ; intros.
+  destruct (uid ==n u_id); subst; clean_map_lookups.
+  - specialize (H1 _ _ s H0); split_ex; split; eauto.
+    dt bd.
+    simpl in H2; clean_map_lookups; simpl.
+    eapply summarize_user_step; eauto.
+
+  - unfold build_data_step, buildUniverse_step, buildUniverse in *;
+      dt bd; destruct U, ud, u_d; simpl in *; clean_map_lookups.
+
+    eapply step_back_into_other_user with (u_id2 := u_id) in H; eauto.
+    split_ors; clean_map_lookups.
+    specialize (H1 _ _ s H); split_ex; simpl in *; split; eauto.
+    specialize (H1 _ _ s H3); split_ex; simpl in *; split; eauto.
+Qed.
+
 Lemma summarize_univ_step :
   forall t__hon t__adv st st' summaries b,
     @step t__hon t__adv st st'
@@ -1954,6 +1975,178 @@ Proof.
 
 Admitted.
 
+
+Lemma map_add_rw :
+  forall V (m : NatMap.t V) k v,
+    Raw.add k v m = m $+ (k,v).
+Proof.
+  intros.
+  reflexivity.
+Qed.
+
+Lemma step_univ_inv' :
+  forall t__hon t__adv lbl ru ru' b,
+    @step_universe t__hon t__adv ru lbl ru'
+    -> lameAdv b ru.(adversary)
+    -> exists uid ud lbl bd,
+      ru.(users) $? uid = Some ud
+    /\ step_user lbl (Some uid)
+                (build_data_step ru ud)
+                bd
+    /\ ru' = buildUniverse_step bd uid.
+Proof.
+  induction 1; intros; dismiss_adv; subst; eauto 8.
+Qed.
+
+(* Lemma step_univ_inv : *)
+(*   forall t__hon t__adv lbl ru ru', *)
+(*     step_universe ru lbl ru' *)
+
+(*     -> forall cs (usrs : honest_users t__hon) (adv : user_data t__adv) gks cmd ks qmsgs mycs froms sents cur_n uid lbl b, *)
+
+(*       ru' = (mkUniverse (usrs $+ (uid, mkUserData ks cmd qmsgs mycs froms sents cur_n)) adv cs gks) *)
+(*       -> lameAdv b ru.(adversary) *)
+(*       -> exists ud, *)
+(*           ru.(users) $? uid = Some ud *)
+(*         /\ step_user lbl (Some uid)  *)
+(*                     (build_data_step ru ud) *)
+(*                     (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
+(* . *)
+(* Proof. *)
+(*   intros; subst. *)
+(*   generalize (step_univ_inv' H H1); intros; split_ex; simpl in *. *)
+(*   dt x2. *)
+(*   destruct x0. *)
+(*   unfold build_data_step, buildUniverse_step, buildUniverse in *; simpl in *. *)
+(*   destruct (uid ==n x); subst. *)
+(*   - eexists; split; eauto. *)
+(*     simpl. *)
+(*     invert H3. *)
+(*     rewrite !map_add_rw in H5. *)
+(*     admit. *)
+
+(*   - exfalso. *)
+(*     invert H3. *)
+    
+
+
+
+  
+(*   induction 1; inversion 1; inversion 1; intros; subst; dismiss_adv. *)
+(*   destruct userData. *)
+(*   unfold build_data_step, buildUniverse in *; simpl in *. *)
+(*   destruct (uid ==n u_id); subst; clean_context. *)
+(*   - admit. *)
+(*   - invert H5. *)
+(*     rewrite !map_add_rw in H2. *)
+(*     eapply step_user_nochange_that_user_in_honest_users in H0; eauto. *)
+    
+    
+
+  
+
+(* Lemma step_univ_inv : *)
+(*   forall t__hon t__adv cs cs' (usrs usrs' : honest_users t__hon) (adv adv' : user_data t__adv) gks gks' *)
+(*         cmd cmd' ks ks' qmsgs qmsgs' mycs mycs' *)
+(*         froms froms' sents sents' cur_n cur_n' uid lbl b, *)
+
+(*     step_universe *)
+(*       (mkUniverse usrs adv cs gks) lbl *)
+(*       (mkUniverse (usrs' $+ (uid, mkUserData ks cmd' qmsgs' mycs' froms' sents' cur_n')) adv' cs' gks') *)
+(*     -> lameAdv b adv *)
+(*     -> usrs $? uid = Some (mkUserData ks cmd qmsgs mycs froms sents cur_n) *)
+(*     /\ step_user lbl (Some uid)  *)
+(*                 (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
+(*                 (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd') *)
+(* . *)
+(* Proof. *)
+(*   induct 1; intros; subst; dismiss_adv. *)
+(*   unfold build_data_step, buildUniverse in *; simpl in *. *)
+(*   destruct (uid ==n u_id); subst; eauto. *)
+
+
+
+
+(* Lemma step_inv : *)
+(*   forall t__hon t__adv ru iu bd iu' uid b, *)
+(*     @step t__hon t__adv (ru,iu) (buildUniverse_step bd uid, iu') *)
+(*     -> lameAdv b ru.(adversary) *)
+
+(*     -> exists cs cs' (usrs usrs' : honest_users t__hon) adv adv' gks gks' *)
+(*         cmd cmd' ks ks' qmsgs qmsgs' mycs mycs' *)
+(*         froms froms' sents sents' cur_n cur_n' uid lbl, *)
+
+(*       ru = mkUniverse usrs adv cs gks *)
+(*       /\ bd = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd') *)
+(*       /\ step_universe ru lbl (buildUniverse_step bd uid) *)
+(*       /\ usrs $? uid = Some (mkUserData ks cmd qmsgs mycs froms sents cur_n) *)
+(* . *)
+(* Proof. *)
+(*   intros. *)
+(*   destruct ru; dt bd; simpl in *. *)
+(*   unfold buildUniverse in *; simpl in *. *)
+(*   invert H. *)
+
+(*   - invert H2; dismiss_adv; simpl in *. *)
+(*     unfold build_data_step, buildUniverse in H1 , H3; simpl in *. *)
+
+(*     (do 24 eexists); repeat simple apply conj; eauto. *)
+
+
+  
+    
+(*   - invert H2; dismiss_adv; simpl in *. *)
+(*     unfold build_data_step, buildUniverse_step, buildUniverse in *; simpl in *. *)
+(*     invert H3. *)
+    
+(*     destruct ru, userData; simpl in *. *)
+(*     destruct (uid ==n u_id); subst; clean_map_lookups; *)
+(*       rewrite !map_add_rw in H4. *)
+
+
+(*     (do 24 eexists); repeat simple apply conj; eauto. *)
+
+(*     econstructor 1; eauto. *)
+(*     unfold buildUniverse; eauto. *)
+
+
+    
+(*     f_equal. *)
+(*     unfold add. *)
+(*     admit. *)
+
+(*     (do 24 eexists); repeat simple apply conj; eauto. *)
+(*     econstructor 1; eauto. *)
+(*     unfold buildUniverse; eauto. *)
+
+
+
+    
+(*     f_equal. *)
+(*     unfold add. *)
+(*     admit. *)
+
+
+
+  
+
+
+(*     H19 : step *)
+(*           ({| *)
+(*            users := usrs0 $+ (u_id, *)
+(*                     {| *)
+(*                     key_heap := ks0; *)
+(*                     protocol := cmd0; *)
+(*                     msg_heap := qmsgs0; *)
+(*                     c_heap := mycs0; *)
+(*                     from_nons := froms0; *)
+(*                     sent_nons := sents0; *)
+(*                     cur_nonce := cur_n0 |}); *)
+(*            adversary := adv0; *)
+(*            all_ciphers := cs0; *)
+(*            all_keys := gks0 |}, iu) (buildUniverse_step x12 uid, x13) *)
+
+
 (* COMMUTING COMMAND RUNS FIRST!! *)
       
 Lemma translate_trace_commute :
@@ -1974,11 +2167,33 @@ Lemma translate_trace_commute :
                 summaries $? u_id2 = Some s
               /\ commutes cmd__n s)
     -> forall lbl bd, step_user lbl (Some uid) (build_data_step (fst st) ud) bd
-    -> exists lbl' bd' iu st0,
-          step_user lbl' (Some uid) (build_data_step (fst st) ud) bd'
-          /\ st0 = (buildUniverse_step bd' uid, iu)
-          /\ step st st0
-          /\ stepsi i st0 st'.
+    -> exists lbl' bd' ru iu,
+            step_user lbl' (Some uid) (build_data_step (fst st) ud) bd'
+          /\ ru = buildUniverse_step bd' uid
+          /\ (match lbl' with
+             | Silent => iu = snd st
+             | Action ra => exists iu' ia,
+                               istepSilent^* (snd st) iu'
+                               /\ IdealWorld.lstep_universe iu' (Action ia) iu
+                               /\ action_matches ra (fst st) ia iu'
+             end)
+          /\ stepsi i (ru,iu) st'.
+    (* -> exists lbl' bd' ru iu, *)
+    (*       step_user lbl' (Some uid) (build_data_step (fst st) ud) bd' *)
+    (*       /\ ru = buildUniverse_step bd' uid *)
+    (*       /\ (match lbl with *)
+    (*          | Silent => iu = snd st *)
+    (*          | Action ra => exists iu' ia, *)
+    (*                            istepSilent^* (snd st) iu' *)
+    (*                            /\ IdealWorld.lstep_universe iu' (Action ia) iu *)
+    (*                            /\ action_matches ra (fst st) ia iu' *)
+    (*          end) *)
+    (*       (* /\ step st (ru,iu) *) *)
+    (*       /\ stepsi i (ru,iu) st'. *)
+          (* step_user lbl' (Some uid) (build_data_step (fst st) ud) bd' *)
+          (* /\ st0 = (buildUniverse_step bd' uid, iu) *)
+          (* /\ step st st0 *)
+          (* /\ stepsi i st0 st'. *)
 Proof.
   induct 1; intros; eauto.
 
@@ -1996,7 +2211,8 @@ Proof.
     + destruct (uid ==n u_id); subst; clean_map_lookups.
 
       (* equal *)
-      (do 4 eexists); repeat simple apply conj; eauto 10.
+      (do 4 eexists); repeat simple apply conj; simpl; eauto 8.
+      simpl; eauto.
       econstructor 1.
       econstructor 1; eauto.
       econstructor.
@@ -2025,8 +2241,7 @@ Proof.
 
       (* equal *)
       (do 4 eexists); repeat simple apply conj; eauto 10.
-      econstructor 2; eauto 8.
-      econstructor 1; eauto.
+      simpl; eauto.
       econstructor.
 
       (* not equal *) 
@@ -2075,8 +2290,7 @@ Proof.
 
       (* equal *)
       (do 4 eexists); repeat simple apply conj; eauto.
-      econstructor 1.
-      econstructor 1; eauto.
+      simpl; eauto.
       econstructor; eauto.
 
       (* not equal *)
@@ -2101,16 +2315,22 @@ Proof.
 
         eapply commutes_sound with (u_id1 := u_id) (u_id2 := uid) in H11; eauto.
         split_ex; subst.
+
+        2-4: admit. (* silly universe preconditions that need to be added *)
+        2-3: unfold build_data_step, buildUniverse_step; simpl; eauto.
+          
         unfold build_data_step in H11; destruct ru; simpl in *.
-        invert H19.
-        invert H24.
-        dt x12; dt x17.
-        unfold buildUniverse_step, build_data_step, buildUniverse in *; simpl in *.
-        invert H25.
-
         (do 4 eexists); repeat simple apply conj; eauto.
+        destruct x11; split_ex; eauto.
+        (do 2 eexists); repeat simple apply conj; eauto.
+        admit.
+        econstructor; eauto.
+        dt x12; dt x15; dt x16; unfold buildUniverse_step, build_data_step, buildUniverse in *; simpl in *.
+        econstructor 1.
+        econstructor 1; eauto.
+        unfold buildUniverse; symmetry; eauto.
 
-        all:admit.
+        admit.
         
       * admit.
 
@@ -2213,14 +2433,29 @@ Proof.
     generalize H5; intros NA; eapply step_na in NA; eauto.
     split_ex; simpl in *.
     eapply translate_trace_commute in H; eauto.
-    firstorder idtac.
+    firstorder idtac; subst.
+
+    unfold build_data_step in *; dt x5; simpl in *.
+    assert (LAME: lameAdv b (adversary (fst st))) by assumption.
+    eapply adversary_remains_lame_user_step with (lbl := x4) in LAME; eauto.
+
+    assert (SUMMARIES : summarize_univ (fst st) summaries) by assumption.
+    eapply summarize_univ_user_step in SUMMARIES; eauto.
+    2: unfold build_data_step; simpl; eauto.
+    
     eapply IHn in H10; eauto.
     firstorder idtac.
 
-    exists x8; split; eauto.
+    exists x5; split; eauto.
     eapply TrcFront; eauto.
     destruct st; econstructor; eauto.
-    dt x5; simpl in *; econstructor 1; eauto.
+
+    destruct x4; simpl in *; split_ex; subst.
+    econstructor 1; eauto.
+    econstructor 1; eauto.
+
+    econstructor 2; eauto.
+    econstructor 1; eauto.
     
   - invert H.
     eapply IHn in H7; eauto.
