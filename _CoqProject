@@ -51,6 +51,7 @@ protocols/SyntacticallySafe.v
 protocols/PartialOrderReduction.v
 protocols/LabelsAlign.v
 
+protocols/ExampleProtocols.v
 protocols/ExampleProtocolsAutomated.v
 
 protocols/SimplePingProtocol.v

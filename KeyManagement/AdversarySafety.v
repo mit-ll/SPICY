@@ -7599,6 +7599,24 @@ Section SingleAdversarySimulates.
     intros; invert H. pose proof @findUserKeys_clean_users_correct A us cs k; rewrite H0 in H; constructor. assumption.
   Qed.
 
+  Lemma content_eq_strip_keys :
+    forall t (m__rw : RealWorld.message.message t) (m__iw : IdealWorld.message.message t) honestk gks,
+      MessageEq.content_eq m__rw m__iw (clean_keys honestk gks)
+      -> MessageEq.content_eq m__rw m__iw gks.
+  Proof.
+    induction m__rw; intros; eauto.
+    - dependent destruction m__iw.
+      unfold MessageEq.content_eq in *; simpl in *.
+      destruct acc; destruct acc0.
+
+      cases (clean_keys honestk gks $? k); try contradiction.
+      apply clean_keys_inv in Heq; split_ands; context_map_rewrites; eauto.
+      
+    - dependent destruction m__iw.
+      invert H.
+      econstructor; eauto.
+  Qed.
+
   Lemma msg_matches_strip :
     forall {A B t} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A)
       (m__rw : RealWorld.crypto t) (m__iw : IdealWorld.message.message t)
@@ -7607,28 +7625,30 @@ Section SingleAdversarySimulates.
       -> MessageEq.message_eq m__rw U__ra m__iw U__i ch_id.
   Proof.
     intros.
-    invert H.
-    - econstructor; eauto; intros.
-    - unfold strip_adversary_univ in H10, H7; simpl in *. unfold clean_ciphers in *; apply clean_ciphers_inv in H7.
-      eapply MessageEq.CryptoSigCase with (honestk := (RealWorld.findUserKeys U__ra.(RealWorld.users))).
-      eapply H7. assumption. reflexivity. intros. specialize (H10 u).
-      eapply clean_users_cleans_user with (honestk := (RealWorld.findUserKeys U__ra.(RealWorld.users))) (cs := U__ra.(RealWorld.all_ciphers)) in H.
-      2: reflexivity. eapply H10 in H. simpl in H. intuition (eauto using clean_key_permissions_inv', clean_key_permissions_keeps_honest_permission).
-      eapply clean_key_permissions_keeps_honest_permission in H. eauto. rewrite honest_key_honest_keyb in H1.
-      unfold honest_perm_filter_fn. unfold RealWorld.honest_keyb in H1. assumption. apply H3 in H. eapply clean_key_permissions_inv in H. invert H. assumption.
-      assumption. eapply honest_key_is_honest_clean_key in H1. eapply H1.
-    - unfold strip_adversary_univ in H10, H7; simpl in *. unfold clean_ciphers in *; apply clean_ciphers_inv in H7.
-      eapply MessageEq.CryptoSigEncCase with (honestk := (RealWorld.findUserKeys U__ra.(RealWorld.users))).
-      eapply H7. assumption. reflexivity. intros.  specialize (H10 u).
-     eapply clean_users_cleans_user with (honestk := (RealWorld.findUserKeys U__ra.(RealWorld.users))) (cs := U__ra.(RealWorld.all_ciphers)) in H.
-      2: reflexivity.  eapply H10 in H. simpl in H. intuition (eauto using clean_key_permissions_inv', clean_key_permissions_keeps_honest_permission).
-      eapply clean_key_permissions_keeps_honest_permission in H5; eauto. eapply clean_key_permissions_keeps_honest_permission in H6; eauto.
-      unfold honest_perm_filter_fn.  rewrite honest_key_honest_keyb in H2. unfold RealWorld.honest_keyb in H2. assumption.
-      unfold honest_perm_filter_fn.  rewrite honest_key_honest_keyb in H1. unfold RealWorld.honest_keyb in H1. assumption.
-      apply H4 in H3. split_ands. eapply clean_key_permissions_inv in H3. split_ands. assumption.
-      apply H4 in H3. split_ands. eapply clean_key_permissions_inv in H5. split_ands. assumption.
-      assumption. eapply honest_key_is_honest_clean_key in H1. eapply H1.
-      eapply honest_key_is_honest_clean_key in H2. eapply H2.
+    destruct U__ra; unfold strip_adversary_univ in *; simpl in *.
+    invert H; simpl in *.
+    - econstructor; simpl; eauto using content_eq_strip_keys.
+      
+    - apply clean_ciphers_inv in H7.
+      econstructor 2; simpl; eauto using content_eq_strip_keys.
+
+      intros.
+      eapply clean_users_cleans_user in H; eauto.
+      eapply H10; simpl; eauto.
+      eapply honest_key_is_honest_clean_key; eauto.
+      eapply clean_key_permissions_keeps_honest_permission; eauto.
+      invert H1; unfold honest_perm_filter_fn; context_map_rewrites; trivial.
+
+    - apply clean_ciphers_inv in H7.
+      econstructor 3; simpl; eauto using content_eq_strip_keys.
+
+      intros.
+      eapply clean_users_cleans_user in H; eauto.
+      eapply H10; simpl; eauto.
+      eapply honest_key_is_honest_clean_key; eauto.
+      eapply honest_key_is_honest_clean_key; eauto.
+      invert H1; invert H2; split_ands.
+      simpl; split; eapply clean_key_permissions_keeps_honest_permission; eauto.
   Qed.
   
   Lemma action_matches_strip :

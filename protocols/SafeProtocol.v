@@ -533,6 +533,7 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
     invert MEQ.
 
     - eapply ContentCase; eauto.
+      rewrite <- RWK; eauto.
     - eapply CryptoSigCase
       ; rewrite <- ?RWU, <- ?RWC, <- ?RWK
       ; eauto.
