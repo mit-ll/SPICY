@@ -2262,6 +2262,19 @@ Proof.
     eapply merge_perms_adds_no_new_perms; eauto.
 Qed.
 
+Lemma message_content_eq_addnl_key :
+  forall t__rw m__rw  t__iw m__iw gks kid k,
+    @MessageEq.content_eq t__rw t__iw m__rw m__iw gks
+    -> ~ In kid gks
+    -> MessageEq.content_eq m__rw m__iw (gks $+ (kid, k)).
+Proof.
+  induct m__rw; intros; eauto.
+  - destruct m__iw; simpl in *; eauto.
+    destruct acc, acc0.
+    destruct (kid ==n k0); subst; clean_map_lookups; eauto.
+  - destruct m__iw; simpl in *; eauto; split_ands; eauto.
+Qed.
+
 Lemma message_eq_user_add :
   forall A B (usrs : honest_users A) (adv adv' : user_data B) cs cs' gks gks'
     ks ks' cmd qmsgs mycs froms sents cur_n cmd' qmsgs' mycs' froms' sents' cur_n'
@@ -2269,9 +2282,8 @@ Lemma message_eq_user_add :
 
     usrs $? uid = Some (mkUserData ks cmd qmsgs mycs froms sents cur_n)
     -> (cs' = cs \/ (exists cid c, ~ In cid cs /\ cs' = cs $+ (cid,c)))
-    -> (ks' = ks \/ (exists kid k, ~ In kid gks /\ ks' = ks $k++ ($0 $+ (kid,k))))
+    -> ((ks' = ks /\ gks' = gks) \/ (exists kid k ky, ~ In kid gks /\ ks' = ks $k++ ($0 $+ (kid,k)) /\ gks' = gks $+ (kid,ky)))
     -> encrypted_ciphers_ok (findUserKeys usrs) cs gks
-    (* -> (forall cid c, cs $? cid = Some c -> cs' $? cid = Some c) *)
     -> MessageEq.message_eq m__rw {| users := usrs; adversary := adv; all_ciphers := cs; all_keys := gks |} m__iw iu chid
     -> MessageEq.message_eq
         m__rw
@@ -2296,9 +2308,6 @@ Proof.
       autorewrite with find_user_keys in *;
       destruct (u ==n uid); subst; clean_map_lookups; eauto;
         simpl.
-
-    specialize (H12 _ _ _ H H1 H3); simpl in *; eauto.
-    specialize (H12 _ _ _ b__rwenc H H1 H3 H4); simpl in *; eauto.
     
   - invert H3; [ econstructor 1 | econstructor 2 | econstructor 3 ]; simpl in *; eauto;
       intros;
@@ -2306,12 +2315,10 @@ Proof.
       destruct (u ==n uid); subst; clean_map_lookups; eauto;
         simpl.
 
-    specialize (H13 _ _ _ H H3 H4); simpl in *; eauto.
-    specialize (H13 _ _ _ b__rwenc H H3 H4 H5); simpl in *; eauto.
-
   - invert H3; [ econstructor 1 | econstructor 2 | econstructor 3 ]; simpl in *; eauto;
       intros;
-      autorewrite with find_user_keys in *.
+      autorewrite with find_user_keys in *;
+      eauto using message_content_eq_addnl_key.
 
     + unfold encrypted_ciphers_ok in H2; rewrite Forall_natmap_forall in H2.
       specialize (H2 _ _ H10).
@@ -2323,9 +2330,8 @@ Proof.
       cases (ks $? k__sign).
       eapply merge_perms_adds_ks1; eauto; clean_map_lookups; eauto.
       eapply merge_perms_adds_no_new_perms; eauto.
-      rewrite RW.
 
-      specialize (H13 _ _ _ H H3); eauto.
+      eapply H13; simpl in *; eauto; simpl; eauto.
 
     + unfold encrypted_ciphers_ok in H2; rewrite Forall_natmap_forall in H2.
       specialize (H2 _ _ H10).
@@ -2338,19 +2344,20 @@ Proof.
       cases (ks $? k__sign).
       eapply merge_perms_adds_ks1; eauto; clean_map_lookups; eauto.
       eapply merge_perms_adds_no_new_perms; eauto.
-      rewrite RW1.
 
       assert (RW2: ks $k++ ($0 $+ (x, x0)) $? k__enc = ks $? k__enc).
       cases (ks $? k__enc).
       eapply merge_perms_adds_ks1; eauto; clean_map_lookups; eauto.
       eapply merge_perms_adds_no_new_perms; eauto.
-      rewrite RW2.
 
-      specialize (H13 _ _ _ b__rwenc H H3); eauto.
+      simpl in *.
+
+      eapply H13; simpl in *; eauto; simpl; eauto.
 
   - invert H3; [ econstructor 1 | econstructor 2 | econstructor 3 ]; simpl in *; eauto;
       intros;
-      autorewrite with find_user_keys in *.
+      autorewrite with find_user_keys in *;
+      eauto using message_content_eq_addnl_key.
 
     + unfold encrypted_ciphers_ok in H2; rewrite Forall_natmap_forall in H2.
       specialize (H2 _ _ H11).
@@ -2362,9 +2369,8 @@ Proof.
       cases (ks $? k__sign).
       eapply merge_perms_adds_ks1; eauto; clean_map_lookups; eauto.
       eapply merge_perms_adds_no_new_perms; eauto.
-      rewrite RW.
 
-      specialize (H14 _ _ _ H H4); eauto.
+      eapply H14; simpl in *; eauto; simpl; eauto.
 
     + unfold encrypted_ciphers_ok in H2; rewrite Forall_natmap_forall in H2.
       specialize (H2 _ _ H11).
@@ -2377,19 +2383,18 @@ Proof.
       cases (ks $? k__sign).
       eapply merge_perms_adds_ks1; eauto; clean_map_lookups; eauto.
       eapply merge_perms_adds_no_new_perms; eauto.
-      rewrite RW1.
 
       assert (RW2: ks $k++ ($0 $+ (x, x0)) $? k__enc = ks $? k__enc).
       cases (ks $? k__enc).
       eapply merge_perms_adds_ks1; eauto; clean_map_lookups; eauto.
       eapply merge_perms_adds_no_new_perms; eauto.
-      rewrite RW2.
 
-      specialize (H14 _ _ _ b__rwenc H H4); eauto.
+      eapply H14; simpl in *; eauto; simpl; eauto.
+
 Qed.
 
 Lemma message_eq_user_add_inv :
-  forall A B (usrs : honest_users A) (adv adv' : user_data B) cs gks gks'
+  forall A B (usrs : honest_users A) (adv adv' : user_data B) cs gks
     ks cmd qmsgs mycs froms sents cur_n cmd' qmsgs' mycs' froms' sents' cur_n'
     t (m__rw : crypto t) m__iw iu chid uid,
 
@@ -2407,7 +2412,7 @@ Lemma message_eq_user_add_inv :
                          cur_nonce := cur_n' |});
            adversary := adv';
            all_ciphers := cs;
-           all_keys := gks' |} m__iw iu chid
+           all_keys := gks |} m__iw iu chid
     -> MessageEq.message_eq m__rw {| users := usrs; adversary := adv; all_ciphers := cs; all_keys := gks |} m__iw iu chid.
 Proof.
   intros.
