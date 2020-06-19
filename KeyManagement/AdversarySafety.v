@@ -7746,10 +7746,13 @@ Section SingleAdversarySimulates.
   (*     all : simpl in *; rewrite andb_false_r; eauto. *)
   (*     admit. *)
   (*     destruct c; simpl; eauto. *)
+
+  Require Import MessageEqTheory.
       
   Lemma key_perms_from_message_queue_clean_ciphers :
     forall cs msgs ks honestk uid froms A (usrs : RealWorld.honest_users A) kid kp,
       honestk = RealWorld.findUserKeys usrs
+      -> RealWorld.honest_key honestk kid
       -> key_perms_from_message_queue
           (clean_ciphers honestk cs)
           (RealWorld.findUserKeys (clean_users honestk cs usrs))
@@ -7760,15 +7763,55 @@ Section SingleAdversarySimulates.
     unfold key_perms_from_message_queue.
     induction msgs; intros; eauto.
     destruct a; simpl in *.
-    pose proof (clean_messages_cons_split cs honestk uid froms msgs c eq_refl);
+    pose proof (clean_messages_cons_split cs honestk uid froms msgs _ _ c eq_refl);
       split_ors; split_ex.
 
-    - rewrite H1 in H0.
-      apply IHmsgs in H0; eauto.
-      rewrite H2; destruct msgs; eauto.
-      destruct s.
-      cases ( not_replayed cs honestk uid froms c0); eauto.
+    - rewrite H2 in *.
+      apply IHmsgs in H1; eauto.
+    - erewrite <- clean_messages_idempotent in H1; eauto.
+      rewrite H2 in *; simpl in *.
+      eapply IHmsgs; eauto.
+      erewrite <- clean_messages_idempotent; eauto.
+      rewrite findKeysCrypto_same_after_cipher_cleaning in H1; eauto.
+      unfold not_replayed in H3; rewrite !andb_true_iff in H3; split_ex; eauto.
 
+      all: 
+        intros KEY HONK; subst;
+        pose proof (findUserKeys_clean_users_correct usrs cs KEY) as CORRECT;
+        rewrite HONK in CORRECT; eauto.
+  Qed.
+
+  Lemma key_perms_from_message_queue_clean_ciphers' :
+    forall cs msgs ks honestk uid froms A (usrs : RealWorld.honest_users A) kid kp,
+      honestk = RealWorld.findUserKeys usrs
+      -> RealWorld.honest_key honestk kid
+      -> key_perms_from_message_queue
+          (clean_ciphers honestk cs)
+          (RealWorld.findUserKeys (clean_users honestk cs usrs))
+          (clean_messages honestk cs (Some uid) froms msgs)
+          uid froms ks $? kid = kp
+      -> key_perms_from_message_queue cs honestk msgs uid froms ks $? kid = kp.
+  Proof.
+    unfold key_perms_from_message_queue.
+    induction msgs; intros; eauto.
+    destruct a; simpl in *.
+    pose proof (clean_messages_cons_split cs honestk uid froms msgs _ _ c eq_refl);
+      split_ors; split_ex.
+
+    - rewrite H2 in *.
+      apply IHmsgs in H1; eauto.
+    - erewrite <- clean_messages_idempotent in H1; eauto.
+      rewrite H2 in *; simpl in *.
+      eapply IHmsgs; eauto.
+      erewrite <- clean_messages_idempotent; eauto.
+      rewrite findKeysCrypto_same_after_cipher_cleaning in H1; eauto.
+      unfold not_replayed in H3; rewrite !andb_true_iff in H3; split_ex; eauto.
+
+      all: 
+        intros KEY HONK; subst;
+        pose proof (findUserKeys_clean_users_correct usrs cs KEY) as CORRECT;
+        rewrite HONK in CORRECT; eauto.
+  Qed.
 
 
 
@@ -7835,69 +7878,94 @@ Section SingleAdversarySimulates.
       econstructor 1; eauto.
 
       rewrite key_perms_from_known_ciphers_clean_ciphers in H13; eauto.
-      rewrite key_perms_from_message_queue_clean_ciphers in H13; eauto.
 
 
+      remember (clean_key_permissions (RealWorld.findUserKeys users) (RealWorld.key_heap data__rw)) as CKPS.
+      remember (key_perms_from_known_ciphers all_ciphers (RealWorld.c_heap data__rw) $0) as KPKS.
+      remember (key_perms_from_message_queue
+                  (clean_ciphers (RealWorld.findUserKeys users) all_ciphers)
+                  (RealWorld.findUserKeys (clean_users (RealWorld.findUserKeys users) all_ciphers users))
+                  (clean_messages (RealWorld.findUserKeys users) all_ciphers (Some u) (RealWorld.from_nons data__rw)
+                                  (RealWorld.msg_heap data__rw)) u (RealWorld.from_nons data__rw) $0) as KPMQ.
+
+      generalize H3; intros HK; destruct HK.
+
+      cases (CKPS $? k__sign0);
+        cases (KPKS $? k__sign0);
+        cases (KPMQ $? k__sign0).
+
+      Ltac solveit :=
+        repeat
+          match goal with
+          | [ Heq : ?KPMQ = _ , H : ?KPMQ $? ?k = _ |- _ ] =>
+            generalize H; intros KPMQ'; rewrite Heq in KPMQ'; apply key_perms_from_message_queue_clean_ciphers' in KPMQ'; auto
+          | [ Heq : ?CKPS = _ , H : ?CKPS $? ?k = Some ?b |- _ ] =>
+            generalize H; intros CKPS'; rewrite Heq in CKPS'; apply clean_key_permissions_inv in CKPS'
+          | [ Heq : ?CKPS = _ , H : ?CKPS $? ?k = None |- _ ] =>
+            generalize H; intros CKPS'; rewrite Heq in CKPS'; eapply clean_key_permissions_inv'' in CKPS'; eauto
+          end.
+
+      all: try solve [solveit; solve_perm_merges; eauto ].
 
 
-
-      ; split_ors; subst; eauto using clean_key_permissions_inv''.
-      invert H; [ econstructor 1 | econstructor 2 ]; simpl in *; eauto.
-
-        constructor; eauto.
-        rewrite key_perms_from_known_ciphers_clean_ciphers in H11; eauto.
-        
-
-
-        apply findUserKeys_clean_users_correct in H1.
-        
-        autorewrite with find_user_keys in *.
-        
-        eapply honest_key_is_honest_clean_key; eauto.
-
-        
-        right; split; eauto.
-        eapply clean_key_permissions_inv in H; split_ands; eauto.
-
-      + eapply honest_key_is_honest_clean_key; eauto.
-
-    - apply clean_ciphers_inv in H7.
+    - generalize (clean_ciphers_inv _ _ _ H8); intros.
       econstructor 2; simpl; eauto using content_eq_strip_keys.
 
       intros.
-      eapply clean_users_cleans_user with (cs := all_ciphers) (honestk := RealWorld.findUserKeys users) in H; eauto.
-      eapply H10 in H; eauto; simpl in *.
+      user_cipher_queues_prop.
+      eapply clean_users_cleans_user with (cs := all_ciphers) (honestk := RealWorld.findUserKeys users) in H1; eauto.
+      eapply H11 in H1; eauto using honest_key_is_honest_clean_key; simpl in *; clear H11.
 
-      + invert H1; invert H2.
-        split_ors; eauto using clean_key_permissions_inv''.
+      invert H1; clean_map_lookups; simpl in *.
+      rewrite key_perms_from_known_ciphers_clean_ciphers in *; eauto.
 
-        eapply clean_key_permissions_inv in H; split_ands; eauto.
-        eapply clean_key_permissions_inv in H2; split_ands; eauto.
+      remember (clean_key_permissions (RealWorld.findUserKeys users) (RealWorld.key_heap data__rw)) as CKPS.
+      remember (key_perms_from_known_ciphers all_ciphers (RealWorld.c_heap data__rw) $0) as KPKS.
+      remember (key_perms_from_message_queue
+                  (clean_ciphers (RealWorld.findUserKeys users) all_ciphers)
+                  (RealWorld.findUserKeys (clean_users (RealWorld.findUserKeys users) all_ciphers users))
+                  (clean_messages (RealWorld.findUserKeys users) all_ciphers (Some u) (RealWorld.from_nons data__rw)
+                                  (RealWorld.msg_heap data__rw)) u (RealWorld.from_nons data__rw) $0) as KPMQ.
+      generalize H3; intros HKS; destruct HKS.
+      generalize H4; intros HKE; destruct HKE.
+      
+      econstructor 2 with (k__sign := k__sign0) (k__enc := k__enc0); eauto.
 
-      + eapply honest_key_is_honest_clean_key; eauto.
-      + eapply honest_key_is_honest_clean_key; eauto.
+      cases (CKPS $? k__sign0);
+        cases (KPKS $? k__sign0);
+        cases (KPMQ $? k__sign0).
+
+      all: try solve [solveit; solve_perm_merges; eauto ].
+
+      cases (CKPS $? k__enc0);
+        cases (KPKS $? k__enc0);
+        cases (KPMQ $? k__enc0).
+
+      all: try solve [solveit; solve_perm_merges; eauto ].
   Qed.
   
   Lemma action_matches_strip :
     forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A) a__r a__i b,
-      action_matches (strip_action (RealWorld.findUserKeys U__ra.(RealWorld.users)) U__ra.(RealWorld.all_ciphers) a__r) (strip_adversary_univ U__ra b) a__i U__i
+      user_cipher_queues_ok U__ra.(RealWorld.all_ciphers) (RealWorld.findUserKeys U__ra.(RealWorld.users)) U__ra.(RealWorld.users)
+      -> action_matches (strip_action (RealWorld.findUserKeys U__ra.(RealWorld.users)) U__ra.(RealWorld.all_ciphers) a__r)
+                       (strip_adversary_univ U__ra b) a__i U__i
       -> action_matches a__r U__ra a__i U__i.
   Proof.
     intros.
-    invert H.
+    invert H0.
 
     - econstructor.
       2:reflexivity.
       2:eassumption.
       2:eapply msg_matches_strip; eauto.
-      unfold strip_action in H2.
+      unfold strip_action in H3.
       destruct a__r; try discriminate.
       eauto.
 
     - eapply Out.
       2:reflexivity.
       2:eapply msg_matches_strip; eauto.
-      unfold strip_action in H2.
+      unfold strip_action in H3.
       destruct a__r; try discriminate.
       eauto.
   Qed.
