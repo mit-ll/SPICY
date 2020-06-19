@@ -527,6 +527,19 @@ Section CleanKeys.
       keys_solver honestk; eauto.
   Qed.
 
+  Lemma clean_key_permissions_inv'' :
+    forall honestk k_id ks,
+      clean_key_permissions honestk ks $? k_id = None
+      -> honestk $? k_id = Some true
+      -> ks $? k_id = None.
+  Proof.
+    induction ks using map_induction_bis; intros; Equal_eq;
+      unfold clean_key_permissions,filter in *;
+      keys_solver honestk; eauto.
+
+    unfold honest_perm_filter_fn in Heq; context_map_rewrites; discriminate.
+  Qed.
+
   Lemma clean_key_permissions_adds_no_permissions :
     forall honestk k_id ks,
         ks $? k_id = None

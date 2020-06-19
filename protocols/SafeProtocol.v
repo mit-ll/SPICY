@@ -530,16 +530,9 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
       -> message_eq m__rw U' m__iw U__i ch_id.
   Proof.
     intros * MEQ RWU RWC RWK.
-    invert MEQ.
-
-    - eapply ContentCase; eauto.
-      rewrite <- RWK; eauto.
-    - eapply CryptoSigCase
-      ; rewrite <- ?RWU, <- ?RWC, <- ?RWK
-      ; eauto.
-    - eapply CryptoSigEncCase
-      ; rewrite <- ?RWU, <- ?RWC, <- ?RWK
-      ; eauto.
+    invert MEQ; [ econstructor 1 | econstructor 2 ]
+    ; rewrite <- ?RWU, <- ?RWC, <- ?RWK
+    ; eauto.
   Qed.
 
   Hint Resolve message_eq_adv_change : safe.

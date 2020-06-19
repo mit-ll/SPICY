@@ -31,6 +31,7 @@ Require Import
         Keys
         Tactics
         Messages
+        MessageEq
         Automation
         Simulation
         AdversaryUniverse
@@ -7601,12 +7602,12 @@ Section SingleAdversarySimulates.
 
   Lemma content_eq_strip_keys :
     forall t (m__rw : RealWorld.message.message t) (m__iw : IdealWorld.message.message t) honestk gks,
-      MessageEq.content_eq m__rw m__iw (clean_keys honestk gks)
-      -> MessageEq.content_eq m__rw m__iw gks.
+      content_eq m__rw m__iw (clean_keys honestk gks)
+      -> content_eq m__rw m__iw gks.
   Proof.
     induction m__rw; intros; eauto.
     - dependent destruction m__iw.
-      unfold MessageEq.content_eq in *; simpl in *.
+      unfold content_eq in *; simpl in *.
       destruct acc; destruct acc0.
 
       cases (clean_keys honestk gks $? k); try contradiction.
@@ -7617,38 +7618,264 @@ Section SingleAdversarySimulates.
       econstructor; eauto.
   Qed.
 
+  Lemma key_perms_from_known_ciphers_clean_ciphers :
+    forall cs mycs ks honestk,
+      user_cipher_queue_ok cs honestk mycs
+      -> key_perms_from_known_ciphers (clean_ciphers honestk cs) mycs ks
+        = key_perms_from_known_ciphers cs mycs ks.
+  Proof.
+    unfold key_perms_from_known_ciphers.
+    induction mycs; intros; eauto.
+    invert H; split_ex; simpl.
+    erewrite clean_ciphers_keeps_honest_cipher; eauto; context_map_rewrites.
+    destruct x;
+      eapply IHmycs with (ks := ks $k++ RealWorld.findKeysMessage msg) in H3; eauto.
+  Qed.
+
+  Lemma msg_not_honestly_signed_before_after_cleaning :
+    forall {t} (msg : RealWorld.crypto t) honestk cs,
+      RealWorld.msg_honestly_signed honestk cs msg = false
+      -> RealWorld.msg_honestly_signed honestk (clean_ciphers honestk cs) msg = false.
+  Proof.
+    intros.
+    unfold RealWorld.msg_honestly_signed in *.
+    cases (RealWorld.msg_signing_key cs msg); 
+      unfold RealWorld.msg_signing_key in *; destruct msg; try discriminate; eauto;
+        cases (cs $? c_id); try discriminate.
+
+    - invert Heq.
+      erewrite clean_ciphers_eliminates_dishonest_cipher; eauto.
+    - erewrite clean_ciphers_no_new_ciphers; eauto.
+  Qed.
+
+  Lemma findKeysCrypto_same_after_cipher_cleaning :
+    forall t (msg : RealWorld.crypto t) cs honestk,
+      RealWorld.msg_honestly_signed honestk cs msg = true
+      -> RealWorld.findKeysCrypto (clean_ciphers honestk cs) msg = RealWorld.findKeysCrypto cs msg.
+  Proof.
+    destruct msg; intros; eauto.
+    unfold RealWorld.findKeysCrypto.
+    unfold RealWorld.msg_honestly_signed in H.
+    cases (RealWorld.msg_signing_key cs (@RealWorld.SignedCiphertext t0 c_id)); try discriminate.
+    unfold RealWorld.msg_signing_key in Heq; cases (cs $? c_id); try discriminate.
+    invert Heq.
+    erewrite clean_ciphers_keeps_honest_cipher; eauto.
+    unfold honest_cipher_filter_fn, RealWorld.cipher_honestly_signed; destruct c; eauto.
+  Qed.
+
+  Lemma rewrite_clean_messages_cons :
+    forall cs honestk uid froms msgs t (msg : RealWorld.crypto t) c n,
+      not_replayed cs honestk uid froms msg = true
+      -> match msg with
+        | RealWorld.SignedCiphertext cid => cs $? cid = Some c /\ RealWorld.cipher_nonce c = n
+        | _ => False
+        end
+      -> clean_messages honestk cs (Some uid) froms ((existT _ _ msg) :: msgs)
+        = (existT _ _ msg) :: clean_messages honestk cs (Some uid) (n :: froms) msgs.
+  Proof.
+    intros; unfold clean_messages at 1, clean_messages'.
+    simpl.
+    unfold not_replayed in H; rewrite !andb_true_iff in H; split_ex.
+    cases (msg_nonce_ok cs froms msg); try discriminate.
+    unfold RealWorld.msg_signed_addressed.
+    rewrite H, H2; simpl.
+    destruct msg; try contradiction; split_ex; subst; trivial.
+    rewrite fold_clean_messages2', clean_messages'_fst_pull, fold_clean_messages; simpl.
+    unfold msg_nonce_ok in Heq; context_map_rewrites.
+    cases (count_occ RealWorld.msg_seq_eq froms (RealWorld.cipher_nonce c)); try discriminate.
+    invert Heq; trivial.
+  Qed.
+
+      
+
+
+  (* Definition honest_cipher_nonces_unique (cs : RealWorld.ciphers) := *)
+  (*   forall cid1 cid2 c1 c2, *)
+  (*     cs $? cid1 = Some c1 *)
+  (*     -> cs $? cid2 = Some c2 *)
+  (*     -> RealWorld.cipher_nonce c1 = RealWorld.cipher_nonce c2 *)
+  (*     -> c1 = c2. *)
+
+  (* Lemma honest_step_honest_ciphers_unique_preservation : *)
+  (*   forall {A B C} lbl suid bd bd', *)
+  (*     RealWorld.step_user lbl suid bd bd' *)
+  (*     -> forall cs cs' u_id (usrs usrs' : RealWorld.honest_users A) (adv adv' : RealWorld.user_data B) (cmd cmd' : RealWorld.user_cmd C) *)
+  (*         gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n', *)
+
+  (*       suid = Some u_id *)
+  (*       -> bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
+  (*       -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd') *)
+  (*       -> honest_nonces_ok cs usrs *)
+  (*       -> honest_cipher_nonces_unique cs *)
+  (*       -> honest_cipher_nonces_unique cs'. *)
+  (* Proof. *)
+  (*   induction 1; inversion 2; inversion 1; intros; subst; eauto. *)
+
+  (*   all : clean_context. *)
+  (*   - unfold honest_cipher_nonces_unique in *; intros. *)
+  (*     destruct (c_id ==n cid1); destruct (c_id ==n cid2); clean_map_lookups; simpl in *; eauto. *)
+  (*     + destruct c2; simpl in *; eauto. *)
+      
+
+  (* Lemma ok_to_not_update_froms : *)
+  (*   forall cs msgs ks honestk uid froms t (msg : RealWorld.crypto t) cid c, *)
+  (*     not_replayed cs honestk uid froms msg = true *)
+  (*     -> msg = RealWorld.SignedCiphertext cid *)
+  (*     -> cs $? cid = Some c *)
+  (*     -> key_perms_from_message_queue cs honestk msgs uid froms (ks $k++ RealWorld.findKeysCrypto cs msg) *)
+  (*       = key_perms_from_message_queue cs honestk msgs uid (RealWorld.cipher_nonce c :: froms) ( ks $k++ RealWorld.findKeysCrypto cs msg). *)
+  (* Proof. *)
+  (*   induction msgs; intros; eauto. *)
+  (*   simpl; destruct a. *)
+  (*   generalize H; intros NR. *)
+  (*   unfold not_replayed in H; subst; rewrite !andb_true_iff in H; split_ex. *)
+  (*   unfold msg_nonce_ok in H0; context_map_rewrites. *)
+  (*   cases (count_occ RealWorld.msg_seq_eq froms (RealWorld.cipher_nonce c)); try discriminate. *)
+  (*   cases (not_replayed cs honestk uid froms c0). *)
+  (*   - admit. *)
+  (*   - unfold not_replayed in Heq0 |- *. *)
+  (*     rewrite !andb_false_iff in Heq0. *)
+  (*     split_ors. *)
+  (*     rewrite H3, andb_false_l; eapply IHmsgs; eauto. *)
+  (*     rewrite H3, andb_false_r, andb_false_l; eapply IHmsgs; eauto. *)
+  (*     unfold msg_nonce_ok in H3; destruct c0; try discriminate; simpl; context_map_rewrites. *)
+  (*     cases (cs $? c_id); try discriminate; simpl. *)
+  (*     cases (count_occ RealWorld.msg_seq_eq froms (RealWorld.cipher_nonce c0)); try discriminate. simpl. *)
+  (*     cases (RealWorld.msg_seq_eq (RealWorld.cipher_nonce c) (RealWorld.cipher_nonce c0)); eauto. *)
+  (*     rewrite <- e, Heq in Heq1; discriminate. *)
+  (*     all : simpl in *; rewrite andb_false_r; eauto. *)
+  (*     admit. *)
+  (*     destruct c; simpl; eauto. *)
+      
+  Lemma key_perms_from_message_queue_clean_ciphers :
+    forall cs msgs ks honestk uid froms A (usrs : RealWorld.honest_users A) kid kp,
+      honestk = RealWorld.findUserKeys usrs
+      -> key_perms_from_message_queue
+          (clean_ciphers honestk cs)
+          (RealWorld.findUserKeys (clean_users honestk cs usrs))
+          (clean_messages honestk cs (Some uid) froms msgs)
+          uid froms ks $? kid = Some kp
+      -> key_perms_from_message_queue cs honestk msgs uid froms ks $? kid = Some kp.
+  Proof.
+    unfold key_perms_from_message_queue.
+    induction msgs; intros; eauto.
+    destruct a; simpl in *.
+    pose proof (clean_messages_cons_split cs honestk uid froms msgs c eq_refl);
+      split_ors; split_ex.
+
+    - rewrite H1 in H0.
+      apply IHmsgs in H0; eauto.
+      rewrite H2; destruct msgs; eauto.
+      destruct s.
+      cases ( not_replayed cs honestk uid froms c0); eauto.
+
+
+
+
+  (* Lemma key_perms_from_message_queue_clean_ciphers : *)
+  (*   forall cs msgs ks honestk uid froms A (usrs : RealWorld.honest_users A), *)
+  (*     honestk = RealWorld.findUserKeys usrs *)
+  (*     -> key_perms_from_message_queue *)
+  (*         (clean_ciphers honestk cs) *)
+  (*         (RealWorld.findUserKeys (clean_users honestk cs usrs)) *)
+  (*         (clean_messages honestk cs (Some uid) froms msgs) *)
+  (*         uid froms ks *)
+  (*       = key_perms_from_message_queue cs honestk msgs uid froms ks. *)
+  (* Proof. *)
+  (*   unfold key_perms_from_message_queue. *)
+  (*   induction msgs; intros; eauto. *)
+  (*   simpl; destruct a. *)
+  (*   cases (not_replayed cs honestk uid froms c); eauto. *)
+  (*   - erewrite rewrite_clean_messages_cons; eauto; simpl. *)
+
+  (*     assert (HONK : honestk = RealWorld.findUserKeys usrs) by assumption. *)
+  (*     eapply IHmsgs with (uid := uid) (ks := ks) (froms := froms) in HONK; eauto. *)
+  (*     rewrite !key_perms_from_message_queue_notation in *. *)
+
+  (*     assert (not_replayed (clean_ciphers honestk cs) (RealWorld.findUserKeys (clean_users honestk cs usrs)) uid froms c = true) by admit. *)
+  (*     rewrite H0. *)
+    
+  (*   cases (RealWorld.msg_honestly_signed honestk cs c). *)
+  (*   - unfold clean_messages, clean_messages'. simpl. *)
+
+  (*     erewrite clean_messages_keeps_hon_signed; eauto. *)
+  (*     rewrite msg_honestly_signed_before_after_cleaning'; eauto. *)
+  (*     rewrite IHmsgs. *)
+  (*     rewrite findKeysCrypto_same_after_cipher_cleaning; eauto. *)
+      
+  (*   - rewrite msg_not_honestly_signed_before_after_cleaning; eauto. *)
+  (* Qed. *)
+
+  (* MessageEq.key_perms_from_message_queue (clean_ciphers (RealWorld.findUserKeys users) all_ciphers) *)
+  (*         (RealWorld.findUserKeys (clean_users (RealWorld.findUserKeys users) all_ciphers users)) *)
+  (*         (clean_messages (RealWorld.findUserKeys users) all_ciphers (Some u) (RealWorld.from_nons data__rw) *)
+  (*            (RealWorld.msg_heap data__rw)) *)
+
   Lemma msg_matches_strip :
     forall {A B t} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A)
       (m__rw : RealWorld.crypto t) (m__iw : IdealWorld.message.message t)
       ch_id b,
-      MessageEq.message_eq m__rw (strip_adversary_univ U__ra b) m__iw U__i ch_id
+      user_cipher_queues_ok  U__ra.(RealWorld.all_ciphers) (RealWorld.findUserKeys U__ra.(RealWorld.users)) U__ra.(RealWorld.users)
+      -> MessageEq.message_eq m__rw (strip_adversary_univ U__ra b) m__iw U__i ch_id
       -> MessageEq.message_eq m__rw U__ra m__iw U__i ch_id.
   Proof.
     intros.
     destruct U__ra; unfold strip_adversary_univ in *; simpl in *.
-    invert H; simpl in *.
-    - econstructor; simpl; eauto using content_eq_strip_keys.
+    invert H0; simpl in *.
       
+    - generalize (clean_ciphers_inv _ _ _ H8); intros.
+      econstructor 1; simpl; eauto using content_eq_strip_keys.
+
+      intros.
+      user_cipher_queues_prop.
+      eapply clean_users_cleans_user with (cs := all_ciphers) (honestk := RealWorld.findUserKeys users) in H1; eauto.
+      eapply H11 in H1; eauto using honest_key_is_honest_clean_key; simpl in *; clear H11.
+
+      invert H1; clean_map_lookups; simpl in *.
+      econstructor 1; eauto.
+
+      rewrite key_perms_from_known_ciphers_clean_ciphers in H13; eauto.
+      rewrite key_perms_from_message_queue_clean_ciphers in H13; eauto.
+
+
+
+
+
+      ; split_ors; subst; eauto using clean_key_permissions_inv''.
+      invert H; [ econstructor 1 | econstructor 2 ]; simpl in *; eauto.
+
+        constructor; eauto.
+        rewrite key_perms_from_known_ciphers_clean_ciphers in H11; eauto.
+        
+
+
+        apply findUserKeys_clean_users_correct in H1.
+        
+        autorewrite with find_user_keys in *.
+        
+        eapply honest_key_is_honest_clean_key; eauto.
+
+        
+        right; split; eauto.
+        eapply clean_key_permissions_inv in H; split_ands; eauto.
+
+      + eapply honest_key_is_honest_clean_key; eauto.
+
     - apply clean_ciphers_inv in H7.
       econstructor 2; simpl; eauto using content_eq_strip_keys.
 
       intros.
-      eapply clean_users_cleans_user in H; eauto.
-      eapply H10; simpl; eauto.
-      eapply honest_key_is_honest_clean_key; eauto.
-      eapply clean_key_permissions_keeps_honest_permission; eauto.
-      invert H1; unfold honest_perm_filter_fn; context_map_rewrites; trivial.
+      eapply clean_users_cleans_user with (cs := all_ciphers) (honestk := RealWorld.findUserKeys users) in H; eauto.
+      eapply H10 in H; eauto; simpl in *.
 
-    - apply clean_ciphers_inv in H7.
-      econstructor 3; simpl; eauto using content_eq_strip_keys.
+      + invert H1; invert H2.
+        split_ors; eauto using clean_key_permissions_inv''.
 
-      intros.
-      eapply clean_users_cleans_user in H; eauto.
-      eapply H10; simpl; eauto.
-      eapply honest_key_is_honest_clean_key; eauto.
-      eapply honest_key_is_honest_clean_key; eauto.
-      invert H1; invert H2; split_ands.
-      simpl; split; eapply clean_key_permissions_keeps_honest_permission; eauto.
+        eapply clean_key_permissions_inv in H; split_ands; eauto.
+        eapply clean_key_permissions_inv in H2; split_ands; eauto.
+
+      + eapply honest_key_is_honest_clean_key; eauto.
+      + eapply honest_key_is_honest_clean_key; eauto.
   Qed.
   
   Lemma action_matches_strip :

@@ -965,7 +965,7 @@ Module SimulationAutomation.
     | [ |- action_matches _ _ _ _ ] => progress simpl_ideal_users_context
     | [ |- action_matches (RealWorld.Output _ _ _ _) _ _ _ ] => eapply Out
     | [ |- action_matches (RealWorld.Input _ _ _) _ _ _ ] => eapply Inp
-    | [ |- message_eq (RealWorld.Content _) _ _ _ _ ] => eapply ContentCase
+    (* | [ |- message_eq (RealWorld.Content _) _ _ _ _ ] => eapply ContentCase *)
     | [ |- message_eq (RealWorld.SignedCiphertext ?cid)
                      {| RealWorld.users := _;
                         RealWorld.adversary := _;
