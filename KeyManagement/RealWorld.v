@@ -576,6 +576,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
       gks $? k_id = Some (MkCryptoKey k_id Signing kt)
     -> ks  $? k_id = Some true
     -> ~ In c_id cs
+    -> keys_mine ks (findKeysMessage msg)
     -> cur_n' = 1 + cur_n
     -> cipherMsg = SigCipher k_id msg_to (u_id, cur_n) msg
     -> cs' = cs $+ (c_id, cipherMsg)

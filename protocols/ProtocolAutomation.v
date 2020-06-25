@@ -400,6 +400,7 @@ Module SimulationAutomation.
         /\ froms = froms'
         /\ tos = tos'
         /\ cur_n' = 1 + cur_n
+        /\ keys_mine ks (findKeysMessage msg)
         /\ lbl = Silent
         /\ (exists kt__sign,
                 gks $? k__sign = Some (MkCryptoKey k__sign Signing kt__sign)

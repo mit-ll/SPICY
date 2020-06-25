@@ -337,7 +337,7 @@ Section RealWorldLemmas.
               intuition (intros; eauto); contra_map_lookup;
                 contradiction.
     - econstructor; eauto.
-      specialize (H20 k_id); eauto.
+      specialize (H21 k_id); eauto.
       eapply SigCipherNotHonestOk; unfold not; intros; split_ors; split_ands; contra_map_lookup; try contradiction; eauto.
   Qed.
 

@@ -1733,8 +1733,11 @@ Section UniverseLemmas.
    eapply adv_cipher_queue_ok_new_adv_cipher; eauto.
    unfold cipher_honestly_signed.
    unfold honest_keyb.
-   specialize (H24 k_id); contra_map_lookup; split_ors; split_ands; context_map_rewrites;
-     try contradiction; trivial.
+   match goal with
+   | [ H : adv_no_honest_keys _ _ |- _ ] => 
+     specialize (H k_id); contra_map_lookup; split_ors; split_ands; context_map_rewrites;
+       try contradiction; trivial
+   end.
 
   Qed.
 
@@ -3422,7 +3425,10 @@ Section UniverseLemmas.
         specialize (H25 _ _ H4); split_ex; eexists.
         specialize (ADV k); intuition eauto; contra_map_lookup; subst; eauto.
     - econstructor; eauto.
-      specialize (H21 k_id).
+      match goal with
+      | [ H : adv_no_honest_keys _ _ |- _ ] =>
+        specialize (H k_id)
+      end.
       eapply SigCipherNotHonestOk; eauto.
       unfold not; intros; split_ors; split_ands; contra_map_lookup; contradiction.
   Qed.
@@ -4408,14 +4414,14 @@ Section SingleAdversarySimulates.
     - unfold honest_nonces_ok in *; intros;
         process_nonce_ok; eauto.
 
-      + rewrite Forall_forall in H6; unfold not; intro LIN; specialize (H6 _ LIN); simpl in H6.
-        assert (Some u_id0 = Some u_id0) as SUID by trivial; specialize (H6 SUID); Nat.order.
+      + rewrite Forall_forall in H7; unfold not; intro LIN; specialize (H7 _ LIN); simpl in H7;
+          specialize (H7 eq_refl); Nat.order.
 
       + rewrite Forall_forall; intros; destruct x.
         right; unfold msg_nonce_not_same; intros; subst; simpl.
         cases (c_id0 ==n c_id); subst; clean_map_lookups; process_nonce_ok.
         unfold not; intros; process_nonce_ok.
-        rewrite <- H13 in H9; simpl in H9;
+        rewrite <- H14 in H10; simpl in H10;
           process_nonce_ok.
   Qed.
 
@@ -6935,7 +6941,9 @@ Section SingleAdversarySimulates.
         -> ks $? k__signid = Some true
         -> gks $? k__signid = Some (MkCryptoKey k__signid Signing kt)
         -> ( ( enc_cmd = Sign k__signid msg_to msg
-            /\ c = SigCipher k__signid msg_to (Some u_id,cur_n) msg)
+              /\ c = SigCipher k__signid msg_to (Some u_id,cur_n) msg
+              /\ keys_mine ks (findKeysMessage msg)
+            )
           \/ ( exists k__encid kp kt__e,
                   enc_cmd = SignEncrypt k__signid k__encid msg_to msg
                 /\ ks $? k__encid = Some kp
@@ -6979,7 +6987,15 @@ Section SingleAdversarySimulates.
           process_next_cmd_safe;
           econstructor; eauto.
 
-      unfold keys_mine in *; intros.
+      unfold keys_mine in *; intros. 
+      repeat
+        match goal with
+        | [ H : (forall _ _, findKeysMessage ?msg $? _ = Some _ -> _), ARG : findKeysMessage ?msg $? _ = Some _ |- _ ] =>
+          specialize (H _ _ ARG)
+        end.
+      split_ors; assert (findUserKeys usrs $? k_id = Some true) by eauto; eauto.
+
+      unfold keys_mine in *; intros. 
       repeat
         match goal with
         | [ H : (forall _ _, findKeysMessage ?msg $? _ = Some _ -> _), ARG : findKeysMessage ?msg $? _ = Some _ |- _ ] =>

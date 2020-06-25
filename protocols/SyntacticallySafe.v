@@ -603,7 +603,7 @@ Proof.
     rewrite message_only_honest_merge by eauto; eauto.
     
   - unfold typingcontext_sound in *; split_ands; split; intros; eauto.
-    apply H3 in H8; eauto; split_ex; subst; eauto 8.
+    apply H4 in H9; eauto; split_ex; subst; eauto 8.
   - unfold typingcontext_sound in *; split_ands; split; intros; eauto.
     destruct (k_id ==n kid); subst; clean_map_lookups; eauto.
   - unfold typingcontext_sound in *; split_ands; split; intros; eauto.
