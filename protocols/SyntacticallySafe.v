@@ -32,6 +32,7 @@ From KeyManagement Require Import
      Tactics
      Simulation
      RealWorld
+     InvariantsTheory
      AdversarySafety.
 
 From protocols Require Import
@@ -611,60 +612,924 @@ Proof.
 
 Qed.
 
-Lemma syntactically_safe_U_preservation_stepU :
-  forall A B (U U' : universe A B) lbl b,
-    step_universe U lbl U'
-    -> universe_ok U
-    -> adv_universe_ok U
-    -> lameAdv b U.(adversary)
-    -> syntactically_safe_U U
-    -> syntactically_safe_U U'.
-Proof.
-  intros * STEP UOK AUOK LAME SS.
-  invert STEP; dismiss_adv.
+Section PredicatePreservation.
+  Import RealWorld.
 
-  unfold syntactically_safe_U, build_data_step in *; destruct U; destruct userData;
-    simpl in *; intros.
-  unfold universe_ok in UOK;
-    unfold adv_universe_ok in AUOK;
-    split_ors; simpl in *.
-  msg_queue_prop.
+  Hint Resolve
+       encrypted_cipher_ok_addnl_cipher
+       encrypted_cipher_ok_addnl_key
+       encrypted_cipher_ok_addnl_honest_key
+       encrypted_ciphers_ok_new_honest_key_adv_univ
+       users_permission_heaps_good_merged_permission_heaps_good
+       : core.
 
-  destruct (u_id ==n uid); subst; clean_map_lookups; simpl.
-  - specialize (SS _ _ H); split_ex.
-    eapply syntactically_safe_honest_keys_preservation in H0; eauto.
-    split_ex; eauto.
+  Lemma silent_user_step_encrypted_ciphers_ok :
+    forall {A B C} cs cs' u_id suid lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
+      gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd',
+      step_user lbl suid bd bd'
+      -> suid = Some u_id
+      -> forall (cmd : user_cmd C) honestk ctx styp,
+          bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+          -> honestk = findUserKeys usrs
+          -> encrypted_ciphers_ok (findUserKeys usrs) cs gks
+          -> user_cipher_queues_ok cs honestk usrs
+          -> keys_and_permissions_good gks usrs adv.(key_heap)
+          -> syntactically_safe u_id ctx cmd styp
+          -> typingcontext_sound ctx honestk cs u_id
+          -> lbl = Silent
+          -> forall cmd' usrs'',
+              bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+              -> forall cmdc cmdc' honestk',
+                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc
+                                       ; c_heap := mycs ; from_nons := froms ; sent_nons := sents ; cur_nonce := cur_n |}
+                -> usrs'' = usrs' $+ (u_id, {| key_heap := ks'; protocol := cmdc'; msg_heap := qmsgs'
+                                              ; c_heap := mycs' ; from_nons := froms' ; sent_nons := sents' ; cur_nonce := cur_n' |})
+                -> honestk' = findUserKeys usrs''
+                -> encrypted_ciphers_ok honestk' cs' gks'.
+  Proof.
+    induction 1; inversion 2; invert 5; inversion 3; intros; subst;
+      try discriminate;
+      eauto 2;
+      autorewrite with find_user_keys in *;
+      keys_and_permissions_prop;
+      clean_context;
+      eauto.
+  
+    - unfold typingcontext_sound in *; split_ex.
+      econstructor; eauto.
+      eapply SigEncCipherHonestSignedEncKeyHonestOk; eauto.
+      unfold encrypted_ciphers_ok in *; rewrite Forall_natmap_forall in *; intros; eauto.
+      
+    - user_cipher_queues_prop; encrypted_ciphers_prop.
+      rewrite merge_keys_addnl_honest; eauto.
+    - unfold typingcontext_sound in *; split_ex.
+      econstructor; eauto.
+      econstructor; eauto.
+      intros * FKM.
+      eapply H32 in FKM; split_ex; eauto.
+      unfold encrypted_ciphers_ok in *; rewrite Forall_natmap_forall in *; intros; eauto.
 
-  - generalize H0; intros STEP.
-    eapply step_user_nochange_that_user_in_honest_users in H0; eauto.
-    destruct u; generalize STEP; intros STEP'.
-    eapply step_back_into_other_user in STEP; simpl; eauto.
+    - eapply encrypted_ciphers_ok_new_honest_key_adv_univ with (honestk := (findUserKeys usrs'));
+        simpl; eauto; simpl; eauto.
+    - eapply encrypted_ciphers_ok_new_honest_key_adv_univ with (honestk := (findUserKeys usrs'));
+        simpl; eauto; simpl; eauto.
+  Qed.
+
+  Hint Resolve
+       honest_users_only_honest_keys_nochange_keys
+       honest_users_only_honest_keys_gen_key
+    : core.
+
+  Lemma honest_users_only_honest_keys_honest_steps :
+    forall {A B C} u_id suid cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
+      gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd',
+      step_user lbl suid bd bd'
+      -> suid = Some u_id
+      -> forall (cmd : user_cmd C) honestk,
+          honestk = findUserKeys usrs
+          -> bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+          -> honest_users_only_honest_keys usrs
+          -> forall ctx styp, syntactically_safe u_id ctx cmd styp
+          -> typingcontext_sound ctx honestk cs u_id
+          (* -> next_cmd_safe (findUserKeys usrs) cs u_id froms sents cmd *)
+          -> encrypted_ciphers_ok honestk cs gks
+          -> user_cipher_queues_ok  cs honestk usrs
+          -> forall cmd',
+              bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+              -> forall cmdc cmdc' usrs'',
+                usrs $? u_id = Some {| key_heap := ks
+                                       ; msg_heap := qmsgs
+                                       ; protocol := cmdc
+                                       ; c_heap := mycs
+                                       ; from_nons := froms
+                                       ; sent_nons := sents
+                                       ; cur_nonce := cur_n |}
+                -> usrs'' = usrs' $+ (u_id, {| key_heap := ks'
+                                              ; msg_heap := qmsgs'
+                                              ; protocol := cmdc'
+                                              ; c_heap := mycs'
+                                              ; from_nons := froms'
+                                              ; sent_nons := sents'
+                                              ; cur_nonce := cur_n' |})
+                -> honest_users_only_honest_keys usrs''.
+  Proof.
+    induction 1; inversion 3; inversion 6; intros;
+      subst;
+      autorewrite with find_user_keys;
+      (* process_next_cmd_safe; *)
+      eauto;
+      clean_context.
+
+    - invert H15.
+      eapply IHstep_user in H7; eauto.
+
+    - unfold honest_users_only_honest_keys in *; intros.
+      destruct (u_id ==n u_id0); subst; clean_map_lookups; eauto;
+        simpl in *;
+        rewrite findUserKeys_readd_user_addnl_keys; eauto.
+
+      specialize (H10 _ _ H27); simpl in *.
+
+      assert (msg_pattern_safe (findUserKeys usrs') pat) by
+          (unfold typingcontext_sound in *; split_ex; invert H22; eauto).
+      
+      solve_perm_merges;
+        try
+          match goal with
+          | [ H : (forall _ _, ?ks $? _ = Some _ -> _), ARG : ?ks $? _ = Some _ |- _ ] => specialize (H _ _ ARG)
+          end; clean_map_lookups; eauto;
+          assert (msg_honestly_signed (findUserKeys usrs') cs' msg = true) as MHS by eauto.
+
+      + generalize (msg_honestly_signed_has_signing_key_cipher_id _ _ _ MHS); intros; split_ands; split_ex.
+        eapply msg_honestly_signed_signing_key_honest in MHS; eauto.
+        unfold msg_cipher_id in H2; destruct msg; try discriminate;
+          clean_context; simpl in *.
+        cases (cs' $? c_id); try discriminate.
+        clean_context; invert MHS.
+        destruct c; simpl in *; clean_map_lookups; eauto.
+        encrypted_ciphers_prop; eauto.
+        specialize (H13 _ _ H1); split_ands; subst; clean_map_lookups; eauto.
+
+      + generalize (msg_honestly_signed_has_signing_key_cipher_id _ _ _ MHS); intros; split_ands; split_ex.
+        eapply msg_honestly_signed_signing_key_honest in MHS; eauto.
+        unfold msg_cipher_id in H2; destruct msg; try discriminate;
+          clean_context; simpl in *.
+        cases (cs' $? c_id); try discriminate.
+        clean_context; invert MHS.
+        destruct c; simpl in *; clean_map_lookups; eauto.
+        encrypted_ciphers_prop; eauto.
+        specialize (H13 _ _ H1); split_ands; subst; clean_map_lookups; eauto.
+
+      + eapply H10 in H; eauto.
+        solve_perm_merges; eauto.
+
+    - unfold honest_users_only_honest_keys in *; intros.
+      assert (rec_u_id <> u_id) by (unfold not; intros; subst; contradiction).
+      destruct (u_id ==n u_id0); destruct (u_id ==n rec_u_id);
+        subst;
+        try contradiction;
+        clean_map_lookups;
+        simpl in *;
+        eauto.
+
+      + generalize H27; intros; eapply H10 in H27; eauto.
+        autorewrite with find_user_keys; eauto.
+
+      + destruct (u_id0 ==n rec_u_id); subst;
+          clean_map_lookups;
+          autorewrite with find_user_keys;
+          eauto 2.
+
+    - unfold typingcontext_sound in *; split_ex.
+      user_cipher_queues_prop.
+      encrypted_ciphers_prop; clean_map_lookups.
+      unfold honest_users_only_honest_keys in *; intros.
+      autorewrite with find_user_keys.
+      destruct (u_id ==n u_id0);
+        subst;
+        try contradiction;
+        clean_map_lookups;
+        simpl in *;
+        eauto.
+
+      specialize (H11 _ _ H28); simpl in *.
+      apply merge_perms_split in H9; split_ors;
+        match goal with
+        | [ ARG : findKeysMessage _ $? _ = Some _, H : (forall _ _, findKeysMessage _ $? _ = Some _ -> _) |- _ ] =>
+          specialize (H _ _ ARG)
+        | [ H : (forall _ _, ?ks $? _ = Some _ -> _), ARG : ?ks $? _ = Some _ |- _ ] => specialize (H _ _ ARG)
+        end; solve_perm_merges; eauto.
+      
+      eapply H11 in H9; eauto; solve_perm_merges; eauto.
+  Qed.
+
+  Lemma honest_labeled_step_encrypted_ciphers_ok :
+    forall {A B C} cs cs' u_id suid lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
+      gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd' a,
+      step_user lbl suid bd bd'
+      -> suid = Some u_id
+      -> message_queues_ok cs usrs gks
+      -> encrypted_ciphers_ok (findUserKeys usrs) cs gks
+      -> forall (cmd : user_cmd C),
+          bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+          -> forall ctx styp, syntactically_safe u_id ctx cmd styp
+          -> typingcontext_sound ctx (findUserKeys usrs) cs u_id
+          -> lbl = Action a
+          -> forall cmd',
+              bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+              -> forall cmdc cmdc' usrs'' ud',
+                usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs ; from_nons := froms ; sent_nons := sents ; cur_nonce := cur_n |}
+                -> ud' = {| key_heap := ks'; protocol := cmdc'; msg_heap := qmsgs' ; c_heap := mycs' ; from_nons := froms' ; sent_nons := sents' ; cur_nonce := cur_n' |}
+                -> usrs'' = usrs' $+ (u_id, ud')
+                -> encrypted_ciphers_ok (findUserKeys usrs'') cs' gks'.
+  Proof.
+    induction 1; inversion 4; inversion 4; intros; subst; try discriminate;
+      eauto 2; autorewrite with find_user_keys;
+        clean_context; eauto.
+
+    invert H4.
+    eapply IHstep_user in H9; eauto.
+
+    unfold typingcontext_sound in *; split_ex.
+    assert (msg_pattern_safe (findUserKeys usrs') pat) by
+        (unfold typingcontext_sound in *; split_ex; invert H11; eauto).
+    msg_queue_prop; eapply encrypted_ciphers_ok_addnl_pubk; auto.
+    specialize_msg_ok; eauto.
+  Qed.
+
+  Lemma honest_labeled_step_user_cipher_queues_ok :
+    forall {A B C} u_id cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
+      gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd' a suid,
+      step_user lbl suid bd bd'
+      -> suid = Some u_id
+      -> forall (cmd : user_cmd C) honestk,
+          bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+          -> honestk = findUserKeys usrs
+          -> message_queues_ok cs usrs gks
+          -> user_cipher_queues_ok cs honestk usrs
+          -> forall cmd' honestk',
+              bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+              -> lbl = Action a
+              -> forall ctx styp, syntactically_safe u_id ctx cmd styp
+              -> typingcontext_sound ctx (findUserKeys usrs) cs u_id
+              -> forall cmdc cmdc' usrs'',
+                  usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs ; from_nons := froms ; sent_nons := sents ; cur_nonce := cur_n |}
+                  -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' ; c_heap := mycs' ; from_nons := froms' ; sent_nons := sents' ; cur_nonce := cur_n' |})
+                  -> honestk' = findUserKeys usrs''
+                  -> user_cipher_queues_ok cs' honestk' usrs''.
+  Proof.
+    induction 1; inversion 2; inversion 4; intros; subst; try discriminate; eauto;
+      autorewrite with find_user_keys; clean_context.
+
+    - invert H29.
+      eapply IHstep_user in H6; eauto.
+
+    - assert (msg_pattern_safe (findUserKeys usrs') pat) by
+          (unfold typingcontext_sound in *; split_ex; invert H36; eauto).
+
+      msg_queue_prop; eauto.
+      specialize_msg_ok.
+      eapply user_cipher_queues_ok_add_user; autorewrite with find_user_keys; eauto.
+
+    - remember ((usrs $+ (rec_u_id,
+                          {| key_heap := key_heap rec_u;
+                             protocol := protocol rec_u;
+                             msg_heap := msg_heap rec_u ++ [existT crypto t0 msg];
+                             c_heap := c_heap rec_u |}))) as usrs'.
+
+      assert (findUserKeys usrs = findUserKeys usrs') as RW
+          by (subst; autorewrite with find_user_keys; eauto).
+
+      rewrite RW; clear RW.
+      destruct rec_u; simpl in *.
+      eapply user_cipher_queues_ok_readd_user; subst; clean_map_lookups; eauto.
+      autorewrite with find_user_keys.
+      eapply user_cipher_queues_ok_readd_user; subst; clean_map_lookups; eauto.
+  Qed.
+
+  Lemma honest_labeled_step_message_queues_ok :
+    forall {A B C} u_id suid cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
+      gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd' a,
+      step_user lbl suid bd bd'
+      -> suid = Some u_id
+      -> forall (cmd : user_cmd C) honestk,
+          bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+          -> honestk = findUserKeys usrs
+          -> message_queues_ok cs usrs gks
+          -> keys_and_permissions_good gks usrs adv.(key_heap)
+          -> encrypted_ciphers_ok honestk cs gks
+          -> user_cipher_queues_ok cs honestk usrs
+          -> forall cmd' honestk',
+              bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+              -> lbl = Action a
+              -> forall ctx styp, syntactically_safe u_id ctx cmd styp
+              -> typingcontext_sound ctx (findUserKeys usrs) cs u_id
+              -> forall cmdc cmdc' usrs'',
+                  usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc
+                                         ; c_heap := mycs ; from_nons := froms ; sent_nons := sents ; cur_nonce := cur_n |}
+                  -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc'
+                                                ; c_heap := mycs' ; from_nons := froms' ; sent_nons := sents' ; cur_nonce := cur_n' |})
+                  -> honestk' = findUserKeys usrs''
+                  -> message_queues_ok cs' usrs'' gks'.
+  Proof.
+    induction 1; inversion 2; inversion 6; intros; subst; try discriminate;
+      eauto 2; autorewrite with find_user_keys; eauto;
+        clean_context; msg_queue_prop; specialize_msg_ok; eauto.
+
+    - invert H31.
+      eapply IHstep_user in H7; eauto.
+
+    - assert (msg_pattern_safe (findUserKeys usrs') pat) by
+          (unfold typingcontext_sound in *; split_ex; invert H38; eauto).
+
+      unfold message_queues_ok in *; rewrite Forall_natmap_forall in *; intros;
+        autorewrite with find_user_keys in *.
+
+      assert (msg_honestly_signed (findUserKeys usrs') cs' msg = true) by eauto.
+      eapply message_honestly_signed_msg_signing_key_honest in H5; split_ex.
+      specialize_simply.
+      rewrite honestk_merge_new_msgs_keys_same; eauto.
+      destruct (u_id ==n k); subst; clean_map_lookups; eauto.
+
+    - unfold message_queues_ok in *; rewrite Forall_natmap_forall in *; intros;
+        autorewrite with find_user_keys in *.
+      assert (rec_u_id <> u_id) by (unfold not; intros; subst; contradiction).
+
+      unfold typingcontext_sound in *; split_ex.
+      invert H38.
+
+      destruct (rec_u_id ==n k);
+        destruct (u_id ==n k);
+        subst;
+        clean_map_lookups;
+        simpl;
+        eauto.
+
+      eapply H7 in H13; split_ex; subst.
+      eapply H21 in H2; unfold message_queue_ok in H2.
+      eapply Forall_app; simpl; econstructor; eauto.
+
+      eapply H6 in H12.
+      keys_and_permissions_prop.
+
+      encrypted_ciphers_prop;
+        repeat simple apply conj;
+        intros;
+        simpl in *;
+        context_map_rewrites;
+        clean_map_lookups;
+        eauto.
+
+      + eapply H18 in H15; split_ex; subst.
+        eapply H13 in H15; split_ex; clean_map_lookups.
+      + simpl in *; context_map_rewrites.
+        repeat simple apply conj; intros; eauto.
+        discriminate.
+        unfold message_no_adv_private, msgCiphersSignedOk; simpl.
+        context_map_rewrites.
+        split; intros; eauto.
+        econstructor; eauto.
+        unfold msg_honestly_signed, msg_signing_key; context_map_rewrites;
+          simpl;
+          rewrite <- honest_key_honest_keyb;
+          eauto.
+      + simpl in *; context_map_rewrites.
+        repeat simple apply conj; intros; eauto.
+        discriminate.
+        unfold message_no_adv_private, msgCiphersSignedOk; simpl.
+        context_map_rewrites.
+        split; intros; eauto.
+        clean_map_lookups.
+        econstructor; eauto.
+        unfold msg_honestly_signed, msg_signing_key; context_map_rewrites;
+          simpl;
+          rewrite <- honest_key_honest_keyb;
+          eauto.
+  Qed.
+
+  (* Lemma honest_labeled_step_adv_cipher_queue_ok : *)
+  (*   forall {A B C} u_id suid cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B) *)
+  (*     gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd' a, *)
+  (*     step_user lbl suid bd bd' *)
+  (*     -> suid = Some u_id *)
+  (*     -> forall (cmd : user_cmd C) honestk, *)
+  (*         bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
+  (*         -> honestk = findUserKeys usrs *)
+  (*         -> encrypted_ciphers_ok honestk cs gks *)
+  (*         -> adv_message_queue_ok usrs cs gks adv.(msg_heap) *)
+  (*         -> message_queues_ok cs usrs gks *)
+  (*         -> honest_nonces_ok cs usrs *)
+  (*         -> user_cipher_queues_ok cs honestk usrs *)
+  (*         -> adv_cipher_queue_ok cs usrs adv.(c_heap) *)
+  (*         -> forall cmd', *)
+  (*             bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd') *)
+  (*             -> lbl = Action a *)
+  (*             -> forall ctx styp, syntactically_safe u_id ctx cmd styp *)
+  (*             -> typingcontext_sound ctx (findUserKeys usrs) cs u_id *)
+  (*             (* -> action_adversary_safe honestk cs a *) *)
+  (*             -> forall cmdc cmdc' usrs'', *)
+  (*                 usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc *)
+  (*                                        ; c_heap := mycs ; from_nons := froms ; sent_nons := sents ; cur_nonce := cur_n |} *)
+  (*                 -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' *)
+  (*                                               ; c_heap := mycs' ; from_nons := froms' ; sent_nons := sents' ; cur_nonce := cur_n' |}) *)
+  (*                 -> adv_cipher_queue_ok cs' usrs'' adv'.(c_heap). *)
+  (* Proof. *)
+  (*   induction 1; inversion 2; inversion 8; intros; subst; try discriminate; *)
+  (*     eauto 2; autorewrite with find_user_keys; eauto; *)
+  (*       intros; *)
+  (*       clean_context. *)
+
+  (*   - invert H33. *)
+  (*     eapply IHstep_user in H6; eauto. *)
+
+  (*   - unfold typingcontext_sound in *; split_ex. *)
+  (*     assert (msg_pattern_safe (findUserKeys usrs') pat) by *)
+  (*         (unfold typingcontext_sound in *; split_ex; invert H40; eauto). *)
+      
+  (*     unfold adv_cipher_queue_ok in *; rewrite Forall_forall in *; intros. *)
+  (*     assert (msg_honestly_signed (findUserKeys usrs') cs' msg = true) by eauto. *)
+
+  (*     specialize (H26 _ H2); split_ex. *)
+  (*     eexists; split; eauto. *)
+  (*     autorewrite with find_user_keys; split_ors; split_ex; split_ands; subst; eauto. *)
+  (*     + left; split; eauto; subst. *)
+  (*       msg_queue_prop; context_map_rewrites. *)
+  (*       eapply message_honestly_signed_msg_signing_key_honest in H3; split_ex. *)
+  (*       specialize_simply. *)
+  (*       unfold message_no_adv_private in H13; simpl in H13; context_map_rewrites. *)
+  (*       rewrite cipher_honestly_signed_honest_keyb_iff in *; *)
+  (*         unfold honest_keyb in *. *)
+  (*       cases (findUserKeys usrs' $? cipher_signing_key x0); solve_perm_merges; eauto. *)
+  (*       specialize (H13 _ _ H15); split_ex; subst; trivial. *)
+  (*       specialize (H13 _ _ H15); split_ex; subst; trivial. *)
+
+  (*     + right. *)
+
+  (* Ltac process_predicate := *)
+  (*   repeat ( *)
+  (*       contradiction *)
+  (*       || discriminate *)
+  (*       || match goal with *)
+  (*         | [ H : msg_to_this_user _ _ _ = true |- _ ] => *)
+  (*           unfold msg_to_this_user, msg_destination_user in H; context_map_rewrites *)
+  (*         | [ H : (if ?cond then _ else _) = _ |- _ ] => destruct cond; try discriminate; try contradiction *)
+  (*         | [ |- ?c1 /\ _ ] => *)
+  (*           match c1 with *)
+  (*           (* simplify *) *)
+  (*           | List.In _ (sent_nons ?sents) => is_not_var sents; simpl *)
+  (*           | List.In _ ?arg => match arg with *)
+  (*                              | context [ _ $? _ ] => context_map_rewrites *)
+  (*                              | context [ if ?cond then _ else _ ] => destruct cond *)
+  (*                              end *)
+  (*           (* process *) *)
+  (*           | _ =>  *)
+  (*             split; [ *)
+  (*               match c1 with *)
+  (*               | (_ $+ (?k1,_) $? ?k2 = _) => *)
+  (*                 solve [ subst; clean_map_lookups; eauto ] *)
+  (*               | _ => solve [ eauto 2 ] *)
+  (*               end | ] *)
+  (*           end *)
+  (*         | [ H : List.In ?cn _ \/ Exists _ _ |- List.In ?cn _ \/ Exists _ _ ] => *)
+  (*           split_ors; eauto *)
+  (*         | [ H : Exists _ _ |- List.In ?cn _ \/ Exists _ _ ] => *)
+  (*           rewrite Exists_exists in *; split_ex *)
+  (*         | [ H : let (_,_) := ?x in msg_signed_addressed _ _ _ _ = true /\ _ |- _ ] => destruct x; split_ands *)
+  (*         | [ H : List.In ?m ?heap |- context [ ?heap ++ _ ] ] => right; simpl; exists m; rewrite in_app_iff; eauto *)
+  (*         end). *)
+
+        
+  (*       destruct (u_id ==n x1); *)
+  (*         [| destruct (u_id ==n cipher_to_user x0)]; *)
+  (*         subst; clean_map_lookups; simpl in *; *)
+  (*           (do 3 eexists); *)
+  (*           process_predicate; *)
+  (*           eauto; *)
+  (*           simpl. *)
+
+  (*       * right; eexists; split; eauto; simpl. *)
+  (*         split; eauto. *)
+  (*         (do 2 msg_queue_prop). *)
+  (*         generalize (message_honestly_signed_msg_signing_key_honest _ _ _ H3); intros; split_ex; *)
+  (*           specialize_simply. *)
+  (*         rewrite honestk_merge_new_msgs_keys_same by eauto. *)
+
+  (*         unfold msg_honestly_signed, msg_signing_key in H3; *)
+  (*           context_map_rewrites; *)
+  (*           simpl in *; *)
+  (*           encrypted_ciphers_prop; eauto. *)
+
+  (*       * unfold updateTrackedNonce. *)
+  (*         generalize (message_honestly_signed_msg_signing_key_honest _ _ _ H3); intros; split_ex; *)
+  (*           specialize_simply. *)
+  (*         unfold msg_signing_key in H12; destruct msg; try discriminate. *)
+  (*         cases (cs' $? c_id); try discriminate. *)
+  (*         invert H12. *)
+  (*         destruct (cipher_to_user x0 ==n cipher_to_user c); eauto. *)
+  (*         cases (count_occ msg_seq_eq froms (cipher_nonce c)); eauto. *)
+
+  (*       * unfold updateTrackedNonce. *)
+  (*         generalize (message_honestly_signed_msg_signing_key_honest _ _ _ H3); intros; split_ex; *)
+  (*           specialize_simply. *)
+  (*         unfold msg_signing_key in H14; destruct msg; try discriminate. *)
+  (*         cases (cs' $? c_id); try discriminate. *)
+  (*         invert H14. *)
+
+  (*         simpl in H11; split_ors. *)
+  (*         ** invert H11. *)
+  (*            unfold msg_nonce_same in H13. *)
+  (*            unfold msg_signed_addressed, msg_to_this_user, msg_destination_user in H12; *)
+  (*              context_map_rewrites; *)
+  (*              rewrite andb_true_iff in H12; split_ex. *)
+  (*            cases (cipher_to_user c0 ==n cipher_to_user x0); try discriminate. *)
+  (*            rewrite e; destruct (cipher_to_user x0 ==n cipher_to_user x0); try contradiction. *)
+  (*            generalize Heq; intros; eapply H13 in Heq; eauto. *)
+
+  (*            left. *)
+  (*            cases (count_occ msg_seq_eq froms (cipher_nonce c0)). *)
+  (*            rewrite Heq; simpl; eauto. *)
+  (*            rewrite Heq. *)
+  (*            rewrite count_occ_In with (eq_dec := msg_seq_eq). *)
+  (*            rewrite Heq1; eauto. *)
+  (*            Omega.omega. *)
+             
+  (*         ** right; eexists; split; eauto. *)
+  (*            simpl; context_map_rewrites; eauto. *)
+  (*            split; eauto. *)
+
+  (*            destruct c0; eauto. *)
+  (*            rewrite msg_signed_addressed_new_msg_keys'; eauto. *)
+  (*            simpl in *. *)
+  (*            invert H15. *)
+  (*            encrypted_ciphers_prop; eauto. *)
+
+  (*       * right; eexists; simpl; split; eauto. *)
+  (*         simpl; split; eauto. *)
+  (*         (do 2 msg_queue_prop). *)
+  (*         specialize_simply. *)
+  (*         rewrite honestk_merge_new_msgs_keys_same; eauto. *)
+
+  (*   - unfold typingcontext_sound in H41; split_ex; invert H40. *)
+  (*     eapply H4 in H10; split_ex; subst; clear H4. *)
+
+  (*     unfold adv_cipher_queue_ok in *; rewrite Forall_forall in *; simpl in *; intros; *)
+  (*       context_map_rewrites. *)
+
+  (*     specialize (H26 _ H4); split_ex; split_ands. *)
+  (*     eapply H in H10. *)
+  (*     eexists; split; eauto. *)
+  (*     autorewrite with find_user_keys; split_ors; split_ex; split_ands; eauto. *)
+  (*     right; subst; simpl in *. *)
+
+  (*     process_predicate. *)
+  (*     clean_context. *)
+  (*     (* symmetry in e; subst. *) *)
+  (*     assert (u_id <> cipher_to_user x0) by (unfold not; intros; subst; contradiction); clear H3. *)
+
+  (*     destruct (cipher_to_user x0 ==n cipher_to_user x2); *)
+  (*       destruct (cipher_to_user x0 ==n x3); *)
+  (*       destruct (u_id ==n x3); *)
+  (*       destruct (u_id ==n cipher_to_user x2); *)
+  (*       subst; *)
+  (*       try contradiction; *)
+  (*       clean_map_lookups; *)
+  (*       do 3 eexists; *)
+  (*       process_predicate; eauto. *)
+  (* Qed. *)
+
+  (* Lemma honest_labeled_step_adv_message_queue_ok : *)
+  (*   forall {A B C} u_id suid cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B) *)
+  (*             gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd' a, *)
+  (*     step_user lbl suid bd bd' *)
+  (*     -> suid = Some u_id *)
+  (*     -> forall (cmd : user_cmd C) honestk, *)
+  (*       bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
+  (*       -> honestk = findUserKeys usrs *)
+  (*       -> message_queues_ok cs usrs gks *)
+  (*       -> keys_and_permissions_good gks usrs adv.(key_heap) *)
+  (*       -> encrypted_ciphers_ok (findUserKeys usrs) cs gks *)
+  (*       -> user_cipher_queues_ok cs honestk usrs *)
+  (*       -> adv_message_queue_ok usrs cs gks adv.(msg_heap) *)
+  (*       -> forall cmd' honestk', *)
+  (*           bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd') *)
+  (*           -> lbl = Action a *)
+  (*           -> forall ctx styp, syntactically_safe u_id ctx cmd styp *)
+  (*           -> typingcontext_sound ctx (findUserKeys usrs) cs u_id *)
+  (*           (* -> action_adversary_safe honestk cs a *) *)
+  (*           -> forall cmdc cmdc' usrs'', *)
+  (*               usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs ; from_nons := froms ; sent_nons := sents ; cur_nonce := cur_n |} *)
+  (*               -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' ; c_heap := mycs' ; from_nons := froms' ; sent_nons := sents' ; cur_nonce := cur_n' |}) *)
+  (*               -> honestk' = findUserKeys usrs'' *)
+  (*               -> adv_message_queue_ok usrs'' cs' gks' adv'.(msg_heap). *)
+  (* Proof. *)
+  (*   induction 1; inversion 2; inversion 7; intros; subst; try discriminate; *)
+  (*     eauto 2; autorewrite with find_user_keys; eauto; *)
+  (*       clean_context. *)
+
+  (*   - invert H32. *)
+  (*     eapply IHstep_user in H6; eauto. *)
+
+  (*   - assert (msg_pattern_safe (findUserKeys usrs') pat) by *)
+  (*         (unfold typingcontext_sound in *; split_ex; invert H39; eauto). *)
+      
+  (*     unfold adv_message_queue_ok in *; rewrite Forall_forall in *; intros. *)
+  (*     assert (msg_honestly_signed (findUserKeys usrs') cs' msg = true) by eauto. *)
+
+  (*     specialize (H25 _ H0). *)
+  (*     destruct x as [t__m msg']; split_ex. *)
+  (*     repeat simple apply conj; eauto; intros. *)
+  (*     + specialize (H3 _ _ H7); split_ex; split; intros; subst; eauto. *)
+  (*       autorewrite with find_user_keys. *)
+  (*       msg_queue_prop. *)
+  (*       generalize (message_honestly_signed_msg_signing_key_honest _ _ _ H1); intros; split_ex; *)
+  (*         specialize_simply. *)
+  (*       rewrite honestk_merge_new_msgs_keys_same; eauto. *)
+  (*     + specialize (H5 _ H7); split_ex. *)
+  (*       msg_queue_prop. *)
+  (*       generalize (message_honestly_signed_msg_signing_key_honest _ _ _ H1); intros; split_ex; *)
+  (*         specialize_simply. *)
+  (*       autorewrite with find_user_keys; eauto. *)
+  (*       eexists; split; eauto. *)
+  (*       rewrite honestk_merge_new_msgs_keys_same by eauto. *)
+  (*       split_ors; split_ex; eauto. *)
+  (*       right. *)
+  (*       destruct (u_id ==n x1); destruct (u_id ==n cipher_to_user x); *)
+  (*         subst; clean_map_lookups; *)
+  (*           (do 3 eexists); repeat simple apply conj; eauto. *)
+  (*       simpl in *; eauto. *)
+
+  (*       split_ors. *)
+  (*       * left. *)
+  (*         unfold msg_signing_key in H12. *)
+  (*         unfold updateTrackedNonce. *)
+  (*         destruct msg; eauto. *)
+  (*         cases (cs' $? c_id0); eauto. *)
+  (*         destruct (cipher_to_user x ==n cipher_to_user c); eauto. *)
+  (*         destruct (count_occ msg_seq_eq froms (cipher_nonce c)); eauto. *)
+
+  (*       * rewrite Exists_exists in *; split_ex; destruct x3; split_ex. *)
+  (*         simpl in H11; split_ors. *)
+  (*         invert H11. *)
+  (*         unfold msg_nonce_same in H26. *)
+  (*         left; unfold updateTrackedNonce. *)
+  (*         unfold msg_signing_key in H12. *)
+  (*         destruct c; try discriminate. *)
+  (*         cases (cs' $? c_id0); try discriminate. *)
+  (*         invert H12. *)
+  (*         specialize (H26 _ _ eq_refl Heq0). *)
+  (*         simpl in *; context_map_rewrites. *)
+  (*         unfold msg_signed_addressed, msg_to_this_user, msg_destination_user in H25; *)
+  (*           context_map_rewrites; *)
+  (*           rewrite !andb_true_iff in H25; *)
+  (*           split_ex. *)
+  (*         destruct (cipher_to_user c ==n cipher_to_user x); try discriminate. *)
+  (*         rewrite e; destruct (cipher_to_user x ==n cipher_to_user x); try contradiction. *)
+  (*         rewrite H26. *)
+  (*         cases (count_occ msg_seq_eq froms (cipher_nonce c)); eauto. *)
+  (*         rewrite count_occ_In with (eq_dec := msg_seq_eq). *)
+  (*         Omega.omega. *)
+
+  (*         right; eexists; split; simpl; eauto. *)
+  (*         cases (existT (fun H27 : type => crypto H27) x3 c). *)
+  (*         invert Heq0; eauto. *)
+
+  (*   - unfold typingcontext_sound in *; split_ex. *)
+  (*     invert H39. *)
+  (*     specialize (H4 _ _ _ _ H10); split_ex; clear H10. *)
+  (*     unfold adv_message_queue_ok in *; rewrite Forall_forall in *; intros; simpl in *. *)
+
+  (*     apply in_app_or in H10; simpl in H10; split_ors; subst; try contradiction. *)
+  (*     + specialize (H25 _ H10); destruct x1 as [t__m msg']; split_ex. *)
+
+  (*       repeat simple apply conj; eauto; intros. *)
+  (*       specialize (H6 _ _ H12); split_ex. *)
+  (*       split; eauto; intros; subst. *)
+  (*       autorewrite with find_user_keys; eauto. *)
+  (*       specialize (H11 _ H12); split_ex. *)
+  (*       eexists; split; eauto. *)
+  (*       autorewrite with find_user_keys; eauto. *)
+  (*       split_ors; eauto. *)
+  (*       assert (u_id <> cipher_to_user x0) by (unfold not; intros; subst; contradiction). *)
+        
+  (*       right; *)
+  (*         (* destruct (x ==n cipher_to_user x0); *) *)
+  (*         destruct (u_id ==n x2); *)
+  (*         destruct (u_id ==n cipher_to_user x1); *)
+  (*         destruct (x2 ==n cipher_to_user x0); *)
+  (*         destruct (x2 ==n cipher_to_user x1); *)
+  (*         destruct (cipher_to_user x0 ==n cipher_to_user x1); *)
+  (*         subst; clean_map_lookups; *)
+  (*           (do 3 eexists); process_predicate; eauto. *)
+
+  (*     + repeat simple apply conj; eauto; intros; simpl in *; context_map_rewrites. *)
+  (*       * unfold not; intros; simpl in *; invert H4; clean_map_lookups. *)
+  (*       * user_cipher_queues_prop. *)
+
+  (*         apply H in H9. *)
+  (*         autorewrite with find_user_keys. *)
+  (*         keys_and_permissions_prop. *)
+  (*         destruct x0; clean_map_lookups; simpl in *. *)
+  (*         encrypted_ciphers_prop; eauto. *)
+  (*         generalize (H27 _ _ H4); intros; split_ex; subst. *)
+  (*         apply H12 in H3; eauto; split_ex. *)
+  (*         split; intros; clean_map_lookups. *)
+
+  (*       * invert H4. *)
+  (*         keys_and_permissions_prop. *)
+  (*         eapply H in H9. *)
+  (*         eapply H10 in H9; split_ex; clean_map_lookups. *)
+
+  (*       * apply H in H9. *)
+  (*         split_ors; subst; try contradiction. *)
+  (*         eexists; split; eauto. *)
+  (*         autorewrite with find_user_keys. *)
+
+  (*         right; eauto. *)
+  (*         (do 3 eexists); split; eauto. *)
+  (*         split. *)
+  (*         clean_map_lookups. *)
+  (*         reflexivity. *)
+  (*         split. *)
+  (*         unfold not; intros; subst; contradiction. *)
+  (*         simpl. *)
+  (*         destruct (cipher_to_user x0 ==n cipher_to_user x0); try contradiction. *)
+  (*         split. *)
+  (*         cases (count_occ msg_seq_eq sents (cipher_nonce x0)); eauto. *)
+  (*         rewrite count_occ_In with (eq_dec := msg_seq_eq); Omega.omega. *)
+  (*         split. *)
+  (*         clean_map_lookups; reflexivity. *)
+  (*         simpl. *)
+          
+  (*         right; rewrite Exists_exists. *)
+  (*         exists (existT crypto t0 (SignedCiphertext c_id)); split. *)
+  (*         apply in_or_app; eauto. *)
+  (*         unfold *)
+  (*           msg_signed_addressed, msg_nonce_same, *)
+  (*           msg_honestly_signed, msg_signing_key, *)
+  (*           msg_to_this_user, msg_destination_user; context_map_rewrites. *)
+  (*         assert ( HK : honest_keyb (findUserKeys usrs) (cipher_signing_key x0) = true) *)
+  (*           by (unfold honest_keyb; context_map_rewrites; trivial). *)
+  (*         rewrite HK. *)
+  (*         destruct (cipher_to_user x0 ==n cipher_to_user x0); try contradiction; split; eauto. *)
+  (*         intros. *)
+  (*         invert H4; clean_map_lookups; eauto. *)
+  (* Qed. *)
+  
+  (* Lemma honest_labeled_step_adv_no_honest_keys : *)
+  (*   forall {A B C} u_id suid cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B) *)
+  (*     gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd' a, *)
+  (*     step_user lbl suid bd bd' *)
+  (*     -> suid = Some u_id *)
+  (*     -> forall (cmd : user_cmd C) honestk, *)
+  (*         bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
+  (*         -> honestk = findUserKeys usrs *)
+  (*         -> message_queues_ok cs usrs gks *)
+  (*         -> encrypted_ciphers_ok honestk cs gks *)
+  (*         -> user_cipher_queues_ok cs honestk usrs *)
+  (*         -> adv_no_honest_keys honestk adv.(key_heap) *)
+  (*         -> forall cmd' honestk', *)
+  (*             bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd') *)
+  (*             -> lbl = Action a *)
+  (*             -> forall ctx styp, syntactically_safe u_id ctx cmd styp *)
+  (*             -> typingcontext_sound ctx (findUserKeys usrs) cs u_id *)
+  (*             (* -> action_adversary_safe honestk cs a *) *)
+  (*             -> forall cmdc cmdc' usrs'', *)
+  (*                 usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs ; from_nons := froms ; sent_nons := sents ; cur_nonce := cur_n |} *)
+  (*                 -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' ; c_heap := mycs' ; from_nons := froms' ; sent_nons := sents' ; cur_nonce := cur_n' |}) *)
+  (*                 -> honestk' = findUserKeys usrs'' *)
+  (*                 -> adv_no_honest_keys honestk' adv'.(key_heap). *)
+  (* Proof. *)
+  (*   induction 1; inversion 2; inversion 6; intros; subst; *)
+  (*     try discriminate; eauto 2; *)
+  (*       autorewrite with find_user_keys; eauto; *)
+  (*         clean_context. *)
+
+  (*   - invert H31. *)
+  (*     eapply IHstep_user in H6; eauto. *)
+
+  (*   - msg_queue_prop; specialize_msg_ok; *)
+  (*       unfold adv_no_honest_keys, message_no_adv_private in *; *)
+  (*       simpl in *; *)
+  (*       repeat *)
+  (*         match goal with *)
+  (*         | [ RW : honest_keyb ?honk ?kid = _ , H : if honest_keyb ?honk ?kid then _ else _ |- _] => rewrite RW in H *)
+  (*         | [ H : (forall k_id, findUserKeys _ $? k_id = None \/ _) |- (forall k_id, _) ] => intro KID; specialize (H KID) *)
+  (*         | [ |- context [ _ $k++ $0 ] ] => rewrite merge_keys_right_identity *)
+  (*         | [ FK : findKeysCrypto _ ?msg $? ?kid = Some _, H : (forall k p, findKeysCrypto _ ?msg $? k = Some p -> _) *)
+  (*             |- context [ _ $k++ findKeysCrypto _ ?msg $? ?kid] ] => specialize (H _ _ FK); split_ands; try solve_perm_merges *)
+  (*         | [ FK : findKeysCrypto _ ?msg $? ?kid = None |- context [ ?uks $k++ findKeysCrypto _ ?msg $? ?kid] ] => *)
+  (*           split_ors; split_ands; solve_perm_merges *)
+  (*         | [ H : (forall k p, findKeysCrypto _ ?msg $? k = Some p -> _)  |- context [ _ $k++ findKeysCrypto ?cs ?msg $? ?kid] ] => *)
+  (*           match goal with *)
+  (*           | [ H : findKeysCrypto cs msg $? kid = _ |- _ ] => fail 1 *)
+  (*           | _ => cases (findKeysCrypto cs msg $? kid) *)
+  (*           end *)
+  (*         end; eauto. *)
+
+  (*     assert (msg_pattern_safe (findUserKeys usrs') pat) by *)
+  (*         (unfold typingcontext_sound in *; split_ex; invert H38; eauto). *)
+            
+  (*     assert (MHS: msg_honestly_signed (findUserKeys usrs') cs' msg = true) by eauto. *)
+  (*     generalize (message_honestly_signed_msg_signing_key_honest _ _ _ MHS); intros; split_ex; *)
+  (*         specialize_simply. *)
+
+  (*     rewrite honestk_merge_new_msgs_keys_same; eauto. *)
+
+  (*   - unfold adv_no_honest_keys in *; intros. *)
+  (*     specialize (H24 k_id). *)
+  (*     split_ex; subst; simpl in *. *)
+  (*     unfold typingcontext_sound in *; split_ex. *)
+  (*     invert H38. *)
+  (*     eapply H4 in H10; split_ex; subst; simpl in *. *)
+      
+  (*     assert (List.In x mycs') by eauto. *)
+  (*     user_cipher_queues_prop. *)
+      
+  (*     rewrite cipher_honestly_signed_honest_keyb_iff in H8. *)
+  (*     encrypted_ciphers_prop; eauto. *)
+  (*     intuition idtac. *)
+  (*     right; right; split; eauto; intros. *)
+  (*     solve_perm_merges; *)
+  (*       specialize (H13 _ _ H16); split_ands; discriminate. *)
+  (* Qed. *)
+
+  Definition goodness_predicates {A B} (U : RealWorld.universe A B) : Prop :=
+    let honestk := RealWorld.findUserKeys U.(RealWorld.users)
+    in  encrypted_ciphers_ok honestk U.(RealWorld.all_ciphers) U.(RealWorld.all_keys)
+      /\ keys_and_permissions_good U.(RealWorld.all_keys) U.(RealWorld.users) U.(RealWorld.adversary).(RealWorld.key_heap)
+      /\ user_cipher_queues_ok U.(RealWorld.all_ciphers) honestk U.(RealWorld.users)
+      /\ message_queues_ok U.(RealWorld.all_ciphers) U.(RealWorld.users) U.(RealWorld.all_keys)
+      /\ honest_users_only_honest_keys U.(RealWorld.users).
+
+  Lemma goodness_preservation :
+    forall {A B} (U U' : universe A B) lbl b,
+      step_universe U lbl U'
+      -> lameAdv b U.(adversary)
+      -> syntactically_safe_U U
+      -> goodness_predicates U
+      -> goodness_predicates U'.
+  Proof.
+    intros.
+
+    invert H; dismiss_adv.
+
+    unfold goodness_predicates, syntactically_safe_U in *; simpl in *.
+    destruct lbl, U, userData;
+      unfold build_data_step in *; simpl in *;
+        specialize (H1 _ _ H3); split_ex; simpl in *.
     
-    split_ors; split_ex; subst.
-    + subst.
-      generalize (SS _ _ H); intros; split_ex.
-      specialize (SS _ _ H11); split_ex; simpl in *.
-      (do 2 eexists); split; eauto.
-      eapply typingcontext_sound_other_user_step; eauto.
-    + subst.
-      generalize (SS _ _ H); intros; split_ex.
-      specialize (SS _ _ H12); split_ex; simpl in *.
-      (do 2 eexists); split; eauto.
-      eapply typingcontext_sound_other_user_step; eauto.
+    - intuition
+        eauto using silent_user_step_encrypted_ciphers_ok,
+      honest_silent_step_keys_good,
+      honest_silent_step_user_cipher_queues_ok,
+      honest_silent_step_message_queues_ok,
+      honest_users_only_honest_keys_honest_steps
+    .
 
-Qed.
+    eapply honest_silent_step_message_queues_ok; eauto; keys_and_permissions_prop; eauto.
 
-Lemma syntactically_safe_U_preservation_step :
-  forall t__hon t__adv (st st' : universe t__hon t__adv * IdealWorld.universe t__hon) b,
-    step st st'
-    -> universe_ok (fst st)
-    -> adv_universe_ok (fst st)
-    -> lameAdv b (fst st).(adversary)
-    -> syntactically_safe_U (fst st)
-    -> syntactically_safe_U (fst st').
-Proof.
-  inversion 1; intros; subst; simpl in *; eapply syntactically_safe_U_preservation_stepU; eauto.
-Qed.
+    - intuition
+        eauto using
+         honest_labeled_step_encrypted_ciphers_ok,
+      honest_labeled_step_keys_and_permissions_good,
+      honest_labeled_step_user_cipher_queues_ok,
+      honest_labeled_step_message_queues_ok,
+      honest_users_only_honest_keys_honest_steps
+      .
+  Qed.
+
+  Lemma syntactically_safe_U_preservation_stepU :
+    forall A B (U U' : universe A B) lbl b,
+      step_universe U lbl U'
+      -> lameAdv b U.(adversary)
+      -> goodness_predicates U
+      -> syntactically_safe_U U
+      -> syntactically_safe_U U'.
+  Proof.
+    intros * STEP LAME GOOD SS.
+    invert STEP; dismiss_adv.
+
+    unfold syntactically_safe_U, build_data_step in *; destruct U; destruct userData;
+      simpl in *; intros.
+    unfold goodness_predicates in *; split_ex; simpl in *.
+    msg_queue_prop.
+
+    destruct (u_id ==n uid); subst; clean_map_lookups; simpl.
+    - specialize (SS _ _ H); split_ex.
+      eapply syntactically_safe_honest_keys_preservation in H0; eauto.
+      split_ex; eauto.
+
+    - generalize H0; intros STEP.
+      eapply step_user_nochange_that_user_in_honest_users in H0; eauto.
+      destruct u; generalize STEP; intros STEP'.
+      eapply step_back_into_other_user in STEP; simpl; eauto.
+      
+      split_ors; split_ex; subst.
+      + subst.
+        generalize (SS _ _ H); intros; split_ex.
+        specialize (SS _ _ H8); split_ex; simpl in *.
+        (do 2 eexists); split; eauto.
+        eapply typingcontext_sound_other_user_step; eauto.
+      + subst.
+        generalize (SS _ _ H); intros; split_ex.
+        specialize (SS _ _ H9); split_ex; simpl in *.
+        (do 2 eexists); split; eauto.
+        eapply typingcontext_sound_other_user_step; eauto.
+
+  Qed.
+
+  Lemma syntactically_safe_U_preservation_step :
+    forall t__hon t__adv (st st' : universe t__hon t__adv * IdealWorld.universe t__hon) b,
+      step st st'
+      -> lameAdv b (fst st).(adversary)
+      -> goodness_predicates (fst st)
+      -> syntactically_safe_U (fst st)
+      -> syntactically_safe_U (fst st').
+  Proof.
+    inversion 1; intros; subst; simpl in *; eapply syntactically_safe_U_preservation_stepU; eauto.
+  Qed.
+
+End PredicatePreservation.
 
 Definition no_resends (sents : sent_nonces) :=
   NoDup sents.
