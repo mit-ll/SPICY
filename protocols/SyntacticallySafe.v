@@ -409,17 +409,6 @@ Ltac process_ctx1 :=
 
 Ltac process_ctx := repeat process_ctx1.
 
-Ltac dismiss_adv :=
-  repeat
-    match goal with
-    | [ LAME : lameAdv _ (adversary ?ru), STEP : step_user _ None _ _ |- _ ] =>
-      destruct ru; unfold build_data_step in *; unfold lameAdv in LAME; simpl in *
-    | [ LAME : lameAdv _ _, STEP : step_user _ None _ _ |- _ ] =>
-      unfold build_data_step in *; unfold lameAdv in LAME; simpl in *
-    | [ ADVP : protocol ?adv = Return _, STEP : step_user _ None (_,_,_,_,_,_,_,_,_,_,protocol ?adv) _ |- _ ] =>
-      rewrite ADVP in STEP; invert STEP
-    end.
-
 Lemma syntactically_safe_honest_keys_preservation' :
   forall {A B C} suid lbl bd bd',
 

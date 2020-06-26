@@ -38,13 +38,12 @@ From protocols Require Import
      ProtocolAutomation
      SafeProtocol
      RealWorldStepLemmas
+     SyntacticallySafe
 .
-
 
 Require IdealWorld.
 
 Set Implicit Arguments.
-
 
 (* forall reachable states labels align *)
 Inductive labels_always_align {A B} : (universe A B * IdealWorld.universe A) -> Prop :=
@@ -333,17 +332,19 @@ Proof.
   | [ H : forall _ _ _, _ $+ (_, ?ud) $? _ = _ -> _ -> _ -> _ -> _ <-> _ , H2 : _ $? ?u = Some {| key_heap := _ |} |- _ ] =>
     eapply H with (data__rw := ud); clean_map_lookups
   (* | [ H : forall _ _ _, _ $+ (_, _) $? _ = _ -> _ -> _ -> _ <-> _, u : Map.key |- _ ] => specialize (H u) *)
-          end); eauto.  
+          end); eauto.
+
+  
 (* getting new keys out of message *)
-  *  split; intros. apply merge_perms_split in H4. split_ors.
-  - specialize (H17 u). rewrite add_eq_o in H17. specialize (H17 _ _ eq_refl H5). simpl in H17.
-    invert H6. apply merge_perms_split in H10. split_ors.
+  (* *  split; intros. apply merge_perms_split in H4. split_ors. *)
+  (* - specialize (H17 u). rewrite add_eq_o in H17. specialize (H17 _ _ eq_refl H5). simpl in H17. *)
+  (*   invert H6. apply merge_perms_split in H10. split_ors. *)
 
-    assert (honest_key (findUserKeys usrs') k__sign); eauto. specialize (H17 H10). destruct H17. eapply H11. eauto. 
-    assert (findUserKeys usrs' $? k__sign = Some true); eauto. eapply findUserKeys_has_private_key_of_user; eauto.
-    assert (honest_key (findUserKeys usrs') k__sign); eauto. destruct H17; eauto. eauto.
+  (*   assert (honest_key (findUserKeys usrs') k__sign); eauto. specialize (H17 H10). destruct H17. eapply H11. eauto.  *)
+  (*   assert (findUserKeys usrs' $? k__sign = Some true); eauto. eapply findUserKeys_has_private_key_of_user; eauto. *)
+  (*   assert (honest_key (findUserKeys usrs') k__sign); eauto. destruct H17; eauto. eauto. *)
 
-  - invert H6.
+  (* - invert H6. *)
         
 (*    - assert (findUserKeys usrs' $? k__sign = Some true); eauto.  eapply findUserKeys_has_private_key_of_user; eauto. *)
 
@@ -591,7 +592,7 @@ Proof.
 Admitted.
 
 
-Lemma alignment_preservation_step :
+Lemma alignment_violation_step' :
   forall t__hon t__adv st st',
     @step t__hon t__adv st st'
     (* -> lameAdv b (fst st).(adversary) *)
@@ -613,10 +614,6 @@ Proof.
       admit.
 
   - 
-
-
-    
-      
   (* we know that we have stepped from (ru,iu) to (ru',iu).  we know that if the user
    * that stepped was the one from H, then we can use H1 to discharge.
    * However, if it was another user, stepping from (ru,iu) to st', then
@@ -625,44 +622,30 @@ Proof.
    * as a lemma  *)
 
 
-  - invert H3.
-    econstructor; intros.
-    * econstructor; intros.
-      ** admit.
-      ** 
-    * unfold labels_align in *. intros. do 3 eexists. split. eassumption. split
-
-
-      do 3 eexists; repeat (split; try eassumption).
-      (* two lemmas: step_universe H3 and H are same and different users *)
-  (*   eapply silent_leading_step_preserves_action_matches; eauto.  *)
-  (*   eapply silent_leading_step_preserves_action_matches in H. *)
-  (*   invert H. invert H1. shelve. shelve. *)
-  (* - intros. invert H. *)
-
-  (*   invert H. invert H0. *)
-
- (*   specialize (H0 _ ra). admit. *)
-  (* - intros. *)
-  (*   eapply H0. invert H1. invert H. eapply H0. specialize (H0 _ _ H1). *)
-
-
-  (*   intro. intro ru''. intros. specialize (H0 ru'' ra). invert H.    admit. admit. *)
-          
-  (* - intro. intro ru''. intro ra'. specialize (H3 ru'' ra').  *)
 Admitted.
 
-
-Lemma alignment_perservation_steps :
-  forall t__hon t__adv st st' ,
-    (@step t__hon t__adv)^* st st'
-    (* -> lameAdv b (fst st).(adversary) *)
-    -> labels_align st'
-    -> labels_align st.
-(* a user either has only changed in that it has new messages or a user already had label alignment in st *)
+Lemma alignment_violation_step :
+  forall t__hon t__adv st st' b,
+    @step t__hon t__adv st st'
+    -> lameAdv b (fst st).(adversary)
+    -> ~ labels_always_align st
+    -> ~ labels_always_align st'.
 Proof.
-  induct 1; eauto using alignment_preservation_step.
+  unfold not; intros.
+  eauto using alignment_violation_step'.
 Qed.
 
+Lemma alignment_violation_steps :
+  forall t__hon t__adv st st' b,
+    (@step t__hon t__adv)^* st st'
+    -> lameAdv b (fst st).(adversary)
+    -> ~ labels_always_align st
+    -> ~ labels_always_align st'.
+Proof.
+  induction 1; intros; eauto.
 
+  assert (LAME : lameAdv b (fst y).(adversary)) by eauto using adversary_remains_lame_step.
+  destruct x, y, z; simpl in *.
 
+  generalize H; intros VIOL; eapply alignment_violation_step in VIOL; eauto.
+Qed.
