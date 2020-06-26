@@ -3833,15 +3833,9 @@ Proof.
     eapply summarize_univ_step in SUMMARIES; eauto.
 
     assert (SS : syntactically_safe_U (fst st')) by eauto using syntactically_safe_U_preservation_step.
-    assert (UNIVS : universe_ok (fst st') /\ adv_universe_ok (fst st')).
-    invert H; dismiss_adv;
-      eapply universe_predicates_preservation; eauto.
-    1-2: admit.
+    assert (UNIVS : goodness_predicates (fst st')) by (eapply goodness_preservation_step; eauto).
 
-    split_ex.
-
-    specialize (IHstepsi _ _ eq_refl LAME SS H0 H13 H5 _ SUMMARIES).
-
+    specialize (IHstepsi _ _ eq_refl LAME SS UNIVS H4 _ SUMMARIES).
     assert (next : nextAction (protocol ud) cmd__n) by assumption.
 
     dt bd; destruct ud; simpl in *.
@@ -3866,20 +3860,69 @@ Proof.
 
       (* not equal *)
       assert (LK : users ru $? u_id = Some userData) by assumption.
-      eapply H9 in LK; eauto; split_ex.
+      eapply H8 in LK; eauto; split_ex.
 
       destruct userData; unfold buildUniverse, build_data_step in *; simpl in *.
-      specialize (H6 _ _ x H); split_ex.
+      specialize (H5 _ _ x H); split_ex.
 
-      generalize H7; intros MAX;
+      generalize H6; intros MAX;
+        eapply max_elt_non_stepped_user with (uid := uid) (uid' := u_id) in MAX; eauto; split_ex.
+      rename x0 into msg_heap'.
+
+      specialize (IHstepsi _ _ H16 _ _ next); simpl in *.
+
+      apply NatMap.O.max_elt_MapsTo in H16; rewrite find_mapsto_iff in H16; clean_map_lookups.
+      eapply commutes_noblock with (usrs := users ru) (usrs1' := usrs0) in next; eauto; split_ex.
+      
+      eapply IHstepsi in H13; clear IHstepsi; eauto.
+
+      2 : {
+        intros.
+        destruct (u_id ==n u_id2); subst; clean_map_lookups; eauto.
+        destruct userData2; eapply step_back_into_other_user with (u_id3 := u_id2) in H12; eauto.
+        split_ors; split_ex; eauto.
+      }
+      split_ex; subst.
+      eapply commutes_sound with (u_id1 := u_id) (u_id2 := uid) in H13; eauto.
+      split_ex; subst.
+      2-3: unfold build_data_step, buildUniverse_step; simpl; eauto.
+
+      unfold build_data_step in H13; destruct ru; simpl in *.
+
+      (do 3 eexists); repeat simple apply conj; eauto.
+      destruct x11; split_ex; eauto.
+      econstructor; eauto.
+      dt x14; dt x15; destruct x16; simpl in *.
+      econstructor 1; eauto.
+      econstructor 1; eauto.
+      rewrite <- H22; trivial.
+
+      dt x14; eapply labeled_action_never_commutes in H13; eauto; contradiction.
+
+    + destruct (uid ==n u_id); subst; clean_map_lookups.
+
+      (* equal *)
+      (do 3 eexists); repeat simple apply conj; eauto 10.
+      simpl.
+      (do 3 eexists); repeat simple apply conj; eauto.
+      econstructor; eauto.
+
+      (* not equal *)
+      assert (LK : users ru $? u_id = Some userData) by assumption.
+      eapply H8 in LK; eauto; split_ex.
+
+      destruct userData; unfold buildUniverse, build_data_step in *; simpl in *.
+      specialize (H5 _ _ x H); split_ex.
+
+      generalize H6; intros MAX;
         eapply max_elt_non_stepped_user with (uid := uid) (uid' := u_id) in MAX; eauto; split_ex.
       rename x0 into msg_heap'.
 
       specialize (IHstepsi _ _ H19 _ _ next); simpl in *.
 
       apply NatMap.O.max_elt_MapsTo in H19; rewrite find_mapsto_iff in H19; clean_map_lookups.
+
       eapply commutes_noblock with (usrs := users ru) (usrs1' := usrs0) in next; eauto; split_ex.
-      
       eapply IHstepsi in H16; clear IHstepsi; eauto.
 
       2 : {
@@ -3889,304 +3932,30 @@ Proof.
         split_ors; split_ex; eauto.
       }
       split_ex; subst.
+
       eapply commutes_sound with (u_id1 := u_id) (u_id2 := uid) in H16; eauto.
       split_ex; subst.
-      2-3: unfold build_data_step, buildUniverse_step; simpl; eauto.
 
+      2-3: unfold build_data_step, buildUniverse_step; simpl; eauto.
+      
       unfold build_data_step in H16; destruct ru; simpl in *.
 
       (do 3 eexists); repeat simple apply conj; eauto.
       destruct x11; split_ex; eauto.
       econstructor; eauto.
       dt x14; dt x15; destruct x16; simpl in *.
-      econstructor 1; eauto.
+      econstructor 2; eauto.
       econstructor 1; eauto.
       rewrite <- H25; trivial.
 
-      dt x14; eapply labeled_action_never_commutes in H16; eauto; contradiction.
-
-    + destruct (uid ==n u_id); subst; clean_map_lookups.
-
-      (* equal *)
-      (do 3 eexists); repeat simple apply conj; eauto 10.
-      simpl.
-      (do 3 eexists); repeat simple apply conj; eauto.
-      econstructor; eauto.
-
-      (* not equal *)
-      assert (LK : users ru $? u_id = Some userData) by assumption.
-      eapply H9 in LK; eauto; split_ex.
-
-      destruct userData; unfold buildUniverse, build_data_step in *; simpl in *.
-      specialize (H6 _ _ x H); split_ex.
-
-      generalize H7; intros MAX;
-        eapply max_elt_non_stepped_user with (uid := uid) (uid' := u_id) in MAX; eauto; split_ex.
-      rename x0 into msg_heap'.
-
-      specialize (IHstepsi _ _ H22 _ _ next); simpl in *.
-
-      apply NatMap.O.max_elt_MapsTo in H22; rewrite find_mapsto_iff in H22; clean_map_lookups.
-
-      eapply commutes_noblock with (usrs := users ru) (usrs1' := usrs0) in next; eauto; split_ex.
-      eapply IHstepsi in H19; clear IHstepsi; eauto.
-
-      2 : {
-        intros.
-        destruct (u_id ==n u_id2); subst; clean_map_lookups; eauto.
-        destruct userData2; eapply step_back_into_other_user with (u_id3 := u_id2) in H18; eauto.
-        split_ors; split_ex; eauto.
-      }
-      split_ex; subst.
-
-      eapply commutes_sound with (u_id1 := u_id) (u_id2 := uid) in H19; eauto.
-      split_ex; subst.
-
-      2-3: unfold build_data_step, buildUniverse_step; simpl; eauto.
-      
-      unfold build_data_step in H19; destruct ru; simpl in *.
-
-      (do 3 eexists); repeat simple apply conj; eauto.
-      destruct x11; split_ex; eauto.
-      econstructor; eauto.
-      dt x14; dt x15; destruct x16; simpl in *.
-      econstructor 2; eauto.
-      econstructor 1; eauto.
-      rewrite <- H28; trivial.
-
       unfold adv_universe_ok, universe_ok, syntactically_safe_U in *; split_ex; simpl in *.
-      generalize H14; intros USR; apply H2 in USR; split_ex; eauto; simpl in *.
-      eapply action_matches_other_user_silent_step; eauto.
+      generalize H0; intros USR; apply H2 in USR; split_ex; eauto; simpl in *.
+      unfold goodness_predicates in *; split_ex; eapply action_matches_other_user_silent_step; eauto.
 
-      dt x14; unfold build_data_step in H19; eapply labeled_action_never_commutes in H19; eauto; contradiction.
+      dt x14; unfold build_data_step in H16; eapply labeled_action_never_commutes in H16; eauto; contradiction.
 
-Admitted.
+Qed.
 
-Lemma translate_trace_commute :
-  forall t__hon t__adv i st st' b,
-    @stepsi t__hon t__adv (1 + i) st st'
-    -> lameAdv b (fst st).(adversary)
-    (* -> (forall st'', ~ step st' st'') *)
-    -> (forall lbl ru, ~ step_universe (fst st') lbl ru)
-    -> forall summaries, summarize_univ (fst st) summaries
-    -> forall uid ud, NatMap.O.max_elt (fst st).(users) = Some (uid,ud)
-    -> forall t (cmd__n : user_cmd t), nextAction ud.(protocol) cmd__n
-    -> (forall u_id2 userData2,
-          uid <> u_id2
-          -> users (fst st) $? u_id2 = Some userData2
-          -> exists s,
-                summaries $? u_id2 = Some s
-              /\ commutes cmd__n s)
-    -> forall lbl bd, step_user lbl (Some uid) (build_data_step (fst st) ud) bd
-    -> exists lbl' bd' ru,
-            step_user lbl' (Some uid) (build_data_step (fst st) ud) bd'
-          /\ ru = buildUniverse_step bd' uid
-          /\ (match lbl' with
-             | Silent    => stepsi i (ru, snd st) st'
-             | Action ra => exists iu' iu'' ia,
-                               istepSilent^* (snd st) iu'
-                               /\ IdealWorld.lstep_universe iu' (Action ia) iu''
-                               /\ action_matches ra (fst st) ia iu'
-                               /\ stepsi i (ru, iu'') st'
-             end).
-Proof.
-  induct 1; intros; eauto.
-
-  invert H0.
-
-  - clear IHstepsi.
-    invert H; simpl in *;
-      repeat
-        match goal with
-        | [ H : step_universe _ _ _ |- _ ] => invert H; dismiss_adv
-        | [ H : O.max_elt _ = Some _ |- _ ] =>
-          apply NatMap.O.max_elt_MapsTo in H; rewrite find_mapsto_iff in H
-        end.
-
-    + destruct (uid ==n u_id); subst; clean_map_lookups.
-
-      (* equal *)
-      (do 3 eexists); repeat simple apply conj; simpl; eauto 8.
-      simpl; eauto.
-      econstructor 1.
-      (* econstructor 1; eauto. *)
-      (* econstructor. *)
-
-      (* not equal *) 
-      assert (LK : users ru $? u_id = Some userData) by assumption.
-      eapply H6 in LK; eauto; split_ex.
-
-      destruct userData, ud; unfold build_data_step in *; simpl in *.
-
-      specialize (H3 _ _ x H); split_ex.
-      dt bd.
-      unfold buildUniverse in H2.
-
-      (* usrs ru $? uid *)
-      generalize H4; intros STEP.
-      eapply step_limited_change_other_user in STEP; eauto; split_ex.
-      split_ors; clean_map_lookups; eauto.
-
-      * eapply commutes_noblock with (usrs := users ru) (usrs1' := usrs) in (*na*) H5; eauto; split_ex;
-          exfalso; eapply H2; eauto.
-
-      * eapply commutes_noblock with (usrs := users ru) (usrs1' := usrs) in H5; eauto; split_ex;
-          exfalso; eapply H2; eauto.
-
-    + destruct (uid ==n u_id); subst; clean_map_lookups.
-
-      (* equal *)
-      (do 3 eexists); repeat simple apply conj; eauto 10.
-      simpl.
-      (do 3 eexists); repeat simple apply conj; eauto.
-      econstructor.
-
-      (* not equal *) 
-      assert (LK : users ru $? u_id = Some userData) by assumption.
-      eapply H6 in LK; eauto; split_ex.
-
-      destruct userData, ud; unfold build_data_step in *; simpl in *.
-
-      specialize (H3 _ _ x H); split_ex.
-      dt bd.
-      unfold buildUniverse in H2.
-
-      generalize H4; intros STEP.
-      eapply step_limited_change_other_user in STEP; eauto; split_ex.
-      split_ors; clean_map_lookups; eauto.
-
-      * eapply commutes_noblock with (usrs := users ru) (usrs1' := usrs) in H5; eauto; split_ex;
-          exfalso; eapply H2; eauto.
-      * eapply commutes_noblock with (usrs := users ru) (usrs1' := usrs) in H5; eauto; split_ex;
-          exfalso; eapply H2; eauto.
-
-  - assert (LAME: lameAdv b (adversary (fst st))) by assumption.
-    eapply adversary_remains_lame_step in LAME; eauto.
-
-    assert (SUMMARIES : summarize_univ (fst st) summaries) by assumption.
-    eapply summarize_univ_step in SUMMARIES; eauto.
-
-    specialize (IHstepsi _ _ eq_refl LAME H2 _ SUMMARIES).
-
-    assert (next : nextAction (protocol ud) cmd__n) by assumption.
-
-    dt bd; destruct ud; simpl in *.
-
-    invert H; simpl in *;
-      match goal with
-      | [ H : step_universe _ _ _ |- _ ] => invert H; dismiss_adv
-      end;
-      match goal with
-      | [ H : O.max_elt _ = Some _ |- _ ] =>
-        let MAX := fresh "H"
-        in generalize H; intros MAX;
-             apply NatMap.O.max_elt_MapsTo in MAX; rewrite find_mapsto_iff in MAX
-      end.
-
-    + destruct (uid ==n u_id); subst; clean_map_lookups.
-
-      (* equal *)
-      (do 3 eexists); repeat simple apply conj; eauto.
-      simpl; eauto.
-      econstructor; eauto.
-
-      (* not equal *)
-      assert (LK : users ru $? u_id = Some userData) by assumption.
-      eapply H6 in LK; eauto; split_ex.
-
-      destruct userData; unfold buildUniverse, build_data_step in *; simpl in *.
-      specialize (H3 _ _ x H); split_ex.
-
-      generalize H4; intros MAX;
-        eapply max_elt_non_stepped_user with (uid := uid) (uid' := u_id) in MAX; eauto; split_ex.
-      rename x0 into msg_heap'.
-
-      specialize (IHstepsi _ _ H14 _ _ next); simpl in *.
-
-      apply NatMap.O.max_elt_MapsTo in H14; rewrite find_mapsto_iff in H14; clean_map_lookups.
-      eapply commutes_noblock with (usrs := users ru) (usrs1' := usrs0) in next; eauto; split_ex.
-      
-      eapply IHstepsi in H11; clear IHstepsi; eauto.
-
-      2 : {
-        intros.
-        destruct (u_id ==n u_id2); subst; clean_map_lookups; eauto.
-        destruct userData2; eapply step_back_into_other_user with (u_id3 := u_id2) in H10; eauto.
-        split_ors; split_ex; eauto.
-      }
-      split_ex; subst.
-      eapply commutes_sound with (u_id1 := u_id) (u_id2 := uid) in H11; eauto.
-      split_ex; subst.
-      2-4: admit. (* silly universe preconditions that need to be added *)
-      2-3: unfold build_data_step, buildUniverse_step; simpl; eauto.
-
-      unfold build_data_step in H11; destruct ru; simpl in *.
-
-      (do 3 eexists); repeat simple apply conj; eauto.
-      destruct x11; split_ex; eauto.
-      econstructor; eauto.
-      dt x14; dt x15; destruct x16; simpl in *.
-      econstructor 1; eauto.
-      econstructor 1; eauto.
-      rewrite <- H20; trivial.
-
-      dt x14; eapply labeled_action_never_commutes in H11; eauto; contradiction.
-
-    + destruct (uid ==n u_id); subst; clean_map_lookups.
-
-      (* equal *)
-      (do 3 eexists); repeat simple apply conj; eauto 10.
-      simpl.
-      (do 3 eexists); repeat simple apply conj; eauto.
-      econstructor; eauto.
-
-      (* not equal *)
-      assert (LK : users ru $? u_id = Some userData) by assumption.
-      eapply H6 in LK; eauto; split_ex.
-
-      destruct userData; unfold buildUniverse, build_data_step in *; simpl in *.
-      specialize (H3 _ _ x H); split_ex.
-
-      generalize H4; intros MAX;
-        eapply max_elt_non_stepped_user with (uid := uid) (uid' := u_id) in MAX; eauto; split_ex.
-      rename x0 into msg_heap'.
-
-      specialize (IHstepsi _ _ H17 _ _ next); simpl in *.
-
-      apply NatMap.O.max_elt_MapsTo in H17; rewrite find_mapsto_iff in H17; clean_map_lookups.
-
-      eapply commutes_noblock with (usrs := users ru) (usrs1' := usrs0) in next; eauto; split_ex.
-      eapply IHstepsi in H14; clear IHstepsi; eauto.
-
-      2 : {
-        intros.
-        destruct (u_id ==n u_id2); subst; clean_map_lookups; eauto.
-        destruct userData2; eapply step_back_into_other_user with (u_id3 := u_id2) in H13; eauto.
-        split_ors; split_ex; eauto.
-      }
-      split_ex; subst.
-
-      eapply commutes_sound with (u_id1 := u_id) (u_id2 := uid) in H14; eauto.
-      split_ex; subst.
-
-      2-4: admit. (* silly universe preconditions that need to be added *)
-      2-3: unfold build_data_step, buildUniverse_step; simpl; eauto.
-      
-      unfold build_data_step in H11; destruct ru; simpl in *.
-
-      (do 3 eexists); repeat simple apply conj; eauto.
-      destruct x11; split_ex; eauto.
-      econstructor; eauto.
-      dt x14; dt x15; destruct x16; simpl in *.
-      econstructor 2; eauto.
-      econstructor 1; eauto.
-      rewrite <- H23; trivial.
-
-      admit. (* action matches other sense *)
-
-      dt x14; unfold build_data_step in H14; eapply labeled_action_never_commutes in H14; eauto; contradiction.
-
-Admitted.
 
 Lemma step_na :
   forall A B uid lbl bd
@@ -4234,8 +4003,9 @@ Lemma resend_violation_translate' :
   forall t__hon t__adv n st st' b summaries,
     stepsi n st st'
     -> lameAdv b (fst st).(adversary)
+    -> goodness_predicates (fst st)
+    -> syntactically_safe_U (fst st)
     -> summarize_univ (fst st) summaries
-    (* -> (forall st'', step st' st'' -> False) *)
     -> (forall lbl ru, step_universe (fst st') lbl ru -> False)
     -> ~ no_resends_U (fst st')
     -> exists st'',
@@ -4261,15 +4031,16 @@ Proof.
                   summaries $? u_id2 = Some s
                 /\ commutes cmd__n s))).
 
-  - firstorder idtac.
+  - split_ex.
 
-    generalize (O.max_elt_MapsTo H4); intros MT; 
+    generalize (O.max_elt_MapsTo H6); intros MT; 
       rewrite find_mapsto_iff in MT.
     destruct x0.
-    generalize H5; intros NA; eapply step_na in NA; eauto.
+    generalize H7; intros NA; eapply step_na in NA; eauto.
     split_ex; simpl in *.
     eapply translate_trace_commute in H; eauto.
-    firstorder idtac; subst.
+    split_ex; subst.
+    (* firstorder idtac; subst. *)
 
     unfold build_data_step in *; dt x5; simpl in *.
     assert (LAME: lameAdv b (adversary (fst st))) by assumption.
@@ -4278,6 +4049,14 @@ Proof.
     assert (SUMMARIES : summarize_univ (fst st) summaries) by assumption.
     eapply summarize_univ_user_step in SUMMARIES; eauto.
     2: unfold build_data_step; simpl; eauto.
+
+    assert (GOODNESS : goodness_predicates (fst st)) by assumption.
+    eapply goodness_preservation_stepU in GOODNESS; eauto.
+    2: econstructor; eauto.
+
+    assert (SS : syntactically_safe_U (fst st)) by assumption.
+    eapply syntactically_safe_U_preservation_stepU in SS; eauto.
+    2: econstructor; eauto.
 
     destruct x4; split_ex;
       match goal with
@@ -4297,7 +4076,18 @@ Proof.
     econstructor 1; eauto.
     
   - invert H.
-    eapply IHn in H7; eauto.
+
+    generalize H8; intros SS; 
+      eapply syntactically_safe_U_preservation_step in SS; eauto.
+
+    assert (SSU : syntactically_safe_U (fst st'0)) by eauto using syntactically_safe_U_preservation_step.
+    assert (GOODNESS : goodness_predicates (fst st'0)) by eauto using goodness_preservation_step.
+
+    eapply IHn in H9; eauto.
+    repeat match goal with
+           | [ H : goodness_predicates _ |- _ ] => clear H
+           | [ H : syntactically_safe_U _ |- _ ] => clear H
+           end.
     firstorder idtac.
     simpl in *.
 
@@ -4306,19 +4096,19 @@ Proof.
     eapply TrcFront; eauto.
     destruct st, st'0.
 
-    generalize H6; intros STEP; invert H6;
+    generalize H8; intros STEP; invert H8;
       match goal with
       | [ H : step_universe _ _ _ |- _ ] => invert H
       end.
 
     + pose proof (max_element_some _ _ H6); firstorder idtac.
-      specialize (H4 x0); firstorder idtac.
-      specialize (H4 x1); simpl in H4; split_ex.
-      eapply not_and_or in H4; split_ors; try contradiction.
-      eapply not_and_or in H4.
+      specialize (H2 x0); firstorder idtac.
+      specialize (H2 x1); simpl in H2; split_ex.
+      eapply not_and_or in H2; split_ors; try contradiction.
+      eapply not_and_or in H2.
 
       destruct (x0 ==n u_id); subst; clean_map_lookups.
-      * generalize (O.max_elt_MapsTo H8); intros MT.
+      * generalize (O.max_elt_MapsTo H7); intros MT.
         rewrite find_mapsto_iff in MT.
         clean_map_lookups.
         econstructor; eauto.
@@ -4331,17 +4121,15 @@ Proof.
         left; unfold not; intros; eauto.
         right; intros.
 
-        apply not_all_ex_not in H4; split_ex.
-        apply not_all_ex_not in H4; split_ex.
-        apply not_all_ex_not in H4; split_ex.
-        apply not_all_ex_not in H4; split_ex.
+        apply not_all_ex_not in H2; split_ex.
+        apply not_all_ex_not in H2; split_ex.
+        apply not_all_ex_not in H2; split_ex.
+        apply not_all_ex_not in H2; split_ex.
 
-        apply imply_to_and in H4; split_ands.
+        apply imply_to_and in H2; split_ands.
         apply imply_to_and in H10; split_ands.
         apply imply_to_and in H11; split_ands.
-        (* apply not_all_ex_not in H12; split_ex. *)
-        (* apply not_all_ex_not in H12; split_ex. *)
-        (* apply imply_to_and in H12; split_ands. *)
+
         firstorder idtac; simpl in *.
 
         eapply na_deterministic in H11; eauto; split_ands; subst.
@@ -4352,10 +4140,10 @@ Proof.
       rewrite H0 in H6; invert H6.
 
     + pose proof (max_element_some _ _ H6); firstorder idtac.
-      specialize (H4 x0); firstorder idtac.
-      specialize (H4 x1); simpl in H4; split_ex.
-      eapply not_and_or in H4; split_ors; try contradiction.
-      eapply not_and_or in H4.
+      specialize (H2 x0); firstorder idtac.
+      specialize (H2 x1); simpl in H4; split_ex.
+      eapply not_and_or in H2; split_ors; try contradiction.
+      eapply not_and_or in H2.
 
       destruct (x0 ==n u_id); subst; clean_map_lookups.
       * generalize (O.max_elt_MapsTo H8); intros MT.
@@ -4371,17 +4159,14 @@ Proof.
         left; unfold not; intros; eauto.
         right; intros.
 
-        apply not_all_ex_not in H4; split_ex.
-        apply not_all_ex_not in H4; split_ex.
-        apply not_all_ex_not in H4; split_ex.
-        apply not_all_ex_not in H4; split_ex.
+        apply not_all_ex_not in H2; split_ex.
+        apply not_all_ex_not in H2; split_ex.
+        apply not_all_ex_not in H2; split_ex.
+        apply not_all_ex_not in H2; split_ex.
 
-        apply imply_to_and in H4; split_ands.
+        apply imply_to_and in H2; split_ands.
         apply imply_to_and in H10; split_ands.
         apply imply_to_and in H11; split_ands.
-        (* apply not_all_ex_not in H15; split_ex. *)
-        (* apply not_all_ex_not in H15; split_ex. *)
-        (* apply imply_to_and in H15; split_ands. *)
         firstorder idtac; simpl in *.
 
         eapply na_deterministic in H11; eauto; split_ands; subst.
