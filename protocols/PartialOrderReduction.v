@@ -1552,30 +1552,6 @@ Definition TrC {t__hon t__adv} (ru0 : RealWorld.universe t__hon t__adv) (iu0 : I
   {| Initial := {(ru0, iu0)};
      Step    := @stepC t__hon t__adv |}.
 
-(* Lemma resend_violation_translate : *)
-(*   forall t__hon t__adv n st st' b, *)
-(*     stepsi n st st' *)
-(*     -> lameAdv b (fst st).(adversary) *)
-(*     -> (forall st'', step st' st'' -> False) *)
-(*     -> ~ no_resends_U (fst st') *)
-(*     -> exists st'', *)
-(*         (@stepC t__hon t__adv)^* st st'' *)
-(*         /\ ~ no_resends_U (fst st''). *)
-(* Proof. *)
-(* Admitted. *)
-
-(* Lemma alignment_violation_translate : *)
-(*   forall t__hon t__adv st st' n b, *)
-(*     stepsi n st st' *)
-(*     -> lameAdv b (fst st).(adversary) *)
-(*     -> (forall st'', step st' st'' -> False) *)
-(*     -> ~ labels_align st' *)
-(*     -> exists st'', *)
-(*         (@stepC t__hon t__adv)^* st st'' *)
-(*         /\ ~ labels_align st''. *)
-(* Proof. *)
-(* Admitted. *)
-
 Lemma fold_Equal :
   forall V (m1 m2 : NatMap.t V),
     (forall y, m1 $? y = m2 $? y)
@@ -2367,85 +2343,91 @@ Proof.
     rewrite <- KPMQ; eauto.
 Qed.
 
-Lemma message_eq_user_add_nochange_drop_signed_addressed_msg :
-  forall A B (usrs : honest_users A) (adv adv' : user_data B) cs gks
-    ks cmd t (msg : crypto t) qmsgs mycs froms sents cur_n cmd' sents' cur_n'
-    t (m__rw : crypto t) m__iw iu chid uid,
+(* Lemma message_eq_user_add_nochange_drop_signed_addressed_msg : *)
+(*   forall A B (usrs : honest_users A) (adv adv' : user_data B) cs gks *)
+(*     ks cmd t (msg : crypto t) qmsgs mycs froms sents cur_n cmd' sents' cur_n' *)
+(*     t (m__rw : crypto t) m__iw iu chid uid, *)
 
-    usrs $? uid = Some (mkUserData ks cmd (existT _ _ msg :: qmsgs) mycs froms sents cur_n)
-    -> msg_signed_addressed (findUserKeys usrs) cs (Some uid) msg = true
-    -> message_eq m__rw {| users := usrs; adversary := adv; all_ciphers := cs; all_keys := gks |} m__iw iu chid
-    -> message_eq
-        m__rw
-        {| users :=
-             usrs $+ (uid,
-                      {| key_heap := ks;
-                         protocol := cmd';
-                         msg_heap := qmsgs;
-                         c_heap := mycs;
-                         from_nons := updateTrackedNonce (Some uid) froms cs msg;
-                         sent_nons := sents';
-                         cur_nonce := cur_n' |});
-           adversary := adv';
-           all_ciphers := cs;
-           all_keys := gks |} m__iw iu chid.
-Proof.
-  intros.
+(*     usrs $? uid = Some (mkUserData ks cmd (existT _ _ msg :: qmsgs) mycs froms sents cur_n) *)
+(*     -> msg_signed_addressed (findUserKeys usrs) cs (Some uid) msg = true *)
+(*     -> message_eq m__rw {| users := usrs; adversary := adv; all_ciphers := cs; all_keys := gks |} m__iw iu chid *)
+(*     -> message_eq *)
+(*         m__rw *)
+(*         {| users := *)
+(*              usrs $+ (uid, *)
+(*                       {| key_heap := ks; *)
+(*                          protocol := cmd'; *)
+(*                          msg_heap := qmsgs; *)
+(*                          c_heap := mycs; *)
+(*                          from_nons := updateTrackedNonce (Some uid) froms cs msg; *)
+(*                          sent_nons := sents'; *)
+(*                          cur_nonce := cur_n' |}); *)
+(*            adversary := adv'; *)
+(*            all_ciphers := cs; *)
+(*            all_keys := gks |} m__iw iu chid. *)
+(* Proof. *)
+(*   intros. *)
 
-  unfold msg_signed_addressed in H0; rewrite andb_true_iff in H0; split_ex.
+(*   unfold msg_signed_addressed in H0; rewrite andb_true_iff in H0; split_ex. *)
 
-  pose proof (clean_messages_cons_split cs (findUserKeys usrs) uid froms qmsgs _ _ msg eq_refl); split_ors; subst.
-  unfold not_replayed in H4; rewrite H0 in H4.
-  unfold msg_to_this_user, msg_destination_user in *;
-    destruct msg; try discriminate;
-      cases (cs $? c_id); try discriminate;
-        cases (cipher_to_user c ==n uid); try discriminate.
-  simpl in *; unfold AdversaryUniverse.msg_nonce_ok in H4; context_map_rewrites.
-  cases (count_occ msg_seq_eq froms (cipher_nonce c)); try discriminate.
-  rewrite e; destruct (uid ==n uid); try contradiction.
+(*   pose proof (clean_messages_cons_split cs (findUserKeys usrs) uid froms qmsgs _ _ msg eq_refl); split_ors; subst. *)
   
-  invert H1; [ econstructor 1 | econstructor 2 ]; simpl in *; eauto;
-    intros;
-    autorewrite with find_user_keys in *; eauto;
-      destruct (u ==n cipher_to_user c); subst; clean_map_lookups; eauto; simpl; eauto;
-        match goal with
-        | [ ARG : ?usrs $? ?uid = Some _,
-                  IARG : IdealWorld.users _ $? ?uid = Some _,
-                         H : (forall _ _ _, ?usrs $? _ = Some _ -> _) |- _ ] =>
-          eapply H in ARG
-        end; eauto.
+(*   - unfold not_replayed in H4; rewrite H0 in H4. *)
+(*     unfold msg_to_this_user, msg_destination_user in *; *)
+(*       destruct msg; try discriminate; *)
+(*         cases (cs $? c_id); try discriminate; *)
+(*           cases (cipher_to_user c ==n uid); try discriminate. *)
+(*     simpl in *; unfold AdversaryUniverse.msg_nonce_ok in H4; context_map_rewrites. *)
+(*     cases (count_occ msg_seq_eq froms (cipher_nonce c)); try discriminate. *)
+(*     rewrite e; destruct (uid ==n uid); try contradiction. *)
+    
+(*     invert H1; [ econstructor 1 | econstructor 2 ]; simpl in *; eauto; *)
+(*       intros; *)
+(*       autorewrite with find_user_keys in *; eauto; *)
+(*         destruct (u ==n cipher_to_user c); subst; clean_map_lookups; eauto; simpl; eauto; *)
+(*           match goal with *)
+(*           | [ ARG : ?usrs $? ?uid = Some _, *)
+(*                     IARG : IdealWorld.users _ $? ?uid = Some _, *)
+(*                            H : (forall _ _ _, ?usrs $? _ = Some _ -> _) |- _ ] => *)
+(*             eapply H in ARG *)
+(*           end; eauto. *)
 
-  1-2: 
-    invert H; [ econstructor 1 | econstructor 2 ]; simpl in *; eauto;
-    unfold key_perms_from_message_queue in *;
-    rewrite H3, key_perms_from_message_queue_notation in *; eauto.
+(*     1-2:  *)
+(*       invert H; [ econstructor 1 | econstructor 2 ]; simpl in *; eauto; *)
+(*       unfold key_perms_from_message_queue in *; *)
+(*       rewrite H3, key_perms_from_message_queue_notation in *; eauto. *)
 
-  unfold updateTrackedNonce; context_map_rewrites.
-  unfold not_replayed in H4; rewrite H0 in H4.
-  unfold msg_to_this_user, msg_destination_user in *; context_map_rewrites.
-  destruct (cipher_to_user x1 ==n uid); try discriminate; rewrite e.
-  destruct (uid ==n uid); try contradiction.
-  simpl in *; context_map_rewrites.
-  cases (count_occ msg_seq_eq froms (cipher_nonce x1)); try discriminate.
+(*   - unfold  updateTrackedNonce; context_map_rewrites. *)
+(*     unfold not_replayed in H4; rewrite H0 in H4. *)
+(*     unfold msg_to_this_user, msg_destination_user in *; context_map_rewrites. *)
+(*     destruct (cipher_to_user x1 ==n uid); try discriminate; rewrite e. *)
+(*     destruct (uid ==n uid); try contradiction. *)
+(*     simpl in *; context_map_rewrites. *)
+(*     cases (count_occ msg_seq_eq froms (cipher_nonce x1)); try discriminate. *)
 
-  invert H1; [ econstructor 1 | econstructor 2 ]; simpl in *; eauto;
-    intros;
-    autorewrite with find_user_keys in *; eauto;
-      destruct (u ==n cipher_to_user x1); subst; clean_map_lookups; eauto; simpl; eauto;
-        match goal with
-        | [ ARG : ?usrs $? ?uid = Some _,
-            IARG : IdealWorld.users _ $? ?uid = Some _,
-            H : (forall _ _ _, ?usrs $? _ = Some _ -> _) |- _ ] =>
-          eapply H in ARG
-        end; eauto; clean_map_lookups.
-  
-  invert H; [ econstructor 1 | econstructor 2 ]; simpl in *; eauto.
-  unfold key_perms_from_message_queue in *.
-  rewrite H3, key_perms_from_message_queue_notation in *.
-  simpl in H15; context_map_rewrites.
-  rewrite key_perms_from_message_queue_notation in H15.
+(*     invert H1; [ econstructor 1 | econstructor 2 ]; simpl in *; eauto; *)
+(*       intros; *)
+(*       autorewrite with find_user_keys in *; eauto; *)
+(*         destruct (u ==n cipher_to_user x1); subst; clean_map_lookups; eauto; simpl; eauto; *)
+(*           match goal with *)
+(*           | [ ARG : ?usrs $? ?uid = Some _, *)
+(*                     IARG : IdealWorld.users _ $? ?uid = Some _, *)
+(*                            H : (forall _ _ _, ?usrs $? _ = Some _ -> _) |- _ ] => *)
+(*             eapply H in ARG *)
+(*           end; eauto; clean_map_lookups. *)
+    
+(*     + invert H; [ econstructor 1 | econstructor 2 ]; simpl in *; eauto. *)
+(*       unfold key_perms_from_message_queue in *. *)
+(*       rewrite H3, key_perms_from_message_queue_notation in *. *)
+(*       simpl in H15; context_map_rewrites. *)
+(*       rewrite key_perms_from_message_queue_notation in H15. *)
 
-Admitted.
+(*       destruct x1; eauto; simpl in *. *)
+(*       rewrite key_perms_from_message_queue_pull_merge in H15. *)
+
+
+
+(* Admitted. *)
 
 Lemma key_perms_from_known_ciphers_idempotent_addnl_cipher :
   forall cs cs' mycs ks honestk c_id c,
@@ -3076,6 +3058,9 @@ Lemma action_matches_other_user_silent_step' :
           uid1 <> uid2
           -> usrs $? uid1 = Some (mkUserData ks1 cmd1 qmsgs1 mycs1 froms1 sents1 cur_n1)
           -> usrs $? uid2 = Some (mkUserData ks2 cmd2 qmsgs2 mycs2 froms2 sents2 cur_n2)
+          -> forall t__n (cmd__n : user_cmd t__n) s, nextAction cmd cmd__n
+          -> summarize cmd2 s
+          -> commutes cmd__n s
           -> step_user (Action a) (Some uid2)
                       (usrs, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
                       (usrs'', adv'', cs'', gks'', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
@@ -3086,7 +3071,7 @@ Lemma action_matches_other_user_silent_step' :
 Proof.
 
   Ltac action_matches_solver :=
-    repeat 
+    repeat
       match goal with
       | [ H : step_user (Action _) _ _ _ |- _ ] =>
         eapply invert_step_label in H; eauto; split_ors; split_ex; subst; simpl
@@ -3099,20 +3084,17 @@ Proof.
   
   induction 1; inversion 1; inversion 1; intros; subst;
     try discriminate;
-    (* try solve [ action_matches_solver; message_eq_solver; eauto 8 ]. *)
     try solve [ action_matches_solver; eauto 8 ].
 
   - invert H30.
-    eapply IHstep_user in H34; eauto.
+    invert H35.
+    eapply IHstep_user in H8; eauto.
 
-  - (* Recv drop, update to receive nonces if signed *)
-    cases ( msg_signed_addressed (findUserKeys usrs') cs' (Some uid1) msg ); eauto.
-    action_matches_solver; eauto.
-    admit.
-    admit.
-    action_matches_solver; eauto.
+  - (* Recv drop, update to receive nonces if signed -- not allowed by commutation rules right now *)
+    invert H38; unfold commutes in *; contradiction.
 
-Admitted.
+Qed.
+
 
 Lemma action_matches_other_user_silent_step :
   forall A B cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks' cmd1 cmd1'
@@ -3133,6 +3115,9 @@ Lemma action_matches_other_user_silent_step :
         uid1 <> uid2
         -> usrs $? uid1 = Some (mkUserData ks1 cmd1 qmsgs1 mycs1 froms1 sents1 cur_n1)
         -> usrs $? uid2 = Some (mkUserData ks2 cmd2 qmsgs2 mycs2 froms2 sents2 cur_n2)
+        -> forall t__n (cmd__n : user_cmd t__n) s, nextAction cmd1 cmd__n
+        -> summarize cmd2 s
+        -> commutes cmd__n s
         -> step_user (Action a) (Some uid2)
                     (usrs, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
                     (usrs'', adv'', cs'', gks'', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
@@ -3147,37 +3132,6 @@ Proof.
   14: exact H9.
   all: reflexivity || eauto.
 Qed.
-
-(* Lemma action_matches_other_user_silent_step' : *)
-(*   forall A B C lbl suid bd bd', *)
-
-(*     step_user lbl suid bd bd' *)
-
-(*     -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks' (cmd cmd' : user_cmd C) *)
-(*         ks1 ks1' qmsgs1 qmsgs1' mycs1 mycs1' froms1 froms1' sents1 sents1' cur_n1 cur_n1' uid1, *)
-
-(*       bd = (usrs, adv, cs, gks, ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd) *)
-(*       -> bd' = (usrs', adv', cs', gks', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd') *)
-(*       -> suid = Some uid1 *)
-(*       -> lbl = Silent *)
-(*       -> message_queue_ok (findUserKeys usrs) cs qmsgs1 gks *)
-(*       -> encrypted_ciphers_ok (findUserKeys usrs) cs gks *)
-(*       -> user_cipher_queue_ok cs (findUserKeys usrs) mycs1 *)
-(*       -> forall ctx sty, syntactically_safe uid1 ctx cmd sty *)
-(*       -> typingcontext_sound ctx (findUserKeys usrs) cs uid1 *)
-(*       -> forall cmd1 cmd1' cmd2 cmd2' uid2 ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' froms2 froms2' sents2 sents2' cur_n2 cur_n2' a *)
-(*           usrs'' adv'' cs'' gks'', *)
-(*           uid1 <> uid2 *)
-(*           -> usrs $? uid1 = Some (mkUserData ks1 cmd1 qmsgs1 mycs1 froms1 sents1 cur_n1) *)
-(*           -> usrs $? uid2 = Some (mkUserData ks2 cmd2 qmsgs2 mycs2 froms2 sents2 cur_n2) *)
-(*           -> step_user (Action a) (Some uid2) *)
-(*                       (usrs, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2) *)
-(*                       (usrs'', adv'', cs'', gks'', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2') *)
-(*           -> forall ia iu, *)
-(*               action_matches a (mkUniverse usrs adv cs gks) ia iu *)
-(*               -> action_matches a *)
-(*                   (mkUniverse (usrs' $+ (uid1, mkUserData ks1' cmd1' qmsgs1' mycs1' froms1' sents1' cur_n1')) adv' cs' gks') ia iu. *)
-(* Proof. *)
 
 Lemma cipher_keys_known :
   forall A (usrs : honest_users A) cs gks advk cid k__enc k__sign t (m : message t) uid seq,
@@ -3350,126 +3304,43 @@ Proof.
     eauto.
 Qed.
 
-(* Hint Resolve *)
-(*      message_content_eq_addnl_key_inv : core. *)
+(* Lemma message_eq_user_add_addnl_key_inv : *)
+(*   forall A B (usrs : honest_users A) (adv adv' : user_data B) cs gks gks' *)
+(*     ks ks' kid k cmd qmsgs mycs froms sents cur_n cmd' sents' cur_n' *)
+(*     t (m__rw : crypto t) m__iw iu chid uid, *)
 
-Lemma message_eq_user_add_addnl_key_inv :
-  forall A B (usrs : honest_users A) (adv adv' : user_data B) cs gks gks'
-    ks ks' kid k cmd qmsgs mycs froms sents cur_n cmd' sents' cur_n'
-    t (m__rw : crypto t) m__iw iu chid uid,
-
-    ~ In kid gks
-    -> ks' = add_key_perm kid true ks
-    -> gks' = gks $+ (kid,k)
-    -> usrs $? uid = Some (mkUserData ks cmd qmsgs mycs froms sents cur_n)
-    -> encrypted_ciphers_ok (findUserKeys usrs) cs gks
-    -> keys_and_permissions_good gks usrs adv.(key_heap)
-    (* -> user_cipher_queues_ok cs (findUserKeys usrs) usrs *)
-    -> message_queues_ok cs usrs gks
-    (* -> message_queue_ok (findUserKeys usrs) cs qmsgs gks *)
-    (* -> keys_mine ks (findKeysCrypto cs c) *)
-    -> message_eq
-        m__rw
-        {| users :=
-             usrs $+ (uid,
-                      {| key_heap := ks';
-                         protocol := cmd';
-                         msg_heap := qmsgs;
-                         c_heap := mycs;
-                         from_nons := froms;
-                         sent_nons := sents';
-                         cur_nonce := cur_n' |});
-           adversary := adv';
-           all_ciphers := cs;
-           all_keys := gks' |} m__iw iu chid
-    -> message_eq m__rw {| users := usrs; adversary := adv; all_ciphers := cs; all_keys := gks |} m__iw iu chid.
-Proof.
-  intros; subst.
+(*     ~ In kid gks *)
+(*     -> ks' = add_key_perm kid true ks *)
+(*     -> gks' = gks $+ (kid,k) *)
+(*     -> usrs $? uid = Some (mkUserData ks cmd qmsgs mycs froms sents cur_n) *)
+(*     -> encrypted_ciphers_ok (findUserKeys usrs) cs gks *)
+(*     -> keys_and_permissions_good gks usrs adv.(key_heap) *)
+(*     -> message_queues_ok cs usrs gks *)
+(*     -> message_eq *)
+(*         m__rw *)
+(*         {| users := *)
+(*              usrs $+ (uid, *)
+(*                       {| key_heap := ks'; *)
+(*                          protocol := cmd'; *)
+(*                          msg_heap := qmsgs; *)
+(*                          c_heap := mycs; *)
+(*                          from_nons := froms; *)
+(*                          sent_nons := sents'; *)
+(*                          cur_nonce := cur_n' |}); *)
+(*            adversary := adv'; *)
+(*            all_ciphers := cs; *)
+(*            all_keys := gks' |} m__iw iu chid *)
+(*     -> message_eq m__rw {| users := usrs; adversary := adv; all_ciphers := cs; all_keys := gks |} m__iw iu chid. *)
+(* Proof. *)
+(*   intros; subst. *)
   
-  invert H6; [ econstructor 1 | econstructor 2 ]; simpl in *; eauto;
-    autorewrite with find_user_keys in *.
-  eapply message_content_eq_addnl_key_inv; eauto.
-  encrypted_ciphers_prop; eauto.
-  admit.
-  
-    (* destruct (cid ==n c_id); subst; clean_map_lookups; trivial; *)
-    (* intros; *)
-    (*   repeat *)
-    (*     match goal with *)
-    (*     | [ H : (forall _ _ _, _ $+ (?u,_) $? _ = Some _ -> _), IW : IdealWorld.users _ $? ?u = Some _ |- _ ] => *)
-    (*       specialize (H u); rewrite add_eq_o in H by trivial; specialize (H _ _ eq_refl IW) *)
-    (*     | [ H : (forall _ _ _, _ $+ (?u1,_) $? _ = Some _ -> _), IW : IdealWorld.users _ $? ?u2 = Some _, NE : ?u1 <> ?u2 |- _ ] => *)
-    (*       specialize (H u2); rewrite add_neq_o in H by congruence; eapply H in IW; eauto *)
-    (*     | [ H : (forall _ _ _, _ $+ (?uid1,_) $? _ = Some _ -> _), IW : IdealWorld.users _ $? ?u = Some _ |- _ ] => *)
-    (*       destruct (uid1 ==n u); subst; clean_map_lookups *)
-    (*     end; *)
-    (*   specialize_simply; eauto. *)
-
 (*   invert H6; [ econstructor 1 | econstructor 2 ]; simpl in *; eauto; *)
-(*     intros; *)
-(*     autorewrite with find_user_keys in *; eauto using message_content_eq_addnl_key; *)
-(*       destruct (u ==n uid); subst; clean_map_lookups; eauto; simpl; eauto; *)
-(*         assert (k__sign <> kid) by (encrypted_ciphers_prop; destruct (k__sign ==n kid); subst; clean_map_lookups; eauto); *)
-(*         clean_map_lookups; *)
-(*         match goal with *)
-(*         | [ ARG : ?usrs $? ?uid = Some _, *)
-(*                   IARG : IdealWorld.users _ $? ?uid = Some _, *)
-(*                          H : (forall _ _ _, ?usrs $? _ = Some _ -> _) |- _ ] => *)
-(*           generalize ARG; intros; eapply H in ARG *)
-(*         end; *)
-(*         try *)
-(*           match goal with *)
-(*           | [ H : honest_key (?ks $+ (?kid1,_)) ?kid |- honest_key ?ks ?kid ] => *)
-(*             assert (kid <> kid1) by (encrypted_ciphers_prop; destruct (kid ==n kid1); subst; clean_map_lookups; eauto); *)
-(*             invert H; constructor; clean_map_lookups; trivial *)
-(*           end; eauto. *)
+(*     autorewrite with find_user_keys in *. *)
+(*   eapply message_content_eq_addnl_key_inv; eauto. *)
+(*   encrypted_ciphers_prop; eauto. *)
+(*   admit. *)
 
-(*   - invert H2; [ econstructor 1; swap 1 2 | econstructor 2; swap 1 2 ]; eauto; simpl in *; clean_map_lookups; eauto. *)
-(*     keys_and_permissions_prop. *)
-(*     unfold add_key_perm. *)
-(*     cases (ks $? kid). *)
-(*     apply H14 in Heq; clean_map_lookups. *)
-(*     msg_queue_prop. *)
-(*     erewrite <- key_perms_from_message_queue_idempotent_addnl_key; eauto. *)
-
-(*     eapply perm_merge_same; eauto. *)
-
-(*   - invert H0; [ econstructor 1; swap 1 2 | econstructor 2; swap 1 2 ]; eauto; simpl in *; clean_map_lookups; eauto. *)
-(*     keys_and_permissions_prop. *)
-(*     unfold add_key_perm. *)
-(*     cases (data__rw.(key_heap) $? kid). *)
-(*     apply H16 in Heq; clean_map_lookups. *)
-(*     msg_queue_prop. *)
-(*     erewrite <- key_perms_from_message_queue_idempotent_addnl_key; eauto. *)
-
-(*   - invert H2; [ econstructor 1; swap 1 2 | econstructor 2; swap 1 2 ]; *)
-(*       eauto; simpl in *; clean_map_lookups; eauto; *)
-(*         keys_and_permissions_prop; *)
-(*         unfold add_key_perm; *)
-(*         cases (ks $? kid). *)
-
-(*     apply H16 in Heq; clean_map_lookups. *)
-
-(*     msg_queue_prop. *)
-(*     erewrite <- key_perms_from_message_queue_idempotent_addnl_key; eauto. *)
-(*     eapply perm_merge_same; eauto. *)
-
-(*     apply H16 in Heq; clean_map_lookups. *)
-
-(*     msg_queue_prop. *)
-(*     erewrite <- key_perms_from_message_queue_idempotent_addnl_key; eauto. *)
-(*     eapply perm_merge_same; eauto. *)
-(*     assert (k__enc0 <> kid) by (encrypted_ciphers_prop; destruct (k__enc0 ==n kid); subst; clean_map_lookups; eauto); *)
-(*       cases (kid ==n k__enc0); subst; clean_map_lookups; eauto. *)
-
-(*   - invert H0; [ econstructor 1; swap 1 2 | econstructor 2; swap 1 2 ]; eauto; simpl in *; clean_map_lookups; eauto; *)
-(*       keys_and_permissions_prop; *)
-(*       msg_queue_prop. *)
-
-(*     erewrite <- key_perms_from_message_queue_idempotent_addnl_key; eauto. *)
-(*     erewrite <- key_perms_from_message_queue_idempotent_addnl_key; eauto. *)
-
-Admitted.
+(* Admitted. *)
 
 Lemma message_eq_user_decrypt_msg_inv :
   forall A B (usrs : honest_users A) (adv adv' : user_data B) cs gks
@@ -3536,111 +3407,107 @@ Hint Resolve
      message_eq_user_add_nochange_cs_ks_msgs_inv
      message_eq_user_decrypt_msg_inv
      message_eq_user_add_addnl_cipher_inv
-     message_eq_user_add_addnl_key_inv 
+     (* message_eq_user_add_addnl_key_inv  *)
      : core.
 
-Lemma action_matches_other_user_step_inv' :
-  forall A B C suid lbl bd bd',
+(* Lemma action_matches_other_user_step_inv' : *)
+(*   forall A B C suid lbl bd bd', *)
 
-    step_user lbl suid bd bd'
+(*     step_user lbl suid bd bd' *)
 
-    -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks' (cmd cmd' : user_cmd C)
-        ks1 ks1' qmsgs1 qmsgs1' mycs1 mycs1' froms1 froms1' sents1 sents1' cur_n1 cur_n1' uid1,
+(*     -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks' (cmd cmd' : user_cmd C) *)
+(*         ks1 ks1' qmsgs1 qmsgs1' mycs1 mycs1' froms1 froms1' sents1 sents1' cur_n1 cur_n1' uid1, *)
 
-      bd = (usrs, adv, cs, gks, ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd)
-      -> bd' = (usrs', adv', cs', gks', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd')
-      -> suid = Some uid1
-      -> lbl = Silent
-      -> encrypted_ciphers_ok (findUserKeys usrs) cs gks
-      -> keys_and_permissions_good gks usrs adv.(key_heap)
-      -> message_queues_ok cs usrs gks
-      -> user_cipher_queues_ok cs (findUserKeys usrs) usrs
-      -> forall cmd1 cmd2 cmd2' uid2 ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' froms2 froms2' sents2 sents2' cur_n2 cur_n2' a
-          usrs'' adv'' cs'' gks'',
-          uid1 <> uid2
-          -> usrs $? uid1 = Some (mkUserData ks1 cmd1 qmsgs1 mycs1 froms1 sents1 cur_n1)
-          -> usrs $? uid2 = Some (mkUserData ks2 cmd2 qmsgs2 mycs2 froms2 sents2 cur_n2)
-          (* -> message_queue_ok (findUserKeys usrs) cs qmsgs2 gks *)
-          (* -> user_cipher_queue_ok cs (findUserKeys usrs) mycs2 *)
-          (* -> forall ctx sty, syntactically_safe uid2 ctx cmd2 sty *)
-          -> forall s t__n (cmd__n : user_cmd t__n), nextAction cmd cmd__n -> summarize cmd2 s -> commutes cmd__n s
-          -> step_user (Action a) (Some uid2)
-                      (usrs, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
-                      (usrs'', adv'', cs'', gks'', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
-          -> forall ia iu cmd1',
-              action_matches a (mkUniverse (usrs' $+ (uid1, mkUserData ks1' cmd1' qmsgs1' mycs1' froms1' sents1' cur_n1')) adv' cs' gks') ia iu
-              -> action_matches a (mkUniverse usrs adv cs gks) ia iu.
-Proof.
+(*       bd = (usrs, adv, cs, gks, ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd) *)
+(*       -> bd' = (usrs', adv', cs', gks', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd') *)
+(*       -> suid = Some uid1 *)
+(*       -> lbl = Silent *)
+(*       -> encrypted_ciphers_ok (findUserKeys usrs) cs gks *)
+(*       -> keys_and_permissions_good gks usrs adv.(key_heap) *)
+(*       -> message_queues_ok cs usrs gks *)
+(*       -> user_cipher_queues_ok cs (findUserKeys usrs) usrs *)
+(*       -> forall cmd1 cmd2 cmd2' uid2 ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' froms2 froms2' sents2 sents2' cur_n2 cur_n2' a *)
+(*           usrs'' adv'' cs'' gks'', *)
+(*           uid1 <> uid2 *)
+(*           -> usrs $? uid1 = Some (mkUserData ks1 cmd1 qmsgs1 mycs1 froms1 sents1 cur_n1) *)
+(*           -> usrs $? uid2 = Some (mkUserData ks2 cmd2 qmsgs2 mycs2 froms2 sents2 cur_n2) *)
+(*           -> forall s t__n (cmd__n : user_cmd t__n), nextAction cmd cmd__n -> summarize cmd2 s -> commutes cmd__n s *)
+(*           -> step_user (Action a) (Some uid2) *)
+(*                       (usrs, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2) *)
+(*                       (usrs'', adv'', cs'', gks'', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2') *)
+(*           -> forall ia iu cmd1', *)
+(*               action_matches a (mkUniverse (usrs' $+ (uid1, mkUserData ks1' cmd1' qmsgs1' mycs1' froms1' sents1' cur_n1')) adv' cs' gks') ia iu *)
+(*               -> action_matches a (mkUniverse usrs adv cs gks) ia iu. *)
+(* Proof. *)
 
-   (* dt x14; eapply action_matches_other_user_step_inv with (uid1 := u_id) (uid2 := uid) in H21; eauto. *)
-  induction 1; inversion 1; inversion 1; intros; subst; try discriminate; eauto.
+(*   induction 1; inversion 1; inversion 1; intros; subst; try discriminate; eauto. *)
 
-  - invert H33; eauto.
-  - action_matches_solver; eauto.
-  - action_matches_solver; eauto.
-  - invert H36; simpl in H38; contradiction.
-  - action_matches_solver; eauto.
+(*   - invert H33; eauto. *)
+(*   - action_matches_solver; eauto. *)
+(*   - action_matches_solver; eauto. *)
+(*   - invert H36; simpl in H38; contradiction. *)
+(*   - action_matches_solver; eauto. *)
 
-    msg_queue_prop;
-      eapply message_eq_user_add_addnl_cipher_inv in H17; eauto.
+(*     msg_queue_prop; *)
+(*       eapply message_eq_user_add_addnl_cipher_inv in H17; eauto. *)
     
-    msg_queue_prop.
-    eapply message_eq_user_add_addnl_cipher_inv in H17; eauto.
-    intros.
-    unfold findCiphers, msg_cipher_id in *; destruct m__rw; invert H8.
-    assert (LIN : List.In cid mycs2) by eauto.
-    user_cipher_queues_prop.
+(*     msg_queue_prop. *)
+(*     eapply message_eq_user_add_addnl_cipher_inv in H17; eauto. *)
+(*     intros. *)
+(*     unfold findCiphers, msg_cipher_id in *; destruct m__rw; invert H8. *)
+(*     assert (LIN : List.In cid mycs2) by eauto. *)
+(*     user_cipher_queues_prop. *)
 
-  - action_matches_solver.
-  - action_matches_solver.
+(*   - action_matches_solver. *)
+(*   - action_matches_solver. *)
 
-    msg_queue_prop;
-      eapply message_eq_user_add_addnl_cipher_inv in H15; eauto.
+(*     msg_queue_prop; *)
+(*       eapply message_eq_user_add_addnl_cipher_inv in H15; eauto. *)
     
-    msg_queue_prop.
-    eapply message_eq_user_add_addnl_cipher_inv in H15; eauto.
-    intros.
-    unfold findCiphers, msg_cipher_id in *; destruct m__rw; invert H6.
-    assert (LIN : List.In cid mycs2) by eauto.
-    user_cipher_queues_prop.
+(*     msg_queue_prop. *)
+(*     eapply message_eq_user_add_addnl_cipher_inv in H15; eauto. *)
+(*     intros. *)
+(*     unfold findCiphers, msg_cipher_id in *; destruct m__rw; invert H6. *)
+(*     assert (LIN : List.In cid mycs2) by eauto. *)
+(*     user_cipher_queues_prop. *)
 
-  - action_matches_solver; eauto.
-  - action_matches_solver; eauto.
-  - action_matches_solver; eauto.
+(*   - action_matches_solver; eauto. *)
+(*   - action_matches_solver; eauto. *)
+(*   - action_matches_solver; eauto. *)
 
-    Unshelve.
-    all: eauto.
-Qed.
+(*     Unshelve. *)
+(*     all: eauto. *)
+(* Qed. *)
 
-Lemma action_matches_other_user_step_inv :
-  forall A B
-    cs cs' cs'' (usrs usrs' usrs'': honest_users A) (adv adv' adv'' : user_data B) gks gks' gks'' cmd1 cmd1'
-    ks1 ks1' qmsgs1 qmsgs1' mycs1 mycs1' froms1 froms1' sents1 sents1' cur_n1 cur_n1' uid1,
+(* Lemma action_matches_other_user_step_inv : *)
+(*   forall A B *)
+(*     cs cs' cs'' (usrs usrs' usrs'': honest_users A) (adv adv' adv'' : user_data B) gks gks' gks'' cmd1 cmd1' *)
+(*     ks1 ks1' qmsgs1 qmsgs1' mycs1 mycs1' froms1 froms1' sents1 sents1' cur_n1 cur_n1' uid1, *)
 
-    step_user Silent (Some uid1)
-              (usrs, adv, cs, gks, ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd1)
-              (usrs', adv', cs', gks', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd1')
+(*     step_user Silent (Some uid1) *)
+(*               (usrs, adv, cs, gks, ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd1) *)
+(*               (usrs', adv', cs', gks', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd1') *)
 
-    -> encrypted_ciphers_ok (findUserKeys usrs) cs gks
-    -> keys_and_permissions_good gks usrs adv.(key_heap)
-    -> message_queues_ok cs usrs gks
-    -> user_cipher_queues_ok cs (findUserKeys usrs) usrs
-    -> forall cmd2 cmd2' uid2 ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' froms2 froms2' sents2 sents2' cur_n2 cur_n2' a,
-      uid1 <> uid2
-      -> usrs $? uid1 = Some (mkUserData ks1 cmd1 qmsgs1 mycs1 froms1 sents1 cur_n1)
-      -> usrs $? uid2 = Some (mkUserData ks2 cmd2 qmsgs2 mycs2 froms2 sents2 cur_n2)
-      -> forall s t__n (cmd__n : user_cmd t__n), nextAction cmd1 cmd__n -> summarize cmd2 s -> commutes cmd__n s
+(*     -> encrypted_ciphers_ok (findUserKeys usrs) cs gks *)
+(*     -> keys_and_permissions_good gks usrs adv.(key_heap) *)
+(*     -> message_queues_ok cs usrs gks *)
+(*     -> user_cipher_queues_ok cs (findUserKeys usrs) usrs *)
+(*     -> forall cmd2 cmd2' uid2 ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' froms2 froms2' sents2 sents2' cur_n2 cur_n2' a, *)
+(*       uid1 <> uid2 *)
+(*       -> usrs $? uid1 = Some (mkUserData ks1 cmd1 qmsgs1 mycs1 froms1 sents1 cur_n1) *)
+(*       -> usrs $? uid2 = Some (mkUserData ks2 cmd2 qmsgs2 mycs2 froms2 sents2 cur_n2) *)
+(*       -> forall s t__n (cmd__n : user_cmd t__n), nextAction cmd1 cmd__n -> summarize cmd2 s -> commutes cmd__n s *)
 
-      -> step_user (Action a) (Some uid2)
-                  (usrs, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
-                  (usrs'', adv'', cs'', gks'', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
-      -> forall ia iu,
-          action_matches a (mkUniverse (usrs' $+ (uid1, mkUserData ks1' cmd1' qmsgs1' mycs1' froms1' sents1' cur_n1')) adv' cs' gks') ia iu
-          -> action_matches a (mkUniverse usrs adv cs gks) ia iu.
-Proof.
-  intros.
-  eapply action_matches_other_user_step_inv' with (uid1 := uid1) (uid2 := uid2) in H; eauto.
-Qed.
+(*       -> step_user (Action a) (Some uid2) *)
+(*                   (usrs, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2) *)
+(*                   (usrs'', adv'', cs'', gks'', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2') *)
+(*       -> forall ia iu, *)
+(*           action_matches a (mkUniverse (usrs' $+ (uid1, mkUserData ks1' cmd1' qmsgs1' mycs1' froms1' sents1' cur_n1')) adv' cs' gks') ia iu *)
+(*           -> action_matches a (mkUniverse usrs adv cs gks) ia iu. *)
+(* Proof. *)
+(*   intros. *)
+(*   eapply action_matches_other_user_step_inv' with (uid1 := uid1) (uid2 := uid2) in H; eauto. *)
+(* Qed. *)
 
 Lemma user_step_summaries_still_good' :
   forall A B C suid lbl bd bd',
@@ -3950,12 +3817,13 @@ Proof.
 
       unfold adv_universe_ok, universe_ok, syntactically_safe_U in *; split_ex; simpl in *.
       generalize H0; intros USR; apply H2 in USR; split_ex; eauto; simpl in *.
+
+      generalize H; intros COMMUTES; eapply H8 in COMMUTES; eauto.
+      
       unfold goodness_predicates in *; split_ex; eapply action_matches_other_user_silent_step; eauto.
 
       dt x14; unfold build_data_step in H16; eapply labeled_action_never_commutes in H16; eauto; contradiction.
-
 Qed.
-
 
 Lemma step_na :
   forall A B uid lbl bd
@@ -3999,7 +3867,7 @@ Proof.
   induct H; eauto.
 Qed.
 
-Lemma resend_violation_translate' :
+Lemma resend_violation_translate :
   forall t__hon t__adv n st st' b summaries,
     stepsi n st st'
     -> lameAdv b (fst st).(adversary)
@@ -4173,7 +4041,8 @@ Proof.
         invert H16.
         exists x4; exists x5; repeat simple apply conj; eauto; intros; simpl in *.
 Qed.
-  
+
+
 Lemma complete_trace :
   forall t__hon t__adv n' n st b,
     runningTimeMeasure (fst st) n
@@ -4181,7 +4050,7 @@ Lemma complete_trace :
     -> lameAdv b (fst st).(adversary)
     -> exists st',
         (@step t__hon t__adv) ^* st st'
-        /\ (forall st'', step st' st'' -> False).
+      /\ (forall lbl ru, step_universe (fst st') lbl ru -> False).
 
 Proof.
   induct n'; intros.
@@ -4192,53 +4061,130 @@ Proof.
     destruct u; simpl in *; subst.
     destruct n__rt; try Omega.omega.
     
+    (* invert H. *)
+
+    invert H; dismiss_adv; simpl in *. 
+    eapply boundRunningTime_for_element in H2; eauto; split_ex.
+    destruct x; try Omega.omega.
     invert H.
-
-    invert H6; dismiss_adv; simpl in *.
-    eapply boundRunningTime_for_element in H2; eauto; split_ex.
-    destruct x; try Omega.omega.
-    invert H2.
-    unfold build_data_step in *; rewrite <- H8 in H3; invert H3.
+    unfold build_data_step in *; rewrite <- H8 in H4; invert H4.
     
-    invert H5; simpl in *.
-    eapply boundRunningTime_for_element in H2; eauto; split_ex.
-    destruct x; try Omega.omega.
-    invert H2.
-    unfold build_data_step in *; rewrite <- H11 in H3; invert H3.
+    (* invert H5; simpl in *. *)
+    (* eapply boundRunningTime_for_element in H2; eauto; split_ex. *)
+    (* destruct x; try Omega.omega. *)
+    (* invert H2. *)
+    (* unfold build_data_step in *; rewrite <- H11 in H3; invert H3. *)
 
-  - destruct (classic (exists st', step st st')).
+  - destruct (classic (exists lblU, step_universe (fst st) (fst lblU) (snd lblU))).
+    (* destruct (classic (exists st', step st st')). *)
     + split_ex.
-      rename x into st'.
-      generalize H2; intros STEP; invert H2; simpl in *.
+      destruct x as [lbl ru']; simpl in *.
+      (* rename x into st'. *)
+      (* generalize H2; intros STEP; invert H2; simpl in *. *)
+      generalize (adversary_remains_lame H1 H2); intros LAME'.
+      generalize H2; intros STEP; destruct lbl;
+        eapply runningTimeMeasure_stepU in H; eauto;
+          split_ex.
 
-      * eapply runningTimeMeasure_stepU in H; eauto.
-        split_ex.
-        eapply adversary_remains_lame in H1; eauto.
-
+      * destruct st as [ru iu].
         specialize (IHn' x (ru',iu)).
-        simpl in IHn'.
         eapply IHn' in H; try Omega.omega; eauto.
         split_ex.
-
         exists x0; split; intros; eauto.
         eapply TrcFront; eauto.
+        econstructor; eauto.
 
-      * eapply runningTimeMeasure_stepU in H; eauto.
+      * destruct st as [ru iu].
+        destruct (classic (exists iu' iu'' ia, 
+                              istepSilent^* iu iu'
+                              /\ IdealWorld.lstep_universe iu' (Action ia) iu''
+                              /\ action_matches a ru ia iu')).
+
         split_ex.
-        eapply adversary_remains_lame in H1; eauto.
-
+        rename x0 into iu'.
+        rename x2 into ia.
+        rename x1 into iu''.
         specialize (IHn' x (ru',iu'')).
-        simpl in IHn'.
         eapply IHn' in H; try Omega.omega; eauto.
         split_ex.
-
         exists x0; split; intros; eauto.
         eapply TrcFront; eauto.
+        econstructor; eauto.
 
+        admit.
 
-    + assert (forall st', ~ step st st') by eauto using not_ex_all_not.
+    + assert (forall lblU, ~ step_universe (fst st) (fst lblU) (snd lblU)) by eauto using not_ex_all_not.
       exists st; split; intros; eauto.
-Qed.
+      eapply (H3 (lbl,ru)); eauto.
+
+Admitted.
+
+(* Lemma complete_trace : *)
+(*   forall t__hon t__adv n' n st b, *)
+(*     runningTimeMeasure (fst st) n *)
+(*     -> n <= n' *)
+(*     -> lameAdv b (fst st).(adversary) *)
+(*     -> exists st', *)
+(*         (@step t__hon t__adv) ^* st st' *)
+(*         /\ (forall lbl ru, step_universe (fst st') lbl ru -> False). *)
+
+(* Proof. *)
+(*   induct n'; intros. *)
+(*   - invert H; simpl in *. *)
+
+(*     exists st; split; intros; eauto. *)
+(*     destruct st. *)
+(*     destruct u; simpl in *; subst. *)
+(*     destruct n__rt; try Omega.omega. *)
+    
+(*     (* invert H. *) *)
+
+(*     invert H; dismiss_adv; simpl in *.  *)
+(*     eapply boundRunningTime_for_element in H2; eauto; split_ex. *)
+(*     destruct x; try Omega.omega. *)
+(*     invert H. *)
+(*     unfold build_data_step in *; rewrite <- H8 in H4; invert H4. *)
+    
+(*     (* invert H5; simpl in *. *) *)
+(*     (* eapply boundRunningTime_for_element in H2; eauto; split_ex. *) *)
+(*     (* destruct x; try Omega.omega. *) *)
+(*     (* invert H2. *) *)
+(*     (* unfold build_data_step in *; rewrite <- H11 in H3; invert H3. *) *)
+
+(*   - destruct (classic (exists st', step st st')). *)
+(*     + split_ex. *)
+(*       rename x into st'. *)
+(*       generalize H2; intros STEP; invert H2; simpl in *. *)
+
+(*       * eapply runningTimeMeasure_stepU in H; eauto. *)
+(*         split_ex. *)
+(*         eapply adversary_remains_lame in H1; eauto. *)
+
+(*         specialize (IHn' x (ru',iu)). *)
+(*         simpl in IHn'. *)
+(*         eapply IHn' in H; try Omega.omega; eauto. *)
+(*         split_ex. *)
+
+(*         exists x0; split; intros; eauto. *)
+(*         eapply TrcFront; eauto. *)
+
+(*       * eapply runningTimeMeasure_stepU in H; eauto. *)
+(*         split_ex. *)
+(*         eapply adversary_remains_lame in H1; eauto. *)
+
+(*         specialize (IHn' x (ru',iu'')). *)
+(*         simpl in IHn'. *)
+(*         eapply IHn' in H; try Omega.omega; eauto. *)
+(*         split_ex. *)
+
+(*         exists x0; split; intros; eauto. *)
+(*         eapply TrcFront; eauto. *)
+
+(*     + assert (forall st', ~ step st st') by eauto using not_ex_all_not. *)
+(*       exists st; split; intros; eauto. *)
+
+
+(* Qed. *)
 
 Lemma many_steps_stays_lame :
   forall t__hon t__adv st st' b,
@@ -4255,15 +4201,17 @@ Qed.
 Hint Resolve many_steps_stays_lame : core.
 
 Theorem step_stepC :
-  forall {t__hon t__adv} (ru0 : RealWorld.universe t__hon t__adv) (iu0 : IdealWorld.universe t__hon) b n,
-    syntactically_safe_U ru0
-    -> runningTimeMeasure ru0 n
+  forall {t__hon t__adv} (ru0 : RealWorld.universe t__hon t__adv) (iu0 : IdealWorld.universe t__hon) b n summaries,
+    runningTimeMeasure ru0 n
+    -> goodness_predicates ru0
+    -> syntactically_safe_U ru0
+    -> summarize_univ ru0 summaries
     -> lameAdv b ru0.(adversary)
     -> invariantFor (TrC ru0 iu0) (fun st => no_resends_U (fst st) /\ labels_align st)
     -> invariantFor (S ru0 iu0) (fun st => no_resends_U (fst st) /\ labels_align st)
 .
 Proof.
-  intros * SYN_SAFE RUNTIME LAME INV.
+  intros * RUNTIME GOOD SYN_SAFE SUMM LAME INV.
 
   apply NNPP; unfold not; intros INV'.
   unfold invariantFor in INV'.
@@ -4291,13 +4239,13 @@ Proof.
     eapply resend_violation_translate in H4; eauto; split_ex.
     apply INV in H4; eauto; split_ex.
     contradiction.
-    
+
   - assert (~ labels_align x0) by admit.
       (* by eauto using labels_align_violation_steps, many_steps_stays_lame. *)
 
-    unfold invariantFor in INV; simpl in *.
-    eapply alignment_violation_translate in H4; eauto; split_ex.
-    apply INV in H4; eauto; split_ex.
-    contradiction.
+    (* unfold invariantFor in INV; simpl in *. *)
+    (* eapply alignment_violation_translate in H4; eauto; split_ex. *)
+    (* apply INV in H4; eauto; split_ex. *)
+    (* contradiction. *)
 
 Admitted.
