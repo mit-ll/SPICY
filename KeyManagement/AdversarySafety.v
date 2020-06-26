@@ -32,6 +32,7 @@ Require Import
         Tactics
         Messages
         MessageEq
+        MessageEqTheory
         Automation
         Simulation
         AdversaryUniverse
@@ -7763,8 +7764,6 @@ Section SingleAdversarySimulates.
   (*     admit. *)
   (*     destruct c; simpl; eauto. *)
 
-  Require Import MessageEqTheory.
-      
   Lemma key_perms_from_message_queue_clean_ciphers :
     forall cs msgs ks honestk uid froms A (usrs : RealWorld.honest_users A) kid kp,
       honestk = RealWorld.findUserKeys usrs
