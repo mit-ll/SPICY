@@ -2907,11 +2907,33 @@ Proof.
     + unfold not; intros; split_ex; eauto.
 Qed.
 
+Lemma labels_always_align_step :
+  forall t__hon t__adv st,
+    labels_always_align st
+    -> forall b st',
+      @step t__hon t__adv st st'
+    -> lameAdv b (fst st).(adversary)
+    -> labels_always_align st'.
+Proof.
+  induction 1; intros; eauto.
+Qed.
+
+Lemma labels_always_align_steps :
+  forall t__hon t__adv st st' b,
+    (@step t__hon t__adv) ^* st st'
+    -> labels_always_align st
+    -> lameAdv b (fst st).(adversary)
+    -> labels_always_align st'.
+Proof.
+  induction 1; intros; eauto using labels_always_align_step.
+Qed.
+
 Lemma complete_trace :
   forall t__hon t__adv n' n st b,
     runningTimeMeasure (fst st) n
     -> n <= n'
     -> lameAdv b (fst st).(adversary)
+    -> labels_always_align st
     -> exists st',
         (@step t__hon t__adv) ^* st st'
       /\ (forall lbl ru, step_universe (fst st') lbl ru -> False).
@@ -2924,64 +2946,47 @@ Proof.
     destruct st.
     destruct u; simpl in *; subst.
     destruct n__rt; try Omega.omega.
-    
-    (* invert H. *)
 
-    invert H; dismiss_adv; simpl in *. 
-    eapply boundRunningTime_for_element in H2; eauto; split_ex.
+    invert H; dismiss_adv; simpl in *.
+    eapply boundRunningTime_for_element in H3; eauto; split_ex.
     destruct x; try Omega.omega.
     invert H.
-    unfold build_data_step in *; rewrite <- H8 in H4; invert H4.
+    unfold build_data_step in *; rewrite <- H9 in H5; invert H5.
     
-    (* invert H5; simpl in *. *)
-    (* eapply boundRunningTime_for_element in H2; eauto; split_ex. *)
-    (* destruct x; try Omega.omega. *)
-    (* invert H2. *)
-    (* unfold build_data_step in *; rewrite <- H11 in H3; invert H3. *)
-
-  - destruct (classic (exists lblU, step_universe (fst st) (fst lblU) (snd lblU))).
-    (* destruct (classic (exists st', step st st')). *)
+  - (* destruct (classic (exists lblU, step_universe (fst st) (fst lblU) (snd lblU))). *)
+    destruct (classic (exists st', step st st')).
     + split_ex.
-      destruct x as [lbl ru']; simpl in *.
-      (* rename x into st'. *)
-      (* generalize H2; intros STEP; invert H2; simpl in *. *)
-      assert (LAME' : lameAdv b ru'.(adversary)) by eauto using adversary_remains_lame.
-      generalize H2; intros STEP; destruct lbl;
+      (* destruct x as [lbl ru']; simpl in *. *)
+      rename x into st'.
+      assert (LAME' : lameAdv b (fst st').(adversary)) by eauto using adversary_remains_lame_step.
+      assert (INV : labels_always_align st') by eauto using labels_always_align_step.
+      generalize H3; intros STEP; invert H3;
         eapply runningTimeMeasure_stepU in H; eauto;
           split_ex.
 
-      * destruct st as [ru iu].
-        specialize (IHn' x (ru',iu)).
+      * specialize (IHn' x (ru',iu)).
         eapply IHn' in H; try Omega.omega; eauto.
         split_ex.
         exists x0; split; intros; eauto.
         eapply TrcFront; eauto.
-        econstructor; eauto.
 
-      * destruct st as [ru iu].
-        destruct (classic (exists iu' iu'' ia, 
-                              istepSilent^* iu iu'
-                              /\ IdealWorld.lstep_universe iu' (Action ia) iu''
-                              /\ action_matches a ru ia iu')).
-
-        split_ex.
-        rename x0 into iu'.
-        rename x2 into ia.
-        rename x1 into iu''.
-        specialize (IHn' x (ru',iu'')).
+      * specialize (IHn' x (ru',iu'')).
         eapply IHn' in H; try Omega.omega; eauto.
         split_ex.
         exists x0; split; intros; eauto.
         eapply TrcFront; eauto.
-        econstructor; eauto.
 
-        admit.
-
-    + assert (forall lblU, ~ step_universe (fst st) (fst lblU) (snd lblU)) by eauto using not_ex_all_not.
-      exists st; split; intros; eauto.
-      eapply (H3 (lbl,ru)); eauto.
-
-Admitted.
+    + firstorder idtac; simpl in *.
+      invert H2.
+      unfold labels_align in H5.
+      destruct st as [ru iu]; simpl in *.
+      
+      exists (ru,iu); split; intros; eauto; simpl in *.
+      destruct lbl.
+      * eapply H3; econstructor; eauto.
+      * specialize (H5 _ _ H2); split_ex.
+        eapply H3; econstructor 2; eauto.
+Qed.
 
 (* Lemma complete_trace : *)
 (*   forall t__hon t__adv n' n st b, *)
@@ -3112,4 +3117,13 @@ Proof.
     eapply violations_translate in H4; eauto; split_ex.
     apply INV in H4; eauto; split_ex.
     unfold not; intros; split_ex; contradiction.
+
+  - unfold invariantFor in INV; simpl in INV.
+    assert (ARG : (ru0,iu0) = (ru0,iu0) \/ False ) by (left; trivial).
+    assert (STEPS : (stepC (t__adv:=t__adv)) ^* (ru0,iu0) (ru0,iu0)) by eauto.
+    eapply INV in STEPS; eauto; split_ex.
+    eapply labels_always_align_steps; eauto.
+    
 Qed.
+
+Print Assumptions step_stepC.
