@@ -1641,3 +1641,66 @@ Section Lameness.
   Qed.
 
 End Lameness.
+
+Section OtherUserStep.
+  Hint Constructors step_user : core.
+
+  Lemma impact_from_other_user_step :
+    forall {A B C} lbl suid1 bd bd',
+      step_user lbl suid1 bd bd'
+                
+      -> forall (usrs usrs' : honest_users A) (adv adv' : user_data B) cs cs' gks gks'
+          u_id1 u_id2 ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' (cmd cmd' : user_cmd C),
+        
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+        -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+        -> suid1 = Some u_id1
+        -> u_id1 <> u_id2
+        -> forall ks2 qmsgs2 mycs2 froms2 sents2 cur_n2 cmd2,
+            usrs $? u_id2 = Some (mkUserData ks2 cmd2 qmsgs2 mycs2 froms2 sents2 cur_n2)
+            -> exists m,
+              usrs' $? u_id2 = Some (mkUserData ks2 cmd2 (qmsgs2 ++ m) mycs2 froms2 sents2 cur_n2).
+  Proof.
+    induct 1; inversion 1; inversion 2; intros; subst;
+      clean_context;
+      match goal with
+      | [ H : (_,_,_,_,_,_,_,_,_,_,_) = (_,_,_,_,_,_,_,_,_,_,_) |- _ ] => invert H
+      end;
+      clean_map_lookups;
+      try solve [ exists []; rewrite app_nil_r; trivial ];
+      eauto.
+
+    destruct (rec_u_id ==n u_id2); subst; clean_map_lookups;
+      repeat simple apply conj; trivial; eauto.
+    exists []; rewrite app_nil_r; trivial.
+  Qed.
+
+  Lemma step_addnl_msgs :
+    forall {A B C} lbl suid1 bd bd',
+      step_user lbl suid1 bd bd'
+                
+      -> forall (usrs usrs' : honest_users A) (adv adv' : user_data B) cs cs' gks gks'
+          u_id1 ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' (cmd cmd' : user_cmd C) ms,
+        
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+        -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+        -> suid1 = Some u_id1
+        -> step_user lbl suid1
+                    (usrs, adv, cs, gks, ks, qmsgs ++ ms, mycs, froms, sents, cur_n, cmd)
+                    (usrs', adv', cs', gks', ks', qmsgs' ++ ms, mycs', froms', sents', cur_n', cmd').
+
+  Proof.
+    induct 1; inversion 1; inversion 2; intros; subst;
+      clean_context;
+      match goal with
+      | [ H : (_,_,_,_,_,_,_,_,_,_,_) = (_,_,_,_,_,_,_,_,_,_,_) |- _ ] => invert H
+      end;
+      clean_map_lookups;
+      eauto.
+
+    rewrite <- app_comm_cons; eauto.
+    rewrite <- app_comm_cons; eauto.
+    econstructor; eauto.
+    congruence.
+  Qed.
+End OtherUserStep.

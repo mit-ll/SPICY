@@ -756,36 +756,6 @@ Section CommutationLemmas.
       
   Qed.
 
-  Lemma impact_from_other_user_step :
-    forall {A B C} lbl suid1 bd bd',
-      step_user lbl suid1 bd bd'
-    
-      -> forall (usrs usrs' : honest_users A) (adv adv' : user_data B) cs cs' gks gks'
-      u_id1 u_id2 ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' (cmd cmd' : user_cmd C),
-    
-      bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
-      -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
-      -> suid1 = Some u_id1
-      -> u_id1 <> u_id2
-      -> forall ks2 qmsgs2 mycs2 froms2 sents2 cur_n2 cmd2,
-          usrs $? u_id2 = Some (mkUserData ks2 cmd2 qmsgs2 mycs2 froms2 sents2 cur_n2)
-          -> exists m,
-            usrs' $? u_id2 = Some (mkUserData ks2 cmd2 (qmsgs2 ++ m) mycs2 froms2 sents2 cur_n2).
-  Proof.
-    induct 1; inversion 1; inversion 2; intros; subst;
-      clean_context;
-      match goal with
-      | [ H : (_,_,_,_,_,_,_,_,_,_,_) = (_,_,_,_,_,_,_,_,_,_,_) |- _ ] => invert H
-      end;
-      clean_map_lookups;
-      try solve [ exists []; rewrite app_nil_r; trivial ];
-      eauto.
-
-    destruct (rec_u_id ==n u_id2); subst; clean_map_lookups;
-      repeat simple apply conj; trivial; eauto.
-    exists []; rewrite app_nil_r; trivial.
-  Qed.
-
   Lemma impact_from_other_user_step_commutes :
     forall {A B C} lbl suid1 bd bd',
       step_user lbl suid1 bd bd'
@@ -814,35 +784,6 @@ Section CommutationLemmas.
       eapply IHstep_user; eauto.
     - invert H23; eauto.
     
-  Qed.
-
-  Lemma step_addnl_msgs :
-    forall {A B C} lbl suid1 bd bd',
-      step_user lbl suid1 bd bd'
-    
-      -> forall (usrs usrs' : honest_users A) (adv adv' : user_data B) cs cs' gks gks'
-          u_id1 ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' (cmd cmd' : user_cmd C) ms,
-    
-        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
-        -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
-        -> suid1 = Some u_id1
-        -> step_user lbl suid1
-                    (usrs, adv, cs, gks, ks, qmsgs ++ ms, mycs, froms, sents, cur_n, cmd)
-                    (usrs', adv', cs', gks', ks', qmsgs' ++ ms, mycs', froms', sents', cur_n', cmd').
-
-  Proof.
-    induct 1; inversion 1; inversion 2; intros; subst;
-      clean_context;
-      match goal with
-      | [ H : (_,_,_,_,_,_,_,_,_,_,_) = (_,_,_,_,_,_,_,_,_,_,_) |- _ ] => invert H
-      end;
-      clean_map_lookups;
-      eauto.
-
-    rewrite <- app_comm_cons; eauto.
-    rewrite <- app_comm_cons; eauto.
-    econstructor; eauto.
-    congruence.
   Qed.
 
   Hint Resolve step_addnl_msgs : core.
@@ -898,7 +839,7 @@ Section CommutationLemmas.
         ; clear H; intros; simpl in *; split_ex
       end.
 
-    specialize (impact_from_other_user_step H3 eq_refl eq_refl eq_refl H6 H0); intros; split_ex; clean_map_lookups.
+    specialize (impact_from_other_user_step _ _ _ _ H3 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ eq_refl eq_refl eq_refl H6 _ _ _ _ _ _ _ H0); intros; split_ex; clean_map_lookups.
     assert (u_id2 <> u_id1) as UNE by congruence.
 
     eapply commutes_sound_recur' in H8; try reflexivity; try eassumption; split_ex; subst; eauto.
@@ -2364,10 +2305,8 @@ Lemma translate_trace_commute :
     -> lameAdv b (fst st).(adversary)
     -> syntactically_safe_U (fst st)
     -> goodness_predicates (fst st)
-    (* -> universe_ok (fst st) *)
-    (* -> adv_universe_ok (fst st) *)
-    (* -> (forall st'', ~ step st' st'') *)
-    -> (forall lbl ru, ~ step_universe (fst st') lbl ru)
+    -> (forall st'', ~ step st' st'')
+    (* -> (forall lbl ru, ~ step_universe (fst st') lbl ru) *)
     -> forall summaries, summarize_univ (fst st) summaries
     -> forall uid ud, NatMap.O.max_elt (fst st).(users) = Some (uid,ud)
     -> forall t (cmd__n : user_cmd t), nextAction ud.(protocol) cmd__n
@@ -2378,6 +2317,12 @@ Lemma translate_trace_commute :
                 summaries $? u_id2 = Some s
               /\ commutes cmd__n s)
     -> forall lbl bd, step_user lbl (Some uid) (build_data_step (fst st) ud) bd
+    (* -> match lbl with *)
+    (*   | Silent => True *)
+    (*   | Action ra => exists iu' iu'' ia, istepSilent ^* (snd st) iu' *)
+    (*                                /\ IdealWorld.lstep_universe iu' (Action ia) iu'' *)
+    (*                                /\ action_matches ra (fst st) ia iu' *)
+    (*   end *)
     -> exists lbl' bd' ru,
             step_user lbl' (Some uid) (build_data_step (fst st) ud) bd'
           /\ ru = buildUniverse_step bd' uid
@@ -2423,12 +2368,18 @@ Proof.
       (* usrs ru $? uid *)
       generalize H6; intros STEP.
       eapply step_limited_change_other_user in STEP; eauto; split_ex.
+      generalize H7; intros NA.
       split_ors; clean_map_lookups; eauto.
 
-      * eapply commutes_noblock with (usrs := users ru) (usrs1' := usrs) in (*na*) H7; eauto; split_ex;
-          exfalso; eapply H4; eauto.
-      * eapply commutes_noblock with (usrs := users ru) (usrs1' := usrs) in (*na*) H7; eauto; split_ex;
-          exfalso; eapply H4; eauto.
+      * eapply commutes_noblock with (usrs := users ru) (usrs1' := usrs) in (*na*) H7; eauto; split_ex.
+        exfalso; destruct lbl; split_ex; eapply H4; eauto.
+        econstructor; eauto.
+        eapply labeled_action_never_commutes in H11; eauto; contradiction.
+
+      * eapply commutes_noblock with (usrs := users ru) (usrs1' := usrs) in (*na*) H7; eauto; split_ex.
+        exfalso; destruct lbl; split_ex; eapply H4; eauto.
+        econstructor; eauto.
+        eapply labeled_action_never_commutes in H11; eauto; contradiction.
 
     + destruct (uid ==n u_id); subst; clean_map_lookups.
 
@@ -2450,12 +2401,18 @@ Proof.
 
       generalize H6; intros STEP.
       eapply step_limited_change_other_user in STEP; eauto; split_ex.
+      generalize H7; intros NA.
       split_ors; clean_map_lookups; eauto.
 
-      * eapply commutes_noblock with (usrs := users ru) (usrs1' := usrs) in H7; eauto; split_ex;
-          exfalso; eapply H4; eauto.
-      * eapply commutes_noblock with (usrs := users ru) (usrs1' := usrs) in H7; eauto; split_ex;
-          exfalso; eapply H4; eauto.
+      * eapply commutes_noblock with (usrs := users ru) (usrs1' := usrs) in H7; eauto; split_ex.
+        exfalso; destruct lbl; split_ex; eapply H4; eauto.
+        econstructor; eauto.
+        eapply labeled_action_never_commutes in H14; eauto; contradiction.
+
+      * eapply commutes_noblock with (usrs := users ru) (usrs1' := usrs) in H7; eauto; split_ex.
+        exfalso; destruct lbl; split_ex; eapply H4; eauto.
+        econstructor; eauto.
+        eapply labeled_action_never_commutes in H14; eauto; contradiction.
 
   - assert (LAME: lameAdv b (adversary (fst st))) by assumption.
     eapply adversary_remains_lame_step in LAME; eauto.
@@ -2587,6 +2544,9 @@ Proof.
       unfold goodness_predicates in *; split_ex; eapply action_matches_other_user_silent_step; eauto.
 
       dt x14; unfold build_data_step in H16; eapply labeled_action_never_commutes in H16; eauto; contradiction.
+
+      Unshelve.
+      all: eauto.
 Qed.
 
 Lemma step_na :
@@ -2638,7 +2598,8 @@ Lemma violations_translate :
     -> goodness_predicates (fst st)
     -> syntactically_safe_U (fst st)
     -> summarize_univ (fst st) summaries
-    -> (forall lbl ru, step_universe (fst st') lbl ru -> False)
+    (* -> (forall lbl ru, step_universe (fst st') lbl ru -> False) *)
+    -> (forall st'', step st' st'' -> False)
     -> ~ ( no_resends_U (fst st') /\ labels_always_align st' )
     -> exists st'',
         (@stepC t__hon t__adv)^* st st''
@@ -2808,36 +2769,37 @@ Proof.
     + unfold not; intros; split_ex; eauto.
 Qed.
 
-Lemma labels_always_align_step :
-  forall t__hon t__adv st,
-    labels_always_align st
-    -> forall b st',
-      @step t__hon t__adv st st'
-    -> lameAdv b (fst st).(adversary)
-    -> labels_always_align st'.
-Proof.
-  induction 1; intros; eauto.
-Qed.
+(* Lemma labels_always_align_step : *)
+(*   forall t__hon t__adv st, *)
+(*     labels_always_align st *)
+(*     -> forall b st', *)
+(*       @step t__hon t__adv st st' *)
+(*     -> lameAdv b (fst st).(adversary) *)
+(*     -> labels_always_align st'. *)
+(* Proof. *)
+(*   induction 1; intros; eauto. *)
+(* Qed. *)
 
-Lemma labels_always_align_steps :
-  forall t__hon t__adv st st' b,
-    (@step t__hon t__adv) ^* st st'
-    -> labels_always_align st
-    -> lameAdv b (fst st).(adversary)
-    -> labels_always_align st'.
-Proof.
-  induction 1; intros; eauto using labels_always_align_step.
-Qed.
+(* Lemma labels_always_align_steps : *)
+(*   forall t__hon t__adv st st' b, *)
+(*     (@step t__hon t__adv) ^* st st' *)
+(*     -> labels_always_align st *)
+(*     -> lameAdv b (fst st).(adversary) *)
+(*     -> labels_always_align st'. *)
+(* Proof. *)
+(*   induction 1; intros; eauto using labels_always_align_step. *)
+(* Qed. *)
 
 Lemma complete_trace :
   forall t__hon t__adv n' n st b,
     runningTimeMeasure (fst st) n
     -> n <= n'
     -> lameAdv b (fst st).(adversary)
-    -> labels_always_align st
+    (* -> labels_always_align st *)
     -> exists st',
         (@step t__hon t__adv) ^* st st'
-      /\ (forall lbl ru, step_universe (fst st') lbl ru -> False).
+      /\ (forall st'', step st' st'' -> False).
+      (* /\ (forall lbl ru, step_universe (fst st') lbl ru -> False). *)
 
 Proof.
   induct n'; intros.
@@ -2848,11 +2810,19 @@ Proof.
     destruct u; simpl in *; subst.
     destruct n__rt; try Omega.omega.
 
-    invert H; dismiss_adv; simpl in *.
-    eapply boundRunningTime_for_element in H3; eauto; split_ex.
-    destruct x; try Omega.omega.
     invert H.
-    unfold build_data_step in *; rewrite <- H9 in H5; invert H5.
+    
+    + invert H6; dismiss_adv; simpl in *.
+      eapply boundRunningTime_for_element in H2; eauto; split_ex.
+      destruct x; try Omega.omega.
+      invert H2.
+      unfold build_data_step in *; rewrite <- H8 in H3; invert H3.
+
+    + invert H5; simpl in *.
+      eapply boundRunningTime_for_element in H2; eauto; split_ex.
+      destruct x; try Omega.omega.
+      invert H2.
+      unfold build_data_step in *; rewrite <- H11 in H3; invert H3.
     
   - (* destruct (classic (exists lblU, step_universe (fst st) (fst lblU) (snd lblU))). *)
     destruct (classic (exists st', step st st')).
@@ -2860,34 +2830,46 @@ Proof.
       (* destruct x as [lbl ru']; simpl in *. *)
       rename x into st'.
       assert (LAME' : lameAdv b (fst st').(adversary)) by eauto using adversary_remains_lame_step.
-      assert (INV : labels_always_align st') by eauto using labels_always_align_step.
-      generalize H3; intros STEP; invert H3;
-        eapply runningTimeMeasure_stepU in H; eauto;
-          split_ex.
+      (* assert (INV : labels_always_align st') by eauto using labels_always_align_step. *)
+      eapply runningTimeMeasure_step in H; eauto; split_ex.
 
-      * specialize (IHn' x (ru',iu)).
-        eapply IHn' in H; try Omega.omega; eauto.
-        split_ex.
-        exists x0; split; intros; eauto.
-        eapply TrcFront; eauto.
+      eapply IHn' in H; try Omega.omega; eauto.
+      split_ex.
+      exists x0; split; intros; eauto.
+      eapply TrcFront; eauto.
 
-      * specialize (IHn' x (ru',iu'')).
-        eapply IHn' in H; try Omega.omega; eauto.
-        split_ex.
-        exists x0; split; intros; eauto.
-        eapply TrcFront; eauto.
+      (* generalize H3; intros STEP; invert H3; *)
+      (*   eapply runningTimeMeasure_stepU in H; eauto; *)
+      (*     split_ex. *)
+
+      (* * specialize (IHn' x (ru',iu)). *)
+      (*   eapply IHn' in H; try Omega.omega; eauto. *)
+      (*   split_ex. *)
+      (*   exists x0; split; intros; eauto. *)
+      (*   eapply TrcFront; eauto. *)
+
+      (* * specialize (IHn' x (ru',iu'')). *)
+      (*   eapply IHn' in H; try Omega.omega; eauto. *)
+      (*   split_ex. *)
+      (*   exists x0; split; intros; eauto. *)
+      (*   eapply TrcFront; eauto. *)
 
     + firstorder idtac; simpl in *.
-      invert H2.
-      unfold labels_align in H5.
-      destruct st as [ru iu]; simpl in *.
-      
-      exists (ru,iu); split; intros; eauto; simpl in *.
-      destruct lbl.
-      * eapply H3; econstructor; eauto.
-      * specialize (H5 _ _ H2); split_ex.
-        eapply H3; econstructor 2; eauto.
+      exists st; split; intros; eauto.
 Qed.
+
+
+
+(*                      invert H2. *)
+(*       unfold labels_align in H5. *)
+(*       destruct st as [ru iu]; simpl in *. *)
+      
+(*       exists (ru,iu); split; intros; eauto; simpl in *. *)
+(*       destruct lbl. *)
+(*       * eapply H3; econstructor; eauto. *)
+(*       * specialize (H5 _ _ H2); split_ex. *)
+(*         eapply H3; econstructor 2; eauto. *)
+(* Qed. *)
 
 Lemma many_steps_stays_lame :
   forall t__hon t__adv st st' b,
@@ -2951,12 +2933,6 @@ Proof.
     eapply violations_translate in H4; eauto; split_ex.
     apply INV in H4; eauto; split_ex.
     unfold not; intros; split_ex; contradiction.
-
-  - unfold invariantFor in INV; simpl in INV.
-    assert (ARG : (ru0,iu0) = (ru0,iu0) \/ False ) by (left; trivial).
-    assert (STEPS : (stepC (t__adv:=t__adv)) ^* (ru0,iu0) (ru0,iu0)) by eauto.
-    eapply INV in STEPS; eauto; split_ex.
-    eapply labels_always_align_steps; eauto.
     
 Qed.
 
