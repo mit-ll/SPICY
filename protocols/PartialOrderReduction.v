@@ -371,6 +371,8 @@ Section CommutationLemmas.
         erewrite <- findKeysCrypto_addnl_cipher by eauto
       | [ |- context [ updateTrackedNonce _ _ (_ $+ (_,_)) _ ]] => 
         erewrite <- updateTrackedNonce_addnl_cipher by eauto
+      | [ |- context [ updateSentNonce _ _ (_ $+ (_,_)) _ ]] => 
+        erewrite <- updateSentNonce_addnl_cipher by eauto
       | [ H : message_queue_ok _ _ (_ :: _) _ |- _ ] => invert H; split_ex
       | [ |- context [ msg_signed_addressed (?honk $+ (_,true)) _ _ _ ]] =>
         erewrite msg_signed_addressed_nochange_addnl_honest_key
@@ -508,7 +510,7 @@ Section CommutationLemmas.
             |- context [ ?msg ] ] => specialize (FN _ _ _ _ H); split_ex; subst
         | [ |- context [ findKeysCrypto (_ $+ (?cid1,_)) (SignedCiphertext ?cid2) ]] =>
           destruct (cid1 ==n cid2); subst; clean_map_lookups; rewrite findKeysCrypto_addnl_cipher'
-        | [ |- context [ updateTrackedNonce _ _ (_ $+ (?cid1,_)) (SignedCiphertext ?cid2) ]] =>
+        | [ |- context [ updateSentNonce _ _ (_ $+ (?cid1,_)) (SignedCiphertext ?cid2) ]] =>
           destruct (cid1 ==n cid2); subst; clean_map_lookups; eauto
         | [ |- exists _, _ /\ _ ] =>
           solve [ try unfold add_key_perm

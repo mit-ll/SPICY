@@ -2225,8 +2225,8 @@ Section UniverseLemmas.
 
         simpl.
         destruct (rec_u_id ==n cipher_to_user x1); try congruence.
-        rewrite count_occ_not_In with (eq_dec := msg_seq_eq) in H10.
-        rewrite H10.
+        (* rewrite count_occ_not_In with (eq_dec := msg_seq_eq) in H10. *)
+        (* rewrite H10. *)
         split; eauto.
         assert (u_id <> cipher_to_user x1).
         rewrite e.
@@ -5705,7 +5705,28 @@ Section SingleAdversarySimulates.
           context_map_rewrites; eauto.
     Qed.
 
-    Hint Resolve updateTrackedNonce_clean_ciphers_idempotent_honest_msg.
+    Lemma updateSentNonce_clean_ciphers_idempotent_honest_msg :
+      forall {t} (msg : crypto t) suid froms cs honestk,
+        msg_honestly_signed honestk cs msg = true
+        -> updateSentNonce suid froms cs msg = updateSentNonce suid froms (clean_ciphers honestk cs) msg.
+    Proof.
+      unfold updateSentNonce; intros.
+      destruct msg; eauto.
+      cases (cs $? c_id).
+      - eapply clean_ciphers_keeps_honest_cipher with (honestk := honestk) in Heq; eauto.
+        context_map_rewrites; trivial.
+        unfold msg_honestly_signed in H; simpl in *; context_map_rewrites.
+        unfold honest_cipher_filter_fn, cipher_honestly_signed;
+          destruct c; eauto.
+
+      - eapply clean_ciphers_no_new_ciphers with (honestk := honestk) in Heq;
+          context_map_rewrites; eauto.
+    Qed.
+
+    Hint Resolve
+         updateSentNonce_clean_ciphers_idempotent_honest_msg
+         updateTrackedNonce_clean_ciphers_idempotent_honest_msg
+         : core.
 
 
     Lemma clean_messages_keeps_hon_signed :
@@ -7194,7 +7215,7 @@ Section SingleAdversarySimulates.
                      clean_key_permissions honestk ks,
                      clean_messages honestk cs (Some u_id) froms qmsgs,
                      mycs, froms,
-                     updateTrackedNonce (Some rec_u_id) sents cs msg, cur_n, ret tt).
+                     updateSentNonce (Some rec_u_id) sents cs msg, cur_n, ret tt).
     Proof.
       intros; subst; eauto.
       process_next_cmd_safe; subst.
@@ -7204,7 +7225,7 @@ Section SingleAdversarySimulates.
         assert (List.In x mycs) by eauto; user_cipher_queues_prop.
         erewrite clean_ciphers_keeps_honest_cipher; eauto 3.
 
-      - rewrite clean_users_add_pull; simpl.
+      - simpl. rewrite clean_users_add_pull; simpl.
         erewrite clean_messages_keeps_hon_signed; eauto 8.
         unfold msg_signed_addressed; eauto.
 
@@ -7229,7 +7250,10 @@ Section SingleAdversarySimulates.
         rewrite RW; trivial.
     Qed.
 
-    Hint Resolve updateTrackedNonce_clean_ciphers_idempotent_honest_msg.
+    Hint Resolve
+         updateTrackedNonce_clean_ciphers_idempotent_honest_msg
+         updateSentNonce_clean_ciphers_idempotent_honest_msg
+         : core.
 
     Lemma honest_silent_step_advuniv_implies_honest_or_no_step_origuniv'' :
       forall {A B C} u_id suid cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)

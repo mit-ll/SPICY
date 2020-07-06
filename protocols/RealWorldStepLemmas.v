@@ -303,6 +303,20 @@ Proof.
   specialize (H0 _ eq_refl); contradiction.
 Qed.
 
+Lemma updateSentNonce_addnl_cipher :
+  forall suid nons cs {t} (msg : crypto t) c_id c,
+    ~ In c_id cs
+    -> (forall cid, msg_cipher_id msg = Some cid -> cs $? cid <> None)
+    -> updateSentNonce suid nons cs msg =
+      updateSentNonce suid nons (cs $+ (c_id, c)) msg.
+Proof.
+  intros.
+  unfold updateSentNonce.
+  destruct msg; eauto.
+  destruct (c_id ==n c_id0); subst; clean_map_lookups; eauto.
+  specialize (H0 _ eq_refl); contradiction.
+Qed.
+
 Lemma msg_not_accepted_pattern_addnl_cipher :
   forall {t} (msg : crypto t) cs suid froms pat c_id c,
     ~ In c_id cs
@@ -368,11 +382,23 @@ Proof.
   unfold updateTrackedNonce; clean_map_lookups; eauto.
 Qed.
 
+Lemma updateSentNonce_addnl_cipher' :
+  forall cs cid1 c cid2 t nons suid,
+    cid1 <> cid2
+    -> @updateSentNonce t suid nons cs (SignedCiphertext cid2) =
+      @updateSentNonce t suid nons (cs $+ (cid1, c)) (SignedCiphertext cid2).
+Proof.
+  intros.
+  unfold updateSentNonce; clean_map_lookups; eauto.
+Qed.
+
 Hint Resolve
      findKeysCrypto_addnl_cipher
      merge_findKeysCrypto_addnl_cipher
      updateTrackedNonce_addnl_cipher
      updateTrackedNonce_addnl_cipher'
+     updateSentNonce_addnl_cipher
+     updateSentNonce_addnl_cipher'
      msg_signed_addressed_addnl_cipher
      msg_signed_addressed_nochange_addnl_honest_key
      msg_accepted_pattern_addnl_cipher

@@ -291,7 +291,7 @@ Module SimulationAutomation.
         /\ ks = ks'
         /\ qmsgs = qmsgs'
         /\ froms = froms'
-        /\ tos' = updateTrackedNonce (Some rec_u_id) tos cs msg
+        /\ tos' = updateSentNonce (Some rec_u_id) tos cs msg
         /\ cur_n = cur_n'
         /\ mycs = mycs'
         /\ keys_mine ks (findKeysCrypto cs msg)

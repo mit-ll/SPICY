@@ -1114,11 +1114,10 @@ Proof.
   induction 1; inversion 1; inversion 1; unfold no_resends; intros; subst; eauto.
 
   - eapply IHstep_user in H25; eauto.
-  - unfold updateTrackedNonce in H33.
+  - unfold updateSentNonce in H33.
     destruct msg; eauto.
     cases (cs' $? c_id); eauto.
     destruct (rec_u_id ==n cipher_to_user c); subst; eauto.
-    destruct (count_occ msg_seq_eq sents0 (cipher_nonce c)); eauto.
     invert H33; eauto.
 Qed.
 

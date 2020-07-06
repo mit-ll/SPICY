@@ -399,6 +399,24 @@ Definition updateTrackedNonce {t} (to_usr : option user_id) (froms : recv_nonces
     end
   end.
 
+Definition updateSentNonce {t} (to_usr : option user_id) (sents : sent_nonces) (cs : ciphers) (msg : crypto t) :=
+  match msg with
+  | Content _ => sents
+  | SignedCiphertext c_id =>
+    match cs $? c_id with
+    | None => sents
+    | Some c =>
+      match to_usr with
+      | None => sents
+      | Some to_uid =>
+        if to_uid ==n cipher_to_user c
+        then cipher_nonce c :: sents
+        else sents
+      end                
+    end
+  end.
+
+
 Definition msg_nonce_not_same (new_cipher : cipher) (cs : ciphers) {t} (msg : crypto t) : Prop :=
   forall c_id c,
     msg = SignedCiphertext c_id
@@ -511,7 +529,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> incl (findCiphers msg) mycs
     -> usrs $? rec_u_id = Some rec_u
     -> Some rec_u_id <> suid
-    -> sents' = updateTrackedNonce (Some rec_u_id) sents cs msg
+    -> sents' = updateSentNonce (Some rec_u_id) sents cs msg
     -> usrs' = usrs $+ (rec_u_id, {| key_heap  := rec_u.(key_heap)
                                   ; protocol  := rec_u.(protocol)
                                   ; msg_heap  := rec_u.(msg_heap) ++ [existT _ _ msg]
