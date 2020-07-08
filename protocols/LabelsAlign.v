@@ -560,7 +560,7 @@ Admitted.
                                   
               (* no recursion *)
               (* -> nextAction cmd1 cmd1 *)
-              -> not nextAction cmd2 cmd2
+              -> not (nextAction cmd2 cmd2)
               (* -> (forall cmd__n x t (m : crypto t), nextAction cmd1 cmd__n -> cmd__n <> Send x m) *)
 
 
@@ -578,7 +578,8 @@ Admitted.
   .
   Proof.
     induction 1; inversion 5; inversion 1
-    ; intros
+    ; intros.
+    Admitted.
 
 Lemma step_step_recurse_ok :
   forall A B C lbl1 suid1 bd1 bd1',
@@ -621,7 +622,7 @@ Proof.
   - induction H27.
     + admit.
     + admit.
-    + do 3 eexists. intros. econstructor 2; eauto.
+    + do 3 eexists. intros. 
 Admitted.
 
 
@@ -648,10 +649,13 @@ Lemma step_then_step :
 Proof.
   induction 1; inversion 1; inversion 1; intros; subst; eauto.
   - invert H27. 
-    + destruct cmd1.
-      *do 3 eexists; intros; econstructor 2; eauto.
-      * admit.
-      * exists lbl2. do 2 eexists. intros. econstructor.
+    (* + destruct cmd1. *)
+    (*   *do 3 eexists; intros; econstructor 2; eauto. *)
+    (*   * admit. *)
+    (*   * exists lbl2. do 2 eexists. intros. econstructor. admit. *)
+    (*   * admit. *)
+    (*   * admit *)
+    + admit.
     + do 3 eexists; intros; econstructor 2; eauto.
     + do 3 eexists; intros; econstructor; eauto.
     + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto.
@@ -709,7 +713,7 @@ Proof.
     + do 3 eexists; intros; econstructor; eauto.
     + do 3 eexists; intros; econstructor; eauto.
   (* sign *)
-  - invert H34.
+  - invert H35.
     + admit.
     + do 3 eexists; intros; econstructor 2; eauto.
     + do 3 eexists; intros; econstructor; eauto.
