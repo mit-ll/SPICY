@@ -49,6 +49,7 @@ From protocols Require Import
      ProtocolAutomation
      SafeProtocol
      LabelsAlign
+     NoResends
      PartialOrderReduction
 .
 
@@ -79,6 +80,49 @@ Proof.
   invert H6.
 Qed.
 
+(* Lemma user_steps_to_same_place : *)
+(*   forall A B C lbl bd bd1' bd2' suid, *)
+(*     @step_user A B C lbl suid bd bd1' *)
+(*     -> step_user lbl suid bd bd2' *)
+(*     -> bd1' = bd2'. *)
+(* Proof. *)
+(*   induction 1; invert 1; *)
+(*     subst; *)
+(*     eauto. *)
+
+(*   Ltac invertEq := *)
+(*     repeat *)
+(*       match goal with *)
+(*       | [ STEP : step_user ?lbl ?uid (_,_,_,_,_,_,_,_,_,_,Return _) _  |- _] => invert STEP *)
+(*       | [ STEP : step_user ?lbl ?uid ?bd _ , H : (forall _, step_user ?lbl ?uid ?bd _ -> _) |- _] => *)
+(*         apply H in STEP *)
+(*       | [ H : _ = _ |- _ ] => invert H; try contradiction *)
+(*       end. *)
+
+(*   invertEq; eauto. *)
+(*   invertEq; eauto. *)
+(*   invertEq; eauto. *)
+(*   admit. *)
+(*   invertEq; eauto. *)
+(*   invertEq; eauto. *)
+(*   clean_map_lookups; eauto. *)
+(*   clean_map_lookups; eauto. *)
+(*   clean_map_lookups; eauto. *)
+(*   invertEq; eauto. *)
+(*   invertEq; eauto. *)
+
+(*   apply IHstep_user in H7; eauto; invertEq; eauto. *)
+(*   eapply IHstep_user in H7; eauto; invertEq; eauto. *)
+  
+
+  
+(*     repeat *)
+(*       match goal with *)
+(*       | [ H : _ = _ |- _ ] => invert H; try contradiction *)
+(*       end; *)
+(*     eauto. *)
+
+
 Lemma stuck_model_step_user_stuck_user_implies_labels_align :
   forall t__hon t__adv st,
     @stuck_model_step_user_stuck_user t__hon t__adv st
@@ -108,150 +152,91 @@ Proof.
     contradiction.
 Qed.
 
-Lemma stuck_model_violation_step :
-  forall t__hon t__adv st st' b,
-    @step t__hon t__adv st st'
-    -> lameAdv b (fst st).(adversary)
-    -> stuck_model_step_user_stuck_user st
-    -> stuck_model_step_user_stuck_user st'.
-Proof.
-  unfold not; intros.
-  eauto using alignment_violation_step'.
-Qed.
 
-
-
-
-
-Lemma stuck_other_step_not_unstuck :
-  forall t__hon t__adv uid st st',
-    @model_step_user t__hon t__adv uid st st'
-    -> forall uid' lbl u bd,
-      (fst st).(users) $? uid' = Some u
-      -> step_user lbl (Some uid') (build_data_step (fst st) u) bd
-      -> uid <> uid'
-      -> (forall st'', model_step_user uid' st st'' -> False)
-      -> (forall st'', model_step_user uid' st' st'' -> False).
-Proof.
-  intros.
-  invert H;
-    unfold build_data_step, buildUniverse in *; simpl in *.
-
-  - 
-  
-  invert H; invert H2;
-    unfold build_data_step, buildUniverse in *; simpl in *;
-      clean_map_lookups.
-  - destruct ru , userData, userData0; simpl in *.
-
-
-    assert (exists m, users $? uid' =
-                 Some
-                   {|
-                     key_heap := key_heap0;
-                     protocol := protocol0;
-                     msg_heap := msg_heap0 ++ m;
-                     c_heap := c_heap0;
-                     from_nons := from_nons0;
-                     sent_nons := sent_nons0;
-                     cur_nonce := cur_nonce0 |}).
-    eapply step_back_into_other_user with (u_id1 := uid) in H4; eauto.
-    split_ors; split_ex; eauto.
-
-    2: {
-      simpl.
-    
-
-
-
-Lemma stuck_other_step_not_unstuck :
-  forall t__hon t__adv t suid bd bd',
+Lemma no_model_step_other_user_silent_step :
+  forall t__hon t__adv suid bd bd',
 
     step_user Silent suid bd bd'
     
-    -> forall (usrs usrs' : honest_users t__hon) (adv adv' : user_data t__adv) (cmd cmd' : user_cmd t)
-        cs cs' gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' n n' uid ru iu,
+    -> forall (usrs usrs' : honest_users t__hon) (adv adv' : user_data t__adv) (cmd cmd' : user_cmd (Base t__hon))
+        cs cs' gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' n n' uid uid' iu,
 
       bd = (usrs,adv,cs,gks,ks,qmsgs,mycs,froms,sents,n,cmd)
       -> bd' = (usrs',adv',cs',gks',ks',qmsgs',mycs',froms',sents',n',cmd')
       -> suid = Some uid
-      -> forall cmda1, usrs $? uid = Some (mkUserData ks cmda1 qmsgs mycs froms sents n)
-      -> ru = {| users := usrs; adversary := adv; all_ciphers := cs ; all_keys := gks |}
-      -> forall ru' uid' cmda,
-          uid <> uid'
-          -> (forall st, model_step_user uid' (ru,iu) st -> False)
-          -> ru' = buildUniverse_step (usrs',adv',cs',gks',ks',qmsgs',mycs',froms',sents',n',cmda) uid
-          -> (forall st, model_step_user uid' (ru',iu) st -> False).
+      -> uid <> uid'
+      -> (forall st', model_step_user
+                  uid' 
+                  (mkUniverse usrs adv cs gks, iu)
+                  st' -> False)
+      -> (forall st', model_step_user
+                  uid'
+                  (mkUniverse (usrs' $+ (uid, mkUserData ks' cmd' qmsgs' mycs' froms' sents' n'))
+                              adv' cs' gks', iu)
+                  st' -> False).
 Proof.
-  induction 1; inversion 1; inversion 1; intros; subst;
-    eauto.
-
-  admit.
-  admit.
-
-  unfold buildUniverse_step in *; simpl in *.
-    
-
-
-Lemma stuck_step_implies_stuck_universe_step_labels_align :
-  forall t__hon t__adv st,
-    @stuck_step_implies_stuck_universe_step t__hon t__adv st
-    -> labels_align st.
-Proof.
-  destruct st as [ru iu].
-  unfold stuck_step_implies_stuck_universe_step, labels_align; intros.
-
-  destruct (classic (forall st', step (ru,iu) st' -> False)).
-  - exfalso; eauto.
-  - eapply not_all_not_ex in H1; split_ex.
-    
-
 Admitted.
 
-Lemma stuck_step_trsys_implies_labels_align :
-  forall t__hon t__adv st st',
-    (@step t__hon t__adv) ^* st st'
-    -> forall ru0 iu0,
-      st = (ru0,iu0)
-      -> invariantFor (@S t__hon t__adv ru0 iu0) stuck_step_implies_stuck_universe_step
-      -> labels_align st'.
+Lemma stuck_model_violation_step' :
+  forall t__hon t__adv st st' b,
+    @step t__hon t__adv st st'
+    -> lameAdv b (fst st).(adversary)
+    -> stuck_model_step_user_stuck_user st'
+    -> stuck_model_step_user_stuck_user st.
 Proof.
-  induction 1; intros; subst; eauto.
-  - unfold invariantFor in *; simpl in *; intros.
-    assert (ARG : (ru0,iu0) = (ru0,iu0) \/ False) by eauto.
-    specialize (H0 _ ARG); clear ARG.
-    assert (STEP : (@step t__hon t__adv) ^* (ru0,iu0) (ru0,iu0)) by eauto.
-    apply H0 in STEP.
-    apply stuck_step_implies_stuck_universe_step_labels_align in STEP.
-    unfold labels_align in STEP; eauto.
+  unfold stuck_model_step_user_stuck_user; intros.
 
-  - destruct y as [ru1 iu1].
-    assert (STEP : (@step t__hon t__adv) ^* (ru0,iu0) (ru1,iu1)) by (eapply TrcFront; eauto).
-    assert (INIT : (ru0,iu0) = (ru0,iu0) \/ False ) by eauto.
+  invert H; simpl in *.
 
-    assert (INV : invariantFor (S ru1 iu1) stuck_step_implies_stuck_universe_step).
-    unfold invariantFor; simpl; intros.
-    destruct H1; try contradiction; subst.
-    eapply trc_trans in H3; eauto.
-    eapply H2; simpl; eauto.
+  - invert H5; dismiss_adv.
+    unfold buildUniverse, build_data_step in *; simpl in *.
 
-    eapply IHtrc in INV; eauto.
-Qed.
+    destruct (u_id ==n uid); subst; clean_map_lookups.
+    + eapply H3.
+      econstructor; eauto.
+    + generalize H6; intros OUSTEP.
+      destruct ru, u; simpl in *.
+      eapply impact_from_other_user_step in OUSTEP; eauto; split_ex.
 
-Lemma stuck_step_violation_implies_alignment_violation :
-  forall t__hon t__adv st,
-    ~ @stuck_step_implies_stuck_universe_step t__hon t__adv st
-    -> ~ labels_align st.
+      specialize (H1 uid).
+      rewrite add_neq_o in H1 by auto.
+      specialize (H1 _ H5); simpl in H1.
+
+      pose proof (no_model_step_other_user_silent_step
+                    _ _ _ _ _ H6
+                    _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+                    eq_refl eq_refl eq_refl n H3) as NOMODEL.
+      specialize (H1 NOMODEL).
+      eapply H1.
+
+      (* Need lemma for :
+       *   if I can step now
+       *   and other user silently steps instead 
+       *   then I can still step in the new universe *)
+
+      admit.
+
+  - (* labeled case -- this will perhaps be a bit more difficult because of the ideal world *)
+  
+Admitted.
+
+Lemma stuck_model_violation_step :
+  forall t__hon t__adv st st' b,
+    @step t__hon t__adv st st'
+    -> lameAdv b (fst st).(adversary)
+    -> ~ stuck_model_step_user_stuck_user st
+    -> ~ stuck_model_step_user_stuck_user st'.
 Proof.
-  unfold stuck_step_implies_stuck_universe_step, labels_align; intros.
-  destruct st as [ru iu]; simpl in *.
   unfold not; intros.
-  eapply H; intros; clear H.
-  destruct lbl.
-  - eapply H1; econstructor; eauto.
-  - generalize H2; intros; eapply H0 in H2; split_ex.
-    eapply H1; econstructor 2; eauto.
+  eauto using stuck_model_violation_step'.
 Qed.
+
+
+
+
+    
+
+
 
 
 Module Type SyntacticallySafeProtocol.
