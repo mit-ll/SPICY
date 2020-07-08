@@ -243,8 +243,7 @@ Lemma syntactically_safe_pk_in_message_owned_by_some_honest_user :
       -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', (Return c_id))
 
       -> cs' $? c_id = Some (SigEncCipher k__signid k__encid msg_to nonce msg)
-
-      -> forall honestk honestk' cmdc cmdc' u_id,
+-> forall honestk honestk' cmdc cmdc' u_id,
           suid = Some u_id
           -> syntactically_safe u_id ctx cmd sty
           -> usrs $? u_id = Some {| key_heap := ks;
@@ -527,6 +526,103 @@ Admitted.
 (*   (* invert H13. destruct iu; simpl in *. econstructor. *) *)
 (*   (* eauto. eauto. eauto.  *) *)
 (* Admitted. *)
+  Lemma commutes_sound_recur_cmd1' :
+    forall {A B C D} suid1 u_id1 lbl1 (bd1 bd1' : data_step0 A B C),
+
+      step_user lbl1 suid1 bd1 bd1'
+      -> suid1 = Some u_id1
+      -> forall (bd2 bd2' : data_step0 A B D) lbl2 suid2 u_id2,
+
+          step_user lbl2 suid2 bd2 bd2'
+          -> suid2 = Some u_id2
+          -> u_id1 <> u_id2
+
+          -> forall cs cs1 cs' (usrs1 usrs1' usrs2 usrs2' : honest_users A) (adv adv1 adv' : user_data B) gks gks1 gks'
+              ks1 ks1' qmsgs1 qmsgs1' mycs1 mycs1' cmd1 cmd1' froms1 froms1' sents1 sents1' cur_n1 cur_n1'
+              ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' cmd2 cmd2' froms2 froms2' sents2 sents2' cur_n2 cur_n2'
+              cmdc1 cmdc1' cmdc2 qmsgs2'',
+
+              bd1  = (usrs1,  adv,  cs,  gks,  ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd1)
+              -> bd1' = (usrs1', adv1, cs1, gks1, ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd1')
+              -> bd2  = (usrs2,  adv1, cs1, gks1, ks2, qmsgs2'', mycs2, froms2, sents2, cur_n2, cmd2)
+              -> bd2' = (usrs2', adv', cs', gks', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
+              (* allow protocol to freely vary, since we won't be looking at it *)
+              -> usrs1 $? u_id1 = Some (mkUserData ks1 cmdc1 qmsgs1 mycs1 froms1 sents1 cur_n1)
+              -> usrs1 $? u_id2 = Some (mkUserData ks2 cmdc2 qmsgs2 mycs2 froms2 sents2 cur_n2)
+              -> usrs1' $? u_id2 = Some (mkUserData ks2 cmdc2 qmsgs2'' mycs2 froms2 sents2 cur_n2)
+              -> usrs2 = usrs1' $+ (u_id1, mkUserData ks1' cmdc1' qmsgs1' mycs1' froms1' sents1' cur_n1')
+              -> encrypted_ciphers_ok (findUserKeys usrs1) cs gks
+              -> message_queues_ok cs usrs1 gks
+              -> keys_and_permissions_good gks usrs1 adv.(key_heap)
+              -> user_cipher_queues_ok cs (findUserKeys usrs1) usrs1
+              (* -> next_cmd_safe (findUserKeys usrs1) cs u_id1 froms1 sents1 cmd1 *)
+              (* -> next_cmd_safe (findUserKeys usrs1) cs u_id2 froms2 sents2 cmd2 *)
+                                  
+              (* no recursion *)
+              (* -> nextAction cmd1 cmd1 *)
+              -> not nextAction cmd2 cmd2
+              (* -> (forall cmd__n x t (m : crypto t), nextAction cmd1 cmd__n -> cmd__n <> Send x m) *)
+
+
+              -> forall bd3 cmdc2',
+                  bd3 = (usrs1,   adv,  cs,  gks,  ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
+                  -> exists bd3' bd4 bd4' lbl3 lbl4 adv2 cs2 gks2 usrs3' usrs4 usrs4' qmsgs3,
+                      step_user lbl3 suid2 bd3 bd3'
+                      /\ bd3' = (usrs3', adv2, cs2, gks2, ks2', qmsgs3, mycs2', froms2', sents2', cur_n2', cmd2')
+                      /\ usrs4 = usrs3' $+ (u_id2, mkUserData ks2' cmdc2' qmsgs3 mycs2' froms2' sents2' cur_n2')
+                      /\ bd4 = (usrs4,   adv2, cs2, gks2, ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd1)
+                      /\ bd4' = (usrs4', adv', cs', gks', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd1')
+                      /\ step_user lbl4 suid1 bd4 bd4'
+                      /\ ( usrs4' $+ (u_id1, mkUserData ks1' cmdc1' qmsgs1' mycs1' froms1' sents1' cur_n1') = 
+                          usrs2' $+ (u_id2, mkUserData ks2' cmdc2' qmsgs2' mycs2' froms2' sents2' cur_n2') )
+  .
+  Proof.
+    induction 1; inversion 5; inversion 1
+    ; intros
+
+Lemma step_step_recurse_ok :
+  forall A B C lbl1 suid1 bd1 bd1',
+    step_user lbl1 suid1 bd1 bd1'
+    -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks'
+        (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs'
+        froms froms' sents sents' cur_n cur_n' uid1,
+      bd1 = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+      -> bd1' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+      -> suid1 = Some uid1
+      -> forall cmdc cmdc',
+          usrs $? uid1 = Some (mkUserData ks cmdc qmsgs mycs froms sents cur_n)
+      -> forall D ks2 qmsgs2 mycs2 froms2 sents2 cur_n2 cmd1 (cmd2 : << D >> -> user_cmd (Base A)) uid2,
+          usrs $? uid2 = Some (mkUserData ks2 (Bind cmd1 cmd2) qmsgs2 mycs2 froms2 sents2 cur_n2)
+      -> uid1 <> uid2
+      -> forall bd2' lbl2 ,
+          step_user lbl2 (Some uid2) (usrs, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, Bind cmd1 cmd2) bd2'
+          -> exists lbl3 bd3 qmsgs3,
+            usrs' $? uid2 =
+            Some
+              {| key_heap := ks2;
+                 protocol := Bind cmd1 cmd2;
+                 msg_heap := qmsgs3;
+                 c_heap := mycs2;
+                 from_nons := froms2;
+                 sent_nons := sents2;
+                 cur_nonce := cur_n2 |}
+            -> step_user lbl3 (Some uid2)
+                        (usrs' $+ (uid1,
+                                   {|
+                                     key_heap := ks';
+                                     protocol := cmdc';
+                                     msg_heap := qmsgs';
+                                     c_heap := mycs';
+                                     from_nons := froms';
+                                     sent_nons := sents';
+                                     cur_nonce := cur_n' |}), adv', cs', gks', ks2, qmsgs3, mycs2, froms2, sents2, cur_n2, Bind cmd1 cmd2) bd3.
+Proof.
+  induction 1; inversion 1; inversion 1; intros; subst; eauto.
+  - induction H27.
+    + admit.
+    + admit.
+    + do 3 eexists. intros. econstructor 2; eauto.
+Admitted.
 
 
 Lemma step_then_step :
@@ -551,6 +647,100 @@ Lemma step_then_step :
                                         adv', cs', gks', ks2, qmsgs3, mycs2, froms2, sents2, cur_n2, cmd2) bd3.
 Proof.
   induction 1; inversion 1; inversion 1; intros; subst; eauto.
+  - invert H27. 
+    + destruct cmd1.
+      *do 3 eexists; intros; econstructor 2; eauto.
+      * admit.
+      * exists lbl2. do 2 eexists. intros. econstructor.
+    + do 3 eexists; intros; econstructor 2; eauto.
+    + do 3 eexists; intros; econstructor; eauto.
+    + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto.
+     do 3 eexists; intros; econstructor; eauto.
+    + do 3 eexists; intros; econstructor; eauto.
+    + do 3 eexists; intros; econstructor; eauto.
+  - invert H27.
+    + admit.
+    + do 3 eexists; intros; econstructor 2; eauto.
+    + do 3 eexists; intros; econstructor; eauto.
+    + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto.
+     do 3 eexists; intros; econstructor; eauto.
+    + do 3 eexists; intros; econstructor; eauto.
+    + do 3 eexists; intros; econstructor; eauto.
+  - invert H35.
+    + admit.
+    + do 3 eexists; intros; econstructor 2; eauto.
+    + do 3 eexists; intros; econstructor; eauto.
+    + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto.
+     do 3 eexists; intros; econstructor; eauto.
+    + do 3 eexists; intros; econstructor; eauto.
+    + do 3 eexists; intros; econstructor; eauto.
+      (* Verify? *) 
+  - invert H31.
+    + admit.
+    + do 3 eexists; intros; econstructor 2; eauto.
+    + do 3 eexists; intros; econstructor; eauto.
+    + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto.
+     do 3 eexists; intros; econstructor; eauto.
+    + do 3 eexists; intros; econstructor; eauto.
+    + do 3 eexists; intros; econstructor; eauto.
+  (* send *)
+  - invert H35. 
+    + admit.
+    + do 3 eexists; intros; econstructor 2; eauto.
+    + do 3 eexists; intros; econstructor; eauto.
+    + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto.
+     do 3 eexists; intros; econstructor; eauto. admit.
+    + do 3 eexists; intros; econstructor; eauto.
+    + do 3 eexists; intros; econstructor; eauto.
+      (* sign enc*)
+  - invert H37.
+    + admit.
+    + do 3 eexists; intros; econstructor 2; eauto.
+    + do 3 eexists; intros; econstructor; eauto.
+    + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto. admit. admit.
+    + do 3 eexists; intros; econstructor; eauto.
+    + do 3 eexists; intros; econstructor; eauto.
+  - invert H36.
+    + admit.
+    + do 3 eexists; intros; econstructor 2; eauto.
+    + do 3 eexists; intros; econstructor; eauto.
+    + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto.
+     do 3 eexists; intros; econstructor; eauto.
+    + do 3 eexists; intros; econstructor; eauto.
+    + do 3 eexists; intros; econstructor; eauto.
+  (* sign *)
+  - invert H34.
+    + admit.
+    + do 3 eexists; intros; econstructor 2; eauto.
+    + do 3 eexists; intros; econstructor; eauto.
+    + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto. admit. admit.
+    + do 3 eexists; intros; econstructor; eauto.
+    + do 3 eexists; intros; econstructor; eauto.
+  - invert H31.
+    + admit.
+    + do 3 eexists; intros; econstructor 2; eauto.
+    + do 3 eexists; intros; econstructor; eauto.
+    + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto.
+     do 3 eexists; intros; econstructor; eauto.
+    + do 3 eexists; intros; econstructor; eauto.
+    + do 3 eexists; intros; econstructor; eauto.
+  (* gen keys *)
+  - invert H31.
+    + admit.
+    + do 3 eexists; intros; econstructor 2; eauto.
+    + do 3 eexists; intros; econstructor; eauto.
+    + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto.
+     do 3 eexists; intros; econstructor; eauto.
+    + do 3 eexists; intros; econstructor; eauto. admit. (* gks *)
+    + do 3 eexists; intros; econstructor; eauto. admit.
+  - invert H31.
+    + admit.
+    + do 3 eexists; intros; econstructor 2; eauto.
+    + do 3 eexists; intros; econstructor; eauto.
+    + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto.
+     do 3 eexists; intros; econstructor; eauto.
+    + do 3 eexists; intros; econstructor; eauto. admit. (* gks *)
+    + do 3 eexists; intros; econstructor; eauto. admit. 
 Admitted.
 
 
