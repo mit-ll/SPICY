@@ -339,45 +339,11 @@ Section SafeActions.
         | Bind _ _ => False
         end.
 
-  (* Inductive next_cmd_safe (honestk : key_perms) (cs : ciphers) (u_id : user_id) (froms : recv_nonces) (sents : sent_nonces) : *)
-  (*   forall {A}, user_cmd A -> Prop := *)
-
-  (* | SafeBind : forall {r A} (cmd1 : user_cmd r) (cmd2 : <<r>> -> user_cmd A), *)
-  (*     next_cmd_safe honestk cs u_id froms sents cmd1 *)
-  (*     -> next_cmd_safe honestk cs u_id froms sents (Bind cmd1 cmd2) *)
-  (* | SafeEncrypt : forall {t} (msg : message t) k__sign k__enc msg_to, *)
-  (*     honestk $? k__enc = Some true *)
-  (*     -> (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true) *)
-  (*     -> next_cmd_safe honestk cs u_id froms sents (SignEncrypt k__sign k__enc msg_to msg) *)
-  (* | SafeSign : forall {t} (msg : message t) k msg_to, *)
-  (*     (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true /\ kp = false) *)
-  (*     -> next_cmd_safe honestk cs u_id froms sents (Sign k msg_to msg) *)
-  (* | SafeRecv : forall t pat, *)
-  (*     msg_pattern_safe honestk pat *)
-  (*     -> next_cmd_safe honestk cs u_id froms sents (@Recv t pat) *)
-  (* | SafeSend : forall {t} (msg : crypto t) msg_to, *)
-  (*       msg_honestly_signed honestk cs msg = true *)
-  (*     -> msg_to_this_user cs (Some msg_to) msg = true *)
-  (*     -> msgCiphersSignedOk honestk cs msg *)
-  (*     -> (exists c_id c, msg = SignedCiphertext c_id *)
-  (*               /\ cs $? c_id = Some c *)
-  (*               /\ fst (cipher_nonce c) = (Some u_id)  (* only send my messages *) *)
-  (*               /\ ~ List.In (cipher_nonce c) sents) *)
-  (*     -> next_cmd_safe honestk cs u_id froms sents (Send msg_to msg) *)
-
-  (* (* Boring Commands *) *)
-  (* | SafeReturn : forall {A} (a : <<A>>), next_cmd_safe honestk cs u_id froms sents (Return a) *)
-  (* | SafeGen : next_cmd_safe honestk cs u_id froms sents Gen *)
-  (* | SafeDecrypt : forall {t} (c : crypto t), next_cmd_safe honestk cs u_id froms sents (Decrypt c) *)
-  (* | SafeVerify : forall {t} k (c : crypto t), next_cmd_safe honestk cs u_id froms sents (Verify k c) *)
-  (* | SafeGenerateSymKey : forall usage, next_cmd_safe honestk cs u_id froms sents (GenerateSymKey usage) *)
-  (* | SafeGenerateAsymKey : forall usage, next_cmd_safe honestk cs u_id froms sents (GenerateAsymKey usage) *)
-  (* . *)
-
   Definition honest_cmds_safe {A B} (U : universe A B) : Prop :=
     forall u_id u honestk,
       honestk = findUserKeys U.(users)
       -> U.(users) $? u_id = Some u
+      (* -> forall lbl bd, step_user lbl (Some u_id) (build_data_step U u) bd *)
       -> next_cmd_safe (findUserKeys U.(users)) U.(all_ciphers) u_id u.(from_nons) u.(sent_nons) u.(protocol).
 
   Definition label_safe (honestk : key_perms) (cs : ciphers) (lbl : label) : Prop :=

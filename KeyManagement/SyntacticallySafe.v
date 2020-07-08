@@ -17,7 +17,6 @@
  * as specifically authorized by the U.S. Government may violate any copyrights that exist in this work. *)
 
 From Coq Require Import
-     Classical
      List.
 
 From KeyManagement Require Import
@@ -33,19 +32,13 @@ From KeyManagement Require Import
      Simulation
      RealWorld
      InvariantsTheory
-     AdversarySafety.
-
-From protocols Require Import
-     ExampleProtocols
-     ProtocolAutomation
-     SafeProtocol
-     RealWorldStepLemmas
-.
+     SafetyAutomation.
+     (* AdversarySafety. *)
 
 Set Implicit Arguments.
 Import RealWorld RealWorldNotations.
-Import SimulationAutomation.
-Import AdversarySafety.Automation.
+
+Import SafetyAutomation.
 
 Inductive ty : Set :=
 | TyDontCare
@@ -152,38 +145,6 @@ Inductive syntactically_safe (u_id : user_id) :
     syntactically_safe u_id context (GenerateAsymKey usage) TyHonestKey
 .
 
-Section TestProto.
-
-  Notation KID1 := 0.
-  Notation KID2 := 1.
-
-  Definition KEY1  := MkCryptoKey KID1 Signing AsymKey.
-  Definition KEY2  := MkCryptoKey KID2 Signing AsymKey.
-  Definition KEYS  := $0 $+ (KID1, KEY1) $+ (KID2, KEY2).
-
-  Definition A__keys := $0 $+ (KID1, true) $+ (KID2, false).
-  Definition B__keys := $0 $+ (KID1, false) $+ (KID2, true).
-
-  Definition real_univ_start :=
-    mkrU KEYS A__keys B__keys
-         (* user A *)
-         ( kp <- GenerateAsymKey Encryption
-           ; c1 <- Sign KID1 B (Permission (fst kp, false))
-           ; _  <- Send B c1
-           ; c2 <- @Recv Nat (SignedEncrypted KID2 (fst kp) true)
-           ; m  <- Decrypt c2
-           ; @Return (Base Nat) (extractContent m) )
-
-         (* user B *)
-         ( c1 <- @Recv Access (Signed KID1 true)
-           ; v  <- Verify KID1 c1
-           ; n  <- Gen
-           ; c2 <- SignEncrypt KID2 (fst (extractPermission (snd v))) A (message.Content n)
-           ; _  <- Send A c2
-           ; @Return (Base Nat) n).
-  
-End TestProto.
-
 Definition U_syntactically_safe {A B} (U : RealWorld.universe A B) :=
   forall u_id u,
     U.(users) $? u_id = Some u
@@ -196,52 +157,6 @@ Hint Constructors
      HonestKey
      syntactically_safe
   : core.
-
-Lemma share_secret_synctactically_safe :
-  U_syntactically_safe (real_univ_start startAdv).
-Proof.
-  unfold U_syntactically_safe, real_univ_start, mkrU, mkrUsr, A__keys, B__keys; simpl; 
-    intros; subst.
-
-  destruct (u_id ==n A); destruct (u_id ==n B); subst; clean_map_lookups; simpl.
-
-  - eexists.
-
-    econstructor.
-    econstructor.
-
-    intros; econstructor; simpl; eauto.
-    econstructor; simpl; eauto.
-
-    intros; destruct (fst a ==n k_id); subst; clean_map_lookups; eauto.
-    econstructor; simpl; eauto.
-    destruct a; simpl; econstructor; eauto.
-
-    econstructor; simpl; eauto.
-    econstructor; simpl; eauto.
-
-    intros; econstructor; subst; eauto.
-    econstructor; simpl; eauto 8.
-
-  - eexists.
-
-    econstructor.
-    econstructor.
-    econstructor; eauto.
-
-    intros; econstructor; simpl.
-    econstructor; simpl; eauto 8.
-
-    intros; econstructor; simpl.
-    econstructor; simpl; eauto.
-
-    intros; econstructor; simpl; eauto.
-    econstructor; simpl; simpl.
-
-    eapply HonestKeyFromMsgVerify; eauto.
-    intros; econstructor; simpl; eauto 8.
-    intros; clean_map_lookups.
-Qed.
 
 Lemma HonestKey_split :
   forall t (tv : <<t>>) styp k context key_rec,
@@ -408,6 +323,17 @@ Ltac process_ctx1 :=
   end.
 
 Ltac process_ctx := repeat process_ctx1.
+
+Hint Constructors
+     RealWorld.msg_accepted_by_pattern 
+     RealWorld.honest_key
+     RealWorld.msg_pattern_safe
+  : core.
+Hint Extern 1 (List.In _ _) => progress simpl : core.
+Hint Extern 1 (_ $+ (_,_) $? _ = _) => progress clean_map_lookups : core.
+Hint Extern 1 (_ $+ (?k1,_) $? ?k2 = _) =>
+  solve [ destruct (k1 ==n k2); subst; clean_map_lookups; trivial ] : core.
+
 
 Lemma syntactically_safe_honest_keys_preservation' :
   forall {A B C} suid lbl bd bd',
@@ -826,7 +752,7 @@ Section PredicatePreservation.
     specialize_msg_ok; eauto.
   Qed.
 
-  Lemma honest_labeled_step_user_cipher_queues_ok :
+  Lemma honest_labeled_step_user_cipher_queues_ok_ss :
     forall {A B C} u_id cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
       gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd' a suid,
       step_user lbl suid bd bd'
@@ -876,7 +802,7 @@ Section PredicatePreservation.
       eapply user_cipher_queues_ok_readd_user; subst; clean_map_lookups; eauto.
   Qed.
 
-  Lemma honest_labeled_step_message_queues_ok :
+  Lemma honest_labeled_step_message_queues_ok_ss :
     forall {A B C} u_id suid cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
       gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd' a,
       step_user lbl suid bd bd'
@@ -1001,35 +927,97 @@ Section PredicatePreservation.
       unfold build_data_step in *; simpl in *;
         specialize (H1 _ _ H3); split_ex; simpl in *.
     
-    - intuition
-        eauto using silent_user_step_encrypted_ciphers_ok,
-      honest_silent_step_keys_good,
-      honest_silent_step_user_cipher_queues_ok,
-      honest_silent_step_message_queues_ok,
-      honest_users_only_honest_keys_honest_steps
-    .
+    - repeat simple apply conj.
 
-    eapply honest_silent_step_message_queues_ok; eauto; keys_and_permissions_prop; eauto.
+      eapply silent_user_step_encrypted_ciphers_ok; eauto.
+      eapply honest_silent_step_keys_good; eauto.
+      eapply honest_silent_step_user_cipher_queues_ok; eauto.
+      eapply honest_silent_step_message_queues_ok; eauto; keys_and_permissions_prop; eauto.
+      eapply honest_users_only_honest_keys_honest_steps; eauto.
 
-    - intuition
-        eauto using
-         honest_labeled_step_encrypted_ciphers_ok,
-      honest_labeled_step_keys_and_permissions_good,
-      honest_labeled_step_user_cipher_queues_ok,
-      honest_labeled_step_message_queues_ok,
-      honest_users_only_honest_keys_honest_steps
-      .
+    - repeat simple apply conj.
+      eapply honest_labeled_step_encrypted_ciphers_ok; eauto.
+      eapply honest_labeled_step_keys_and_permissions_good; eauto.
+      eapply honest_labeled_step_user_cipher_queues_ok_ss; eauto.
+      eapply honest_labeled_step_message_queues_ok_ss; eauto.
+      eapply honest_users_only_honest_keys_honest_steps; eauto.
   Qed.
 
-  Lemma goodness_preservation_step :
-    forall t__hon t__adv (st st' : universe t__hon t__adv * IdealWorld.universe t__hon) b,
-      step st st'
-      -> lameAdv b (fst st).(adversary)
-      -> syntactically_safe_U (fst st)
-      -> goodness_predicates (fst st)
-      -> goodness_predicates (fst st').
+  (* Lemma goodness_preservation_step : *)
+  (*   forall t__hon t__adv (st st' : universe t__hon t__adv * IdealWorld.universe t__hon) b, *)
+  (*     step st st' *)
+  (*     -> lameAdv b (fst st).(adversary) *)
+  (*     -> syntactically_safe_U (fst st) *)
+  (*     -> goodness_predicates (fst st) *)
+  (*     -> goodness_predicates (fst st'). *)
+  (* Proof. *)
+  (*   inversion 1; intros; subst; simpl in *; eapply goodness_preservation_stepU; eauto. *)
+  (* Qed. *)
+
+  Lemma step_user_nochange_that_user_in_honest_users :
+    forall {A B C} suid lbl bd bd',
+      step_user lbl suid bd bd'
+      -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks'
+          (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs'
+          froms froms' sents sents' cur_n cur_n',
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+        -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+        -> forall u_id1 ud1,
+            suid = Some u_id1
+            -> usrs $? u_id1 = Some ud1
+            -> usrs' $? u_id1 = Some ud1.
   Proof.
-    inversion 1; intros; subst; simpl in *; eapply goodness_preservation_stepU; eauto.
+    induction 1; inversion 1; inversion 1;
+      intros; subst; eauto.
+  Qed.
+
+  Lemma step_back_into_other_user :
+    forall {A B C} suid lbl bd bd',
+      step_user lbl suid bd bd'
+      -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks'
+          (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs'
+          froms froms' sents sents' cur_n cur_n',
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+        -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+        -> forall cmdc u_id1 u_id2 ks2 cmdc2 qmsgs2 mycs2 froms2 sents2 cur_n2,
+            suid = Some u_id1
+            -> u_id1 <> u_id2
+            -> usrs $? u_id1 = Some {| key_heap := ks;
+                                      protocol := cmdc;
+                                      msg_heap := qmsgs;
+                                      c_heap   := mycs;
+                                      from_nons := froms;
+                                      sent_nons := sents;
+                                      cur_nonce := cur_n |}
+            -> usrs' $? u_id2 = Some {| key_heap := ks2;
+                                       protocol := cmdc2;
+                                       msg_heap := qmsgs2;
+                                       c_heap   := mycs2;
+                                       from_nons := froms2;
+                                       sent_nons := sents2;
+                                       cur_nonce := cur_n2 |}
+            -> usrs $? u_id2 = Some {| key_heap := ks2;
+                                      protocol := cmdc2;
+                                      msg_heap := qmsgs2;
+                                      c_heap   := mycs2;
+                                      from_nons := froms2;
+                                      sent_nons := sents2;
+                                      cur_nonce := cur_n2 |}
+              \/ exists m qmsgs2',
+                qmsgs2 = qmsgs2' ++ [m]
+                /\ usrs $? u_id2 = Some {| key_heap := ks2;
+                                          protocol := cmdc2;
+                                          msg_heap := qmsgs2';
+                                          c_heap   := mycs2;
+                                          from_nons := froms2;
+                                          sent_nons := sents2;
+                                          cur_nonce := cur_n2 |}.
+  Proof.
+    induction 1; inversion 1; inversion 1;
+      intros; subst; eauto.
+
+    destruct (rec_u_id ==n u_id2); subst; clean_map_lookups; eauto.
+    destruct rec_u; eauto.
   Qed.
 
   Lemma syntactically_safe_U_preservation_stepU :
@@ -1072,121 +1060,15 @@ Section PredicatePreservation.
 
   Qed.
 
-  Lemma syntactically_safe_U_preservation_step :
-    forall t__hon t__adv (st st' : universe t__hon t__adv * IdealWorld.universe t__hon) b,
-      step st st'
-      -> lameAdv b (fst st).(adversary)
-      -> goodness_predicates (fst st)
-      -> syntactically_safe_U (fst st)
-      -> syntactically_safe_U (fst st').
-  Proof.
-    inversion 1; intros; subst; simpl in *; eapply syntactically_safe_U_preservation_stepU; eauto.
-  Qed.
+  (* Lemma syntactically_safe_U_preservation_step : *)
+  (*   forall t__hon t__adv (st st' : universe t__hon t__adv * IdealWorld.universe t__hon) b, *)
+  (*     step st st' *)
+  (*     -> lameAdv b (fst st).(adversary) *)
+  (*     -> goodness_predicates (fst st) *)
+  (*     -> syntactically_safe_U (fst st) *)
+  (*     -> syntactically_safe_U (fst st'). *)
+  (* Proof. *)
+  (*   inversion 1; intros; subst; simpl in *; eapply syntactically_safe_U_preservation_stepU; eauto. *)
+  (* Qed. *)
 
 End PredicatePreservation.
-
-Definition no_resends (sents : sent_nonces) :=
-  NoDup sents.
-
-Definition no_resends_U {A B} (U : universe A B) :=
-  Forall_natmap (fun u => no_resends u.(sent_nons)) U.(users).
-
-Lemma no_resends_user_step :
-  forall {A B C} suid lbl bd bd',
-    step_user lbl suid bd bd'
-    -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks'
-        (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs'
-        froms froms' sents sents' cur_n cur_n',
-      bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
-      -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
-      -> forall cmdc u_id,
-          suid = Some u_id
-          -> usrs $? u_id = Some {| key_heap := ks;
-                                   protocol := cmdc;
-                                   msg_heap := qmsgs;
-                                   c_heap   := mycs;
-                                   from_nons := froms;
-                                   sent_nons := sents;
-                                   cur_nonce := cur_n |}
-          -> no_resends sents'
-          -> no_resends sents.
-Proof.
-  induction 1; inversion 1; inversion 1; unfold no_resends; intros; subst; eauto.
-
-  - eapply IHstep_user in H25; eauto.
-  - unfold updateSentNonce in H33.
-    destruct msg; eauto.
-    cases (cs' $? c_id); eauto.
-    destruct (rec_u_id ==n cipher_to_user c); subst; eauto.
-    invert H33; eauto.
-Qed.
-
-Lemma resend_violation_step' :
-  forall t__hon t__adv st st' b,
-    @step t__hon t__adv st st'
-    -> lameAdv b (fst st).(adversary)
-    -> no_resends_U (fst st')
-    -> no_resends_U (fst st).
-Proof.
-  induction 1; unfold no_resends_U; rewrite !Forall_natmap_forall; destruct ru, v; simpl in *; intros.
-
-  - invert H; unfold build_data_step in *; simpl in *; dismiss_adv.
-  
-    destruct (u_id ==n k); subst; clean_map_lookups; simpl in *; eauto.
-    + specialize (H1 k); rewrite add_eq_o in H1 by trivial.
-      specialize (H1 _ eq_refl); simpl in *.
-      eapply no_resends_user_step; eauto.
-    + specialize (H1 k); rewrite add_neq_o in H1 by congruence.
-      destruct userData; eapply silent_step_nochange_other_user with (u_id2 := k) in H4; eauto.
-      clean_map_lookups; simpl in *.
-      specialize (H1 _ H4); eauto.
-
-  - invert H; unfold build_data_step in *; simpl in *.
-    destruct (u_id ==n k); subst; clean_map_lookups; simpl in *; eauto.
-    + specialize (H4 k); rewrite add_eq_o in H4 by trivial.
-      specialize (H4 _ eq_refl); simpl in *.
-      eapply no_resends_user_step; eauto.
-    + specialize (H4 k); rewrite add_neq_o in H4 by congruence.
-      destruct userData; eapply step_limited_change_other_user with (u_id2 := k) in H7; eauto.
-      split_ex; split_ors; clean_map_lookups; simpl in *.
-      specialize (H4 _ H7); eauto.
-      specialize (H4 _ H7); eauto.
-Qed.
-
-Lemma resend_violation_step :
-  forall t__hon t__adv st st' b,
-    @step t__hon t__adv st st'
-    -> lameAdv b (fst st).(adversary)
-    -> ~ no_resends_U (fst st)
-    -> ~ no_resends_U (fst st').
-Proof.
-  unfold not; intros.
-  eauto using resend_violation_step'.
-Qed.
-
-Lemma single_step_stays_lame :
-  forall t__hon t__adv st st' b,
-    (@step t__hon t__adv) st st'
-    -> lameAdv b (adversary (fst st))
-    -> lameAdv b (adversary (fst st')).
-Proof.
-  intros.
-  invert H;
-    simpl in *;
-    eauto using universe_step_preserves_lame_adv.
-Qed.
-
-Lemma resend_violation_steps :
-  forall t__hon t__adv st st' b,
-    (@step t__hon t__adv) ^* st st'
-    -> lameAdv b (fst st).(adversary)
-    -> ~ no_resends_U (fst st)
-    -> ~ no_resends_U (fst st').
-Proof.
-  induction 1; intros; eauto.
-
-  specialize (single_step_stays_lame H H1); intros.
-  destruct x, y, z; simpl in *.
-
-  generalize H; intros VIOL; eapply resend_violation_step in VIOL; eauto.
-Qed.

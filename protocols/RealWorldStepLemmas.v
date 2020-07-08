@@ -30,6 +30,7 @@ From KeyManagement Require Import
      Simulation
      RealWorld
      AdversaryUniverse
+     SafetyAutomation
      AdversarySafety.
 
 From protocols Require Import
@@ -66,71 +67,71 @@ Proof.
     eauto using honest_cmds_implies_safe_actions.
 Qed.
 
-Lemma step_user_nochange_that_user_in_honest_users :
-  forall {A B C} suid lbl bd bd',
-    step_user lbl suid bd bd'
-    -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks'
-        (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs'
-        froms froms' sents sents' cur_n cur_n',
-      bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
-      -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
-      -> forall u_id1 ud1,
-          suid = Some u_id1
-          -> usrs $? u_id1 = Some ud1
-          -> usrs' $? u_id1 = Some ud1.
-Proof.
-  induction 1; inversion 1; inversion 1;
-    intros; subst; eauto.
-Qed.
+(* Lemma step_user_nochange_that_user_in_honest_users : *)
+(*   forall {A B C} suid lbl bd bd', *)
+(*     step_user lbl suid bd bd' *)
+(*     -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks' *)
+(*         (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs' *)
+(*         froms froms' sents sents' cur_n cur_n', *)
+(*       bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
+(*       -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd') *)
+(*       -> forall u_id1 ud1, *)
+(*           suid = Some u_id1 *)
+(*           -> usrs $? u_id1 = Some ud1 *)
+(*           -> usrs' $? u_id1 = Some ud1. *)
+(* Proof. *)
+(*   induction 1; inversion 1; inversion 1; *)
+(*     intros; subst; eauto. *)
+(* Qed. *)
 
-Lemma step_back_into_other_user :
-  forall {A B C} suid lbl bd bd',
-    step_user lbl suid bd bd'
-    -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks'
-        (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs'
-        froms froms' sents sents' cur_n cur_n',
-      bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
-      -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
-      -> forall cmdc u_id1 u_id2 ks2 cmdc2 qmsgs2 mycs2 froms2 sents2 cur_n2,
-          suid = Some u_id1
-          -> u_id1 <> u_id2
-          -> usrs $? u_id1 = Some {| key_heap := ks;
-                                    protocol := cmdc;
-                                    msg_heap := qmsgs;
-                                    c_heap   := mycs;
-                                    from_nons := froms;
-                                    sent_nons := sents;
-                                    cur_nonce := cur_n |}
-          -> usrs' $? u_id2 = Some {| key_heap := ks2;
-                                     protocol := cmdc2;
-                                     msg_heap := qmsgs2;
-                                     c_heap   := mycs2;
-                                     from_nons := froms2;
-                                     sent_nons := sents2;
-                                     cur_nonce := cur_n2 |}
-          -> usrs $? u_id2 = Some {| key_heap := ks2;
-                                    protocol := cmdc2;
-                                    msg_heap := qmsgs2;
-                                    c_heap   := mycs2;
-                                    from_nons := froms2;
-                                    sent_nons := sents2;
-                                    cur_nonce := cur_n2 |}
-            \/ exists m qmsgs2',
-              qmsgs2 = qmsgs2' ++ [m]
-              /\ usrs $? u_id2 = Some {| key_heap := ks2;
-                                        protocol := cmdc2;
-                                        msg_heap := qmsgs2';
-                                        c_heap   := mycs2;
-                                        from_nons := froms2;
-                                        sent_nons := sents2;
-                                        cur_nonce := cur_n2 |}.
-Proof.
-  induction 1; inversion 1; inversion 1;
-    intros; subst; eauto.
+(* Lemma step_back_into_other_user : *)
+(*   forall {A B C} suid lbl bd bd', *)
+(*     step_user lbl suid bd bd' *)
+(*     -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks' *)
+(*         (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs' *)
+(*         froms froms' sents sents' cur_n cur_n', *)
+(*       bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
+(*       -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd') *)
+(*       -> forall cmdc u_id1 u_id2 ks2 cmdc2 qmsgs2 mycs2 froms2 sents2 cur_n2, *)
+(*           suid = Some u_id1 *)
+(*           -> u_id1 <> u_id2 *)
+(*           -> usrs $? u_id1 = Some {| key_heap := ks; *)
+(*                                     protocol := cmdc; *)
+(*                                     msg_heap := qmsgs; *)
+(*                                     c_heap   := mycs; *)
+(*                                     from_nons := froms; *)
+(*                                     sent_nons := sents; *)
+(*                                     cur_nonce := cur_n |} *)
+(*           -> usrs' $? u_id2 = Some {| key_heap := ks2; *)
+(*                                      protocol := cmdc2; *)
+(*                                      msg_heap := qmsgs2; *)
+(*                                      c_heap   := mycs2; *)
+(*                                      from_nons := froms2; *)
+(*                                      sent_nons := sents2; *)
+(*                                      cur_nonce := cur_n2 |} *)
+(*           -> usrs $? u_id2 = Some {| key_heap := ks2; *)
+(*                                     protocol := cmdc2; *)
+(*                                     msg_heap := qmsgs2; *)
+(*                                     c_heap   := mycs2; *)
+(*                                     from_nons := froms2; *)
+(*                                     sent_nons := sents2; *)
+(*                                     cur_nonce := cur_n2 |} *)
+(*             \/ exists m qmsgs2', *)
+(*               qmsgs2 = qmsgs2' ++ [m] *)
+(*               /\ usrs $? u_id2 = Some {| key_heap := ks2; *)
+(*                                         protocol := cmdc2; *)
+(*                                         msg_heap := qmsgs2'; *)
+(*                                         c_heap   := mycs2; *)
+(*                                         from_nons := froms2; *)
+(*                                         sent_nons := sents2; *)
+(*                                         cur_nonce := cur_n2 |}. *)
+(* Proof. *)
+(*   induction 1; inversion 1; inversion 1; *)
+(*     intros; subst; eauto. *)
 
-  destruct (rec_u_id ==n u_id2); subst; clean_map_lookups; eauto.
-  destruct rec_u; eauto.
-Qed.
+(*   destruct (rec_u_id ==n u_id2); subst; clean_map_lookups; eauto. *)
+(*   destruct rec_u; eauto. *)
+(* Qed. *)
 
 Lemma silent_step_nochange_other_user' :
   forall {A B C} suid lbl bd bd',
@@ -264,28 +265,6 @@ Proof.
   unfold honest_keyb in *.
   destruct (k_id ==n k); subst; clean_map_lookups; eauto.
   specialize (H1 _ eq_refl); split_ands; contradiction.
-Qed.
-
-Lemma honestk_merge_new_msgs_keys_same :
-  forall honestk cs  {t} (msg : crypto t),
-    message_no_adv_private honestk cs msg
-    -> (honestk $k++ findKeysCrypto cs msg) = honestk.
-Proof.
-  intros.
-  apply map_eq_Equal; unfold Equal; intros.
-  solve_perm_merges; eauto;
-    specialize (H _ _ Heq0); clean_map_lookups; eauto.
-Qed.
-
-Lemma honestk_merge_new_msgs_keys_dec_same :
-  forall honestk {t} (msg : message t),
-    (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true)
-    -> (honestk $k++ findKeysMessage msg) = honestk.
-Proof.
-  intros.
-  apply map_eq_Equal; unfold Equal; intros.
-  solve_perm_merges; eauto;
-    specialize (H _ _ Heq0); clean_map_lookups; eauto.
 Qed.
 
 (* need to know that msg, if cipher, is in cs *)
@@ -528,7 +507,7 @@ Qed.
 
 Section MessageEqLemmas.
 
-  Import AdversarySafety.Automation.
+  Import SafetyAutomation.SafetyAutomation.
 
   Lemma message_content_eq_addnl_key :
     forall t__rw m__rw  t__iw m__iw gks kid k,

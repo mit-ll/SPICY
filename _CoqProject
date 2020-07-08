@@ -41,6 +41,8 @@ KeyManagement/Simulation.v
 KeyManagement/AdversaryUniverse.v
 KeyManagement/AdversarySafety.v
 KeyManagement/Tactics.v
+KeyManagement/SafetyAutomation.v
+KeyManagement/SyntacticallySafe.v
 
 protocols/ProtocolAutomation.v
 protocols/UniverseEqAutomation.v
@@ -48,9 +50,9 @@ protocols/SafeProtocol.v
 protocols/Sets.v
 protocols/ModelCheck.v
 protocols/RealWorldStepLemmas.v
-protocols/SyntacticallySafe.v
 protocols/PartialOrderReduction.v
 protocols/LabelsAlign.v
+protocols/NoResends.v
 
 protocols/ExampleProtocols.v
 protocols/ExampleProtocolsAutomated.v

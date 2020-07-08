@@ -38,6 +38,8 @@ From KeyManagement Require Import
      InvariantsTheory
      AdversaryUniverse
      AdversarySafety
+     SafetyAutomation
+     SyntacticallySafe
      UsersTheory.
 
 From protocols Require Import
@@ -46,8 +48,8 @@ From protocols Require Import
      ModelCheck
      ProtocolAutomation
      SafeProtocol
-     SyntacticallySafe
      LabelsAlign
+     NoResends
 .
 
 From protocols Require Sets.
@@ -65,7 +67,7 @@ Ltac dt bd :=
   destruct bd as [[[[[[[[[[?usrs ?adv] ?cs] ?gks] ?ks] ?qmsgs] ?mycs] ?froms] ?sents] ?cur_n] ?cmd].
 
 Import SimulationAutomation.
-Import AdversarySafety.Automation.
+Import SafetyAutomation.
 
 Ltac step_usr uid :=
   match goal with
@@ -272,9 +274,6 @@ Section CommutationLemmas.
         eapply StepBindRecur; eauto 12.
   Qed.
 
-
-  Import SimulationAutomation.
-  Import AdversarySafety.Automation.
 
   Definition buildUniverse_step {A B} (ds : data_step0 A B (Base A)) (uid : user_id) : universe A B  :=
     let '(usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) := ds

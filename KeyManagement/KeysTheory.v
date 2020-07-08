@@ -30,7 +30,8 @@ Require Import
         Automation
         Tactics
         RealWorld
-        AdversaryUniverse.
+        AdversaryUniverse
+        Simulation.
 
 Set Implicit Arguments.
 
@@ -651,6 +652,47 @@ Section CleanKeys.
   Qed.
 
 End CleanKeys.
+
+Section MergeKeysLemmas.
+
+  Lemma merge_keys_addnl_honest :
+    forall ks1 ks2,
+      (forall k_id kp, ks2 $? k_id = Some kp -> ks1 $? k_id = Some true)
+      -> ks1 $k++ ks2 = ks1.
+  Proof.
+    intros; apply map_eq_Equal; unfold Equal; intros.
+    cases (ks1 $? y); cases (ks2 $? y); subst;
+      try
+        match goal with
+        | [ H1 : ks2 $? _ = Some ?b
+                 , H2 : (forall _ _, ks2 $? _ = Some _ -> _) |- _ ]  => generalize (H2 _ _ H1); intros
+        end; solve_perm_merges; intuition eauto.
+  Qed.
+
+Lemma honestk_merge_new_msgs_keys_same :
+  forall honestk cs  {t} (msg : crypto t),
+    message_no_adv_private honestk cs msg
+    -> (honestk $k++ findKeysCrypto cs msg) = honestk.
+Proof.
+  intros.
+  apply map_eq_Equal; unfold Equal; intros.
+  solve_perm_merges; eauto;
+    specialize (H _ _ Heq0); clean_map_lookups; eauto.
+Qed.
+
+Lemma honestk_merge_new_msgs_keys_dec_same :
+  forall honestk {t} (msg : message t),
+    (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true)
+    -> (honestk $k++ findKeysMessage msg) = honestk.
+Proof.
+  intros.
+  apply map_eq_Equal; unfold Equal; intros.
+  solve_perm_merges; eauto;
+    specialize (H _ _ Heq0); clean_map_lookups; eauto.
+Qed.
+
+End MergeKeysLemmas.
+
 
 Hint Resolve
      honest_key_filter_fn_proper

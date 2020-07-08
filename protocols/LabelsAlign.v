@@ -31,6 +31,7 @@ From KeyManagement Require Import
      Tactics
      Simulation
      RealWorld
+     SyntacticallySafe
      AdversarySafety.
 
 From protocols Require Import
@@ -39,7 +40,6 @@ From protocols Require Import
      ModelCheck
      SafeProtocol
      RealWorldStepLemmas
-     SyntacticallySafe
 .
 
 Require IdealWorld.

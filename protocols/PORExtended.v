@@ -38,6 +38,8 @@ From KeyManagement Require Import
      InvariantsTheory
      AdversaryUniverse
      AdversarySafety
+     SafetyAutomation
+     SyntacticallySafe
      UsersTheory.
 
 From protocols Require Import
@@ -46,7 +48,6 @@ From protocols Require Import
      ModelCheck
      ProtocolAutomation
      SafeProtocol
-     SyntacticallySafe
      LabelsAlign
      PartialOrderReduction
 .
@@ -97,17 +98,29 @@ Proof.
       simpl in *;
       clean_map_lookups.
 
-    + admit.  (* contradiction based on steps being deterministic *)
-    + 
-
-
-
+    + pose proof (user_step_label_deterministic _ _ _ _ _ _ _ _ _ H2 H6); discriminate.
+    + pose proof (user_step_label_deterministic _ _ _ _ _ _ _ _ _ H2 H6).
+      invert H0.
+      (do 3 eexists); repeat simple apply conj; eauto.
 
   - assert (forall st', ~ model_step_user u_id (ru,iu) st') by eauto using all_not_not_ex.
     eapply H in H3; eauto.
     contradiction.
 Qed.
-  
+
+Lemma stuck_model_violation_step :
+  forall t__hon t__adv st st' b,
+    @step t__hon t__adv st st'
+    -> lameAdv b (fst st).(adversary)
+    -> stuck_model_step_user_stuck_user st
+    -> stuck_model_step_user_stuck_user st'.
+Proof.
+  unfold not; intros.
+  eauto using alignment_violation_step'.
+Qed.
+
+
+
 
 
 Lemma stuck_other_step_not_unstuck :
