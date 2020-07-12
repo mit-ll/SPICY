@@ -89,69 +89,168 @@ Fixpoint init_context (ks : list key_permission) : list safe_typ :=
     {| cmd_type := Base Access ; cmd_val := kp ; safetyTy := TyHonestKey |} :: init_context kps
   end.
 
-Inductive syntactically_safe (u_id : user_id) :
+Inductive syntactically_safe (u_id : user_id) (uids : list user_id) :
   list safe_typ -> forall t, user_cmd t -> ty -> Prop :=
 
 | SafeBind : forall {t t'} context (cmd1 : user_cmd t') t1,
-    syntactically_safe u_id context cmd1 t1
+    syntactically_safe u_id uids context cmd1 t1
     -> forall (cmd2 : <<t'>> -> user_cmd t) t2,
-      (forall a, syntactically_safe u_id ({| cmd_type := t' ; cmd_val := a ; safetyTy := t1 |} :: context) (cmd2 a) t2)
-      -> syntactically_safe u_id context (Bind cmd1 cmd2) t2
+      (forall a, syntactically_safe u_id uids ({| cmd_type := t' ; cmd_val := a ; safetyTy := t1 |} :: context) (cmd2 a) t2)
+      -> syntactically_safe u_id uids context (Bind cmd1 cmd2) t2
 
 | SafeEncrypt : forall context {t} (msg : message t) k__sign k__enc msg_to,
     HonestKey context k__enc
     -> HonestKey context k__sign
     -> (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> HonestKey context k_id)
-    -> syntactically_safe u_id context (SignEncrypt k__sign k__enc msg_to msg) (TyMyCphr msg_to k__sign)
+    -> msg_to <> u_id
+    -> List.In msg_to uids
+    -> syntactically_safe u_id uids context (SignEncrypt k__sign k__enc msg_to msg) (TyMyCphr msg_to k__sign)
 
 | SafeSign : forall context {t} (msg : message t) k msg_to,
     HonestKey context k
     -> (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> HonestKey context k_id /\ kp = false)
-    -> syntactically_safe u_id context (Sign k msg_to msg) (TyMyCphr msg_to k)
+    -> msg_to <> u_id
+    -> List.In msg_to uids
+    -> syntactically_safe u_id uids context (Sign k msg_to msg) (TyMyCphr msg_to k)
 
 | SafeRecvSigned : forall context t k,
     HonestKey context k
-    -> syntactically_safe u_id context (@Recv t (Signed k true)) TyRecvCphr
+    -> syntactically_safe u_id uids context (@Recv t (Signed k true)) TyRecvCphr
 
 | SafeRecvEncrypted : forall context t k__sign k__enc,
     HonestKey context k__sign
-    -> syntactically_safe u_id context (@Recv t (SignedEncrypted k__sign k__enc true)) TyRecvCphr
+    -> syntactically_safe u_id uids context (@Recv t (SignedEncrypted k__sign k__enc true)) TyRecvCphr
 
 | SafeSend : forall context t (msg : crypto t) msg_to k,
     (* ~ List.In {| cmd_type := Crypto t ; cmd_val := msg ; safetyTy := TySent |} context *)
     List.In {| cmd_type := Crypto t ; cmd_val := msg ; safetyTy := (TyMyCphr msg_to k) |} context
-    -> syntactically_safe u_id context (Send msg_to msg) TyDontCare
+    -> syntactically_safe u_id uids context (Send msg_to msg) TyDontCare
 
 | SafeReturn : forall {A} context (a : << A >>) sty,
     List.In {| cmd_type := A ; cmd_val := a ; safetyTy := sty |} context
-    -> syntactically_safe u_id context (Return a) sty
+    -> syntactically_safe u_id uids context (Return a) sty
 
 | SafeReturnUntyped : forall {A} context (a : << A >>),
-    syntactically_safe u_id context (Return a) TyDontCare
+    syntactically_safe u_id uids context (Return a) TyDontCare
 
 | SafeGen : forall context,
-    syntactically_safe u_id context Gen TyDontCare
+    syntactically_safe u_id uids context Gen TyDontCare
 
 | SafeDecrypt : forall context t (msg : crypto t),
     List.In {| cmd_type := Crypto t ; cmd_val := msg ; safetyTy := TyRecvCphr |} context
-    -> syntactically_safe u_id context (Decrypt msg) TyRecvMsg
+    -> syntactically_safe u_id uids context (Decrypt msg) TyRecvMsg
 | SafeVerify : forall context t k msg,
     List.In {| cmd_type := Crypto t ; cmd_val := msg ; safetyTy := TyRecvCphr |} context
-    -> syntactically_safe u_id context (@Verify t k msg) TyRecvMsg
+    -> syntactically_safe u_id uids context (@Verify t k msg) TyRecvMsg
 
 | SafeGenerateSymKey : forall context usage,
-    syntactically_safe u_id context (GenerateSymKey usage) TyHonestKey
+    syntactically_safe u_id uids context (GenerateSymKey usage) TyHonestKey
 | SafeGenerateAsymKey : forall context usage,
-    syntactically_safe u_id context (GenerateAsymKey usage) TyHonestKey
+    syntactically_safe u_id uids context (GenerateAsymKey usage) TyHonestKey
 .
 
+Definition compute_ids' {V} (m : NatMap.t V) :=
+  List.map (fun '(k,_) => k) (elements m).
+
+Definition compute_ids {V} (m : NatMap.t V) :=
+  List.map (fun '(k,_) => k) (elements (mapi (fun k v => k) m)).
+(* fold (fun k _ l => k :: l) m []. *)
+
+Lemma list_setoidlist_iff :
+  forall {V} (l : list (nat * V)) k v,
+    List.In (k,v) l <-> SetoidList.InA (@eq_key_elt V) (k,v) l.
+Proof.
+  induction l; split; intros; eauto.
+  - invert H.
+  - destruct a; simpl in H; split_ors; eauto.
+    invert H; econstructor; red; eauto.
+    apply IHl in H; eauto.
+  - destruct a; invert H; eauto.
+    invert H1; simpl in *; subst; eauto.
+    eapply IHl in H1; eauto.
+Qed.
+
+Lemma in_ids_in_m :
+  forall V (m : NatMap.t V) k,
+    List.In k (compute_ids m)
+    -> exists v,
+      m $? k = Some v.
+Proof.
+  unfold compute_ids; intros *.
+  induction m using map_induction_bis; intros; Equal_eq; eauto.
+  contradiction.
+
+  destruct (k ==n x); subst.
+  - eexists; clean_map_lookups; eauto.
+  - assert (List.In k (List.map (fun '(k, _) => k) (elements (elt:=Map.key) (mapi (fun (k : Map.key) (_ : V) => k) m)))).
+
+    rewrite in_map_iff in H0 |- *; split_ex.
+    destruct x0; subst.
+    exists (k,k1); split; eauto.
+    rewrite list_setoidlist_iff in *.
+    rewrite <- elements_mapsto_iff in *.
+    rewrite mapi_mapsto_iff in *; eauto.
+    split_ex; subst.
+    eexists; rewrite find_mapsto_iff in *; clean_map_lookups; eauto.
+
+    clean_map_lookups; eauto.
+Qed.
+
+
+Lemma readd_user_in :
+  forall V (m : NatMap.t V) k v v',
+    m $? k = Some v
+    -> List.map (fun '(k,_) => k) (elements (mapi (fun k _ => k) (m $+ (k,v'))))
+      = List.map (fun '(k,_) => k) (elements (mapi (fun k _ => k) m)).
+Proof.
+  intros.
+
+  assert ( mapi (fun k _ => k) (m $+ (k,v')) = mapi (fun k _ => k) m ).
+  apply map_eq_Equal; unfold Equal; intros.
+  cases (m $? y);
+    destruct (y ==n k); subst; clean_map_lookups; eauto;
+      rewrite !mapi_o; eauto;
+        clean_map_lookups; eauto.
+
+  rewrite <- H0; trivial.
+Qed.
+
+Lemma compute_userids_readd_idempotent :
+  forall A (usrs : honest_users A) uid u u',
+    usrs $? uid = Some u
+    -> compute_ids (usrs $+ (uid,u')) = compute_ids usrs.
+Proof.
+  unfold compute_ids; intros; eauto using readd_user_in.
+Qed.
+
+Lemma user_step_nochange_uids :
+  forall {A B C} cs cs' lbl u_id (usrs usrs' : honest_users A) (adv adv' : user_data B)
+    gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd',
+    step_user lbl u_id bd bd'
+    -> forall (cmd : user_cmd C),
+      bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+      -> forall cmd',
+        bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+        -> compute_ids usrs' = compute_ids usrs.
+Proof.
+  induction 1; inversion 1; inversion 1; intros; subst; eauto;
+    repeat match goal with
+           | [ H : ?us $? ?uid = Some _ |- ?us $? ?uid <> None ] => solve [ rewrite H; intro C; invert C ]
+           end.
+
+  clean_context.
+  erewrite compute_userids_readd_idempotent by eauto.
+  trivial.
+Qed.
+
 Definition U_syntactically_safe {A B} (U : RealWorld.universe A B) :=
-  forall u_id u,
+  forall u_id u uids,
     U.(users) $? u_id = Some u
+    -> uids = compute_ids U.(users)
     -> forall ctx,
-      ctx =  init_context (elements u.(key_heap))
+      ctx = init_context (elements u.(key_heap))
       -> exists t,
-        syntactically_safe u_id ctx u.(protocol) t.
+        syntactically_safe u_id uids ctx u.(protocol) t.
 
 Hint Constructors
      HonestKey
@@ -258,11 +357,11 @@ Hint Resolve
   : core.
 
 Lemma syntactically_safe_add_ctx :
-  forall ctx u_id A (cmd : user_cmd A) sty,
-    syntactically_safe u_id ctx cmd sty
+  forall ctx u_id uids A (cmd : user_cmd A) sty,
+    syntactically_safe u_id uids ctx cmd sty
     -> forall ctx',
       List.Forall (fun styp => List.In styp ctx') ctx
-      -> syntactically_safe u_id ctx' cmd sty.
+      -> syntactically_safe u_id uids ctx' cmd sty.
 Proof.
   induction 1; intros;
     eauto;
@@ -276,14 +375,17 @@ Proof.
     
   - econstructor; intros; eauto.
   - econstructor; intros; eauto.
-    specialize (H0 _ _ H2); split_ands; eauto.
+    eapply H0 in H4; split_ands; subst; eauto.
 Qed.
 
 Definition typingcontext_sound (ctx : list safe_typ)
-           (honestk : key_perms) (cs : ciphers)
+           (* (honestk : key_perms) *)
+           {A} (usrs : honest_users A)
+           (* (honestk : key_perms) *)
+           (cs : ciphers)
            (* (ks : key_perms) *)
            (u_id : user_id) :=
-  (forall kid, HonestKey ctx kid -> honestk $? kid = Some true)
+  (forall kid, HonestKey ctx kid -> (findUserKeys usrs) $? kid = Some true)
 (* /\ (forall kid, ks $? kid = Some true -> HonestKey ctx kid) *)
 /\ (forall t msg msg_to k,
       List.In {| cmd_type := Crypto t ; cmd_val := msg ; safetyTy := (TyMyCphr msg_to k) |} ctx
@@ -293,12 +395,27 @@ Definition typingcontext_sound (ctx : list safe_typ)
         /\ cipher_to_user c = msg_to
         /\ cipher_signing_key c = k
         /\ fst (cipher_nonce c) = Some u_id
-        /\ HonestKey ctx k)
+        /\ HonestKey ctx k
+        (* clauses to ensure sends aren't stuck *)
+        /\ u_id <> msg_to
+        /\ (exists rec_u, usrs $? msg_to = Some rec_u)
+        /\ (exists me, usrs $? u_id = Some me
+               /\ incl [c_id] me.(c_heap)
+               /\ keys_mine me.(key_heap) (findKeysCrypto cs msg))
+  )
 (* /\ (forall t msg, *)
 (*       List.In {| cmd_type := Crypto t ; cmd_val := msg ; safetyTy := TyRecvCphr |} ctx *)
 (*       -> forall kid kp, *)
 (*         findKeysCrypto cs msg $? kid = Some kp -> HonestKey ctx kid) *)
 .
+
+(* Lemma in_userids_in_usrs : *)
+(*   forall V (m : NatMap.t V) k, *)
+(*     List.In k (List.map (fun '(k,_) => k) (elements m)) *)
+(*     -> exists v, *)
+(*       m $? k = Some v. *)
+(* Proof. *)
+(* Admitted. *)
 
 Ltac process_ctx1 :=
   match goal with
@@ -309,17 +426,48 @@ Ltac process_ctx1 :=
   | [ H : (_,_) = (_,_) |- _ ] => invert H
   | [ H : {| cmd_type := _ |} = {| cmd_type := _ |} |- _ ] => eapply safe_typ_eq in H; split_ex; subst; try discriminate
   | [ H : _ ~= _ |- _ ] => invert H
-  | [ H : syntactically_safe _ _ (Return _) _ |- _ ] => invert H
+  | [ H : syntactically_safe _ _ _ (Return _) _ |- _ ] => invert H
+  | [ H : syntactically_safe _ _ _ _ (TyMyCphr _ _) |- _ ] => invert H
+  | [ H1 : ?m $? ?k = _ , H2 : ?m $? ?k = _ |- _ ] => clean_map_lookups
+  | [ H : List.In _ (compute_ids _) |- _] =>
+    apply in_ids_in_m in H; split_ex
+  (* | [ H : (forall _ _ _ _, List.In _ ?ctx -> exists _ _, _), ARG : List.In _ ?ctx |- _ ] => *)
+  (*   specialize (H _ _ _ _ ARG); split_ex; subst *)
+  (* | [ H : (forall _ _, List.In _ ?ctx -> exists _ _, _), ARG : List.In _ ?ctx |- _ ] => *)
+  (*   specialize (H _ _ ARG) *)
   | [ H : (forall _ _ _ _, List.In _ ?ctx -> exists _ _, _), ARG : List.In _ ?ctx |- _ ] =>
-    specialize (H _ _ _ _ ARG); split_ex; subst
+    eapply H in ARG; split_ex; subst
   | [ H : (forall _ _, List.In _ ?ctx -> exists _ _, _), ARG : List.In _ ?ctx |- _ ] =>
-    specialize (H _ _ ARG)
+    eapply H in ARG; split_ex
+    (* specialize (H _ _ ARG) *)
   | [ H : HonestKey ({| cmd_type := ?cty |} :: _) ?kid |- context [ ?kid ] ] =>
     eapply (@HonestKey_split cty _ _ _ _ _ eq_refl) in H; split_ors
+  | [ |- incl _ (c_heap _) ] => progress simpl
+  | [ H : incl _ (c_heap _) |- _ ] => progress ( simpl in H )
+  | [ |- keys_mine (key_heap _) _ ] => progress ( simpl )
+  | [ H : keys_mine (key_heap _) _ |- _ ] => progress ( simpl in * )
   | [ H : List.In _ (_ :: _) |- _ ] => simpl in H; split_ors
-  | [ HK : HonestKey ?ctx _, H : (forall _, HonestKey ?ctx _  -> _) |- _ ] => specialize (H _ HK)
+  | [ HK : HonestKey ?ctx ?k, H : (forall _, HonestKey ?ctx _  -> _) |- _ ] =>
+    match goal with
+    | [ H : findUserKeys _ $? k = Some true |- _ ] => fail 1
+    | _ => idtac
+    end;
+    generalize (H _ HK); intros
+  (* (forall kid, HonestKey ctx kid -> (findUserKeys usrs) $? kid = Some true) *)
+  (* | [ HK : HonestKey ?ctx _, H : (forall _, HonestKey ?ctx _  -> _) |- _ ] => *)
+  (*   generalize (H _ HK); intros; clear HK *)
+  | [ |- incl [?x] (?x :: _) ] =>
+    let LIN := fresh "LIN"
+    in  unfold incl; intros * LIN; simpl in LIN; split_ors; try contradiction; subst
+  | [ |- keys_mine _ (match _ $+ (?k1,_) $? ?k2 with _ => _ end) ] =>
+    (progress clean_map_lookups)
+    || (destruct (k1 ==n k2); subst; clean_map_lookups)
+  | [ |- keys_mine _ (match _ $+ (?k1,_) $? ?k2 with _ => _ end) ] =>
+    (progress clean_map_lookups)
+    || (destruct (k1 ==n k2); subst; clean_map_lookups)
   | [ |- _ $k++ _ $? _ = Some true ] => solve_perm_merges
   | [ |- exists _ _, _ ] => (do 2 eexists); repeat simple apply conj
+  | [ |- exists _, _ ] => eexists; repeat simple apply conj
   end.
 
 Ltac process_ctx := repeat process_ctx1.
@@ -335,6 +483,55 @@ Hint Extern 1 (_ $+ (?k1,_) $? ?k2 = _) =>
   solve [ destruct (k1 ==n k2); subst; clean_map_lookups; trivial ] : core.
 
 
+(* Lemma syntactically_safe_nochange_usrs_ks_mycs : *)
+(*   forall  *)
+
+Lemma keys_mine_addln_keys :
+  forall ks1 ks2 ks3,
+    keys_mine ks1 ks3
+    -> keys_mine (ks1 $k++ ks2) ks3.
+Proof.
+  unfold keys_mine; intros.
+  apply H in H0; split_ors; split_ex; subst.
+  - cases (ks2 $? k_id); destruct kp;
+      try solve [ left; solve_perm_merges ].
+    destruct b; solve_perm_merges; eauto.
+
+  - right; split; eauto.
+    solve_perm_merges.
+Qed.
+
+Lemma keys_mine_new_honestk :
+  forall kid ks1 ks2,
+    keys_mine ks1 ks2
+    -> keys_mine (add_key_perm kid true ks1) ks2.
+Proof.
+  unfold keys_mine, add_key_perm; intros.
+  apply H in H0.
+  destruct (kid ==n k_id); subst;
+    split_ors; clean_map_lookups;
+      solve_perm_merges; eauto.
+
+  destruct kp; eauto.
+Qed.
+
+Hint Resolve keys_mine_addln_keys keys_mine_new_honestk : core.
+Hint Resolve incl_appr incl_tl : core.
+
+(* Lemma merge_keys_mine : *)
+(*     forall ks1 ks2, *)
+(*       keys_mine ks1 ks2 *)
+(*       -> ks1 $k++ ks2 = ks1. *)
+(*   Proof. *)
+(*     unfold keys_mine; intros. *)
+(*     apply map_eq_Equal; unfold Equal; intros. *)
+(*     solve_perm_merges; *)
+(*       try match goal with *)
+(*           | [ H : (forall kid kp, ?ks2 $? kid = Some kp -> _), H1 : ?ks2 $? _ = Some _ |- _ ] => *)
+(*             specialize (H _ _ H1); split_ors; split_ands; subst; clean_map_lookups *)
+(*           end; solve_perm_merges; eauto. *)
+(*   Qed. *)
+
 Lemma syntactically_safe_honest_keys_preservation' :
   forall {A B C} suid lbl bd bd',
 
@@ -347,9 +544,10 @@ Lemma syntactically_safe_honest_keys_preservation' :
       bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
       -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
 
-      -> forall honestk honestk' cmdc cmdc' u_id,
+      -> forall honestk cmdc cmdc' u_id usrs'' uids,
           suid = Some u_id
-          -> syntactically_safe u_id ctx cmd sty
+          -> uids = compute_ids usrs
+          -> syntactically_safe u_id uids ctx cmd sty
           -> usrs $? u_id = Some {| key_heap := ks;
                                    protocol := cmdc;
                                    msg_heap := qmsgs;
@@ -357,37 +555,38 @@ Lemma syntactically_safe_honest_keys_preservation' :
                                    from_nons := froms;
                                    sent_nons := sents;
                                    cur_nonce := cur_n |}
-          -> typingcontext_sound ctx honestk cs u_id
+          -> typingcontext_sound ctx usrs cs u_id
           -> honestk  = findUserKeys usrs
           -> message_queue_ok honestk cs qmsgs gks
           -> encrypted_ciphers_ok honestk cs gks
           -> honest_users_only_honest_keys usrs
-          -> honestk' = findUserKeys (usrs' $+ (u_id, {| key_heap := ks';
-                                                        protocol := cmdc';
-                                                        msg_heap := qmsgs';
-                                                        c_heap   := mycs';
-                                                        from_nons := froms';
-                                                        sent_nons := sents';
-                                                        cur_nonce := cur_n' |}))
+          -> usrs'' = usrs' $+ (u_id, {| key_heap := ks';
+                                        protocol := cmdc';
+                                        msg_heap := qmsgs';
+                                        c_heap   := mycs';
+                                        from_nons := froms';
+                                        sent_nons := sents';
+                                        cur_nonce := cur_n' |})
 
           -> exists ctx',
               List.Forall (fun styp => List.In styp ctx') ctx
-              /\ typingcontext_sound ctx' honestk' cs' u_id
-              /\ syntactically_safe u_id ctx' cmd' sty
+              /\ typingcontext_sound ctx' usrs'' cs' u_id
+              /\ syntactically_safe u_id uids ctx' cmd' sty
 .
 Proof.
-
   induction 1; inversion 1; inversion 1;
     invert 2;
     unfold typingcontext_sound;
     intros; subst;
       autorewrite with find_user_keys;
       try solve [
-            split_ands; eexists; repeat simple apply conj; swap 1 4; intros; eauto; process_ctx; eauto 8
+            split_ands; eexists; process_ctx; repeat simple apply conj; swap 1 4; intros; eauto;
+            repeat (progress (process_ctx; eauto))
           ].
 
   - clean_context.
-    eapply IHstep_user in H32; eauto.
+    invert H2.
+    eapply IHstep_user in H12; eauto.
     clear IHstep_user.
     split_ex; eauto.
     unfold typingcontext_sound in H1; split_ands.
@@ -398,12 +597,28 @@ Proof.
     econstructor; eauto.
     rewrite Forall_forall in *; eauto.
 
-  - split_ands; eexists; repeat simple apply conj; swap 1 4; intros; eauto; process_ctx; eauto 8.
+  - invert H1.
+    split_ands; eexists; process_ctx; repeat simple apply conj; swap 1 4; intros; eauto; process_ctx; eauto.
 
-    simpl; specialize (H10 _ _ H5 _ _ H0); encrypted_ciphers_prop.
+  - invert H; split_ands; clean_context.
+    eapply H5 in H16; split_ex; subst.
+    progress clean_map_lookups.
+    eexists; process_ctx.
+    repeat simple apply conj; swap 1 4; eauto.
+    intros.
+    destruct (msg_to ==n cipher_to_user x0); subst; clean_map_lookups; eauto;
+      process_ctx; eauto.
+
+    
+  - split_ands; eexists; process_ctx; repeat simple apply conj; swap 1 4; intros; eauto;
+      repeat (progress (process_ctx; eauto)).
+
+    invert H5.
+    simpl; specialize (H11 _ _ H6 _ _ H0); encrypted_ciphers_prop.
     dependent destruction msg; simpl in *.
-    specialize (H17 (fst acc) (snd acc)); rewrite add_eq_o in H17 by eauto.
-    specialize (H17 eq_refl); split_ands; eauto.
+    specialize (H18 (fst acc) (snd acc)); rewrite add_eq_o in H18 by eauto.
+    specialize (H18 eq_refl); split_ands; eauto.
+
 Qed.
 
 Lemma syntactically_safe_honest_keys_preservation :
@@ -418,8 +633,9 @@ Lemma syntactically_safe_honest_keys_preservation :
       bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
       -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
 
-      -> forall honestk honestk' u_id,
+      -> forall honestk u_id uids usrs'',
           suid = Some u_id
+          -> uids = compute_ids usrs
           -> usrs $? u_id = Some {| key_heap := ks;
                                    protocol := cmd;
                                    msg_heap := qmsgs;
@@ -427,45 +643,72 @@ Lemma syntactically_safe_honest_keys_preservation :
                                    from_nons := froms;
                                    sent_nons := sents;
                                    cur_nonce := cur_n |}
-          -> syntactically_safe u_id ctx cmd sty
-          -> typingcontext_sound ctx honestk cs u_id
+          -> syntactically_safe u_id uids ctx cmd sty
+          -> typingcontext_sound ctx usrs cs u_id
           -> honestk  = findUserKeys usrs
           -> message_queue_ok honestk cs qmsgs gks
           -> encrypted_ciphers_ok honestk cs gks
           -> honest_users_only_honest_keys usrs
-          -> honestk' = findUserKeys (usrs' $+ (u_id, {| key_heap := ks';
-                                                        protocol := cmd';
-                                                        msg_heap := qmsgs';
-                                                        c_heap   := mycs';
-                                                        from_nons := froms';
-                                                        sent_nons := sents';
-                                                        cur_nonce := cur_n' |}))
+          -> usrs'' = usrs' $+ (u_id, {| key_heap := ks';
+                                        protocol := cmd';
+                                        msg_heap := qmsgs';
+                                        c_heap   := mycs';
+                                        from_nons := froms';
+                                        sent_nons := sents';
+                                        cur_nonce := cur_n' |})
 
           -> exists ctx',
               List.Forall (fun styp => List.In styp ctx') ctx
-              /\ typingcontext_sound ctx' honestk' cs' u_id
-              /\ syntactically_safe u_id ctx' cmd' sty
+              /\ typingcontext_sound ctx' usrs'' cs' u_id
+              /\ syntactically_safe u_id uids ctx' cmd' sty
 .
 Proof.
   intros; subst; eapply syntactically_safe_honest_keys_preservation'; eauto.
 Qed.
 
 Definition syntactically_safe_U {A B} (U : universe A B) :=
-  forall uid u,
+  forall uid u uids,
     U.(users) $? uid = Some u
+    -> uids = compute_ids U.(users)
     -> exists sty ctx,
-      syntactically_safe uid ctx u.(protocol) sty
-      /\ typingcontext_sound ctx (findUserKeys U.(users)) U.(all_ciphers) uid.
+      syntactically_safe uid uids ctx u.(protocol) sty
+      /\ typingcontext_sound ctx U.(users) U.(all_ciphers) uid.
 
 Lemma syntactically_safe_na :
-  forall A uid ctx (p : user_cmd A) sty,
-    syntactically_safe uid ctx p sty
+  forall A uid uids ctx (p : user_cmd A) sty,
+    syntactically_safe uid uids ctx p sty
     -> forall B (p__n : user_cmd B),
       nextAction p p__n
-      -> exists sty', syntactically_safe uid ctx p__n sty'.
+      -> exists sty', syntactically_safe uid uids ctx p__n sty'.
 Proof.
   induction 1; try solve [ invert 1; eauto ]; intros.
 Qed.
+
+Lemma typingcontext_sound_ok_nochange_usrs_ks_mycs :
+  forall A (usrs : honest_users A) uid uid' cs ks cmd qmsgs mycs froms sents n ctx,
+    usrs $? uid = Some (mkUserData ks cmd qmsgs mycs froms sents n)
+    -> typingcontext_sound ctx usrs cs uid'
+    -> forall cmd' qmsgs' froms' sents' n',
+        typingcontext_sound ctx
+                            (usrs $+ (uid, mkUserData ks cmd' qmsgs' mycs froms' sents' n'))
+                            cs uid'.
+Proof.
+  unfold typingcontext_sound; intros; eauto.
+  destruct (uid ==n uid'); subst; clean_map_lookups;
+    autorewrite with find_user_keys; split_ands; repeat simple apply conj; eauto.
+  
+  intros * LIN;
+    eapply H1 in LIN; split_ex; subst;
+      process_ctx; eauto.
+
+  intros * LIN;
+    eapply H1 in LIN; split_ex; subst; eauto.
+
+  destruct (uid ==n cipher_to_user x0); subst; clean_map_lookups; eauto;
+    process_ctx; eauto.
+Qed.
+
+Hint Resolve typingcontext_sound_ok_nochange_usrs_ks_mycs : core.
 
 Lemma typingcontext_sound_other_user_step :
   forall {A B C} suid lbl bd bd',
@@ -488,42 +731,74 @@ Lemma typingcontext_sound_other_user_step :
                                     from_nons := froms;
                                     sent_nons := sents;
                                     cur_nonce := cur_n |}
-          -> syntactically_safe u_id1 ctx__step cmd sty
-          -> typingcontext_sound ctx__step (findUserKeys usrs) cs u_id1
-          -> typingcontext_sound ctx (findUserKeys usrs) cs u_id2
-          -> typingcontext_sound ctx (findUserKeys (usrs' $+ (u_id1,
-                                                           mkUserData ks' cmdc' qmsgs' mycs' froms' sents' cur_n'))) cs' u_id2.
+          -> syntactically_safe u_id1 (compute_ids usrs) ctx__step cmd sty
+          -> typingcontext_sound ctx__step usrs cs u_id1
+          -> typingcontext_sound ctx usrs cs u_id2
+          -> typingcontext_sound ctx (usrs' $+ (u_id1,
+                                               mkUserData ks' cmdc' qmsgs' mycs' froms' sents' cur_n')) cs' u_id2.
 Proof.
-  induction 1; inversion 1; inversion 1; 
+  induction 1; inversion 1; inversion 1;
     intros; subst; autorewrite with find_user_keys; eauto.
 
   - invert H30; eauto.
-
   - msg_queue_prop.
     unfold typingcontext_sound in *; repeat simple apply conj; intros; split_ands; eauto.
+    autorewrite with find_user_keys; process_ctx; eauto.
+    
     assert (msg_pattern_safe (findUserKeys usrs') pat) by (invert H37; eauto).
-
     assert (msg_honestly_signed (findUserKeys usrs') cs' msg = true) by eauto.
     unfold msg_honestly_signed in H12.
     destruct (msg_signing_key cs' msg); try discriminate.
     rewrite <- honest_key_honest_keyb in H12.
     specialize (H1 _ eq_refl); split_ands.
     specialize (H13 H12); split_ands.
-    rewrite message_no_adv_private_merge by eauto; eauto.
-    
+    eapply H5 in H2; split_ex; subst.
+    destruct (u_id1 ==n cipher_to_user x0); subst; clean_map_lookups;
+      process_ctx; eauto.
+
+  - destruct (rec_u_id ==n u_id1); subst; clean_map_lookups; eauto.
+
+    unfold typingcontext_sound in *; split_ands; split; intros; eauto.
+    autorewrite with find_user_keys; process_ctx; eauto.
+    eapply H4 in H9; split_ex; subst.
+    destruct (rec_u_id ==n u_id2);
+    destruct (rec_u_id ==n cipher_to_user x0);
+      destruct (u_id1 ==n cipher_to_user x0); subst; clean_map_lookups; eauto;
+      process_ctx; eauto.
+
   - unfold typingcontext_sound in *; split_ands; split; intros; eauto.
-    apply H6 in H11; eauto; split_ex; subst; eauto 8.
+    autorewrite with find_user_keys; process_ctx; eauto.
+    eapply H6 in H11; split_ex; subst.
+    destruct (u_id1 ==n cipher_to_user x0); subst; clean_map_lookups; eauto;
+      process_ctx; eauto.
+
   - user_cipher_queues_prop.
     encrypted_ciphers_prop.
 
-    rewrite message_only_honest_merge by eauto; eauto.
+    unfold typingcontext_sound in *; repeat simple apply conj; intros; split_ands; eauto.
+    autorewrite with find_user_keys; process_ctx; eauto.
+
+    eapply H10 in H4; split_ex; subst.
+    destruct (u_id1 ==n cipher_to_user x0); subst; clean_map_lookups; eauto;
+      process_ctx; eauto.
+
+  - unfold typingcontext_sound in *; split_ands; split; intros; eauto.
+    autorewrite with find_user_keys; process_ctx; eauto.
+    apply H4 in H9; eauto; split_ex; subst.
+    destruct (u_id1 ==n cipher_to_user x0); subst; clean_map_lookups; eauto;
+      process_ctx; eauto.
     
   - unfold typingcontext_sound in *; split_ands; split; intros; eauto.
-    apply H4 in H9; eauto; split_ex; subst; eauto 8.
+    autorewrite with find_user_keys; process_ctx; eauto.
+    eapply H1 in H6; split_ex; subst.
+    destruct (u_id1 ==n cipher_to_user x0); subst; clean_map_lookups; eauto;
+      process_ctx; eauto.
+
   - unfold typingcontext_sound in *; split_ands; split; intros; eauto.
-    destruct (k_id ==n kid); subst; clean_map_lookups; eauto.
-  - unfold typingcontext_sound in *; split_ands; split; intros; eauto.
-    destruct (k_id ==n kid); subst; clean_map_lookups; eauto.
+    autorewrite with find_user_keys; process_ctx; eauto.
+    eapply H1 in H6; split_ex; subst.
+    destruct (u_id1 ==n cipher_to_user x0); subst; clean_map_lookups; eauto;
+      process_ctx; eauto.
 
 Qed.
 
@@ -543,14 +818,15 @@ Section PredicatePreservation.
       gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd',
       step_user lbl suid bd bd'
       -> suid = Some u_id
-      -> forall (cmd : user_cmd C) honestk ctx styp,
+      -> forall (cmd : user_cmd C) honestk ctx styp uids,
           bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
           -> honestk = findUserKeys usrs
+          -> uids = compute_ids usrs
           -> encrypted_ciphers_ok (findUserKeys usrs) cs gks
           -> user_cipher_queues_ok cs honestk usrs
           -> keys_and_permissions_good gks usrs adv.(key_heap)
-          -> syntactically_safe u_id ctx cmd styp
-          -> typingcontext_sound ctx honestk cs u_id
+          -> syntactically_safe u_id uids ctx cmd styp
+          -> typingcontext_sound ctx usrs cs u_id
           -> lbl = Silent
           -> forall cmd' usrs'',
               bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
@@ -562,14 +838,14 @@ Section PredicatePreservation.
                 -> honestk' = findUserKeys usrs''
                 -> encrypted_ciphers_ok honestk' cs' gks'.
   Proof.
-    induction 1; inversion 2; invert 5; inversion 3; intros; subst;
+    induction 1; inversion 2; invert 6; inversion 3; intros; subst;
       try discriminate;
       eauto 2;
       autorewrite with find_user_keys in *;
-      keys_and_permissions_prop;
+      try keys_and_permissions_prop;
       clean_context;
       eauto.
-  
+
     - unfold typingcontext_sound in *; split_ex.
       econstructor; eauto.
       eapply SigEncCipherHonestSignedEncKeyHonestOk; eauto.
@@ -600,12 +876,13 @@ Section PredicatePreservation.
       gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd',
       step_user lbl suid bd bd'
       -> suid = Some u_id
-      -> forall (cmd : user_cmd C) honestk,
+      -> forall (cmd : user_cmd C) honestk uids,
           honestk = findUserKeys usrs
+          -> uids = compute_ids usrs
           -> bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
           -> honest_users_only_honest_keys usrs
-          -> forall ctx styp, syntactically_safe u_id ctx cmd styp
-          -> typingcontext_sound ctx honestk cs u_id
+          -> forall ctx styp, syntactically_safe u_id uids ctx cmd styp
+          -> typingcontext_sound ctx usrs cs u_id
           (* -> next_cmd_safe (findUserKeys usrs) cs u_id froms sents cmd *)
           -> encrypted_ciphers_ok honestk cs gks
           -> user_cipher_queues_ok  cs honestk usrs
@@ -628,25 +905,24 @@ Section PredicatePreservation.
                                               ; cur_nonce := cur_n' |})
                 -> honest_users_only_honest_keys usrs''.
   Proof.
-    induction 1; inversion 3; inversion 6; intros;
+    induction 1; inversion 4; inversion 6; intros;
       subst;
-      autorewrite with find_user_keys;
-      (* process_next_cmd_safe; *)
-      eauto;
-      clean_context.
+      autorewrite with find_user_keys.
 
-    - invert H15.
-      eapply IHstep_user in H7; eauto.
+    invert H16.
+    eapply IHstep_user in H8; eauto.
+
+    all : eauto; clean_context.
 
     - unfold honest_users_only_honest_keys in *; intros.
       destruct (u_id ==n u_id0); subst; clean_map_lookups; eauto;
         simpl in *;
         rewrite findUserKeys_readd_user_addnl_keys; eauto.
 
-      specialize (H10 _ _ H27); simpl in *.
+      specialize (H11 _ _ H28); simpl in *.
 
       assert (msg_pattern_safe (findUserKeys usrs') pat) by
-          (unfold typingcontext_sound in *; split_ex; invert H22; eauto).
+          (unfold typingcontext_sound in *; split_ex; invert H23; eauto).
       
       solve_perm_merges;
         try
@@ -675,7 +951,7 @@ Section PredicatePreservation.
         encrypted_ciphers_prop; eauto.
         specialize (H13 _ _ H1); split_ands; subst; clean_map_lookups; eauto.
 
-      + eapply H10 in H; eauto.
+      + eapply H11 in H0; eauto.
         solve_perm_merges; eauto.
 
     - unfold honest_users_only_honest_keys in *; intros.
@@ -687,7 +963,7 @@ Section PredicatePreservation.
         simpl in *;
         eauto.
 
-      + generalize H27; intros; eapply H10 in H27; eauto.
+      + generalize H28; intros; eapply H11 in H28; eauto.
         autorewrite with find_user_keys; eauto.
 
       + destruct (u_id0 ==n rec_u_id); subst;
@@ -707,7 +983,7 @@ Section PredicatePreservation.
         simpl in *;
         eauto.
 
-      specialize (H11 _ _ H28); simpl in *.
+      specialize (H12 _ _ H29); simpl in *.
       apply merge_perms_split in H9; split_ors;
         match goal with
         | [ ARG : findKeysMessage _ $? _ = Some _, H : (forall _ _, findKeysMessage _ $? _ = Some _ -> _) |- _ ] =>
@@ -715,7 +991,7 @@ Section PredicatePreservation.
         | [ H : (forall _ _, ?ks $? _ = Some _ -> _), ARG : ?ks $? _ = Some _ |- _ ] => specialize (H _ _ ARG)
         end; solve_perm_merges; eauto.
       
-      eapply H11 in H9; eauto; solve_perm_merges; eauto.
+      eapply H12 in H6; eauto; solve_perm_merges; eauto.
   Qed.
 
   Lemma honest_labeled_step_encrypted_ciphers_ok :
@@ -727,8 +1003,9 @@ Section PredicatePreservation.
       -> encrypted_ciphers_ok (findUserKeys usrs) cs gks
       -> forall (cmd : user_cmd C),
           bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
-          -> forall ctx styp, syntactically_safe u_id ctx cmd styp
-          -> typingcontext_sound ctx (findUserKeys usrs) cs u_id
+          -> forall ctx styp uids, syntactically_safe u_id uids ctx cmd styp
+          -> typingcontext_sound ctx usrs cs u_id
+          -> uids = compute_ids usrs
           -> lbl = Action a
           -> forall cmd',
               bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
@@ -738,7 +1015,7 @@ Section PredicatePreservation.
                 -> usrs'' = usrs' $+ (u_id, ud')
                 -> encrypted_ciphers_ok (findUserKeys usrs'') cs' gks'.
   Proof.
-    induction 1; inversion 4; inversion 4; intros; subst; try discriminate;
+    induction 1; inversion 4; inversion 5; intros; subst; try discriminate;
       eauto 2; autorewrite with find_user_keys;
         clean_context; eauto.
 
@@ -765,8 +1042,9 @@ Section PredicatePreservation.
           -> forall cmd' honestk',
               bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
               -> lbl = Action a
-              -> forall ctx styp, syntactically_safe u_id ctx cmd styp
-              -> typingcontext_sound ctx (findUserKeys usrs) cs u_id
+              -> forall ctx styp uids, syntactically_safe u_id uids ctx cmd styp
+              -> typingcontext_sound ctx usrs cs u_id
+              -> uids = compute_ids usrs
               -> forall cmdc cmdc' usrs'',
                   usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc ; c_heap := mycs ; from_nons := froms ; sent_nons := sents ; cur_nonce := cur_n |}
                   -> usrs'' = usrs' $+ (u_id, {| key_heap := ks' ; msg_heap := qmsgs' ; protocol := cmdc' ; c_heap := mycs' ; from_nons := froms' ; sent_nons := sents' ; cur_nonce := cur_n' |})
@@ -817,8 +1095,9 @@ Section PredicatePreservation.
           -> forall cmd' honestk',
               bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
               -> lbl = Action a
-              -> forall ctx styp, syntactically_safe u_id ctx cmd styp
-              -> typingcontext_sound ctx (findUserKeys usrs) cs u_id
+              -> forall ctx styp uids, syntactically_safe u_id uids ctx cmd styp
+              -> typingcontext_sound ctx usrs cs u_id
+              -> uids = compute_ids usrs
               -> forall cmdc cmdc' usrs'',
                   usrs $? u_id = Some {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmdc
                                          ; c_heap := mycs ; from_nons := froms ; sent_nons := sents ; cur_nonce := cur_n |}
@@ -875,8 +1154,9 @@ Section PredicatePreservation.
         clean_map_lookups;
         eauto.
 
-      + eapply H18 in H15; split_ex; subst.
-        eapply H13 in H15; split_ex; clean_map_lookups.
+      + eapply H27 in H20; split_ex; subst.
+        eapply H18 in H15; split_ex; clean_map_lookups.
+
       + simpl in *; context_map_rewrites.
         repeat simple apply conj; intros; eauto.
         discriminate.
@@ -925,7 +1205,7 @@ Section PredicatePreservation.
     unfold goodness_predicates, syntactically_safe_U in *; simpl in *.
     destruct lbl, U, userData;
       unfold build_data_step in *; simpl in *;
-        specialize (H1 _ _ H3); split_ex; simpl in *.
+        specialize (H1 _ _ _ H3 eq_refl); split_ex; simpl in *.
     
     - repeat simple apply conj.
 
@@ -1020,6 +1300,36 @@ Section PredicatePreservation.
     destruct rec_u; eauto.
   Qed.
 
+  Lemma impact_from_other_user_step :
+    forall {A B C} lbl suid1 bd bd',
+      step_user lbl suid1 bd bd'
+                
+      -> forall (usrs usrs' : honest_users A) (adv adv' : user_data B) cs cs' gks gks'
+          u_id1 u_id2 ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' (cmd cmd' : user_cmd C),
+        
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+        -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+        -> suid1 = Some u_id1
+        -> u_id1 <> u_id2
+        -> forall ks2 qmsgs2 mycs2 froms2 sents2 cur_n2 cmd2,
+            usrs $? u_id2 = Some (mkUserData ks2 cmd2 qmsgs2 mycs2 froms2 sents2 cur_n2)
+            -> exists m,
+              usrs' $? u_id2 = Some (mkUserData ks2 cmd2 (qmsgs2 ++ m) mycs2 froms2 sents2 cur_n2).
+  Proof.
+    induct 1; inversion 1; inversion 2; intros; subst;
+      clean_context;
+      match goal with
+      | [ H : (_,_,_,_,_,_,_,_,_,_,_) = (_,_,_,_,_,_,_,_,_,_,_) |- _ ] => invert H
+      end;
+      clean_map_lookups;
+      try solve [ exists []; rewrite app_nil_r; trivial ];
+      eauto.
+
+    destruct (rec_u_id ==n u_id2); subst; clean_map_lookups;
+      repeat simple apply conj; trivial; eauto.
+    exists []; rewrite app_nil_r; trivial.
+  Qed.
+
   Lemma syntactically_safe_U_preservation_stepU :
     forall A B (U U' : universe A B) lbl b,
       step_universe U lbl U'
@@ -1034,30 +1344,32 @@ Section PredicatePreservation.
     unfold syntactically_safe_U, build_data_step in *; destruct U; destruct userData;
       simpl in *; intros.
     unfold goodness_predicates in *; split_ex; simpl in *.
-    msg_queue_prop.
+    msg_queue_prop; subst.
+
+    pose proof (step_user_nochange_that_user_in_honest_users H0 eq_refl eq_refl eq_refl H).
+    erewrite compute_userids_readd_idempotent by eauto.
+    erewrite user_step_nochange_uids by eauto.
 
     destruct (u_id ==n uid); subst; clean_map_lookups; simpl.
-    - specialize (SS _ _ H); split_ex.
+    - specialize (SS _ _ _ H eq_refl); split_ex; simpl in *.
       eapply syntactically_safe_honest_keys_preservation in H0; eauto.
       split_ex; eauto.
 
     - generalize H0; intros STEP.
-      eapply step_user_nochange_that_user_in_honest_users in H0; eauto.
       destruct u; generalize STEP; intros STEP'.
       eapply step_back_into_other_user in STEP; simpl; eauto.
       
       split_ors; split_ex; subst.
       + subst.
-        generalize (SS _ _ H); intros; split_ex.
-        specialize (SS _ _ H8); split_ex; simpl in *.
+        generalize (SS _ _ _ H eq_refl); intros; split_ex.
+        specialize (SS _ _ _ H9 eq_refl); split_ex; simpl in *.
         (do 2 eexists); split; eauto.
         eapply typingcontext_sound_other_user_step; eauto.
       + subst.
-        generalize (SS _ _ H); intros; split_ex.
-        specialize (SS _ _ H9); split_ex; simpl in *.
+        generalize (SS _ _ _ H eq_refl); intros; split_ex.
+        specialize (SS _ _ _ H10 eq_refl); split_ex; simpl in *.
         (do 2 eexists); split; eauto.
         eapply typingcontext_sound_other_user_step; eauto.
-
   Qed.
 
   (* Lemma syntactically_safe_U_preservation_step : *)

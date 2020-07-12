@@ -82,14 +82,6 @@ Section TestProto.
   
 End TestProto.
 
-Definition U_syntactically_safe {A B} (U : RealWorld.universe A B) :=
-  forall u_id u,
-    U.(users) $? u_id = Some u
-    -> forall ctx,
-      ctx =  init_context (elements u.(key_heap))
-      -> exists t,
-        syntactically_safe u_id ctx u.(protocol) t.
-
 Hint Constructors
      HonestKey
      syntactically_safe
@@ -139,6 +131,9 @@ Proof.
     eapply HonestKeyFromMsgVerify; eauto.
     intros; econstructor; simpl; eauto 8.
     intros; clean_map_lookups.
+
+    congruence.
+    eauto.
 Qed.
 
 Section PredicatePreservation.

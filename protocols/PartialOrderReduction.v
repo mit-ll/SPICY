@@ -460,10 +460,12 @@ Section CommutationLemmas.
               -> message_queues_ok cs usrs1 gks
               -> keys_and_permissions_good gks usrs1 adv.(key_heap)
               -> user_cipher_queues_ok cs (findUserKeys usrs1) usrs1
-              -> forall ctx1 styp1, syntactically_safe u_id1 ctx1 cmd1 styp1
-              -> typingcontext_sound ctx1 (findUserKeys usrs1) cs u_id1
-              -> forall ctx2 styp2, syntactically_safe u_id2 ctx2 cmd2 styp2
-              -> typingcontext_sound ctx2 (findUserKeys usrs2) cs1 u_id2
+              -> forall ctx1 uids1 styp1, syntactically_safe u_id1 uids1 ctx1 cmd1 styp1
+              -> typingcontext_sound ctx1 usrs1 cs u_id1
+              -> uids1 = compute_ids usrs1
+              -> forall ctx2 uids2 styp2, syntactically_safe u_id2 uids2 ctx2 cmd2 styp2
+              -> typingcontext_sound ctx2 usrs2 cs1 u_id2
+              -> uids2 = compute_ids usrs2
                                   
               (* no recursion *)
               -> nextAction cmd2 cmd2
@@ -491,7 +493,7 @@ Section CommutationLemmas.
         | [ H : nextAction ?c1 ?c2 |- _ ] => apply nextAction_couldBe in H; try contradiction
         | [ H : commutes (Send _ _) _ |- _ ] => unfold commutes in H; contradiction
         | [ H : commutes (Recv _) _ |- _ ] => unfold commutes in H; contradiction
-        | [ H : syntactically_safe _ _ _ _ |- _ ] => invert H
+        | [ H : syntactically_safe _ _ _ _ _ |- _ ] => invert H
         | [ H : typingcontext_sound _ _ _ _ |- _ ] => unfold typingcontext_sound in H
         end
     ; subst
@@ -551,10 +553,12 @@ Section CommutationLemmas.
               -> message_queues_ok cs usrs1 gks
               -> keys_and_permissions_good gks usrs1 adv.(key_heap)
               -> user_cipher_queues_ok cs (findUserKeys usrs1) usrs1
-              -> forall ctx1 styp1, syntactically_safe u_id1 ctx1 cmd1 styp1
-              -> typingcontext_sound ctx1 (findUserKeys usrs1) cs u_id1
-              -> forall ctx2 styp2, syntactically_safe u_id2 ctx2 cmd2 styp2
-              -> typingcontext_sound ctx2 (findUserKeys usrs2) cs1 u_id2
+              -> forall ctx1 uids1 styp1, syntactically_safe u_id1 uids1 ctx1 cmd1 styp1
+              -> typingcontext_sound ctx1 usrs1 cs u_id1
+              -> uids1 = compute_ids usrs1
+              -> forall ctx2 uids2 styp2, syntactically_safe u_id2 uids2 ctx2 cmd2 styp2
+              -> typingcontext_sound ctx2 usrs2 cs1 u_id2
+              -> uids2 = compute_ids usrs2
                                   
               (* no recursion *)
               -> nextAction cmd2 cmd2
@@ -599,11 +603,11 @@ Section CommutationLemmas.
                               _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
                               _ _ _ _ _ _ _ _ _ _ _ _ cmdc1' _ _ s
                               eq_refl eq_refl eq_refl eq_refl H30 H31).
-      specialize_simply.
+      progress specialize_simply.
       invert H38.
-      specialize (IHstep_user _ _ H8 H39 _ _ H40 H41).
+      specialize (IHstep_user _ _ _ H8 H39 eq_refl _ _ _ H41 H42 eq_refl).
 
-      invert H43.
+      invert H45.
       specialize_simply.
       specialize (IHstep_user _ cmdc2' eq_refl).
       split_ex; subst.
@@ -705,10 +709,12 @@ Section CommutationLemmas.
               -> message_queues_ok cs usrs1 gks
               -> keys_and_permissions_good gks usrs1 adv.(key_heap)
               -> user_cipher_queues_ok cs (findUserKeys usrs1) usrs1
-              -> forall ctx1 styp1, syntactically_safe u_id1 ctx1 cmd1 styp1
-              -> typingcontext_sound ctx1 (findUserKeys usrs1) cs u_id1
-              -> forall ctx2 styp2, syntactically_safe u_id2 ctx2 cmd2 styp2
-              -> typingcontext_sound ctx2 (findUserKeys usrs2) cs1 u_id2
+              -> forall ctx1 uids1 styp1, syntactically_safe u_id1 uids1 ctx1 cmd1 styp1
+              -> typingcontext_sound ctx1 usrs1 cs u_id1
+              -> uids1 = compute_ids usrs1
+              -> forall ctx2 uids2 styp2, syntactically_safe u_id2 uids2 ctx2 cmd2 styp2
+              -> typingcontext_sound ctx2 usrs2 cs1 u_id2
+              -> uids2 = compute_ids usrs2
 
               -> forall E (cmd__i2 : user_cmd E),
                   nextAction cmd2 cmd__i2
@@ -730,10 +736,10 @@ Section CommutationLemmas.
   Proof.
     intros; subst; clean_map_lookups.
 
-    specialize (nextAction_couldBe H20).
+    specialize (nextAction_couldBe H22).
     cases cmd__i2; intros; try contradiction; clean_context.
 
-    eapply step_na_return in H20; eauto; split_ands; subst.
+    eapply step_na_return in H22; eauto; split_ands; subst.
     eapply step_no_depend_other_usrs_program in H; eauto; split_ex.
     (do 10 eexists); repeat simple apply conj; eauto.
     maps_equal; eauto.
@@ -742,7 +748,7 @@ Section CommutationLemmas.
       match goal with
       | [ NA : nextAction ?c2 ?c
                , STEP : step_user _ (Some uid) _ _
-                        , SS : syntactically_safe _ _ ?c2 _
+                        , SS : syntactically_safe _ _ _ ?c2 _
           (* , NCS : next_cmd_safe _ _ _ _ _ ?c2 *)
           |- _ ] => 
         let NACMD2 := fresh "NACMD2" in
@@ -835,8 +841,8 @@ Section CommutationLemmas.
       | [ H : {| users := _ |} = _ |- _ ] => invert H; clean_map_lookups
       | [ H : (_,_,_,_,_,_,_,_,_,_,_) = (_,_,_,_,_,_,_,_,_,_,_) |- _ ] => invert H
       | [ H : syntactically_safe_U _ , US1 : _ $? u_id1 = _ , US2 : _ $? u_id2 = _ |- _ ] =>
-        generalize (H _ _ US1)
-        ; generalize (H _ _ US2)
+        generalize (H _ _ _ US1 eq_refl)
+        ; generalize (H _ _ _ US2 eq_refl)
         ; clear H; intros; simpl in *; split_ex
       end.
 
@@ -849,6 +855,10 @@ Section CommutationLemmas.
     specialize (impact_from_other_user_step_commutes H8 s eq_refl eq_refl eq_refl UNE H10 H12 H); intros; eauto.
     all: simpl; clean_map_lookups; eauto.
     simpl; rewrite H22; eauto.
+
+    erewrite compute_userids_readd_idempotent; eauto.
+    erewrite (user_step_nochange_uids H3); eauto.
+    eapply (step_user_nochange_that_user_in_honest_users H3); eauto.
   Qed.
   
 End CommutationLemmas.
@@ -2129,8 +2139,9 @@ Lemma action_matches_other_user_silent_step' :
       -> encrypted_ciphers_ok (findUserKeys usrs) cs gks
       -> user_cipher_queues_ok cs (findUserKeys usrs) usrs
       -> keys_and_permissions_good gks usrs adv.(key_heap)
-      -> forall ctx sty, syntactically_safe uid1 ctx cmd sty
-      -> typingcontext_sound ctx (findUserKeys usrs) cs uid1
+      -> forall ctx uids sty, syntactically_safe uid1 uids ctx cmd sty
+      -> typingcontext_sound ctx usrs cs uid1
+      -> uids = compute_ids usrs
       -> forall cmd1 cmd1' cmd2 cmd2' uid2 ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' froms2 froms2' sents2 sents2' cur_n2 cur_n2' a
           usrs'' adv'' cs'' gks'',
           uid1 <> uid2
@@ -2165,11 +2176,11 @@ Proof.
     try solve [ action_matches_solver; eauto 8 ].
 
   - invert H30.
-    invert H35.
+    invert H36.
     eapply IHstep_user in H8; eauto.
 
   - (* Recv drop, update to receive nonces if signed -- not allowed by commutation rules right now *)
-    invert H38; unfold commutes in *; contradiction.
+    invert H39; unfold commutes in *; contradiction.
 Qed.
 
 Lemma action_matches_other_user_silent_step :
@@ -2184,8 +2195,9 @@ Lemma action_matches_other_user_silent_step :
     -> encrypted_ciphers_ok (findUserKeys usrs) cs gks
     -> user_cipher_queues_ok cs (findUserKeys usrs) usrs
     -> keys_and_permissions_good gks usrs adv.(key_heap)
-    -> forall ctx sty, syntactically_safe uid1 ctx cmd1 sty
-    -> typingcontext_sound ctx (findUserKeys usrs) cs uid1
+    -> forall ctx uids sty, syntactically_safe uid1 uids ctx cmd1 sty
+    -> typingcontext_sound ctx usrs cs uid1
+    -> uids = compute_ids usrs
     -> forall cmd2 cmd2' uid2 ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' froms2 froms2' sents2 sents2' cur_n2 cur_n2' a
         usrs'' adv'' cs'' gks'',
         uid1 <> uid2
@@ -2538,7 +2550,7 @@ Proof.
       rewrite <- H25; trivial.
 
       unfold adv_universe_ok, universe_ok, syntactically_safe_U in *; split_ex; simpl in *.
-      generalize H0; intros USR; apply H2 in USR; split_ex; eauto; simpl in *.
+      generalize H0; intros USR; eapply H2 in USR; split_ex; eauto; simpl in *.
 
       generalize H; intros COMMUTES; eapply H8 in COMMUTES; eauto.
       
