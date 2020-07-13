@@ -24,6 +24,7 @@ From KeyManagement Require Import
      Keys
      KeysTheory
      Messages
+     MessagesTheory
      MessageEq
      MessageEqTheory
      Tactics

@@ -30,12 +30,21 @@ Require Import
         Tactics
         Automation
         AdversaryUniverse
-        KeysTheory.
-
-Require IdealWorld
+        KeysTheory
         RealWorld.
 
+(* Require IdealWorld *)
+(*         RealWorld. *)
+
 Set Implicit Arguments.
+
+Lemma cipher_honestly_signed_honest_keyb_iff :
+  forall honestk c tf,
+    cipher_honestly_signed honestk c = tf <-> honest_keyb honestk (cipher_signing_key c) = tf.
+Proof.
+  intros.
+  unfold cipher_honestly_signed, cipher_signing_key; split; destruct c; trivial.
+Qed.
 
 (******************** CIPHER CLEANING *********************
  **********************************************************

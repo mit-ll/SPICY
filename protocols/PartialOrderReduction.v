@@ -854,7 +854,7 @@ Section CommutationLemmas.
 
     specialize (impact_from_other_user_step_commutes H8 s eq_refl eq_refl eq_refl UNE H10 H12 H); intros; eauto.
     all: simpl; clean_map_lookups; eauto.
-    simpl; rewrite H22; eauto.
+    simpl; rewrite H25; eauto.
 
     erewrite compute_userids_readd_idempotent; eauto.
     erewrite (user_step_nochange_uids H3); eauto.

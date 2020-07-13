@@ -1182,46 +1182,85 @@ Section PredicatePreservation.
           eauto.
   Qed.
 
-  Definition goodness_predicates {A B} (U : RealWorld.universe A B) : Prop :=
-    let honestk := RealWorld.findUserKeys U.(RealWorld.users)
-    in  encrypted_ciphers_ok honestk U.(RealWorld.all_ciphers) U.(RealWorld.all_keys)
-      /\ keys_and_permissions_good U.(RealWorld.all_keys) U.(RealWorld.users) U.(RealWorld.adversary).(RealWorld.key_heap)
-      /\ user_cipher_queues_ok U.(RealWorld.all_ciphers) honestk U.(RealWorld.users)
-      /\ message_queues_ok U.(RealWorld.all_ciphers) U.(RealWorld.users) U.(RealWorld.all_keys)
-      /\ honest_users_only_honest_keys U.(RealWorld.users).
+  Definition goodness_predicates {A B} (U : universe A B) : Prop :=
+    let honestk := findUserKeys U.(users)
+    in  encrypted_ciphers_ok honestk U.(all_ciphers) U.(all_keys)
+      /\ keys_and_permissions_good U.(all_keys) U.(users) U.(adversary).(key_heap)
+      /\ user_cipher_queues_ok U.(all_ciphers) honestk U.(users)
+      /\ message_queues_ok U.(all_ciphers) U.(users) U.(all_keys)
+      /\ honest_users_only_honest_keys U.(users)
+      /\ adv_no_honest_keys honestk U.(adversary).(key_heap)
+      /\ adv_cipher_queue_ok U.(all_ciphers) U.(users) U.(adversary).(c_heap)
+      /\ adv_message_queue_ok U.(users) U.(all_ciphers) U.(all_keys) U.(adversary).(msg_heap).
 
   Lemma goodness_preservation_stepU :
-    forall {A B} (U U' : universe A B) lbl b,
+    forall {A B} (U U' : universe A B) lbl,
       step_universe U lbl U'
-      -> lameAdv b U.(adversary)
       -> syntactically_safe_U U
       -> goodness_predicates U
       -> goodness_predicates U'.
   Proof.
     intros.
 
-    invert H; dismiss_adv.
+    invert H.
 
-    unfold goodness_predicates, syntactically_safe_U in *; simpl in *.
-    destruct lbl, U, userData;
-      unfold build_data_step in *; simpl in *;
-        specialize (H1 _ _ _ H3 eq_refl); split_ex; simpl in *.
+    - unfold goodness_predicates, syntactically_safe_U in *; simpl in *.
+      destruct lbl, U, userData;
+        unfold build_data_step in *; simpl in *;
+          specialize (H0 _ _ _ H2 eq_refl); split_ex; simpl in *.
     
-    - repeat simple apply conj.
+      + autorewrite with find_user_keys; repeat simple apply conj; eauto.
 
-      eapply silent_user_step_encrypted_ciphers_ok; eauto.
-      eapply honest_silent_step_keys_good; eauto.
-      eapply honest_silent_step_user_cipher_queues_ok; eauto.
-      eapply honest_silent_step_message_queues_ok; eauto; keys_and_permissions_prop; eauto.
-      eapply honest_users_only_honest_keys_honest_steps; eauto.
+        eapply silent_user_step_encrypted_ciphers_ok; eauto.
+        eapply honest_silent_step_keys_good; eauto.
+        eapply honest_silent_step_user_cipher_queues_ok; eauto.
+        eapply honest_silent_step_message_queues_ok; eauto; keys_and_permissions_prop; eauto.
+        eapply honest_users_only_honest_keys_honest_steps; eauto.
+        eapply honest_silent_step_adv_no_honest_keys; eauto.
+        eapply honest_silent_step_adv_cipher_queue_ok; eauto.
+        eapply honest_silent_step_adv_message_queue_ok; eauto.
 
-    - repeat simple apply conj.
-      eapply honest_labeled_step_encrypted_ciphers_ok; eauto.
-      eapply honest_labeled_step_keys_and_permissions_good; eauto.
-      eapply honest_labeled_step_user_cipher_queues_ok_ss; eauto.
-      eapply honest_labeled_step_message_queues_ok_ss; eauto.
-      eapply honest_users_only_honest_keys_honest_steps; eauto.
-  Qed.
+      + repeat simple apply conj.
+        eapply honest_labeled_step_encrypted_ciphers_ok; eauto.
+        eapply honest_labeled_step_keys_and_permissions_good; eauto.
+        eapply honest_labeled_step_user_cipher_queues_ok_ss; eauto.
+        eapply honest_labeled_step_message_queues_ok_ss; eauto.
+        eapply honest_users_only_honest_keys_honest_steps; eauto.
+        eapply honest_labeled_step_adv_no_honest_keys; eauto. admit.
+        eapply honest_labeled_step_adv_cipher_queue_ok; eauto.  admit. admit.
+        eapply honest_labeled_step_adv_message_queue_ok; eauto. admit.
+
+    - simpl.
+      unfold goodness_predicates, build_data_step in *;
+        destruct U, adversary;
+        split_ex; simpl in *.
+
+      repeat simple apply conj.
+
+      eapply adv_step_encrypted_ciphers_ok; eauto.
+      eapply adv_step_keys_good; eauto.
+      eapply adv_step_user_cipher_queues_ok; eauto.
+
+      unfold keys_and_permissions_good in *; split_ex.
+      eapply adv_step_message_queues_ok; eauto.
+
+      eapply honest_users_only_honest_keys_adv_steps; eauto.
+      eapply adv_step_adv_no_honest_keys; eauto.
+      eapply adv_step_adv_cipher_queue_ok; eauto.
+      eapply adv_step_adv_message_queue_ok; eauto.
+  Admitted.
+
+(* ubgoal 1 (ID 3324) is: *)
+(*  adv_no_honest_keys (findUserKeys users) key_heap *)
+(* subgoal 2 (ID 3326) is: *)
+(*  adv_cipher_queue_ok all_ciphers users c_heap *)
+(* subgoal 3 (ID 3376) is: *)
+(*  adv_message_queue_ok users all_ciphers all_keys msg_heap *)
+(* subgoal 4 (ID 3377) is: *)
+(*  adv_cipher_queue_ok all_ciphers users c_heap *)
+(* subgoal 5 (ID 3510) is: *)
+(*  adv_cipher_queue_ok all_ciphers users c_heap *)
+(* You need to go back and solve them. *)
 
   (* Lemma goodness_preservation_step : *)
   (*   forall t__hon t__adv (st st' : universe t__hon t__adv * IdealWorld.universe t__hon) b, *)
@@ -1362,12 +1401,12 @@ Section PredicatePreservation.
       split_ors; split_ex; subst.
       + subst.
         generalize (SS _ _ _ H eq_refl); intros; split_ex.
-        specialize (SS _ _ _ H9 eq_refl); split_ex; simpl in *.
+        specialize (SS _ _ _ H12 eq_refl); split_ex; simpl in *.
         (do 2 eexists); split; eauto.
         eapply typingcontext_sound_other_user_step; eauto.
       + subst.
         generalize (SS _ _ _ H eq_refl); intros; split_ex.
-        specialize (SS _ _ _ H10 eq_refl); split_ex; simpl in *.
+        specialize (SS _ _ _ H13 eq_refl); split_ex; simpl in *.
         (do 2 eexists); split; eauto.
         eapply typingcontext_sound_other_user_step; eauto.
   Qed.

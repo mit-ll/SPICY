@@ -693,6 +693,12 @@ Qed.
 
 End MergeKeysLemmas.
 
+Lemma add_key_perm_add_private_key :
+  forall ks k_id,
+    add_key_perm k_id true ks = ks $+ (k_id,true).
+Proof.
+  intros; unfold add_key_perm; cases (ks $? k_id); subst; clean_map_lookups; eauto.
+Qed.
 
 Hint Resolve
      honest_key_filter_fn_proper
@@ -700,4 +706,5 @@ Hint Resolve
      honest_key_filter_fn_filter_proper_Equal honest_key_filter_fn_filter_transpose_Equal
      honest_perm_filter_fn_proper
      honest_perm_filter_fn_filter_proper honest_perm_filter_fn_filter_transpose
-     honest_perm_filter_fn_filter_proper_Equal honest_perm_filter_fn_filter_transpose_Equal.
+     honest_perm_filter_fn_filter_proper_Equal honest_perm_filter_fn_filter_transpose_Equal
+     : core.
