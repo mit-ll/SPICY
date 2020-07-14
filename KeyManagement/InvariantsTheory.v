@@ -1017,7 +1017,7 @@ Proof.
     rewrite Forall_natmap_forall in *; intros.
     eapply permission_heap_good_addnl_key; eauto.
 Qed.
-
+  
 Lemma permission_heap_good_clean_keys :
   forall honestk gks uks,
     permission_heap_good gks uks

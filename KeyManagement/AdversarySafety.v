@@ -337,51 +337,51 @@ Section UniverseLemmas.
   (*     intuition contra_map_lookup. *)
   (* Qed. *)
 
-  Lemma adv_step_keys_good :
-    forall {A B C} cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
-              gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd',
-      step_user lbl None bd bd'
-      -> forall (cmd : user_cmd C),
-        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
-        -> ks = adv.(key_heap)
-        -> adv_message_queue_ok usrs cs gks qmsgs
-        -> adv_cipher_queue_ok cs usrs mycs
-        -> encrypted_ciphers_ok (findUserKeys usrs) cs gks
-        -> keys_and_permissions_good gks usrs ks
-        -> forall cmd',
-            bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
-            -> keys_and_permissions_good gks' usrs' ks'.
-  Proof.
-    induction 1; inversion 1; inversion 6; intros; subst; try discriminate;
-      eauto; clean_context.
+  (* Lemma adv_step_keys_good : *)
+  (*   forall {A B C} cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B) *)
+  (*             gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd', *)
+  (*     step_user lbl None bd bd' *)
+  (*     -> forall (cmd : user_cmd C), *)
+  (*       bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
+  (*       -> ks = adv.(key_heap) *)
+  (*       -> adv_message_queue_ok usrs cs gks qmsgs *)
+  (*       -> adv_cipher_queue_ok cs usrs mycs *)
+  (*       -> encrypted_ciphers_ok (findUserKeys usrs) cs gks *)
+  (*       -> keys_and_permissions_good gks usrs ks *)
+  (*       -> forall cmd', *)
+  (*           bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd') *)
+  (*           -> keys_and_permissions_good gks' usrs' ks'. *)
+  (* Proof. *)
+  (*   induction 1; inversion 1; inversion 6; intros; subst; try discriminate; *)
+  (*     eauto; clean_context. *)
 
-    - unfold keys_and_permissions_good in *; intuition eauto.
-      unfold permission_heap_good in *; intros.
-      cases (key_heap adv' $? k_id); eauto.
-      invert H20; split_ands.
-      cases (findKeysCrypto cs' msg $? k_id); solve_perm_merges.
-      specialize (H4 _ _ H9); split_ands; subst.
-      cases (gks' $? k_id); try contradiction; eauto.
-    - destruct rec_u; simpl in *.
-      eapply keys_and_permissions_good_readd_user_same_perms; eauto.
-    - unfold keys_and_permissions_good in *; intuition eauto.
-      unfold permission_heap_good in *; intros.
-      eapply merge_perms_split in H5; split_ors; eauto.
-      encrypted_ciphers_prop; clean_map_lookups; eauto.
-      + specialize_msg_ok; split_ex; intuition eauto.
-      + assert (permission_heap_good gks' (findUserKeys usrs')) by eauto.
-        specialize_msg_ok; subst.
-        specialize (H9 _ _ H20); eauto.
+  (*   - unfold keys_and_permissions_good in *; intuition eauto. *)
+  (*     unfold permission_heap_good in *; intros. *)
+  (*     cases (key_heap adv' $? k_id); eauto. *)
+  (*     invert H20; split_ands. *)
+  (*     cases (findKeysCrypto cs' msg $? k_id); solve_perm_merges. *)
+  (*     specialize (H4 _ _ H9); split_ands; subst. *)
+  (*     cases (gks' $? k_id); try contradiction; eauto. *)
+  (*   - destruct rec_u; simpl in *. *)
+  (*     eapply keys_and_permissions_good_readd_user_same_perms; eauto. *)
+  (*   - unfold keys_and_permissions_good in *; intuition eauto. *)
+  (*     unfold permission_heap_good in *; intros. *)
+  (*     eapply merge_perms_split in H5; split_ors; eauto. *)
+  (*     encrypted_ciphers_prop; clean_map_lookups; eauto. *)
+  (*     + specialize_msg_ok; split_ex; intuition eauto. *)
+  (*     + assert (permission_heap_good gks' (findUserKeys usrs')) by eauto. *)
+  (*       specialize_msg_ok; subst. *)
+  (*       specialize (H9 _ _ H20); eauto. *)
 
-    - unfold keys_and_permissions_good in *; intuition eauto.
-      destruct (k_id ==n k_id0); subst; clean_map_lookups; eauto.
-      rewrite Forall_natmap_forall in *; intros.
-      eapply permission_heap_good_addnl_key; eauto.
-    - unfold keys_and_permissions_good in *; intuition eauto.
-      destruct (k_id ==n k_id0); subst; clean_map_lookups; eauto.
-      rewrite Forall_natmap_forall in *; intros.
-      eapply permission_heap_good_addnl_key; eauto.
-  Qed.
+  (*   - unfold keys_and_permissions_good in *; intuition eauto. *)
+  (*     destruct (k_id ==n k_id0); subst; clean_map_lookups; eauto. *)
+  (*     rewrite Forall_natmap_forall in *; intros. *)
+  (*     eapply permission_heap_good_addnl_key; eauto. *)
+  (*   - unfold keys_and_permissions_good in *; intuition eauto. *)
+  (*     destruct (k_id ==n k_id0); subst; clean_map_lookups; eauto. *)
+  (*     rewrite Forall_natmap_forall in *; intros. *)
+  (*     eapply permission_heap_good_addnl_key; eauto. *)
+  (* Qed. *)
 
   Lemma permission_heap_good_clean_keys :
     forall honestk gks uks,

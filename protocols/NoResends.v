@@ -140,9 +140,8 @@ Section PredicatePreservation.
   Import RealWorld.
 
   Lemma goodness_preservation_step :
-    forall t__hon t__adv (st st' : universe t__hon t__adv * IdealWorld.universe t__hon) b,
+    forall t__hon t__adv (st st' : universe t__hon t__adv * IdealWorld.universe t__hon),
       step st st'
-      -> lameAdv b (fst st).(adversary)
       -> syntactically_safe_U (fst st)
       -> goodness_predicates (fst st)
       -> goodness_predicates (fst st').
@@ -151,9 +150,8 @@ Section PredicatePreservation.
   Qed.
 
   Lemma syntactically_safe_U_preservation_step :
-    forall t__hon t__adv (st st' : universe t__hon t__adv * IdealWorld.universe t__hon) b,
+    forall t__hon t__adv (st st' : universe t__hon t__adv * IdealWorld.universe t__hon),
       step st st'
-      -> lameAdv b (fst st).(adversary)
       -> goodness_predicates (fst st)
       -> syntactically_safe_U (fst st)
       -> syntactically_safe_U (fst st').

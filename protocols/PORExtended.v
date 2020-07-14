@@ -82,9 +82,8 @@ Proof.
 Qed.
 
 Lemma syntactically_safe_U_preservation_step :
-  forall t__hon t__adv (st st' : universe t__hon t__adv * IdealWorld.universe t__hon) b,
+  forall t__hon t__adv (st st' : universe t__hon t__adv * IdealWorld.universe t__hon),
     step st st'
-    -> lameAdv b (fst st).(adversary)
     -> goodness_predicates (fst st)
     -> syntactically_safe_U (fst st)
     -> syntactically_safe_U (fst st').
@@ -93,9 +92,8 @@ Proof.
 Qed.
 
 Lemma syntactically_safe_U_preservation_steps :
-  forall t__hon t__adv st st' b,
+  forall t__hon t__adv st st',
     (@step t__hon t__adv) ^* st st'
-    -> lameAdv b (fst st).(adversary)
     -> goodness_predicates (fst st)
     -> syntactically_safe_U (fst st)
     -> syntactically_safe_U (fst st').
@@ -829,21 +827,25 @@ Module ProtocolSimulates (Proto : SyntacticallySafeProtocol).
     assert ( (ru0,iu0) = (ru0,iu0) \/ False ) as ARG by auto.
     specialize (H0 _ ARG).
 
-    assert (syntactically_safe_U ru).
     pose proof universe_starts_safe; simpl in *; split_ex.
+    assert (syntactically_safe_U ru).
     change (syntactically_safe_U (fst (ru,U__i))).
-    assert (goodness_predicates (fst (ru0, iu0))) by
-        (unfold goodness_predicates , adv_universe_ok, universe_ok in *; intuition idtac).
+    assert (goodness_predicates (fst (ru0, iu0))).
+    unfold goodness_predicates, adv_goodness , adv_universe_ok, universe_ok,
+           adv_message_queue_ok, adv_cipher_queue_ok in *; intuition idtac.
+    1-2:simpl.
 
+    rewrite Forall_forall in H15 |- *; intros * LIN; eapply H15 in LIN; destruct x; intuition idtac.
+    eapply H27 in H26; split_ex; intuition eauto.
+
+    rewrite Forall_forall in H13 |- *; intros * LIN; eapply H13 in LIN; split_ex; intuition eauto.
     eapply syntactically_safe_U_preservation_steps; eauto.
-
-
     
     unfold syntactically_safe_U in *; simpl in *.
     unfold honest_cmds_safe; intros; subst.
     destruct u; simpl.
-    generalize H6; intros USRS; rewrite <- H in USRS.
-    specialize (H4 _ _ _ USRS eq_refl); split_ex; simpl in *.
+    generalize H9; intros USRS; rewrite <- H in USRS.
+    specialize (H7 _ _ _ USRS eq_refl); split_ex; simpl in *.
 
     rename U__i into iu.
     red. intros.
@@ -851,7 +853,7 @@ Module ProtocolSimulates (Proto : SyntacticallySafeProtocol).
     destruct (classic (exists st', model_step_user u_id (ru,iu) st')).
     - split_ex.
       rename x1 into st'.
-      pose proof (model_step_implies_step _ _ _ _ _ H8) as STEP.
+      pose proof (model_step_implies_step _ _ _ _ _ H11) as STEP.
       assert (STEPS' : (@step t__hon t__adv) ^* (ru,iu) st') by (eauto using TrcFront).
       pose proof (trc_trans H3 STEPS') as STEPS.
 
@@ -864,31 +866,29 @@ Module ProtocolSimulates (Proto : SyntacticallySafeProtocol).
 
       rewrite Forall_natmap_forall in H0.
       
-      destruct ru; invert H8;
+      destruct ru; invert H11;
         unfold build_data_step in *;
         clean_map_lookups;
         simpl in *;
         eapply ss_implies_next_safe; eauto.
 
-      specialize (H0 u_id); rewrite add_eq_o in H0 by trivial;
+      all: 
+        specialize (H0 u_id); rewrite add_eq_o in H0 by trivial;
         specialize (H0 _ eq_refl);
         eauto.
 
-      specialize (H0 u_id); rewrite add_eq_o in H0 by trivial;
-        specialize (H0 _ eq_refl);
-        eauto.
-
-    - eapply syntactically_safe_na in H4; eauto; split_ex.
+    - eapply syntactically_safe_na in H7; eauto; split_ex.
       rewrite <- H, <- H1.
-      unfold typingcontext_sound in *; split_ex; invert H4; process_ctx; eauto.
+      unfold typingcontext_sound in *; split_ex.
+      invert H7; subst; process_ctx; eauto.
 
-      + eapply nextAction_couldBe in H7; eauto.
-      + apply H13 in H11; split_ex; subst; eauto.
+      + eapply nextAction_couldBe in H10; eauto.
+      + apply H16 in H14; split_ex; subst; eauto.
       + exfalso.
         assert (forall st', model_step_user u_id (ru,iu) st' -> False) by eauto using not_ex_all_not.
         pose proof stuck_not_misaligned_inv as NOTMISAL.
         specialize (NOTMISAL _ ARG _ H3).
-        eapply NOTMISAL in H11.
+        eapply NOTMISAL in H14.
         2: simpl; exact USRS.
         
         unfold build_data_step in *; simpl in *.
@@ -908,10 +908,10 @@ Module ProtocolSimulates (Proto : SyntacticallySafeProtocol).
         split_ex.
 
         assert (forall st', model_step_user u_id (ru,iu) st' -> False) by eauto using not_ex_all_not.
-        eapply NOTMISAL in H17; eauto.
-        unfold build_data_step in H17; simpl in H17; eauto.
+        eapply NOTMISAL in H20; eauto.
+        unfold build_data_step in H20; simpl in H20; eauto.
 
-        dt x5; eapply step_na_recur in H12; eauto; split_ex; eauto.
+        dt x5; eapply step_na_recur in H10; eauto; split_ex; eauto.
   Qed.
 
   Hint Resolve simsilent simlabeled simsafe : safe.
