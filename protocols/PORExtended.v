@@ -133,9 +133,9 @@ Qed.
 
 
 Lemma no_model_step_other_user_silent_step :
-  forall t t__hon t__adv suid bd bd',
+  forall t t__hon t__adv suid lbl bd bd',
 
-    step_user Silent suid bd bd'
+    step_user lbl suid bd bd'
     
     -> forall (usrs usrs' : honest_users t__hon) (adv adv' : user_data t__adv) (cmd cmd' : user_cmd t)
         cs cs' gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' n n' uid uid' iu,
@@ -143,7 +143,10 @@ Lemma no_model_step_other_user_silent_step :
       bd = (usrs,adv,cs,gks,ks,qmsgs,mycs,froms,sents,n,cmd)
       -> bd' = (usrs',adv',cs',gks',ks',qmsgs',mycs',froms',sents',n',cmd')
       -> suid = Some uid
-      -> forall st', model_step_user uid (mkUniverse usrs adv cs gks, iu) st'
+      -> lbl = Silent
+      -> forall cmdc, usrs $? uid = Some (mkUserData ks cmdc qmsgs mycs froms sents n)
+      -> forall ud', usrs $? uid' = Some ud'
+      -> forall lbl' bd'', step_user lbl' (Some uid') (build_data_step (mkUniverse usrs adv cs gks) ud') bd''
       -> uid <> uid'
       -> forall cmdc ,
         (forall st', model_step_user
@@ -159,11 +162,74 @@ Proof.
   induct 1; inversion 1; inversion 1; intros; subst; eauto;
     clean_context.
 
-  - invert H27; unfold build_data_step in *; simpl in *.
-    admit.
-    
-  
 
+Admitted.
+
+
+Lemma no_model_step_other_user_labeled_step :
+  forall t t__hon t__adv suid lbl bd bd',
+
+    step_user lbl suid bd bd'
+    
+    -> forall (usrs usrs' : honest_users t__hon) (adv adv' : user_data t__adv) (cmd cmd' : user_cmd t)
+        cs cs' gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' n n' uid uid'
+        ra ia iu iu' iu'',
+
+      bd = (usrs,adv,cs,gks,ks,qmsgs,mycs,froms,sents,n,cmd)
+      -> bd' = (usrs',adv',cs',gks',ks',qmsgs',mycs',froms',sents',n',cmd')
+      -> suid = Some uid
+      -> lbl = Action ra
+      -> forall cmdc, usrs $? uid = Some (mkUserData ks cmdc qmsgs mycs froms sents n)
+      -> forall ud', usrs $? uid' = Some ud'
+      -> forall lbl' bd'', step_user lbl' (Some uid') (build_data_step (mkUniverse usrs adv cs gks) ud') bd''
+      -> (istepSilent) ^* iu iu'
+      -> IdealWorld.lstep_universe iu' (Action ia) iu''
+      -> action_matches ra (mkUniverse usrs adv cs gks) ia iu'
+      -> uid <> uid'
+      -> forall cmdc ,
+        (forall st', model_step_user
+                  uid' 
+                  (mkUniverse usrs adv cs gks, iu)
+                  st' -> False)
+      -> (forall st', model_step_user
+                  uid'
+                  (mkUniverse (usrs' $+ (uid, mkUserData ks' cmdc qmsgs' mycs' froms' sents' n'))
+                              adv' cs' gks', iu'')
+                  st' -> False).
+Proof.
+  induct 1; inversion 1; inversion 1; intros; subst; eauto;
+    clean_context.
+
+
+Admitted.
+
+Lemma step_reorder :
+  forall A B C lbl1 suid1 uid1 (bd1 bd1' : data_step0 A B C),
+    step_user lbl1 suid1 bd1 bd1'
+    -> suid1 = Some uid1
+    -> forall D (bd2 bd2' : data_step0 A B D) lbl2 suid2 uid2,
+        step_user lbl2 suid2 bd2 bd2'
+        -> suid2 = Some uid2
+        -> forall cs cs1' cs2' (usrs usrs1' usrs2' : honest_users A) (adv adv1' adv2' : user_data B) gks gks1' gks2'
+            ks1 ks1' qmsgs1 qmsgs1' mycs1 mycs1' cmd1 cmd1' froms1 froms1' sents1 sents1' cur_n1 cur_n1'
+            ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' cmd2 cmd2' froms2 froms2' sents2 sents2' cur_n2 cur_n2'
+            cmdc1 cmdc2,
+
+              bd1  = (usrs,   adv,   cs,   gks,   ks1,  qmsgs1,  mycs1,  froms1,  sents1,  cur_n1,  cmd1)
+            -> bd1' = (usrs1', adv1', cs1', gks1', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd1')
+            -> bd2  = (usrs,   adv,   cs,   gks,   ks2,  qmsgs2,  mycs2,  froms2,  sents2,  cur_n2,  cmd2)
+            -> bd2' = (usrs2', adv2', cs2', gks2', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
+
+            (* allow protocol to freely vary, since we won't be looking at it *)
+            -> usrs $? uid1 = Some (mkUserData ks1 cmdc1 qmsgs1 mycs1 froms1 sents1 cur_n1)
+            -> usrs $? uid2 = Some (mkUserData ks2 cmdc2 qmsgs2 mycs2 froms2 sents2 cur_n2)
+            -> forall cmdc1' usrs1'' usr2',
+                usrs1'' = usrs1' $+ (uid1, mkUserData ks1' cmdc1' qmsgs1' mycs1' froms1' sents1' cur_n1')
+                -> usrs1'' $? uid2 = Some usr2'
+                -> exists bd2'',
+                  step_user lbl2 suid2
+                            (build_data_step (mkUniverse usrs1'' adv1' cs1' gks1') usr2') bd2''.
+Proof.
 Admitted.
 
 Lemma stuck_model_violation_step' :
@@ -191,19 +257,19 @@ Proof.
       rewrite add_neq_o in H1 by auto.
       specialize (H1 _ H5); simpl in H1.
 
-      (* pose proof (no_model_step_other_user_silent_step *)
-      (*               _ _ _ _ _ H6 *)
-      (*               _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ *)
-      (*               eq_refl eq_refl eq_refl n H3) as NOMODEL. *)
-      (* specialize (H1 NOMODEL). *)
-      (* eapply H1. *)
+      destruct userData; simpl in *.
+      pose proof (no_model_step_other_user_silent_step
+                    _ _ _ _ _ _ _ H6
+                    _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ iu
+                    eq_refl eq_refl eq_refl eq_refl _ H _ H2 _ _ H4 n cmd H3) as NOMODEL.
+      specialize (H1 NOMODEL).
 
-      (* Need lemma for :
-       *   if I can step now
-       *   and other user silently steps instead 
-       *   then I can still step in the new universe *)
-
-      admit.
+      dt bd.
+      pose proof (step_reorder _ _ _ _ _ _ _ _ H6 eq_refl _ _ _ _ _ _ H4 eq_refl) as REORDER.
+      generalize H; intros USR; eapply REORDER in USR; eauto; clear REORDER.
+      split_ex.
+      unfold build_data_step in H7; simpl in H7.
+      eapply H1; eauto.
 
   (* labeled case -- this will perhaps be a bit more difficult because of the ideal world *)
   - invert H5.
@@ -212,10 +278,30 @@ Proof.
     destruct (u_id ==n uid); subst; clean_map_lookups.
     + eapply H3.
       econstructor 2; eauto.
-    + admit.
+    + generalize H9; intros OUSTEP.
 
-  
-Admitted.
+      destruct ru, u; simpl in *.
+      eapply impact_from_other_user_step in OUSTEP; eauto; split_ex.
+
+      specialize (H1 uid).
+      rewrite add_neq_o in H1 by auto.
+      specialize (H1 _ H5); simpl in H1.
+
+      destruct userData; simpl in *.
+      pose proof (no_model_step_other_user_labeled_step
+                    _ _ _ _ _ _ _ H9
+                    _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ ra ia iu iu' iu''
+                    eq_refl eq_refl eq_refl eq_refl _ H _ H2 _ _ H4 H6 H7 H8 n cmd H3) as NOMODEL.
+      specialize (H1 NOMODEL).
+
+      dt bd.
+      pose proof (step_reorder _ _ _ _ _ _ _ _ H9 eq_refl _ _ _ _ _ _ H4 eq_refl) as REORDER.
+      generalize H; intros USR; eapply REORDER in USR; eauto; clear REORDER.
+      split_ex.
+      unfold build_data_step in H7; simpl in H7.
+      eapply H1; eauto.
+
+Qed.
 
 Lemma stuck_model_violation_step :
   forall t__hon t__adv st st' b,
@@ -227,9 +313,6 @@ Proof.
   unfold not; intros.
   eauto using stuck_model_violation_step'.
 Qed.
-
-
-
 
     
 
