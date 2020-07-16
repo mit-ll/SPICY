@@ -219,7 +219,7 @@ Proof.
 
   assert (sents'' = sents0 /\
           from = Some uid /\
-          (exists (rec_u_id : user_id) (rec_u : user_data r'),
+          (exists (rec_u_id : user_id) (rec_u : user_data A),
               nextAction cmd1 (Send rec_u_id msg)
               /\ to = Some rec_u_id /\ usrs0 $? rec_u_id = Some rec_u /\ rec_u_id <> uid)) by eauto.
   split_ex; subst.
@@ -915,8 +915,8 @@ Module ProtocolSimulates (Proto : SyntacticallySafeProtocol).
     - invert H0.
       invert H1; eauto.
       invert H4.
-      eapply IHcmd in H8; eauto.
-      eapply H8 in H11; eauto.
+      eapply IHcmd in H7; eauto.
+      eapply H7 in H11; eauto.
 
       invert H11; trivial.
 
@@ -1030,111 +1030,6 @@ Module ProtocolSimulates (Proto : SyntacticallySafeProtocol).
       econstructor; eauto.
   Qed.
 
-  Import RealWorldNotations.
-
-  Lemma StepBindRecur' :
-    forall {B r r'} (usrs usrs' : honest_users r') (adv adv' : user_data B)
-      lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' sents sents' cur_n cur_n'
-      (cmd1 cmd1' : user_cmd r) (cmd2 : <<r>> -> user_cmd (Base r')) bd bd',
-
-      step_user lbl u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd1)
-                (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd1')
-      -> bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Bind cmd1 cmd2)
-      -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', Bind cmd1' cmd2)
-      -> forall lbl' suid',
-          lbl' = lbl
-          -> suid' = u_id
-          -> step_user lbl u_id bd bd'.
-  Proof.
-    intros; subst; eapply StepBindRecur; eauto.
-  Qed.
-
-  Lemma syntactically_safe_na :
-    forall t (cmd : user_cmd t) t__n (cmd__n : user_cmd t__n),
-      nextAction cmd cmd__n
-      -> forall ctx uid uids styp,
-        syntactically_safe uid uids ctx cmd styp
-        -> exists styp',
-          syntactically_safe uid uids ctx cmd__n styp'.
-  Proof.
-    induction 1; eauto.
-    intros * SS; invert SS; eauto.
-  Qed.
-
-
-  (* Lemma step_na_recur : *)
-  (*   forall t t__n (cmd : user_cmd t) (cmd__n : user_cmd t__n), *)
-  (*     nextAction cmd cmd__n *)
-  (*     -> (forall r, cmd__n <> Return r) *)
-  (*     -> forall A B suid lbl bd bd', *)
-
-  (*       step_user lbl suid bd bd' *)
-
-  (*       -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks' *)
-  (*           cmd__n' ks ks' qmsgs qmsgs' mycs mycs' *)
-  (*           froms froms' sents sents' cur_n cur_n', *)
-
-  (*         bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd__n) *)
-  (*         -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd__n') *)
-  (*         -> exists bd'', *)
-  (*             step_user lbl suid (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) bd''. *)
-  (* Proof. *)
-  (*   induct 1; intros; subst; eauto. *)
-  (*   eapply IHnextAction in H0; eauto. *)
-  (*   split_ex. *)
-  (*   dt x. *)
-  (*   eexists. *)
-  (* Admitted. *)
-
-  (* Lemma step_na_recur : *)
-  (*   forall A B t__n suid lbl bd bd', *)
-
-  (*     step_user lbl suid bd bd' *)
-
-  (*     -> forall t (cmd : user_cmd t) (cmd__n : user_cmd t__n), *)
-  (*       nextAction cmd cmd__n *)
-  (*       -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks' *)
-  (*           cmd__n' ks ks' qmsgs qmsgs' mycs mycs' *)
-  (*           froms froms' sents sents' cur_n cur_n', *)
-
-  (*         bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd__n) *)
-  (*         -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd__n') *)
-  (*         -> exists bd'', *)
-  (*             step_user lbl suid (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) bd''. *)
-  (* Proof. *)
-  (*   induct 1; intros; subst; *)
-  (*     eauto. *)
-
-  (*   eapply IHstep_user in H0; eauto. *)
-
-  (*   eapply IHnextAction in H0; eauto; split_ex; eauto. *)
-  (* Admitted. *)
-
-(* Inductive nextAction : forall {A B}, user_cmd A -> user_cmd B -> Prop := *)
-(*   | NaReturn : forall A (a : << A >>), *)
-(*       nextAction (Return a) (Return a) *)
-(*   | NaGen : *)
-(*       nextAction Gen Gen *)
-(*   | NaSend : forall t uid (msg : crypto t), *)
-(*       nextAction (Send uid msg) (Send uid msg) *)
-(*   | NaRecv : forall t pat, *)
-(*       nextAction (@Recv t pat) (@Recv t pat) *)
-(*   | NaSignEncrypt : forall t k__s k__e u_id (msg : message t), *)
-(*       nextAction (SignEncrypt k__s k__e u_id msg) (SignEncrypt k__s k__e u_id msg) *)
-(*   | NaDecrypt : forall t (msg : crypto t), *)
-(*       nextAction (Decrypt msg) (Decrypt msg) *)
-(*   | NaSign : forall t k u_id (msg : message t), *)
-(*       nextAction (Sign k u_id msg) (Sign k u_id msg) *)
-(*   | NaVerify : forall t k (msg : crypto t), *)
-(*       nextAction (Verify k msg) (Verify k msg) *)
-(*   | NaGenSymKey : forall usg, *)
-(*       nextAction (GenerateSymKey usg) (GenerateSymKey usg) *)
-(*   | NaGenAsymKey : forall usg, *)
-(*       nextAction (GenerateAsymKey usg) (GenerateAsymKey usg) *)
-(*   | NaBind : forall A B r (c : user_cmd B) (c1 : user_cmd r) (c2 : << r >> -> user_cmd A), *)
-(*       nextAction c1 c *)
-(*       -> nextAction (Bind c1 c2) c. *)
-  
   Lemma step_na_recur :
     forall t t__n (cmd : user_cmd t) (cmd__n : user_cmd t__n),
       nextAction cmd cmd__n
@@ -1159,54 +1054,9 @@ Module ProtocolSimulates (Proto : SyntacticallySafeProtocol).
 
     Set Printing Implicit.
     
-    (* eapply StepBindRecur. *)
+    dt x; eexists; eapply StepBindRecur; eauto.
 
-  Admitted.
-
-  (* Lemma step_na_recur : *)
-  (*   forall t t__n (cmd : user_cmd t) (cmd__n : user_cmd t__n), *)
-  (*     nextAction cmd cmd__n *)
-  (*     -> forall A B suid lbl bd bd', *)
-
-  (*       step_user lbl suid bd bd' *)
-
-  (*       -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks' *)
-  (*           cmd__n' ks ks' qmsgs qmsgs' mycs mycs' *)
-  (*           froms froms' sents sents' cur_n cur_n', *)
-
-  (*         bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd__n) *)
-  (*         -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd__n') *)
-  (*         -> exists bd'', *)
-  (*             step_user lbl suid (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) bd''. *)
-  (* Proof. *)
-  (*   induct cmd; intros; subst; *)
-  (*     match goal with *)
-  (*     | [ H : nextAction _ _ |- _ ] => invert H *)
-  (*     end; eauto. *)
-
-  (*   invert H0. *)
-
-  (*   eapply IHcmd in H5; eauto; split_ex; eauto. *)
-  (*   exists x. *)
-
-  (* Admitted. *)
-
-
-  (* Lemma step_na_recur : *)
-  (*   forall {A B C D} suid lbl bd bd', *)
-  (*     step_user lbl suid bd bd' *)
-
-  (*     -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks' *)
-  (*         (cmd : user_cmd C) (cmd__n cmd'__n : user_cmd D) ks ks' qmsgs qmsgs' mycs mycs' *)
-  (*         froms froms' sents sents' cur_n cur_n', *)
-
-  (*       bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd__n) *)
-  (*       -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd'__n) *)
-  (*       -> nextAction cmd cmd__n *)
-  (*       -> exists bd', *)
-  (*           step_user lbl suid (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) bd'. *)
-  (* Proof. *)
-
+  Qed.
 
   Lemma simsafe : honest_actions_safe t__adv R.
   Proof.

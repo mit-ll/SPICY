@@ -475,18 +475,30 @@ Definition build_data_step {A B C} (U : universe A B) (u_data : user_data C) : d
 Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C -> data_step0 A B C -> Prop :=
 
 (* Plumbing *)
-| StepBindRecur : forall {B r r'} (usrs usrs' : honest_users r') (adv adv' : user_data B)
+| StepBindRecur : forall {A B r r'} (usrs usrs' : honest_users A) (adv adv' : user_data B)
                     lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' sents sents' cur_n cur_n'
-                    (cmd1 cmd1' : user_cmd r) (cmd2 : <<r>> -> user_cmd (Base r')),
+                    (cmd1 cmd1' : user_cmd r) (cmd2 : <<r>> -> user_cmd r'),
     step_user lbl u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd1)
                        (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd1')
     -> step_user lbl u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Bind cmd1 cmd2)
                          (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', Bind cmd1' cmd2)
-| StepBindProceed : forall {B r r'} (usrs : honest_users r) (adv : user_data B) cs u_id gks ks qmsgs mycs froms sents cur_n
-                      (v : <<r'>>) (cmd : <<r'>> -> user_cmd (Base r)),
+| StepBindProceed : forall {A B r r'} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks qmsgs mycs froms sents cur_n
+                      (v : <<r'>>) (cmd : <<r'>> -> user_cmd r),
     step_user Silent u_id
               (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Bind (@Return r' v) cmd)
               (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd v)
+(* | StepBindRecur : forall {B r r'} (usrs usrs' : honest_users r') (adv adv' : user_data B) *)
+(*                     lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' sents sents' cur_n cur_n' *)
+(*                     (cmd1 cmd1' : user_cmd r) (cmd2 : <<r>> -> user_cmd (Base r')), *)
+(*     step_user lbl u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd1) *)
+(*                        (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd1') *)
+(*     -> step_user lbl u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Bind cmd1 cmd2) *)
+(*                          (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', Bind cmd1' cmd2) *)
+(* | StepBindProceed : forall {B r r'} (usrs : honest_users r) (adv : user_data B) cs u_id gks ks qmsgs mycs froms sents cur_n *)
+(*                       (v : <<r'>>) (cmd : <<r'>> -> user_cmd (Base r)), *)
+(*     step_user Silent u_id *)
+(*               (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Bind (@Return r' v) cmd) *)
+(*               (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd v) *)
 
 | StepGen : forall {A B} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks qmsgs mycs froms sents cur_n n,
     step_user Silent u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Gen)
