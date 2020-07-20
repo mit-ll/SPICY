@@ -553,6 +553,29 @@ Section MessageEqLemmas.
     solve_perm_merges; eauto.
   Qed.
 
+  Lemma compat_perm_same :
+    forall kid ks1 ks2 ks3 ks1' ks2' ks3' b,
+      compat_perm (ks1 $k++ ks2 $k++ ks3 $? kid) b
+      -> ks1 $? kid = ks1' $? kid
+      -> ks2 $? kid = ks2' $? kid
+      -> ks3 $? kid = ks3' $? kid
+      -> compat_perm (ks1' $k++ ks2' $k++ ks3' $? kid) b.
+  Proof.
+    intros.
+
+    cases (ks1 $k++ ks2 $k++ ks3 $? kid).
+    - erewrite perm_merge_same; eauto.
+    - repeat
+        match goal with
+        | [ H : _ $k++ _ $? _ = None |- _ ] => 
+          apply merge_perms_no_disappear_perms in H; split_ex
+        end.
+
+      assert (RW : ks1' $k++ ks2' $k++ ks3' $? kid = None).
+      repeat eapply merge_perms_adds_no_new_perms; eauto.
+      rewrite RW; eauto.
+  Qed.
+
   Lemma message_eq_user_add_nochange_cs_ks_msgs :
     forall A B (usrs : honest_users A) (adv adv' : user_data B) cs gks
       ks cmd qmsgs mycs froms sents cur_n cmd' sents' cur_n'
@@ -934,35 +957,35 @@ Section MessageEqLemmas.
     - intros.
       specialize (H17 u); destruct (u ==n uid); subst; clean_map_lookups; eauto.
       eapply H17 in H7; eauto.
-      invert H7; simpl in *; [ econstructor 1 | econstructor 2 ]; eauto.
-      simpl; clean_map_lookups.
+      invert H7; simpl in *; [ econstructor 1 | econstructor 2 ]; eauto;
+        simpl; clean_map_lookups.
       msg_queue_prop.
       user_cipher_queues_prop.
-      erewrite <- key_perms_from_message_queue_idempotent_addnl_cipher,
+      erewrite (* <- key_perms_from_message_queue_idempotent_addnl_cipher, *)
                <- key_perms_from_known_ciphers_idempotent_addnl_cipher in H16 by eauto.
       destruct c;
         rewrite key_perms_from_known_ciphers_pull_merge ,
                 merge_perms_sym with (ks1 := key_perms_from_known_ciphers cs mycs $0),
                 <- merge_perms_assoc,
-                merge_keys_mine with (ks1 := ks) in H16 by eauto; eauto.
+                merge_keys_mine with (ks1 := ks) in H16 by eauto; eauto; simpl.
 
       eapply H17 in H7; eauto.
-      invert H7; simpl in *; [ econstructor 1 | econstructor 2 ]; eauto.
+      invert H7; simpl in *; [ econstructor 1 | econstructor 2 ]; eauto;
+        simpl; clean_map_lookups.
       msg_queue_prop.
       user_cipher_queues_prop.
-      erewrite <- key_perms_from_message_queue_idempotent_addnl_cipher,
+      erewrite (* <- key_perms_from_message_queue_idempotent_addnl_cipher, *)
                <- key_perms_from_known_ciphers_idempotent_addnl_cipher in H18 by eauto; eauto.
 
     - intros.
       specialize (H17 u); destruct (u ==n uid); subst; clean_map_lookups; eauto.
       eapply H17 in H7; eauto.
 
-      invert H7; simpl in *; [ econstructor 1 | econstructor 2 ]; eauto.
-
-      simpl; clean_map_lookups.
-      msg_queue_prop.
-      user_cipher_queues_prop.
-      erewrite <- key_perms_from_message_queue_idempotent_addnl_cipher,
+      invert H7; simpl in *; [ econstructor 1 | econstructor 2 ]; eauto;
+        simpl; clean_map_lookups; eauto
+        ; msg_queue_prop
+        ; user_cipher_queues_prop.
+      erewrite (* <- key_perms_from_message_queue_idempotent_addnl_cipher, *)
                <- key_perms_from_known_ciphers_idempotent_addnl_cipher in H18 by eauto.
       destruct c;
         rewrite key_perms_from_known_ciphers_pull_merge ,
@@ -970,11 +993,8 @@ Section MessageEqLemmas.
                 <- merge_perms_assoc,
                 merge_keys_mine with (ks1 := ks) in H18 by eauto; eauto.
 
-      simpl; clean_map_lookups.
-      msg_queue_prop.
-      user_cipher_queues_prop.
-      erewrite <- key_perms_from_message_queue_idempotent_addnl_cipher,
-      <- key_perms_from_known_ciphers_idempotent_addnl_cipher in H19 by eauto.
+      erewrite (* <- key_perms_from_message_queue_idempotent_addnl_cipher, *)
+               <- key_perms_from_known_ciphers_idempotent_addnl_cipher in H19 by eauto.
       destruct c;
         rewrite key_perms_from_known_ciphers_pull_merge ,
         merge_perms_sym with (ks1 := key_perms_from_known_ciphers cs mycs $0),
@@ -982,14 +1002,15 @@ Section MessageEqLemmas.
                 merge_keys_mine with (ks1 := ks) in H19 by eauto; eauto.
 
       eapply H17 in H7; eauto.
-      invert H7; simpl in *; [ econstructor 1 | econstructor 2 ]; eauto.
-      msg_queue_prop.
-      user_cipher_queues_prop.
-      erewrite <- key_perms_from_message_queue_idempotent_addnl_cipher,
+      invert H7; simpl in *; [ econstructor 1 | econstructor 2 ]; eauto;
+        simpl; clean_map_lookups;
+          msg_queue_prop;
+          user_cipher_queues_prop.
+
+      erewrite (* <- key_perms_from_message_queue_idempotent_addnl_cipher, *)
                <- key_perms_from_known_ciphers_idempotent_addnl_cipher in H19 by eauto; eauto.
-      msg_queue_prop.
-      user_cipher_queues_prop.
-      erewrite <- key_perms_from_message_queue_idempotent_addnl_cipher,
+
+      erewrite (* <- key_perms_from_message_queue_idempotent_addnl_cipher, *)
                <- key_perms_from_known_ciphers_idempotent_addnl_cipher in H20; eauto.
   Qed.
 
@@ -1040,7 +1061,7 @@ Section MessageEqLemmas.
     - invert H1; [ econstructor 1 | econstructor 2 ]; eauto; simpl in *; clean_map_lookups.
       msg_queue_prop.
       user_cipher_queues_prop.
-      erewrite <- key_perms_from_message_queue_idempotent_addnl_cipher; eauto.
+      (* erewrite <- key_perms_from_message_queue_idempotent_addnl_cipher; eauto. *)
       assert (RW : key_perms_from_known_ciphers (cs $+ (cid, c)) (cid :: mycs) $0
                    = key_perms_from_known_ciphers (cs $+ (cid, c)) mycs
                                                   match c with
@@ -1049,21 +1070,60 @@ Section MessageEqLemmas.
       rewrite <- RW; clear RW.
       erewrite key_perms_from_known_ciphers_user_new_cipher; eauto.
       rewrite merge_perms_sym with (ks1 := key_perms_from_known_ciphers cs mycs $0), <- merge_perms_assoc.
+
+      Ltac go :=
+        match goal with
+        | [ H : ?ks1 $? ?k = Some ?x , CP : compat_perm (Some ?x) ?b |- compat_perm (?ks2 $? ?k) ?b ] =>
+          assert (RW: ks2 $? k = Some x)
+
+        | [ H : ?ks1 $? ?k = None , CP : compat_perm None ?b |- compat_perm (?ks2 $? ?k) ?b ] =>
+          idtac H CP
+        | [ H : compat_perm (?ks1 $? ?k) ?b |- compat_perm (?ks2 $? ?k) ?b ] =>
+          cases (ks1 $? k)
+        end.
+
+      go; go.
       eapply perm_merge_same with (ks1' := ks $k++ match c with
                                                    | @SigCipher t0 _ _ _ m | @SigEncCipher t0 _ _ _ _ m => findKeysMessage m
-                                                   end); eauto.
-      destruct c; rewrite merge_keys_mine; trivial.
+                                                   end); try eassumption; trivial; destruct c; rewrite merge_keys_mine; trivial.
+      rewrite RW; assumption.
+
+      repeat
+        match goal with
+        | [ H : _ $k++ _ $? _ = None |- _ ] => 
+          apply merge_perms_no_disappear_perms in H; split_ex
+        end.
+
+      Ltac xx :=
+        match goal with
+        | [ H : ?m $? ?k = None |- compat_perm (?ks1 $k++ ?m $k++ ?ks2 $k++ ?ks3 $? ?k) _ ] =>
+          let RW := fresh "RW"
+          in assert (RW: ks1 $k++ m $k++ ks2 $k++ ks3 $? k = None) by (repeat eapply merge_perms_adds_no_new_perms; eauto); rewrite RW
+        | [ |- compat_perm (_ $k++ ?m $k++ _ $k++ _ $? ?k) _ ] =>
+          assert (m $? k = None) by (repeat xx)
+        | [ |- (match ?c with _ => _ end) $? _ = None ] => destruct c
+        | [ H : keys_mine _ (findKeysMessage ?m) |- _ ] => unfold keys_mine in H
+        | [ H : (forall _ _, findKeysMessage _ $? _ = Some _ -> _)
+                , FK : findKeysMessage ?msg $? ?k = Some _ |- _ ] =>
+          eapply H in FK; split_ors; clean_map_lookups
+        | [ |- findKeysMessage ?msg $? ?k = None ] =>
+          cases (findKeysMessage msg $? k); auto
+        end.
+
+      repeat xx; eauto.
+
       
     - invert H0; [ econstructor 1 | econstructor 2 ]; eauto; simpl in *; clean_map_lookups.
       msg_queue_prop.
-      erewrite <- key_perms_from_message_queue_idempotent_addnl_cipher; eauto.
+      (* erewrite <- key_perms_from_message_queue_idempotent_addnl_cipher; eauto. *)
       user_cipher_queues_prop.
       erewrite <- key_perms_from_known_ciphers_idempotent_addnl_cipher; eauto.
 
     - invert H1; [ econstructor 1 | econstructor 2 ]; eauto; simpl in *; clean_map_lookups;
         msg_queue_prop;
         user_cipher_queues_prop;
-        erewrite <- key_perms_from_message_queue_idempotent_addnl_cipher; eauto.
+        (* erewrite <- key_perms_from_message_queue_idempotent_addnl_cipher; *)
+        eauto.
 
       + assert (RW : key_perms_from_known_ciphers (cs $+ (cid, c)) (cid :: mycs) $0
                      = key_perms_from_known_ciphers (cs $+ (cid, c)) mycs
@@ -1073,10 +1133,19 @@ Section MessageEqLemmas.
         rewrite <- RW; clear RW.
         erewrite key_perms_from_known_ciphers_user_new_cipher; eauto.
         rewrite merge_perms_sym with (ks1 := key_perms_from_known_ciphers cs mycs $0), <- merge_perms_assoc.
+
+        go; go.
         eapply perm_merge_same with (ks1' := ks $k++ match c with
                                                      | @SigCipher t0 _ _ _ m | @SigEncCipher t0 _ _ _ _ m => findKeysMessage m
-                                                     end); eauto.
-        destruct c; rewrite merge_keys_mine; trivial.
+                                                     end); try eassumption; trivial; destruct c; rewrite merge_keys_mine; trivial.
+        rewrite RW; assumption.
+
+        repeat
+          match goal with
+          | [ H : _ $k++ _ $? _ = None |- _ ] => 
+            apply merge_perms_no_disappear_perms in H; split_ex
+          end.
+        repeat xx; eauto.
         
       + assert (RW : key_perms_from_known_ciphers (cs $+ (cid, c)) (cid :: mycs) $0
                      = key_perms_from_known_ciphers (cs $+ (cid, c)) mycs
@@ -1086,16 +1155,25 @@ Section MessageEqLemmas.
         rewrite <- RW; clear RW.
         erewrite key_perms_from_known_ciphers_user_new_cipher; eauto.
         rewrite merge_perms_sym with (ks1 := key_perms_from_known_ciphers cs mycs $0), <- merge_perms_assoc.
+
+        go; go.
         eapply perm_merge_same with (ks1' := ks $k++ match c with
                                                      | @SigCipher t0 _ _ _ m | @SigEncCipher t0 _ _ _ _ m => findKeysMessage m
-                                                     end); eauto.
-        destruct c; rewrite merge_keys_mine; trivial.
+                                                     end); try eassumption; trivial; destruct c; rewrite merge_keys_mine; trivial.
+        rewrite RW; assumption.
+
+        repeat
+          match goal with
+          | [ H : _ $k++ _ $? _ = None |- _ ] => 
+            apply merge_perms_no_disappear_perms in H; split_ex
+          end.
+        repeat xx; eauto.
 
     - invert H0; [ econstructor 1 | econstructor 2 ]; eauto; simpl in *; clean_map_lookups;
         user_cipher_queues_prop;
         msg_queue_prop;
-        erewrite <- key_perms_from_message_queue_idempotent_addnl_cipher; eauto;
-          erewrite <- key_perms_from_known_ciphers_idempotent_addnl_cipher; eauto.
+        (* erewrite <- key_perms_from_message_queue_idempotent_addnl_cipher; eauto; *)
+        erewrite <- key_perms_from_known_ciphers_idempotent_addnl_cipher; eauto.
   Qed.
 
   Lemma message_eq_user_add_addnl_key :
@@ -1156,17 +1234,16 @@ Section MessageEqLemmas.
       cases (ks $? kid).
       apply H14 in Heq; clean_map_lookups.
       msg_queue_prop.
-      erewrite <- key_perms_from_message_queue_idempotent_addnl_key; eauto.
-
-      eapply perm_merge_same; eauto.
+      (* erewrite <- key_perms_from_message_queue_idempotent_addnl_key; eauto. *)
+      eapply compat_perm_same; eauto.
 
     - invert H0; [ econstructor 1; swap 1 2 | econstructor 2; swap 1 2 ]; eauto; simpl in *; clean_map_lookups; eauto.
-      keys_and_permissions_prop.
-      unfold add_key_perm.
-      cases (data__rw.(key_heap) $? kid).
-      apply H16 in Heq; clean_map_lookups.
-      msg_queue_prop.
-      erewrite <- key_perms_from_message_queue_idempotent_addnl_key; eauto.
+      (* keys_and_permissions_prop. *)
+      (* unfold add_key_perm. *)
+      (* cases (data__rw.(key_heap) $? kid). *)
+      (* apply H16 in Heq; clean_map_lookups. *)
+      (* msg_queue_prop. *)
+      (* erewrite <- key_perms_from_message_queue_idempotent_addnl_key; eauto. *)
 
     - invert H2; [ econstructor 1; swap 1 2 | econstructor 2; swap 1 2 ];
         eauto; simpl in *; clean_map_lookups; eauto;
@@ -1177,14 +1254,14 @@ Section MessageEqLemmas.
       apply H16 in Heq; clean_map_lookups.
 
       msg_queue_prop.
-      erewrite <- key_perms_from_message_queue_idempotent_addnl_key; eauto.
-      eapply perm_merge_same; eauto.
+      (* erewrite <- key_perms_from_message_queue_idempotent_addnl_key; eauto. *)
+      eapply compat_perm_same; eauto.
 
       apply H16 in Heq; clean_map_lookups.
 
       msg_queue_prop.
-      erewrite <- key_perms_from_message_queue_idempotent_addnl_key; eauto.
-      eapply perm_merge_same; eauto.
+      (* erewrite <- key_perms_from_message_queue_idempotent_addnl_key; eauto. *)
+      eapply compat_perm_same; eauto.
       assert (k__enc0 <> kid) by (encrypted_ciphers_prop; destruct (k__enc0 ==n kid); subst; clean_map_lookups; eauto);
         cases (kid ==n k__enc0); subst; clean_map_lookups; eauto.
 
@@ -1192,8 +1269,8 @@ Section MessageEqLemmas.
         keys_and_permissions_prop;
         msg_queue_prop.
 
-      erewrite <- key_perms_from_message_queue_idempotent_addnl_key; eauto.
-      erewrite <- key_perms_from_message_queue_idempotent_addnl_key; eauto.
+      (* erewrite <- key_perms_from_message_queue_idempotent_addnl_key; eauto. *)
+      (* erewrite <- key_perms_from_message_queue_idempotent_addnl_key; eauto. *)
 
   Qed.
 
@@ -1655,15 +1732,15 @@ Section MessageEqLemmas.
       destruct (uid ==n u); subst; clean_map_lookups; eauto.
 
       + eapply H16 in H1; eauto; context_map_rewrites.
-        invert H1; [ econstructor 1 | econstructor 2 ]; eauto; simpl in *.
+        invert H1; [ econstructor 1 | econstructor 2 ]; eauto; simpl in *; clean_map_lookups.
         msg_queue_prop.
-        erewrite <- key_perms_from_message_queue_idempotent_addnl_key in H15 by eauto.
-        eapply perm_merge_same with (ks1 := ks $+ (kid,true)) in H15; eauto.
+        (* erewrite <- key_perms_from_message_queue_idempotent_addnl_key in H15 by eauto. *)
+        eapply compat_perm_same with (ks1 := ks $+ (kid,true)); eauto.
 
       + eapply H16 in H1; eauto; context_map_rewrites.
         msg_queue_prop.
-        invert H1; [ econstructor 1 | econstructor 2 ]; eauto; simpl in *.
-        erewrite <- key_perms_from_message_queue_idempotent_addnl_key in H20; eauto.
+        invert H1; [ econstructor 1 | econstructor 2 ]; eauto; simpl in *; clean_map_lookups; eauto.
+        (* erewrite <- key_perms_from_message_queue_idempotent_addnl_key in H20; eauto. *)
 
     - pose proof (msg_honestly_signed_has_signing_key_cipher_id _ _ _ H5); split_ex.
       pose proof (msg_honestly_signed_signing_key_honest _ _ _ H5 H0); simpl in *; clean_context.
@@ -1688,14 +1765,15 @@ Section MessageEqLemmas.
       + eapply H16 in H1; eauto; context_map_rewrites.
         msg_queue_prop.
         invert H1; simpl in *; [ econstructor 1 | econstructor 2; swap 1 2 ]; eauto; simpl;
-          erewrite <- key_perms_from_message_queue_idempotent_addnl_key in * by eauto.
+          (* erewrite <- key_perms_from_message_queue_idempotent_addnl_key in * by eauto; *)
+          clean_map_lookups.
 
-        eapply perm_merge_same with (ks1 := ks $+ (kid,true)) in H18; eauto.
-        eapply perm_merge_same with (ks1 := ks $+ (kid,true)) in H19; eauto.
+        eapply compat_perm_same with (ks1 := ks $+ (kid,true)); eauto.
+        eapply compat_perm_same with (ks1 := ks $+ (kid,true)); eauto.
 
       + eapply H16 in H1; eauto; context_map_rewrites.
         msg_queue_prop.
-        invert H1; [ econstructor 1 | econstructor 2; swap 1 2 ]; eauto; simpl in *;
+        invert H1; [ econstructor 1 | econstructor 2; swap 1 2 ]; eauto; clean_map_lookups; simpl in *;
           erewrite <- key_perms_from_message_queue_idempotent_addnl_key in * by eauto; eauto.
 
         Unshelve.

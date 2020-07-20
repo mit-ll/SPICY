@@ -92,6 +92,14 @@ Definition key_perms_from_message_queue (cs : RealWorld.ciphers) (honestk: key_p
 (*   | _                   => ks0 *)
 (*   end. *)
 
+Inductive compat_perm : option bool -> bool -> Prop :=
+| CompatEq :
+    compat_perm (Some false) false
+| CompatNone :
+    compat_perm None false
+| CompatTrue : forall sp,
+    compat_perm sp true.
+
 Inductive user_perms_channel_match {A} (uid : user_id) (usr__rw : RealWorld.user_data A) (usr__iw : IdealWorld.user A)
           (honestk : key_perms) (cs : RealWorld.ciphers) (c_id : RealWorld.cipher_id) (ch_id : channel_id) : Prop :=
 
@@ -99,23 +107,26 @@ Inductive user_perms_channel_match {A} (uid : user_id) (usr__rw : RealWorld.user
     RealWorld.honest_key honestk k__sign
     -> cs $? c_id = Some (RealWorld.SigCipher k__sign u_id msg_seq m__rw)
     -> cks = key_perms_from_known_ciphers cs usr__rw.(RealWorld.c_heap) $0
-    -> mks = key_perms_from_message_queue cs honestk usr__rw.(RealWorld.msg_heap) uid usr__rw.(RealWorld.from_nons) $0
+    (* -> mks = key_perms_from_message_queue cs honestk usr__rw.(RealWorld.msg_heap) uid usr__rw.(RealWorld.from_nons) $0 *)
+    -> mks = $0
     -> ks = usr__rw.(RealWorld.key_heap) $k++ cks $k++ mks
     -> resolve_perm usr__iw.(IdealWorld.perms) ch_id = Some (IdealWorld.construct_permission b__read b__write)
-    (* -> ks $? k__sign = None *)
-    -> ks $? k__sign = Some b__write
+    -> compat_perm (ks $? k__sign) b__write
+    (* -> ks $? k__sign = Some b__write *)
     -> b__read = true
     -> user_perms_channel_match uid usr__rw usr__iw honestk cs c_id ch_id
 | SigEncChannel : forall mks cks ks b__read b__write k__sign k__enc u_id msg_seq t (m__rw : RealWorld.message.message t),
     RealWorld.honest_key honestk k__sign
     -> cs $? c_id = Some (RealWorld.SigEncCipher k__sign k__enc u_id msg_seq m__rw)
     -> cks = key_perms_from_known_ciphers cs usr__rw.(RealWorld.c_heap) $0
-    -> mks = key_perms_from_message_queue cs honestk usr__rw.(RealWorld.msg_heap) uid usr__rw.(RealWorld.from_nons) $0
+    (* -> mks = key_perms_from_message_queue cs honestk usr__rw.(RealWorld.msg_heap) uid usr__rw.(RealWorld.from_nons) $0 *)
+    -> mks = $0
     -> ks = usr__rw.(RealWorld.key_heap) $k++ cks $k++ mks
     -> resolve_perm usr__iw.(IdealWorld.perms) ch_id = Some (IdealWorld.construct_permission b__read b__write)
-    (* -> ( ks $? k__sign = None \/ ks $? k__enc = None ) *)
-    -> ks $? k__sign = Some b__write
-    -> ks $? k__enc  = Some b__read
+    -> compat_perm (ks $? k__sign) b__write
+    -> compat_perm (ks $? k__enc) b__read
+    (* -> ks $? k__sign = Some b__write *)
+    (* -> ks $? k__enc  = Some b__read *)
     -> user_perms_channel_match uid usr__rw usr__iw honestk cs c_id ch_id
 .
 

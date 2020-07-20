@@ -6169,8 +6169,11 @@ Section SingleAdversarySimulates.
             generalize H; intros CKPS'; rewrite Heq in CKPS'; eapply clean_key_permissions_inv'' in CKPS'; eauto
           end.
 
-      all: try solve [solveit; solve_perm_merges; eauto ].
-
+      all: solveit; split_ex;
+        match goal with
+        | [ H : compat_perm (?ks1 $? ?k) _ |- compat_perm (?ks2 $? ?k) _ ] =>
+          assert (RW: ks1 $? k = ks2 $? k) by solve_perm_merges; rewrite <- RW; eauto
+        end.
 
     - generalize (clean_ciphers_inv _ _ _ H8); intros.
       econstructor 2; simpl; eauto using content_eq_strip_keys.
@@ -6195,17 +6198,25 @@ Section SingleAdversarySimulates.
       
       econstructor 2 with (k__sign := k__sign0) (k__enc := k__enc0); eauto.
 
-      cases (CKPS $? k__sign0);
-        cases (KPKS $? k__sign0);
-        cases (KPMQ $? k__sign0).
+      + cases (CKPS $? k__sign0);
+          cases (KPKS $? k__sign0);
+          cases (KPMQ $? k__sign0).
 
-      all: try solve [solveit; solve_perm_merges; eauto ].
+        all: solveit; split_ex;
+          match goal with
+          | [ H : compat_perm (?ks1 $? ?k) ?b |- compat_perm (?ks2 $? ?k) ?b ] =>
+            assert (RW: ks1 $? k = ks2 $? k) by solve_perm_merges; rewrite <- RW; eauto
+          end.
 
-      cases (CKPS $? k__enc0);
-        cases (KPKS $? k__enc0);
-        cases (KPMQ $? k__enc0).
+      + cases (CKPS $? k__enc0);
+          cases (KPKS $? k__enc0);
+          cases (KPMQ $? k__enc0).
 
-      all: try solve [solveit; solve_perm_merges; eauto ].
+        all: solveit; split_ex;
+          match goal with
+          | [ H : compat_perm (?ks1 $? ?k) ?b |- compat_perm (?ks2 $? ?k) ?b ] =>
+            assert (RW: ks1 $? k = ks2 $? k) by solve_perm_merges; rewrite <- RW; eauto
+          end.
   Qed.
   
   Lemma action_matches_strip :
