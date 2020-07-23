@@ -961,24 +961,32 @@ Module SimulationAutomation.
   
   Ltac solve_action_matches1 :=
     match goal with
-    | [ |- content_eq _ _ ] => progress simpl
+    | [ |- content_eq _ _ _ ] => progress simpl
     | [ |- action_matches _ _ _ _ ] => progress simpl_real_users_context
     | [ |- action_matches _ _ _ _ ] => progress simpl_ideal_users_context
-    | [ |- action_matches (RealWorld.Output _ _ _ _) _ _ _ ] => eapply Out
-    | [ |- action_matches (RealWorld.Input _ _ _) _ _ _ ] => eapply Inp
+    | [ H : ?cs $? ?cid = Some (SigCipher _ _ _ _ )
+        |- action_matches ?cs _ (RealWorld.Output (SignedCiphertext ?cid) _ _ _) _ ] => eapply OutSig
+    | [ H : ?cs $? ?cid = Some (SigEncCipher _ _ _ _ _ )
+        |- action_matches ?cs _ (RealWorld.Output (SignedCiphertext ?cid) _ _ _) _ ] => eapply OutEnc
+    | [ H : ?cs $? ?cid = Some (SigCipher _ _ _ _ )
+        |- action_matches ?cs _ (RealWorld.Input (SignedCiphertext ?cid) _ _) _ ] => eapply InpSig
+    | [ H : ?cs $? ?cid = Some (SigEncCipher _ _ _ _ _ )
+        |- action_matches ?cs _ (RealWorld.Input (SignedCiphertext ?cid) _ _) _ ] => eapply InpEnc
+    (* | [ |- action_matches (RealWorld.Output _ _ _ _) _ _ _ ] => eapply Out *)
+    (* | [ |- action_matches (RealWorld.Input _ _ _) _ _ _ ] => eapply Inp *)
     (* | [ |- message_eq (RealWorld.Content _) _ _ _ _ ] => eapply ContentCase *)
-    | [ |- message_eq (RealWorld.SignedCiphertext ?cid)
-                     {| RealWorld.users := _;
-                        RealWorld.adversary := _;
-                        RealWorld.all_ciphers := _ $+ (?cid, RealWorld.SigCipher _ _ _ _);
-                        RealWorld.all_keys := _ |}
-                     _ _ _ ] => eapply CryptoSigCase
-    | [ |- message_eq (RealWorld.SignedCiphertext ?cid)
-                     {| RealWorld.users := _;
-                        RealWorld.adversary := _;
-                        RealWorld.all_ciphers := _ $+ (?cid, RealWorld.SigEncCipher _ _ _ _ _);
-                        RealWorld.all_keys := _ |}
-                     _ _ _ ] => eapply CryptoSigEncCase; [ solve [ simpl; eauto ] .. | ]
+    (* | [ |- message_eq (RealWorld.SignedCiphertext ?cid) *)
+    (*                  {| RealWorld.users := _; *)
+    (*                     RealWorld.adversary := _; *)
+    (*                     RealWorld.all_ciphers := _ $+ (?cid, RealWorld.SigCipher _ _ _ _); *)
+    (*                     RealWorld.all_keys := _ |} *)
+    (*                  _ _ _ ] => eapply CryptoSigCase *)
+    (* | [ |- message_eq (RealWorld.SignedCiphertext ?cid) *)
+    (*                  {| RealWorld.users := _; *)
+    (*                     RealWorld.adversary := _; *)
+    (*                     RealWorld.all_ciphers := _ $+ (?cid, RealWorld.SigEncCipher _ _ _ _ _); *)
+    (*                     RealWorld.all_keys := _ |} *)
+    (*                  _ _ _ ] => eapply CryptoSigEncCase; [ solve [ simpl; eauto ] .. | ] *)
     | [ H : _ $+ (?k1,_) $? ?k2 = Some ?d__rw |- context [ RealWorld.key_heap ?d__rw $? _ = Some _ ] ] =>
       is_var d__rw; is_var k2; is_not_var k1;
       destruct (k1 ==n k2); subst; clean_map_lookups; simpl
@@ -1479,8 +1487,8 @@ Module Gen.
                   invert H
                 | [H : action_matches _ _ _ _ |- _] =>
                   invert H
-                | [ H : MessageEq.message_eq _ _ _ _ _ |- _ ] =>
-                  invert H
+                (* | [ H : MessageEq.message_eq _ _ _ _ _ |- _ ] => *)
+                (*   invert H *)
 
                 (* clear out resulting assumption that seems to cause a problem for [close] *)
                 | [ H : forall _ _ _, _ -> _ -> _ -> _ <-> _ |- _ ] => clear H

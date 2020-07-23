@@ -1884,7 +1884,7 @@ Inductive model_step_user (t__hon t__adv : type) (uid : user_id) :
                                                ; cur_nonce := cur_n |}
     -> istepSilent^* iu iu'
     -> IdealWorld.lstep_universe iu' (Action ia) iu''
-    -> action_matches ra ru ia iu'
+    -> action_matches ru.(all_ciphers) ru.(all_keys) ra ia
     -> model_step_user uid (ru, iu) (ru', iu'')
 .
 
@@ -2116,12 +2116,12 @@ Proof.
     eapply merge_perms_adds_no_new_perms; eauto.
 Qed.
 
-Hint Resolve
-     message_eq_user_add_nochange_cs_ks_msgs
-     message_eq_user_add_nochange_drop_not_signed_addressed_msg
-     message_eq_user_add_addnl_cipher
-     message_eq_user_decrypt_msg
-     message_eq_user_add_addnl_key.
+(* Hint Resolve *)
+(*      message_eq_user_add_nochange_cs_ks_msgs *)
+(*      message_eq_user_add_nochange_drop_not_signed_addressed_msg *)
+(*      message_eq_user_add_addnl_cipher *)
+(*      message_eq_user_decrypt_msg *)
+(*      message_eq_user_add_addnl_key. *)
 
 Lemma action_matches_other_user_silent_step' :
   forall A B C lbl suid bd bd',
@@ -2142,7 +2142,7 @@ Lemma action_matches_other_user_silent_step' :
       -> forall ctx uids sty, syntactically_safe uid1 uids ctx cmd sty
       -> typingcontext_sound ctx usrs cs uid1
       -> uids = compute_ids usrs
-      -> forall cmd1 cmd1' cmd2 cmd2' uid2 ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' froms2 froms2' sents2 sents2' cur_n2 cur_n2' a
+      -> forall cmd1 cmd2 cmd2' uid2 ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' froms2 froms2' sents2 sents2' cur_n2 cur_n2' a
           usrs'' adv'' cs'' gks'',
           uid1 <> uid2
           -> usrs $? uid1 = Some (mkUserData ks1 cmd1 qmsgs1 mycs1 froms1 sents1 cur_n1)
@@ -2153,34 +2153,31 @@ Lemma action_matches_other_user_silent_step' :
           -> step_user (Action a) (Some uid2)
                       (usrs, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
                       (usrs'', adv'', cs'', gks'', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
-          -> forall ia iu,
-              action_matches a (mkUniverse usrs adv cs gks) ia iu
-              -> action_matches a
-                  (mkUniverse (usrs' $+ (uid1, mkUserData ks1' cmd1' qmsgs1' mycs1' froms1' sents1' cur_n1')) adv' cs' gks') ia iu.
+          -> forall ia,
+              action_matches cs gks a ia 
+              -> action_matches cs' gks' a ia.
 Proof.
 
   Ltac action_matches_solver :=
-    repeat
-      match goal with
-      | [ H : step_user (Action _) _ _ _ |- _ ] =>
-        eapply invert_step_label in H; eauto; split_ors; split_ex; subst; simpl
-      | [ H : action_matches _ _ _ _ |- _ ] => invert H
-      | [ H : Input _ _ _ = _ |- _ ] => invert H
-      | [ H : Output _ _ _ _ = _ |- _ ] => invert H
-      | [ |- action_matches (Input _ _ _) _ _ _ ] => econstructor 1; eauto
-      | [ |- action_matches (Output _ _ _ _) _ _ _ ] => econstructor 2; eauto
-      end.
+    repeat (
+        match goal with
+        | [ H : step_user (Action _) _ _ _ |- _ ] =>
+          eapply invert_step_label in H; eauto; split_ors; split_ex; subst; simpl
+        | [ H : action_matches _ _ _ _ |- _ ] => invert H
+        | [ H : Input _ _ _ = _ |- _ ] => invert H
+        | [ H : Output _ _ _ _ = _ |- _ ] => invert H
+        (* | [ |- action_matches (Input _ _ _) _ _ _ ] => econstructor 1; eauto *)
+        (* | [ |- action_matches (Output _ _ _ _) _ _ _ ] => econstructor 2; eauto *)
+        end || solve_action_matches1).
   
   induction 1; inversion 1; inversion 1; intros; subst;
-    try discriminate;
-    try solve [ action_matches_solver; eauto 8 ].
+    try discriminate.
 
-  - invert H30.
-    invert H36.
-    eapply IHstep_user in H8; eauto.
+  invert H30.
+  invert H36.
+  eapply IHstep_user in H8; eauto.
 
-  - (* Recv drop, update to receive nonces if signed -- not allowed by commutation rules right now *)
-    invert H39; unfold commutes in *; contradiction.
+  all : solve [ action_matches_solver; eauto 8 using message_content_eq_addnl_key ].
 Qed.
 
 Lemma action_matches_other_user_silent_step :
@@ -2209,10 +2206,9 @@ Lemma action_matches_other_user_silent_step :
         -> step_user (Action a) (Some uid2)
                     (usrs, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
                     (usrs'', adv'', cs'', gks'', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
-        -> forall ia iu,
-            action_matches a (mkUniverse usrs adv cs gks) ia iu
-            -> action_matches a
-                             (mkUniverse (usrs' $+ (uid1, mkUserData ks1' cmd1' qmsgs1' mycs1' froms1' sents1' cur_n1')) adv' cs' gks') ia iu.
+        -> forall ia,
+            action_matches cs gks a ia 
+            -> action_matches cs' gks' a ia.
 Proof.
   intros; eapply action_matches_other_user_silent_step'
             with (cmd := cmd1) (cmd' := cmd1') (cmd1 := cmd1) (uid1 := uid1) (uid2 := uid2).
@@ -2221,13 +2217,12 @@ Proof.
   all: reflexivity || eauto.
 Qed.
 
-
-Hint Resolve
-     message_eq_user_add_nochange_cs_ks_msgs_inv
-     message_eq_user_decrypt_msg_inv
-     message_eq_user_add_addnl_cipher_inv
-     (* message_eq_user_add_addnl_key_inv  *)
-     : core.
+(* Hint Resolve *)
+(*      message_eq_user_add_nochange_cs_ks_msgs_inv *)
+(*      message_eq_user_decrypt_msg_inv *)
+(*      message_eq_user_add_addnl_cipher_inv *)
+(*      message_eq_user_add_addnl_key_inv *)
+(*      : core. *)
 
 Lemma user_step_summaries_still_good' :
   forall A B C suid lbl bd bd',
@@ -2344,7 +2339,7 @@ Lemma translate_trace_commute :
              | Action ra => exists iu' iu'' ia,
                                istepSilent^* (snd st) iu'
                                /\ IdealWorld.lstep_universe iu' (Action ia) iu''
-                               /\ action_matches ra (fst st) ia iu'
+                               /\ action_matches (fst st).(all_ciphers) (fst st).(all_keys) ra ia
                                /\ stepsi i (ru, iu'') st'
              end).
 Proof.

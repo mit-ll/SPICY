@@ -175,67 +175,67 @@ Qed.
 (*     rewrite <- H1; trivial. *)
 (* Qed. *)
 
-Lemma ch_keys_from_cipher :
-  forall A (usr usr' : RealWorld.user_data A) usr__iw honestk uid cs c_id c_id' c ch_id newk cmd' sents' cur_n',
-    cs $? c_id' = Some c
-    (* -> c_id <> c_id' *)
-    -> List.In c_id' usr.(RealWorld.c_heap)
-    -> newk = match c with
-             | (RealWorld.SigCipher _ _ _ m) => RealWorld.findKeysMessage m
-             | (RealWorld.SigEncCipher _ _ _ _ m) => RealWorld.findKeysMessage m
-             end
-    -> usr' =  {| RealWorld.key_heap := usr.(RealWorld.key_heap) $k++ newk;
-                 RealWorld.protocol := cmd';
-                 RealWorld.msg_heap := usr.(RealWorld.msg_heap);
-                 RealWorld.c_heap   := usr.(RealWorld.c_heap);
-                 RealWorld.from_nons := usr.(RealWorld.from_nons);
-                 RealWorld.sent_nons := sents';
-                 RealWorld.cur_nonce := cur_n' |}
-    -> user_perms_channel_match uid usr usr__iw honestk cs c_id ch_id
-    -> user_perms_channel_match uid usr' usr__iw honestk cs c_id ch_id.
-Proof.
-  intros.
-  invert H3; [ econstructor 1 | econstructor 2]; simpl; eauto.
+(* Lemma ch_keys_from_cipher : *)
+(*   forall A (usr usr' : RealWorld.user_data A) usr__iw honestk uid cs c_id c_id' c ch_id newk cmd' sents' cur_n', *)
+(*     cs $? c_id' = Some c *)
+(*     (* -> c_id <> c_id' *) *)
+(*     -> List.In c_id' usr.(RealWorld.c_heap) *)
+(*     -> newk = match c with *)
+(*              | (RealWorld.SigCipher _ _ _ m) => RealWorld.findKeysMessage m *)
+(*              | (RealWorld.SigEncCipher _ _ _ _ m) => RealWorld.findKeysMessage m *)
+(*              end *)
+(*     -> usr' =  {| RealWorld.key_heap := usr.(RealWorld.key_heap) $k++ newk; *)
+(*                  RealWorld.protocol := cmd'; *)
+(*                  RealWorld.msg_heap := usr.(RealWorld.msg_heap); *)
+(*                  RealWorld.c_heap   := usr.(RealWorld.c_heap); *)
+(*                  RealWorld.from_nons := usr.(RealWorld.from_nons); *)
+(*                  RealWorld.sent_nons := sents'; *)
+(*                  RealWorld.cur_nonce := cur_n' |} *)
+(*     -> user_perms_channel_match uid usr usr__iw honestk cs c_id ch_id *)
+(*     -> user_perms_channel_match uid usr' usr__iw honestk cs c_id ch_id. *)
+(* Proof. *)
+(*   intros. *)
+(*   invert H3; [ econstructor 1 | econstructor 2]; simpl; eauto. *)
 
-  all : 
-    rewrite merge_perms_assoc with (ks3 := key_perms_from_known_ciphers cs (RealWorld.c_heap usr) $0);
-    rewrite merge_perms_sym with (ks2 := key_perms_from_known_ciphers cs (RealWorld.c_heap usr) $0);
-    rewrite <- key_perms_from_known_ciphers_pull_merge;
-    erewrite <- key_perms_from_known_ciphers_idempotent_add_known_cipher with (c_id := c_id'); eauto.
-Qed.
+(*   all :  *)
+(*     rewrite merge_perms_assoc with (ks3 := key_perms_from_known_ciphers cs (RealWorld.c_heap usr) $0); *)
+(*     rewrite merge_perms_sym with (ks2 := key_perms_from_known_ciphers cs (RealWorld.c_heap usr) $0); *)
+(*     rewrite <- key_perms_from_known_ciphers_pull_merge; *)
+(*     erewrite <- key_perms_from_known_ciphers_idempotent_add_known_cipher with (c_id := c_id'); eauto. *)
+(* Qed. *)
 
-Lemma ch_keys_from_cipher_inv :
-  forall A (usr usr' : RealWorld.user_data A) usr__iw honestk cs uid c_id c_id' c ch_id newk cmd' sents' cur_n',
-    cs $? c_id' = Some c
-    -> List.In c_id' usr.(RealWorld.c_heap)
-    -> newk = match c with
-             | (RealWorld.SigCipher _ _ _ m) => RealWorld.findKeysMessage m
-             | (RealWorld.SigEncCipher _ _ _ _ m) => RealWorld.findKeysMessage m
-             end
-    -> usr' =  {| RealWorld.key_heap := usr.(RealWorld.key_heap) $k++ newk;
-                 RealWorld.protocol := cmd';
-                 RealWorld.msg_heap := usr.(RealWorld.msg_heap);
-                 RealWorld.c_heap   := usr.(RealWorld.c_heap);
-                 RealWorld.from_nons := usr.(RealWorld.from_nons);
-                 RealWorld.sent_nons := sents';
-                 RealWorld.cur_nonce := cur_n' |}
-    -> user_perms_channel_match uid usr' usr__iw honestk cs c_id ch_id
-    -> user_perms_channel_match uid usr usr__iw honestk cs c_id ch_id.
-Proof.
-  intros.
-  invert H3; [ econstructor 1 | econstructor 2]; simpl in *; eauto; simpl in *.
+(* Lemma ch_keys_from_cipher_inv : *)
+(*   forall A (usr usr' : RealWorld.user_data A) usr__iw honestk cs uid c_id c_id' c ch_id newk cmd' sents' cur_n', *)
+(*     cs $? c_id' = Some c *)
+(*     -> List.In c_id' usr.(RealWorld.c_heap) *)
+(*     -> newk = match c with *)
+(*              | (RealWorld.SigCipher _ _ _ m) => RealWorld.findKeysMessage m *)
+(*              | (RealWorld.SigEncCipher _ _ _ _ m) => RealWorld.findKeysMessage m *)
+(*              end *)
+(*     -> usr' =  {| RealWorld.key_heap := usr.(RealWorld.key_heap) $k++ newk; *)
+(*                  RealWorld.protocol := cmd'; *)
+(*                  RealWorld.msg_heap := usr.(RealWorld.msg_heap); *)
+(*                  RealWorld.c_heap   := usr.(RealWorld.c_heap); *)
+(*                  RealWorld.from_nons := usr.(RealWorld.from_nons); *)
+(*                  RealWorld.sent_nons := sents'; *)
+(*                  RealWorld.cur_nonce := cur_n' |} *)
+(*     -> user_perms_channel_match uid usr' usr__iw honestk cs c_id ch_id *)
+(*     -> user_perms_channel_match uid usr usr__iw honestk cs c_id ch_id. *)
+(* Proof. *)
+(*   intros. *)
+(*   invert H3; [ econstructor 1 | econstructor 2]; simpl in *; eauto; simpl in *. *)
 
-  all : 
-    rewrite merge_perms_assoc with (ks3 := key_perms_from_known_ciphers cs (RealWorld.c_heap usr) $0) in H10;
-    rewrite merge_perms_sym with (ks2 := key_perms_from_known_ciphers cs (RealWorld.c_heap usr) $0) in H10;
-    rewrite <- key_perms_from_known_ciphers_pull_merge in H10;
-    erewrite <- key_perms_from_known_ciphers_idempotent_add_known_cipher with (c_id := c_id') in H10; eauto.
+(*   all :  *)
+(*     rewrite merge_perms_assoc with (ks3 := key_perms_from_known_ciphers cs (RealWorld.c_heap usr) $0) in H10; *)
+(*     rewrite merge_perms_sym with (ks2 := key_perms_from_known_ciphers cs (RealWorld.c_heap usr) $0) in H10; *)
+(*     rewrite <- key_perms_from_known_ciphers_pull_merge in H10; *)
+(*     erewrite <- key_perms_from_known_ciphers_idempotent_add_known_cipher with (c_id := c_id') in H10; eauto. *)
 
-  rewrite merge_perms_assoc with (ks3 := key_perms_from_known_ciphers cs (RealWorld.c_heap usr) $0) in H11;
-    rewrite merge_perms_sym with (ks2 := key_perms_from_known_ciphers cs (RealWorld.c_heap usr) $0) in H11;
-    rewrite <- key_perms_from_known_ciphers_pull_merge in H11;
-    erewrite <- key_perms_from_known_ciphers_idempotent_add_known_cipher with (c_id := c_id') in H11; eauto.
-Qed.
+(*   rewrite merge_perms_assoc with (ks3 := key_perms_from_known_ciphers cs (RealWorld.c_heap usr) $0) in H11; *)
+(*     rewrite merge_perms_sym with (ks2 := key_perms_from_known_ciphers cs (RealWorld.c_heap usr) $0) in H11; *)
+(*     rewrite <- key_perms_from_known_ciphers_pull_merge in H11; *)
+(*     erewrite <- key_perms_from_known_ciphers_idempotent_add_known_cipher with (c_id := c_id') in H11; eauto. *)
+(* Qed. *)
 
 (* Lemma ch_keys_from_msg : *)
 (*   forall A (usr usr' : RealWorld.user_data A) t (msg : RealWorld.crypto t) usr__iw cs honestk newk uid c_id ch_id, *)

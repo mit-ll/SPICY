@@ -350,6 +350,72 @@ Proof.
   eapply user_step_label_deterministic in H9; eauto.
 Qed.
 
+Lemma action_matches_addnl_cipher_inp :
+  forall cs cid c gks ia t c_id c' pat froms,
+    ~ In cid cs
+    -> cs $? c_id = Some c'
+    -> action_matches (cs $+ (cid,c)) gks (Input (@SignedCiphertext t c_id) pat froms) ia
+    -> action_matches cs gks (Input (@SignedCiphertext t c_id) pat froms) ia.
+Proof.
+  intros * NIN CS AM;
+    invert AM;
+    destruct (cid ==n cid0); subst;
+      match goal with
+      | [ H : SignedCiphertext _ = SignedCiphertext _ |- _ ] => invert H
+      end;
+      clean_map_lookups;
+      [ econstructor 1 | econstructor 2];
+      eauto.
+Qed.
+
+Lemma action_matches_addnl_cipher_out :
+  forall cs cid c gks ia t c_id c' to from sents,
+    ~ In cid cs
+    -> cs $? c_id = Some c'
+    -> action_matches (cs $+ (cid,c)) gks (Output (@SignedCiphertext t c_id) to from sents) ia
+    -> action_matches cs gks (Output (@SignedCiphertext t c_id) to from sents) ia.
+Proof.
+  intros * NIN CS AM;
+    invert AM;
+    destruct (cid ==n cid0); subst;
+      match goal with
+      | [ H : SignedCiphertext _ = SignedCiphertext _ |- _ ] => invert H
+      end;
+      clean_map_lookups;
+      [ econstructor 3 | econstructor 4];
+      eauto.
+Qed.
+
+(* Lemma action_matches_addnl_key : *)
+(*   forall cs gks kid k ia t (msg : crypto t) pat froms, *)
+(*     ~ In kid gks *)
+(*     -> match msg with *)
+(*       | Content _ => False *)
+(*       | SignedCiphertext cid =>  *)
+(*     -> (forall kid' kp, findKeysCrypto cs msg $? kid' = Some kp -> gks $? kid' <> None) *)
+(*     -> action_matches cs (gks $+ (kid,k)) (Input msg pat froms) ia *)
+(*     -> action_matches cs gks (Input msg pat froms) ia. *)
+(* Proof. *)
+(*   intros * NIN FIND AM; *)
+(*     invert AM; *)
+(*     unfold findKeysCrypto in FIND; *)
+(*     context_map_rewrites. *)
+
+(*   eapply InpSig; eauto using message_content_eq_addnl_key_inv. *)
+(*   eapply InpEnc; eauto using message_content_eq_addnl_key_inv. *)
+
+
+  
+(*     destruct (kid ==n kid0); subst; *)
+(*       match goal with *)
+(*       | [ H : SignedCiphertext _ = SignedCiphertext _ |- _ ] => invert H *)
+(*       end; *)
+(*       clean_map_lookups; *)
+(*       [ econstructor 1 | econstructor 2]; *)
+(*       eauto. *)
+(* Qed. *)
+
+
 Lemma no_model_step_other_user_silent_step' :
   forall t t__hon t__adv suid lbl bd bd',
 
@@ -408,8 +474,8 @@ Proof.
         | Silent => econstructor 1
         | Action _ => econstructor 2
         end; unfold build_data_step, buildUniverse; simpl; eauto
-      | [ H : action_matches _ _ _ _ |- action_matches _ _ _ _ ] =>
-        solve [ invert H; [ econstructor 1 | econstructor 2 ]; eauto 3 ]
+      (* | [ H : action_matches ?a _ _ _ |- action_matches ?a _ _ _ ] => *)
+      (*   solve [ invert H; [ econstructor 1 | econstructor 2 | econstructor 3 | econstructor 4 ]; eauto 3 ] *)
       end.
 
   intros * STEP;
@@ -420,175 +486,188 @@ Proof.
         solve_model_step_block STEP.
 
   - destruct userData; simpl in *.
-    invert H8; [ econstructor 1 | econstructor 2 ]; eauto 3.
+    destruct ra.
+    
+    + eapply input_action_msg_queue in H45; eauto; split_ex; subst.
+      msg_queue_prop.
+      generalize (H39 _ _ _ H44 eq_refl); intro; split_ex; simpl in *.
+      eapply syntactically_safe_na in H7; eauto; split_ex.
+      assert (msg_pattern_safe (findUserKeys usrs') x0)
+        by (unfold typingcontext_sound in *; split_ex; invert H7; process_ctx; eauto).
+      assert (msg_honestly_signed (findUserKeys usrs') cs0 msg0 = true) by eauto.
+      unfold msg_honestly_signed, msg_signing_key in H18;
+        destruct msg0;
+        try discriminate;
+        cases (cs0 $? c_id0);
+        try discriminate;
+        destruct c;
+        eauto using action_matches_addnl_cipher_inp.
+    + eapply output_action_msg_queue in H45; eauto; split_ex; subst.
+      generalize (H39 _ _ _ H44 eq_refl); intro; split_ex; simpl in *.
+      eapply syntactically_safe_na in H7; eauto; split_ex.
+      unfold typingcontext_sound in *; split_ex; invert H7; process_ctx.
+      eauto using action_matches_addnl_cipher_out.
+
+  - destruct userData; simpl in *.
+    destruct ra.
+    
+    + eapply input_action_msg_queue in H43; eauto; split_ex; subst.
+      msg_queue_prop.
+      generalize (H37 _ _ _ H42 eq_refl); intro; split_ex; simpl in *.
+      eapply syntactically_safe_na in H5; eauto; split_ex.
+      assert (msg_pattern_safe (findUserKeys usrs') x0)
+        by (unfold typingcontext_sound in *; split_ex; invert H5; process_ctx; eauto).
+      assert (msg_honestly_signed (findUserKeys usrs') cs0 msg0 = true) by eauto.
+      unfold msg_honestly_signed, msg_signing_key in H16;
+        destruct msg0;
+        try discriminate;
+        cases (cs0 $? c_id0);
+        try discriminate;
+        destruct c;
+        eauto using action_matches_addnl_cipher_inp.
+    + eapply output_action_msg_queue in H43; eauto; split_ex; subst.
+      generalize (H37 _ _ _ H42 eq_refl); intro; split_ex; simpl in *.
+      eapply syntactically_safe_na in H5; eauto; split_ex.
+      unfold typingcontext_sound in *; split_ex; invert H5; process_ctx.
+      eauto using action_matches_addnl_cipher_out.
+
+  - destruct userData, ra; simpl in *.
+
+    Import ProtocolAutomation.
+    Import SimulationAutomation.
+
     + eapply input_action_msg_queue in H39; eauto; split_ex; subst.
       msg_queue_prop.
+      generalize (H33 _ _ _ H38 eq_refl); intro; split_ex; simpl in *.
+      eapply syntactically_safe_na in H2; eauto; split_ex.
+      assert (msg_pattern_safe (findUserKeys usrs') x0)
+        by (unfold typingcontext_sound in *; split_ex; invert H2; process_ctx; eauto).
+      assert (msg_honestly_signed (findUserKeys usrs') cs' msg = true) by eauto.
 
-      invert H13; [ econstructor 1 | econstructor 2 ]; simpl in *; eauto;
-        intros;
-        autorewrite with find_user_keys in *; eauto;
-          specialize (H21 u); destruct (u ==n uid); subst; clean_map_lookups; eauto.
+      unfold msg_honestly_signed, msg_signing_key in H13.
+      invert H8;
+        clean_map_lookups;
+        encrypted_ciphers_prop;
+        eauto using message_content_eq_addnl_key_inv;
+        keys_and_permissions_prop.
 
-      * eapply H21 in H10; swap 1 2; eauto.
-        invert H10; [ econstructor 1 | econstructor 2 ]; simpl; eauto; simpl in *; eauto; clean_map_lookups.
+      eapply InpEnc; eauto;
+        repeat 
+          match goal with
+          | [ |- content_eq _ _ _ ] =>
+            eapply message_content_eq_addnl_key_inv; eauto; intros
+          | [ H : (forall _ _, findKeysMessage ?msg $? _ = Some _ -> _), ARG : findKeysMessage ?msg $? _ = Some _ |- _ ] =>
+            eapply H in ARG; split_ex
+          | [ PHG : permission_heap_good ?gks ?honk, LK : ?honk $? ?k = Some _ |- ?gks $? ?k <> None ] =>
+            let GKS := fresh "GKS" in
+            unfold not; intros GKS; eapply PHG in LK; split_ex; clean_map_lookups
+          end.
 
-      * eapply H21 in H10; swap 1 2; eauto.
-        invert H10; [ econstructor 1 | econstructor 2 ]; simpl; eauto; simpl in *; eauto; clean_map_lookups.
-        
-      (*   invert H12; encrypted_ciphers_prop. *)
-
-      (*   pose proof (clean_messages_cons_split cs' (findUserKeys usrs') uid froms0 qmsgs'0 _ _ msg eq_refl); split_ors; split_ex. *)
-      (*   admit. *)
-      (*   subst. *)
-      (*   erewrite unpack_keyperms by eauto. *)
-      (*   unfold not_replayed in H13; repeat rewrite andb_true_iff in H13; split_ex. *)
-      (*   assert (MSA : msg_signed_addressed (findUserKeys usrs') cs' (Some uid) (@SignedCiphertext t0 x3) = true). *)
-      (*   unfold msg_signed_addressed; rewrite H13, H22; trivial. *)
-      (*   rewrite MSA in H20. *)
-      (*   unfold msg_to_this_user, msg_destination_user in H22; *)
-      (*     unfold updateTrackedNonce in H20; *)
-      (*     context_map_rewrites. *)
-      (*   destruct (uid ==n cipher_to_user x4); *)
-      (*     destruct (cipher_to_user x4 ==n uid); *)
-      (*     subst; try discriminate; try contradiction. *)
-      (*   unfold msg_nonce_ok in H14; context_map_rewrites. *)
-      (*   cases (count_occ msg_seq_eq froms0 (cipher_nonce x4)); try discriminate. *)
-
-      (*   admit. *)
-
-      (* * admit. *)
-
-    + eapply output_action_msg_queue in H39; eauto 3; split_ex; subst.
-      specialize (H33 _ _ _ H38 eq_refl); split_ex; simpl in *.
-      eapply syntactically_safe_na in H1; eauto.
-      unfold typingcontext_sound in *; split_ex.
-      invert H1; process_ctx.
-      assert (forall cid, @msg_cipher_id t1 (SignedCiphertext x3) = Some cid -> cs' $? cid <> None).
-      unfold not; intros * MCID XX; invert MCID; clean_map_lookups.
-
-      invert H12; [ econstructor 1 | econstructor 2 ]; simpl in *; eauto;
-        intros;
-        autorewrite with find_user_keys in *; eauto;
-          specialize (H33 u); destruct (u ==n uid); subst; clean_map_lookups; eauto.
-
-      * eapply H33 in H14; swap 1 2; eauto.
-        invert H14; [ econstructor 1 | econstructor 2 ]; simpl; eauto; simpl in *; eauto; clean_map_lookups.
-      * eapply H33 in H14; swap 1 2; eauto.
-        invert H14; [ econstructor 1 | econstructor 2 ]; simpl; eauto; simpl in *; eauto; clean_map_lookups.
-
-  - destruct userData; simpl in *;
-      match goal with
-      | [ H : action_matches _ _ _ _ |- _ ] =>
-        invert H; [ econstructor 1 | econstructor 2 ]; eauto 3
-      end.
-
-    eapply input_action_msg_queue in H45; eauto 2; split_ex; subst.
-    msg_queue_prop.
-    eapply message_eq_user_add_addnl_cipher_inv in H18; eauto.
-
-    eapply output_action_msg_queue in H45; eauto 2; split_ex; subst.
-    specialize (H39 _ _ _ H44 eq_refl); split_ex; simpl in *.
-    eapply syntactically_safe_na in H7; eauto 3.
-    split_ex.
-    unfold typingcontext_sound in *; split_ex; invert H7; process_ctx.
-    eapply message_eq_user_add_addnl_cipher_inv in H17; eauto; intros; simpl in *; clean_context; clean_map_lookups.
-
-  - destruct userData; simpl in *;
-      match goal with
-      | [ H : action_matches _ _ _ _ |- _ ] =>
-        invert H; [ econstructor 1 | econstructor 2 ]; eauto 3
-      end.
-
-    eapply input_action_msg_queue in H43; eauto 2; split_ex; subst.
-    msg_queue_prop.
-    eapply message_eq_user_add_addnl_cipher_inv in H16; eauto.
-
-    eapply output_action_msg_queue in H43; eauto 2; split_ex; subst.
-    specialize (H37 _ _ _ H42 eq_refl); split_ex; simpl in *.
-    eapply syntactically_safe_na in H5; eauto 3.
-    split_ex.
-    unfold typingcontext_sound in *; split_ex; invert H5; process_ctx.
-    eapply message_eq_user_add_addnl_cipher_inv in H15; eauto; intros; simpl in *; clean_context; clean_map_lookups.
-
-  (* - destruct userData; simpl in *; *)
-  (*     match goal with *)
-  (*     | [ H : action_matches _ _ _ _ |- _ ] => *)
-  (*       invert H; [ econstructor 1 | econstructor 2 ]; eauto 3 *)
-  (*     end. *)
-
-  (*   eapply input_action_msg_queue in H35; eauto 2; split_ex; subst. *)
-  (*   msg_queue_prop. *)
-  (*   eapply message_eq_user_add_addnl_cipher_inv in H13; eauto. *)
-
-  (*   eapply output_action_msg_queue in H41; eauto 2; split_ex; subst. *)
-  (*   specialize (H38 _ _ _ H40 eq_refl); split_ex; simpl in *. *)
-  (*   eapply syntactically_safe_na in H7; eauto 3. *)
-  (*   split_ex. *)
-  (*   unfold typingcontext_sound in *; split_ex; invert H7; process_ctx. *)
-  (*   eapply message_eq_user_add_addnl_cipher_inv in H17; eauto; intros; simpl in *; clean_context; clean_map_lookups. *)
-
-
-  (*   admit. *)
-  (*   admit. (*Sign *)  *)
-
-  - destruct userData; simpl in *;
-      repeat 
-        match goal with
-        | [ H : action_matches _ _ _ _ |- _ ] =>
-          invert H; [ econstructor 1 | econstructor 2 ]; eauto 3
-        | [ H1 : step_user (Action ?a) ?suid (?usrs,_,_,_,_,_,_,_,_,_,_) _
-                 , H2 : step_user (Action ?a) ?suid (?usrs $+ (_,_),_,_,_,_,_,_,_,_,_,_) _ |- _ ] =>
-          match a with
-          | Input _ _ _    => eapply input_action_msg_queue in H1
-          | Output _ _ _ _ => eapply output_action_msg_queue in H1
-          end; eauto 2; split_ex; subst
-        end.
-
-    + specialize (H33 _ _ _ H38 eq_refl); split_ex; simpl in *.
-      eapply syntactically_safe_na in H2; eauto 3; split_ex.
-      msg_queue_prop.
-      rename x0 into pat.
-      assert (msg_pattern_safe (findUserKeys usrs') pat)
-        by (unfold typingcontext_sound in *; invert H2; split_ex; eauto).
-
-      eapply message_eq_user_add_addnl_key_inv in H13; eauto 3.
-
-    + specialize (H33 _ _ _ H38 eq_refl); split_ex; simpl in *.
-      eapply syntactically_safe_na in H2; eauto 3; split_ex.
+    + eapply output_action_msg_queue in H39; eauto; split_ex; subst.
+      generalize (H33 _ _ _ H38 eq_refl); intro; split_ex; simpl in *.
+      eapply syntactically_safe_na in H2; eauto; split_ex.
       unfold typingcontext_sound in *; split_ex; invert H2; process_ctx.
 
-      eapply message_eq_user_add_addnl_key_inv in H12; eauto 3.
-      unfold msg_honestly_signed, msg_signing_key, honest_keyb; context_map_rewrites; trivial.
+      invert H8;
+        clean_map_lookups;
+        encrypted_ciphers_prop;
+        eauto using message_content_eq_addnl_key_inv;
+        keys_and_permissions_prop;
+        invert H14;
+        clean_map_lookups.
 
-  - destruct userData; simpl in *;
-      repeat 
-        match goal with
-        | [ H : action_matches _ _ _ _ |- _ ] =>
-          invert H; [ econstructor 1 | econstructor 2 ]; eauto 3
-        | [ H1 : step_user (Action ?a) ?suid (?usrs,_,_,_,_,_,_,_,_,_,_) _
-                 , H2 : step_user (Action ?a) ?suid (?usrs $+ (_,_),_,_,_,_,_,_,_,_,_,_) _ |- _ ] =>
-          match a with
-          | Input _ _ _    => eapply input_action_msg_queue in H1
-          | Output _ _ _ _ => eapply output_action_msg_queue in H1
-          end; eauto 2; split_ex; subst
-        end.
+      eapply OutSig; eauto;
+        repeat 
+          match goal with
+          | [ |- content_eq _ _ _ ] =>
+            eapply message_content_eq_addnl_key_inv; eauto; intros
+          | [ H : (forall _ _, findKeysMessage ?msg $? _ = Some _ -> _), ARG : findKeysMessage ?msg $? _ = Some _ |- _ ] =>
+            eapply H in ARG; split_ex
+          | [ PHG : permission_heap_good ?gks ?honk, LK : ?honk $? ?k = Some _ |- ?gks $? ?k <> None ] =>
+            let GKS := fresh "GKS" in
+            unfold not; intros GKS; eapply PHG in LK; split_ex; clean_map_lookups
+          end.
 
-    + specialize (H33 _ _ _ H38 eq_refl); split_ex; simpl in *.
-      eapply syntactically_safe_na in H2; eauto 3; split_ex.
+      eapply OutEnc; eauto;
+        repeat 
+          match goal with
+          | [ |- content_eq _ _ _ ] =>
+            eapply message_content_eq_addnl_key_inv; eauto; intros
+          | [ H : (forall _ _, findKeysMessage ?msg $? _ = Some _ -> _), ARG : findKeysMessage ?msg $? _ = Some _ |- _ ] =>
+            eapply H in ARG; split_ex
+          | [ PHG : permission_heap_good ?gks ?honk, LK : ?honk $? ?k = Some _ |- ?gks $? ?k <> None ] =>
+            let GKS := fresh "GKS" in
+            unfold not; intros GKS; eapply PHG in LK; split_ex; clean_map_lookups
+          end.
+    
+  - destruct userData, ra; simpl in *.
+
+    Import ProtocolAutomation.
+    Import SimulationAutomation.
+
+    + eapply input_action_msg_queue in H39; eauto; split_ex; subst.
       msg_queue_prop.
-      rename x0 into pat.
-      assert (msg_pattern_safe (findUserKeys usrs') pat)
-        by (unfold typingcontext_sound in *; invert H2; split_ex; eauto).
+      generalize (H33 _ _ _ H38 eq_refl); intro; split_ex; simpl in *.
+      eapply syntactically_safe_na in H2; eauto; split_ex.
+      assert (msg_pattern_safe (findUserKeys usrs') x0)
+        by (unfold typingcontext_sound in *; split_ex; invert H2; process_ctx; eauto).
+      assert (msg_honestly_signed (findUserKeys usrs') cs' msg = true) by eauto.
 
-      eapply message_eq_user_add_addnl_key_inv in H13; eauto 3.
+      unfold msg_honestly_signed, msg_signing_key in H13.
+      invert H8;
+        clean_map_lookups;
+        encrypted_ciphers_prop;
+        eauto using message_content_eq_addnl_key_inv;
+        keys_and_permissions_prop.
 
-    + specialize (H33 _ _ _ H38 eq_refl); split_ex; simpl in *.
-      eapply syntactically_safe_na in H2; eauto 3; split_ex.
+      eapply InpEnc; eauto;
+        repeat 
+          match goal with
+          | [ |- content_eq _ _ _ ] =>
+            eapply message_content_eq_addnl_key_inv; eauto; intros
+          | [ H : (forall _ _, findKeysMessage ?msg $? _ = Some _ -> _), ARG : findKeysMessage ?msg $? _ = Some _ |- _ ] =>
+            eapply H in ARG; split_ex
+          | [ PHG : permission_heap_good ?gks ?honk, LK : ?honk $? ?k = Some _ |- ?gks $? ?k <> None ] =>
+            let GKS := fresh "GKS" in
+            unfold not; intros GKS; eapply PHG in LK; split_ex; clean_map_lookups
+          end.
+
+    + eapply output_action_msg_queue in H39; eauto; split_ex; subst.
+      generalize (H33 _ _ _ H38 eq_refl); intro; split_ex; simpl in *.
+      eapply syntactically_safe_na in H2; eauto; split_ex.
       unfold typingcontext_sound in *; split_ex; invert H2; process_ctx.
 
-      eapply message_eq_user_add_addnl_key_inv in H12; eauto 3.
-      unfold msg_honestly_signed, msg_signing_key, honest_keyb; context_map_rewrites; trivial.
+      invert H8;
+        clean_map_lookups;
+        encrypted_ciphers_prop;
+        eauto using message_content_eq_addnl_key_inv;
+        keys_and_permissions_prop;
+        invert H14;
+        clean_map_lookups.
 
+      eapply OutSig; eauto;
+        repeat 
+          match goal with
+          | [ |- content_eq _ _ _ ] =>
+            eapply message_content_eq_addnl_key_inv; eauto; intros
+          | [ H : (forall _ _, findKeysMessage ?msg $? _ = Some _ -> _), ARG : findKeysMessage ?msg $? _ = Some _ |- _ ] =>
+            eapply H in ARG; split_ex
+          | [ PHG : permission_heap_good ?gks ?honk, LK : ?honk $? ?k = Some _ |- ?gks $? ?k <> None ] =>
+            let GKS := fresh "GKS" in
+            unfold not; intros GKS; eapply PHG in LK; split_ex; clean_map_lookups
+          end.
+
+      eapply OutEnc; eauto;
+        repeat 
+          match goal with
+          | [ |- content_eq _ _ _ ] =>
+            eapply message_content_eq_addnl_key_inv; eauto; intros
+          | [ H : (forall _ _, findKeysMessage ?msg $? _ = Some _ -> _), ARG : findKeysMessage ?msg $? _ = Some _ |- _ ] =>
+            eapply H in ARG; split_ex
+          | [ PHG : permission_heap_good ?gks ?honk, LK : ?honk $? ?k = Some _ |- ?gks $? ?k <> None ] =>
+            let GKS := fresh "GKS" in
+            unfold not; intros GKS; eapply PHG in LK; split_ex; clean_map_lookups
+          end.
 Qed.
 
 Lemma no_model_step_other_user_silent_step :
@@ -615,6 +694,23 @@ Proof.
     eapply no_model_step_other_user_silent_step' with (uid := uid) (uid' := uid'); try reflexivity; simpl; eauto; simpl.
 Qed.
 
+Notation "p1 @@ p2" := (IdealWorld.construct_permission p1 p2) (left associativity, at level 20).
+
+Section IdealWorldLemmas.
+  Import IdealWorld.
+
+  Inductive perm_ge : permission -> permission -> Prop :=
+  | Owner : forall p,
+      perm_ge (true @@ true) p
+  | None : forall p,
+      perm_ge p (false @@ false)
+  | Same : forall b1 b2,
+      b1 <> b2
+      -> perm_ge (b1 @@ b2) (b1 @@ b2)
+  .
+
+End IdealWorldLemmas.
+
 Lemma no_model_step_other_user_labeled_step :
   forall t t__hon t__adv suid lbl bd bd',
 
@@ -631,11 +727,12 @@ Lemma no_model_step_other_user_labeled_step :
       -> forall cmdc, usrs $? uid = Some (mkUserData ks cmdc qmsgs mycs froms sents n)
       -> forall ud', usrs $? uid' = Some ud'
       -> forall lbl' bd'', step_user lbl' (Some uid') (build_data_step (mkUniverse usrs adv cs gks) ud') bd''
+      (* arguments to fill out label alignment for uid step above *)                                  
       -> (istepSilent) ^* iu iu'
       -> IdealWorld.lstep_universe iu' (Action ia) iu''
-      -> action_matches ra (mkUniverse usrs adv cs gks) ia iu'
+      -> action_matches cs gks ra ia
       -> uid <> uid'
-      -> forall cmdc ,
+      -> forall cmdc,
         (forall st', model_step_user
                   uid' 
                   (mkUniverse usrs adv cs gks, iu)
@@ -664,17 +761,90 @@ Proof.
         autorewrite with find_user_keys in *; eauto;
           specialize (H15 u); destruct (u ==n uid); subst; clean_map_lookups; eauto 8.
 
+      (* including message heap keys helps here 
+       * still worried aobut progression of ideal world, though
+       *)
       admit.
       admit.
       admit.
       admit.
 
-    + admit.
+    + econstructor 2; eauto.
+      assert (ia = IdealWorld.Output m__iw ch_id cs1 ps) by admit; eauto.
 
-  - solve_model_step_block STEP; simpl in *.
-    destruct (rec_u_id ==n uid'); subst; clean_map_lookups; solve_model_step_block STEP; simpl in *.
-    admit.
+      invert H12; [ econstructor 1 | econstructor 2 ]; simpl in *; eauto;
+        intros;
+        autorewrite with find_user_keys in *; eauto;
+          specialize (H14 u); destruct (u ==n uid); subst; clean_map_lookups; eauto 8.
+
+      (* including message heap keys helps here 
+       * still worried aobut progression of ideal world, though
+       *)
+      admit.
+      admit.
+      admit.
+      admit.
+
+  - destruct (rec_u_id ==n uid'); subst; clean_map_lookups;
+      solve_model_step_block STEP; simpl in *.
+
+    + dt bd'';
+        destruct ud';
+        simpl in *.
+
+      assert (lbl' = Silent) by 
+          (clean_map_lookups;
+           eapply (user_step_label_deterministic' _ _ _ _ _ _ _ STEP);
+           eauto; unfold build_data_step; simpl; eauto); subst.
       
+      eapply H40; econstructor 1; unfold build_data_step, buildUniverse; simpl; eauto; simpl.
+
+    + dt bd'';
+        destruct ud';
+        simpl in *.
+
+      assert (lbl' = Action ra) by 
+          (clean_map_lookups;
+           eapply (user_step_label_deterministic' _ _ _ _ _ _ _ STEP);
+           eauto; unfold build_data_step; simpl; eauto); subst.
+      
+      eapply H40; econstructor 2; unfold build_data_step, buildUniverse; simpl; eauto; simpl.
+
+      invert H11.
+      * econstructor 1; eauto.
+        assert (ia = IdealWorld.Input m__iw ch_id cs1 ps) by admit; eauto.
+        admit.
+        
+        invert H16; [ econstructor 1 | econstructor 2 ]; simpl in *; eauto;
+          intros;
+          autorewrite with find_user_keys in *; eauto;
+            specialize (H18 u); destruct (u ==n uid); subst; clean_map_lookups; eauto 8.
+
+        all: admit.
+
+      * admit.
+
+    + dt bd'';
+        destruct userData;
+        simpl in *.
+
+      assert (lbl' = Silent) by
+          ( clean_map_lookups;
+            eapply (user_step_label_deterministic' _ _ _ _ _ _ _ STEP) with (uid' := uid');
+            eauto; unfold build_data_step; simpl; eauto); subst.
+      
+      eapply H40; econstructor 1; unfold build_data_step, buildUniverse; simpl; eauto; simpl.
+
+    + dt bd'';
+        destruct userData;
+        simpl in *.
+
+      assert (lbl' = Action ra) by
+          ( clean_map_lookups;
+            eapply (user_step_label_deterministic' _ _ _ _ _ _ _ STEP) with (uid' := uid');
+            eauto; unfold build_data_step; simpl; eauto); subst.
+
+      eapply H40; econstructor 2; unfold build_data_step, buildUniverse; simpl; eauto; simpl.
       
 Admitted.
 

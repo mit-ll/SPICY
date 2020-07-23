@@ -166,7 +166,15 @@ Inductive screen_msg : forall A, permissions -> message A -> Prop :=
 Fixpoint add_ps_to_set {A} (m : message A) (ps : permissions) : permissions :=
   match m with
   | Content _ => ps
-  | Permission p => ps $+ (p.(ch_id), p.(ch_perm))
+  | Permission (construct_access (construct_permission r w) ch)  =>
+    (* permissions should only increase *)
+    match ps $? ch with
+    | None => ps $+ (ch, construct_permission r w)
+    | Some (construct_permission r' w') =>
+      let r'' := if r then r else r' in
+      let w'' := if w then w else w' in
+      ps $+ (ch, construct_permission r'' w'')
+    end
   | MsgPair m1 m2 => add_ps_to_set m1 (add_ps_to_set m2 ps)
   end.
 

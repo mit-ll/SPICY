@@ -175,7 +175,7 @@ Inductive step (t__hon t__adv : type) :
     RealWorld.step_universe ru (Action ra) ru'
     -> istepSilent^* iu iu'
     -> IdealWorld.lstep_universe iu' (Action ia) iu''
-    -> action_matches ra ru ia iu'
+    -> action_matches ru.(RealWorld.all_ciphers) ru.(RealWorld.all_keys) ra ia
     -> step (ru, iu) (ru', iu'').
 
 Definition lift_fst {A B C} (f : A -> C) : (A * B) -> C :=
@@ -192,7 +192,7 @@ Definition labels_align {t__hon t__adv} (st : RealWorld.universe t__hon t__adv *
       -> exists ia iu' iu'',
         (istepSilent)^* iu iu'
         /\ IdealWorld.lstep_universe iu' (Action ia) iu''
-        /\ action_matches ra ru ia iu'.
+        /\ action_matches ru.(RealWorld.all_ciphers) ru.(RealWorld.all_keys) ra ia.
 
 Definition S {t__hon t__adv} (ru0 : RealWorld.universe t__hon t__adv) (iu0 : IdealWorld.universe t__hon) :=
   {| Initial := {(ru0, iu0)};
@@ -520,34 +520,34 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
     
   Qed.
 
-  Lemma message_eq_adv_change :
-    forall {t t1 t2} (m__rw : crypto t) (m__iw : IdealWorld.message.message t)
-      (U U' : RealWorld.universe t1 t2) (U__i : IdealWorld.universe t1) ch_id,
-      message_eq m__rw U m__iw U__i ch_id
-      -> users U = users U'
-      -> all_ciphers U = all_ciphers U'
-      -> all_keys U = all_keys U'
-      -> message_eq m__rw U' m__iw U__i ch_id.
-  Proof.
-    intros * MEQ RWU RWC RWK.
-    invert MEQ; [ econstructor 1 | econstructor 2 ]
-    ; rewrite <- ?RWU, <- ?RWC, <- ?RWK
-    ; eauto.
-  Qed.
+  (* Lemma message_eq_adv_change : *)
+  (*   forall {t t1 t2} (m__rw : crypto t) (m__iw : IdealWorld.message.message t) *)
+  (*     (U U' : RealWorld.universe t1 t2) (U__i : IdealWorld.universe t1) ch_id, *)
+  (*     message_eq m__rw U m__iw U__i ch_id *)
+  (*     -> users U = users U' *)
+  (*     -> all_ciphers U = all_ciphers U' *)
+  (*     -> all_keys U = all_keys U' *)
+  (*     -> message_eq m__rw U' m__iw U__i ch_id. *)
+  (* Proof. *)
+  (*   intros * MEQ RWU RWC RWK. *)
+  (*   invert MEQ; [ econstructor 1 | econstructor 2 ] *)
+  (*   ; rewrite <- ?RWU, <- ?RWC, <- ?RWK *)
+  (*   ; eauto. *)
+  (* Qed. *)
 
-  Hint Resolve message_eq_adv_change : safe.
+  (* Hint Resolve message_eq_adv_change : safe. *)
   Hint Constructors action_matches : safe.
   
   Lemma action_matches_adv_change :
-    forall {t1 t2} (U U' : RealWorld.universe t1 t2) (U__i : IdealWorld.universe t1) a__r a__i,
-      action_matches a__r U a__i U__i
+    forall {t1 t2} (U U' : RealWorld.universe t1 t2) a__r a__i,
+      action_matches U.(RealWorld.all_ciphers) U.(RealWorld.all_keys) a__r a__i
       -> users U = users U'
       -> all_ciphers U = all_ciphers U'
       -> all_keys U = all_keys U'
-      -> action_matches a__r U' a__i U__i.
+      -> action_matches U'.(RealWorld.all_ciphers) U'.(RealWorld.all_keys) a__r a__i.
   Proof.
     intros * AM RWU RWC RWK.
-    invert AM; eauto with safe.
+    rewrite <- RWC, <- RWK; invert AM; eauto with safe.
   Qed.
 
   Lemma simlabeled : simulates_labeled_step (lameAdv b) R.
@@ -566,15 +566,13 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
 
     split_ex.
     do 3 eexists; rewrite H4; repeat apply conj; eauto.
-    - invert H7; eauto with safe.
-      
-    - econstructor.
+    econstructor.
 
-      eapply trcEnd_trc.
-      generalize (trc_trcEnd H3); intros.
-      econstructor; eauto.
-      unfold SYS; simpl.
-      econstructor; eauto.
+    eapply trcEnd_trc.
+    generalize (trc_trcEnd H3); intros.
+    econstructor; eauto.
+    unfold SYS; simpl.
+    econstructor; eauto.
   Qed.
 
   Lemma honest_cmds_safe_adv_change :

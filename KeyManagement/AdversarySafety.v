@@ -6118,132 +6118,155 @@ Section SingleAdversarySimulates.
   (*         (clean_messages (RealWorld.findUserKeys users) all_ciphers (Some u) (RealWorld.from_nons data__rw) *)
   (*            (RealWorld.msg_heap data__rw)) *)
 
-  Lemma msg_matches_strip :
-    forall {A B t} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A)
-      (m__rw : RealWorld.crypto t) (m__iw : IdealWorld.message.message t)
-      ch_id b,
-      user_cipher_queues_ok  U__ra.(RealWorld.all_ciphers) (RealWorld.findUserKeys U__ra.(RealWorld.users)) U__ra.(RealWorld.users)
-      -> MessageEq.message_eq m__rw (strip_adversary_univ U__ra b) m__iw U__i ch_id
-      -> MessageEq.message_eq m__rw U__ra m__iw U__i ch_id.
+  (* Lemma msg_matches_strip : *)
+  (*   forall {A B t} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A) *)
+  (*     (m__rw : RealWorld.crypto t) (m__iw : IdealWorld.message.message t) *)
+  (*     ch_id b, *)
+  (*     user_cipher_queues_ok  U__ra.(RealWorld.all_ciphers) (RealWorld.findUserKeys U__ra.(RealWorld.users)) U__ra.(RealWorld.users) *)
+  (*     -> MessageEq.message_eq m__rw (strip_adversary_univ U__ra b) m__iw U__i ch_id *)
+  (*     -> MessageEq.message_eq m__rw U__ra m__iw U__i ch_id. *)
+  (* Proof. *)
+  (*   intros. *)
+  (*   destruct U__ra; unfold strip_adversary_univ in *; simpl in *. *)
+  (*   invert H0; simpl in *. *)
+      
+  (*   - generalize (clean_ciphers_inv _ _ _ H8); intros. *)
+  (*     econstructor 1; simpl; eauto using content_eq_strip_keys. *)
+
+  (*     intros. *)
+  (*     user_cipher_queues_prop. *)
+  (*     eapply clean_users_cleans_user with (cs := all_ciphers) (honestk := RealWorld.findUserKeys users) in H1; eauto. *)
+  (*     eapply H11 in H1; eauto using honest_key_is_honest_clean_key; simpl in *; clear H11. *)
+
+  (*     invert H1; clean_map_lookups; simpl in *. *)
+  (*     econstructor 1; eauto. *)
+
+  (*     rewrite key_perms_from_known_ciphers_clean_ciphers in H13; eauto. *)
+
+
+  (*     remember (clean_key_permissions (RealWorld.findUserKeys users) (RealWorld.key_heap data__rw)) as CKPS. *)
+  (*     remember (key_perms_from_known_ciphers all_ciphers (RealWorld.c_heap data__rw) $0) as KPKS. *)
+  (*     remember (key_perms_from_message_queue *)
+  (*                 (clean_ciphers (RealWorld.findUserKeys users) all_ciphers) *)
+  (*                 (RealWorld.findUserKeys (clean_users (RealWorld.findUserKeys users) all_ciphers users)) *)
+  (*                 (clean_messages (RealWorld.findUserKeys users) all_ciphers (Some u) (RealWorld.from_nons data__rw) *)
+  (*                                 (RealWorld.msg_heap data__rw)) u (RealWorld.from_nons data__rw) $0) as KPMQ. *)
+
+  (*     generalize H3; intros HK; destruct HK. *)
+
+  (*     cases (CKPS $? k__sign0); *)
+  (*       cases (KPKS $? k__sign0); *)
+  (*       cases (KPMQ $? k__sign0). *)
+
+  (*     Ltac solveit := *)
+  (*       repeat *)
+  (*         match goal with *)
+  (*         | [ Heq : ?KPMQ = _ , H : ?KPMQ $? ?k = _ |- _ ] => *)
+  (*           generalize H; intros KPMQ'; rewrite Heq in KPMQ'; apply key_perms_from_message_queue_clean_ciphers' in KPMQ'; auto *)
+  (*         | [ Heq : ?CKPS = _ , H : ?CKPS $? ?k = Some ?b |- _ ] => *)
+  (*           generalize H; intros CKPS'; rewrite Heq in CKPS'; apply clean_key_permissions_inv in CKPS' *)
+  (*         | [ Heq : ?CKPS = _ , H : ?CKPS $? ?k = None |- _ ] => *)
+  (*           generalize H; intros CKPS'; rewrite Heq in CKPS'; eapply clean_key_permissions_inv'' in CKPS'; eauto *)
+  (*         end. *)
+
+  (*     all: solveit; split_ex; *)
+  (*       match goal with *)
+  (*       | [ H : compat_perm (?ks1 $? ?k) _ |- compat_perm (?ks2 $? ?k) _ ] => *)
+  (*         assert (RW: ks1 $? k = ks2 $? k) by solve_perm_merges; rewrite <- RW; eauto *)
+  (*       end. *)
+
+  (*   - generalize (clean_ciphers_inv _ _ _ H8); intros. *)
+  (*     econstructor 2; simpl; eauto using content_eq_strip_keys. *)
+
+  (*     intros. *)
+  (*     user_cipher_queues_prop. *)
+  (*     eapply clean_users_cleans_user with (cs := all_ciphers) (honestk := RealWorld.findUserKeys users) in H1; eauto. *)
+  (*     eapply H11 in H1; eauto using honest_key_is_honest_clean_key; simpl in *; clear H11. *)
+
+  (*     invert H1; clean_map_lookups; simpl in *. *)
+  (*     rewrite key_perms_from_known_ciphers_clean_ciphers in *; eauto. *)
+
+  (*     remember (clean_key_permissions (RealWorld.findUserKeys users) (RealWorld.key_heap data__rw)) as CKPS. *)
+  (*     remember (key_perms_from_known_ciphers all_ciphers (RealWorld.c_heap data__rw) $0) as KPKS. *)
+  (*     remember (key_perms_from_message_queue *)
+  (*                 (clean_ciphers (RealWorld.findUserKeys users) all_ciphers) *)
+  (*                 (RealWorld.findUserKeys (clean_users (RealWorld.findUserKeys users) all_ciphers users)) *)
+  (*                 (clean_messages (RealWorld.findUserKeys users) all_ciphers (Some u) (RealWorld.from_nons data__rw) *)
+  (*                                 (RealWorld.msg_heap data__rw)) u (RealWorld.from_nons data__rw) $0) as KPMQ. *)
+  (*     generalize H3; intros HKS; destruct HKS. *)
+  (*     generalize H4; intros HKE; destruct HKE. *)
+      
+  (*     econstructor 2 with (k__sign := k__sign0) (k__enc := k__enc0); eauto. *)
+
+  (*     + cases (CKPS $? k__sign0); *)
+  (*         cases (KPKS $? k__sign0); *)
+  (*         cases (KPMQ $? k__sign0). *)
+
+  (*       all: solveit; split_ex; *)
+  (*         match goal with *)
+  (*         | [ H : compat_perm (?ks1 $? ?k) ?b |- compat_perm (?ks2 $? ?k) ?b ] => *)
+  (*           assert (RW: ks1 $? k = ks2 $? k) by solve_perm_merges; rewrite <- RW; eauto *)
+  (*         end. *)
+
+  (*     + cases (CKPS $? k__enc0); *)
+  (*         cases (KPKS $? k__enc0); *)
+  (*         cases (KPMQ $? k__enc0). *)
+
+  (*       all: solveit; split_ex; *)
+  (*         match goal with *)
+  (*         | [ H : compat_perm (?ks1 $? ?k) ?b |- compat_perm (?ks2 $? ?k) ?b ] => *)
+  (*           assert (RW: ks1 $? k = ks2 $? k) by solve_perm_merges; rewrite <- RW; eauto *)
+  (*         end. *)
+  (* Qed. *)
+
+  Lemma action_matches_strip :
+    forall cs gks honestk ra ia,
+      action_matches (clean_ciphers honestk cs) (clean_keys honestk gks)
+                     (strip_action honestk cs ra) ia
+      -> action_matches cs gks ra ia.
   Proof.
     intros.
-    destruct U__ra; unfold strip_adversary_univ in *; simpl in *.
-    invert H0; simpl in *.
-      
-    - generalize (clean_ciphers_inv _ _ _ H8); intros.
-      econstructor 1; simpl; eauto using content_eq_strip_keys.
+    Hint Constructors action_matches : core.
 
-      intros.
-      user_cipher_queues_prop.
-      eapply clean_users_cleans_user with (cs := all_ciphers) (honestk := RealWorld.findUserKeys users) in H1; eauto.
-      eapply H11 in H1; eauto using honest_key_is_honest_clean_key; simpl in *; clear H11.
-
-      invert H1; clean_map_lookups; simpl in *.
-      econstructor 1; eauto.
-
-      rewrite key_perms_from_known_ciphers_clean_ciphers in H13; eauto.
-
-
-      remember (clean_key_permissions (RealWorld.findUserKeys users) (RealWorld.key_heap data__rw)) as CKPS.
-      remember (key_perms_from_known_ciphers all_ciphers (RealWorld.c_heap data__rw) $0) as KPKS.
-      remember (key_perms_from_message_queue
-                  (clean_ciphers (RealWorld.findUserKeys users) all_ciphers)
-                  (RealWorld.findUserKeys (clean_users (RealWorld.findUserKeys users) all_ciphers users))
-                  (clean_messages (RealWorld.findUserKeys users) all_ciphers (Some u) (RealWorld.from_nons data__rw)
-                                  (RealWorld.msg_heap data__rw)) u (RealWorld.from_nons data__rw) $0) as KPMQ.
-
-      generalize H3; intros HK; destruct HK.
-
-      cases (CKPS $? k__sign0);
-        cases (KPKS $? k__sign0);
-        cases (KPMQ $? k__sign0).
-
-      Ltac solveit :=
-        repeat
-          match goal with
-          | [ Heq : ?KPMQ = _ , H : ?KPMQ $? ?k = _ |- _ ] =>
-            generalize H; intros KPMQ'; rewrite Heq in KPMQ'; apply key_perms_from_message_queue_clean_ciphers' in KPMQ'; auto
-          | [ Heq : ?CKPS = _ , H : ?CKPS $? ?k = Some ?b |- _ ] =>
-            generalize H; intros CKPS'; rewrite Heq in CKPS'; apply clean_key_permissions_inv in CKPS'
-          | [ Heq : ?CKPS = _ , H : ?CKPS $? ?k = None |- _ ] =>
-            generalize H; intros CKPS'; rewrite Heq in CKPS'; eapply clean_key_permissions_inv'' in CKPS'; eauto
-          end.
-
-      all: solveit; split_ex;
+    invert H;
+      repeat
         match goal with
-        | [ H : compat_perm (?ks1 $? ?k) _ |- compat_perm (?ks2 $? ?k) _ ] =>
-          assert (RW: ks1 $? k = ks2 $? k) by solve_perm_merges; rewrite <- RW; eauto
-        end.
-
-    - generalize (clean_ciphers_inv _ _ _ H8); intros.
-      econstructor 2; simpl; eauto using content_eq_strip_keys.
-
-      intros.
-      user_cipher_queues_prop.
-      eapply clean_users_cleans_user with (cs := all_ciphers) (honestk := RealWorld.findUserKeys users) in H1; eauto.
-      eapply H11 in H1; eauto using honest_key_is_honest_clean_key; simpl in *; clear H11.
-
-      invert H1; clean_map_lookups; simpl in *.
-      rewrite key_perms_from_known_ciphers_clean_ciphers in *; eauto.
-
-      remember (clean_key_permissions (RealWorld.findUserKeys users) (RealWorld.key_heap data__rw)) as CKPS.
-      remember (key_perms_from_known_ciphers all_ciphers (RealWorld.c_heap data__rw) $0) as KPKS.
-      remember (key_perms_from_message_queue
-                  (clean_ciphers (RealWorld.findUserKeys users) all_ciphers)
-                  (RealWorld.findUserKeys (clean_users (RealWorld.findUserKeys users) all_ciphers users))
-                  (clean_messages (RealWorld.findUserKeys users) all_ciphers (Some u) (RealWorld.from_nons data__rw)
-                                  (RealWorld.msg_heap data__rw)) u (RealWorld.from_nons data__rw) $0) as KPMQ.
-      generalize H3; intros HKS; destruct HKS.
-      generalize H4; intros HKE; destruct HKE.
-      
-      econstructor 2 with (k__sign := k__sign0) (k__enc := k__enc0); eauto.
-
-      + cases (CKPS $? k__sign0);
-          cases (KPKS $? k__sign0);
-          cases (KPMQ $? k__sign0).
-
-        all: solveit; split_ex;
-          match goal with
-          | [ H : compat_perm (?ks1 $? ?k) ?b |- compat_perm (?ks2 $? ?k) ?b ] =>
-            assert (RW: ks1 $? k = ks2 $? k) by solve_perm_merges; rewrite <- RW; eauto
-          end.
-
-      + cases (CKPS $? k__enc0);
-          cases (KPKS $? k__enc0);
-          cases (KPMQ $? k__enc0).
-
-        all: solveit; split_ex;
-          match goal with
-          | [ H : compat_perm (?ks1 $? ?k) ?b |- compat_perm (?ks2 $? ?k) ?b ] =>
-            assert (RW: ks1 $? k = ks2 $? k) by solve_perm_merges; rewrite <- RW; eauto
-          end.
+        | [ H : _ = strip_action _ _ ?ra |- _ ] =>
+          unfold strip_action in H; destruct ra; try discriminate
+        | [ H : RealWorld.Input _ _ _ = RealWorld.Input _ _ _ |- _ ] =>
+          invert H
+        | [ H : RealWorld.Output _ _ _ _ = RealWorld.Output _ _ _ _ |- _ ] =>
+          invert H
+        | [ H : clean_ciphers _ _ $? _ = Some _ |- _ ] =>
+          eapply clean_ciphers_inv in H
+        end; eauto using content_eq_strip_keys.
   Qed.
   
-  Lemma action_matches_strip :
-    forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A) a__r a__i b,
-      user_cipher_queues_ok U__ra.(RealWorld.all_ciphers) (RealWorld.findUserKeys U__ra.(RealWorld.users)) U__ra.(RealWorld.users)
-      -> action_matches (strip_action (RealWorld.findUserKeys U__ra.(RealWorld.users)) U__ra.(RealWorld.all_ciphers) a__r)
-                       (strip_adversary_univ U__ra b) a__i U__i
-      -> action_matches a__r U__ra a__i U__i.
-  Proof.
-    intros.
-    invert H0.
+  (* Lemma action_matches_strip : *)
+  (*   forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A) a__r a__i b, *)
+  (*     user_cipher_queues_ok U__ra.(RealWorld.all_ciphers) (RealWorld.findUserKeys U__ra.(RealWorld.users)) U__ra.(RealWorld.users) *)
+  (*     -> action_matches (strip_action (RealWorld.findUserKeys U__ra.(RealWorld.users)) U__ra.(RealWorld.all_ciphers) a__r) *)
+  (*                      (strip_adversary_univ U__ra b) a__i U__i *)
+  (*     -> action_matches a__r U__ra a__i U__i. *)
+  (* Proof. *)
+  (*   intros. *)
+  (*   invert H0. *)
 
-    - econstructor.
-      2:reflexivity.
-      2:eassumption.
-      2:eapply msg_matches_strip; eauto.
-      unfold strip_action in H3.
-      destruct a__r; try discriminate.
-      eauto.
+  (*   - econstructor. *)
+  (*     2:reflexivity. *)
+  (*     2:eassumption. *)
+  (*     2:eapply msg_matches_strip; eauto. *)
+  (*     unfold strip_action in H3. *)
+  (*     destruct a__r; try discriminate. *)
+  (*     eauto. *)
 
-    - eapply Out.
-      2:reflexivity.
-      2:eapply msg_matches_strip; eauto.
-      unfold strip_action in H3.
-      destruct a__r; try discriminate.
-      eauto.
-  Qed.
+  (*   - eapply Out. *)
+  (*     2:reflexivity. *)
+  (*     2:eapply msg_matches_strip; eauto. *)
+  (*     unfold strip_action in H3. *)
+  (*     destruct a__r; try discriminate. *)
+  (*     eauto. *)
+  (* Qed. *)
   
   Hint Resolve action_matches_strip.
 
@@ -6262,7 +6285,7 @@ Section SingleAdversarySimulates.
           -> exists (a__i : IdealWorld.action) (U__i' U__i'' : IdealWorld.universe A),
             (istepSilent) ^* U__i U__i'
             /\ IdealWorld.lstep_universe U__i' (Action a__i) U__i''
-            /\ action_matches a__r U__ra a__i U__i'
+            /\ action_matches U__ra.(RealWorld.all_ciphers) U__ra.(RealWorld.all_keys) a__r a__i
             /\ R (strip_adversary U__ra') U__i''.
   Proof.
     intros.
@@ -6296,6 +6319,8 @@ Section SingleAdversarySimulates.
 
     specialize (H _ _ H1 STRIP_UNIV_OK STRIP_ADV_UNIV_OK LAME _ _ UNIV_STEP); split_ex; split_ands.
     do 3 eexists; intuition idtac; eauto.
+
+    unfold strip_adversary_univ in H13; simpl in H13; eauto.
   Qed.
 
   Definition ciphers_honestly_signed (honestk : key_perms) (cs : RealWorld.ciphers) :=
@@ -6551,7 +6576,7 @@ Inductive traceMatches : list RealWorld.action -> list IdealWorld.action -> Prop
       rCouldGenerate U__r (a__r :: acts__r)
     -> iCouldGenerate U__i (a__i :: acts__i)
     -> traceMatches acts__r acts__i
-    -> action_matches a__r U__r a__i U__i
+    -> action_matches U__r.(RealWorld.all_ciphers) U__r.(RealWorld.all_keys) a__r a__i
     -> traceMatches (a__r :: acts__r) (a__i :: acts__i)
 .
 
