@@ -41,6 +41,7 @@ From protocols Require Import
      SafeProtocol
      RealWorldStepLemmas
 .
+(* Copy step_usr tactic *)
 
 Require IdealWorld.
 
@@ -518,14 +519,271 @@ Admitted.
 (*     all: try discriminate; eauto. *)
 (* Qed. *)
 
+Lemma step_reorder_no_recur :
+  forall A B C lbl1 suid1 uid1 (bd1 bd1' : data_step0 A B C),
+    step_user lbl1 suid1 bd1 bd1'
+    -> suid1 = Some uid1
+    -> forall D (bd2 bd2' : data_step0 A B D) lbl2 suid2 uid2,
+        step_user lbl2 suid2 bd2 bd2'
+        -> suid2 = Some uid2
+        -> uid1 <> uid2
+        -> forall cs cs1' cs2' (usrs usrs1' usrs2' : honest_users A) (adv adv1' adv2' : user_data B) gks gks1' gks2'
+            ks1 ks1' qmsgs1 qmsgs1' mycs1 mycs1' cmd1 cmd1' froms1 froms1' sents1 sents1' cur_n1 cur_n1'
+            ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' cmd2 cmd2' froms2 froms2' sents2 sents2' cur_n2 cur_n2'
+            cmdc1 cmdc2,
 
+              bd1  = (usrs,   adv,   cs,   gks,   ks1,  qmsgs1,  mycs1,  froms1,  sents1,  cur_n1,  cmd1)
+            -> bd1' = (usrs1', adv1', cs1', gks1', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd1')
+            -> bd2  = (usrs,   adv,   cs,   gks,   ks2,  qmsgs2,  mycs2,  froms2,  sents2,  cur_n2,  cmd2)
+            -> bd2' = (usrs2', adv2', cs2', gks2', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
 
-(*   inversion 1;  intros; subst; eauto; simpl in *. *)
-(*   (* inversion 3; inversion 2;  intros; subst; eauto; simpl in *.  *) *)
-(*   (* eexists. destruct (nextStep cmd). *) *)
-(*   (* invert H13. destruct iu; simpl in *. econstructor. *) *)
-(*   (* eauto. eauto. eauto.  *) *)
-(* Admitted. *)
+            -> nextAction cmd1 cmd1
+            -> nextAction cmd2 cmd2
+            (* goodness *)
+            -> goodness_predicates (mkUniverse usrs adv cs gks)
+            (* allow protocol to freely vary, since we won't be looking at it *)
+            -> usrs $? uid1 = Some (mkUserData ks1 cmdc1 qmsgs1 mycs1 froms1 sents1 cur_n1)
+            -> usrs $? uid2 = Some (mkUserData ks2 cmdc2 qmsgs2 mycs2 froms2 sents2 cur_n2)
+            -> forall cmdc1' usrs1'', 
+                usrs1'' = usrs1' $+ (uid1, mkUserData ks1' cmdc1' qmsgs1' mycs1' froms1' sents1' cur_n1')
+                -> usrs1'' $? uid2 = Some {| key_heap := ks2;
+                                            protocol := cmdc2;
+                                            msg_heap := qmsgs2;
+                                            c_heap := mycs2;
+                                            from_nons := froms2;
+                                            sent_nons := sents2;
+                                            cur_nonce := cur_n2 |}
+                -> exists bd2'',
+                  step_user lbl2 suid2
+                            (usrs1'', adv1', cs1', gks1', ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2) bd2''.
+Proof.
+  (* destruct 1; destruct 2; inversion 3; inversion 1. why not this? too slow? *)
+  intros; cases cmd1; subst.
+  - cases cmd2; invert H1; invert H; clean_map_lookups; simpl.
+  - eapply nextAction_couldBe in H8. contradiction.
+  - cases cmd2; intros; invert H1; invert H; clean_map_lookups; simpl.
+    + eapply nextAction_couldBe in H9. contradiction.
+    + eapply nextAction_couldBe in H9. contradiction.
+    + econstructor; eauto. econstructor; eauto.
+    + destruct (uid ==n uid1); subst. econstructor; eauto. econstructor; eauto. congruence.
+      econstructor; eauto. econstructor; eauto. congruence.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+  - cases cmd2; intros; invert H1; invert H; clean_map_lookups; simpl.
+    + eapply nextAction_couldBe in H9. contradiction.
+    + eapply nextAction_couldBe in H9. contradiction.
+    + econstructor; eauto. econstructor; eauto.
+    + destruct (uid ==n uid1); subst; destruct (uid0 ==n uid1); subst.
+      * econstructor; eauto. econstructor; eauto.
+      * econstructor; eauto. econstructor; eauto.
+      * econstructor; eauto. econstructor; eauto. congruence.
+      * destruct (uid ==n uid0); subst. econstructor; eauto. econstructor; eauto. congruence.  
+        do 2 (econstructor; eauto). congruence.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+  - cases cmd2; invert H; invert H1; clean_map_lookups; simpl. (*; try (econstructor; eauto; econstructor; eauto).S*)
+    + eapply nextAction_couldBe in H9. contradiction.
+    + eapply nextAction_couldBe in H9. contradiction.
+    + eapply nextAction_couldBe in H9. contradiction.
+    + eapply nextAction_couldBe in H9. contradiction.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + destruct (uid ==n uid1); subst; econstructor; eauto; econstructor; eauto; congruence.
+    + destruct (uid ==n uid1); subst; econstructor; eauto; econstructor; eauto; congruence.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+  - cases cmd2; invert H; invert H1; clean_map_lookups; simpl.
+    + eapply nextAction_couldBe in H9. contradiction.
+    + eapply nextAction_couldBe in H9. contradiction.
+    + econstructor; eauto. econstructor; eauto.
+    + destruct (uid ==n uid1); subst. econstructor; eauto. econstructor; eauto.
+      unfold keys_mine in *. admit.
+      congruence.
+      econstructor; eauto. econstructor; eauto.
+      unfold keys_mine in *. admit.
+      congruence.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto. (* message accepted by pattern *) admit.
+    + econstructor; eauto. econstructor; eauto. (* double encrypt, will have different ids *)admit.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto. (* sign and encrypt will have different cids *) admit.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+  - cases cmd2; invert H; invert H1; clean_map_lookups; simpl.
+    + eapply nextAction_couldBe in H9. contradiction.
+    + eapply nextAction_couldBe in H9. contradiction.
+    + econstructor; eauto. econstructor; eauto.
+    + destruct (uid ==n uid1); subst. econstructor; eauto. econstructor; eauto. congruence.
+      econstructor; eauto. econstructor; eauto. congruence.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+  - cases cmd2; invert H; invert H1; clean_map_lookups; simpl.
+    + eapply nextAction_couldBe in H9. contradiction.
+    + eapply nextAction_couldBe in H9. contradiction.
+    + econstructor; eauto. econstructor; eauto.
+    + destruct (uid ==n uid1); subst. econstructor; eauto. econstructor; eauto.
+      (* keys mine again *) admit.
+      congruence.
+      econstructor; eauto. econstructor; eauto.
+      (* keys mine again, try unfolding goodness? *) admit.
+      congruence.
+    + econstructor; eauto. econstructor; eauto.
+    + unfold goodness_predicates. econstructor; eauto. econstructor; eauto. (* message accepted by pattern *) admit.
+    + unfold goodness_predicates. destruct (c_id ==n c_id0); subst. econstructor; eauto.
+      econstructor; eauto. (* double encrypt, will have different ids *) clean_map_lookups.
+      admit. (* cs $? Datatypes.S c_id0 = None *)
+      econstructor; eauto. econstructor; eauto. admit.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto. (* sign and encrypt will have different cids *) admit.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+  - cases cmd2; invert H; invert H1; clean_map_lookups; simpl.
+    + eapply nextAction_couldBe in H9. contradiction.
+    + eapply nextAction_couldBe in H9. contradiction.
+    + econstructor; eauto. econstructor; eauto.
+    + destruct (uid ==n uid1); subst. econstructor; eauto. econstructor; eauto. congruence.
+      econstructor; eauto. econstructor; eauto. congruence.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+  - cases cmd2; invert H; invert H1; clean_map_lookups; simpl.
+    + eapply nextAction_couldBe in H9. contradiction.
+    + eapply nextAction_couldBe in H9. contradiction.
+    + econstructor; eauto. econstructor; eauto.
+    + destruct (uid ==n uid1); subst. econstructor; eauto. econstructor; eauto. congruence.
+      econstructor; eauto. econstructor; eauto. congruence.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + destruct (k_id ==n k_id0). econstructor; eauto. econstructor; eauto. admit.
+      econstructor; eauto. econstructor; eauto. admit.(* double key gen *)
+    + destruct (k_id ==n k_id0). econstructor; eauto. econstructor; eauto. admit.
+      econstructor; eauto. econstructor; eauto. admit.(* double key gen *)
+  - cases cmd2; invert H; invert H1; clean_map_lookups; simpl.
+    + eapply nextAction_couldBe in H9. contradiction.
+    + eapply nextAction_couldBe in H9. contradiction.
+    + econstructor; eauto. econstructor; eauto.
+    + destruct (uid ==n uid1); subst. econstructor; eauto. econstructor; eauto. congruence.
+      econstructor; eauto. econstructor; eauto. congruence.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto. econstructor; eauto.
+    + destruct (k_id ==n k_id0). econstructor; eauto. econstructor; eauto. admit.
+      econstructor; eauto. econstructor; eauto. admit. (* double key gen *)
+    + destruct (k_id ==n k_id0). econstructor; eauto. econstructor; eauto. admit.
+      econstructor; eauto. econstructor; eauto. admit.(* double key gen *)
+Admitted.
+
+Lemma step_reorder :
+  forall A B C lbl1 suid1 uid1 (bd1 bd1' : data_step0 A B C),
+    step_user lbl1 suid1 bd1 bd1'
+    -> suid1 = Some uid1
+    -> forall D (bd2 bd2' : data_step0 A B D) lbl2 suid2 uid2,
+        step_user lbl2 suid2 bd2 bd2'
+        -> suid2 = Some uid2
+        -> uid1 <> uid2
+        -> forall cs cs1' cs2' (usrs usrs1' usrs2' : honest_users A) (adv adv1' adv2' : user_data B) gks gks1' gks2'
+            ks1 ks1' qmsgs1 qmsgs1' mycs1 mycs1' cmd1 cmd1' froms1 froms1' sents1 sents1' cur_n1 cur_n1'
+            ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' cmd2 cmd2' froms2 froms2' sents2 sents2' cur_n2 cur_n2'
+            cmdc1 cmdc2,
+
+              bd1  = (usrs,   adv,   cs,   gks,   ks1,  qmsgs1,  mycs1,  froms1,  sents1,  cur_n1,  cmd1)
+            -> bd1' = (usrs1', adv1', cs1', gks1', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd1')
+            -> bd2  = (usrs,   adv,   cs,   gks,   ks2,  qmsgs2,  mycs2,  froms2,  sents2,  cur_n2,  cmd2)
+            -> bd2' = (usrs2', adv2', cs2', gks2', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
+
+            (* -> nextAction cmd1 cmdc1 *)            -> nextAction cmd2 cmdc2
+            (* goodness *)
+            (* allow protocol to freely vary, since we won't be looking at it *)
+            -> usrs $? uid1 = Some (mkUserData ks1 cmdc1 qmsgs1 mycs1 froms1 sents1 cur_n1)
+            -> usrs $? uid2 = Some (mkUserData ks2 cmdc2 qmsgs2 mycs2 froms2 sents2 cur_n2)
+            -> forall cmdc1' usrs1'' usr2',
+                usrs1'' = usrs1' $+ (uid1, mkUserData ks1' cmdc1' qmsgs1' mycs1' froms1' sents1' cur_n1')
+                -> usrs1'' $? uid2 = Some usr2'
+                -> exists bd2'',
+                  step_user lbl2 suid2
+                            (build_data_step (mkUniverse usrs1'' adv1' cs1' gks1') usr2') bd2''.
+Proof.
+  induction 1; inversion 5; inversion 1; intros.
+  - admit. (* cmd1 = Bind cmd cmd *)
+  - admit. (* cmd1 = Bind (Return v) cmd *)
+  - invert H0. (* cmd1 = Gen *)
+    + unfold build_data_step. simpl. clean_context. (* cmd2 = Gen *) clean_map_lookups. simpl in *.
+      assert (cmd2 = Bind cmd0 cmd3). invert H41; eauto. rewrite H in H29. invert H29. eexists. admit.
+    (* + assert (cmd2 = Bind cmd0 cmd3). invert H41; eauto. rewrite H in H29. *)
+    (*     clean_map_lookups. admit. (* cmd2 = Bind cmd cmd *) *)
+    + admit. (* cmd2 = Bind (Return v) cmd *)
+    + unfold build_data_step. simpl. clean_context. (* cmd2 = Gen *) clean_map_lookups. simpl in *.
+      assert (cmd2 = Gen). invert H41; eauto. rewrite H in H29. invert H29. eexists. econstructor. eexists.
+    + unfold build_data_step. simpl. clean_context. clean_map_lookups. simpl.
+      assert (cmd2 = Recv pat). invert H35; eauto. rewrite H in H29. invert H29.
+    + unfold build_data_step. simpl. clean_context. clean_map_lookups. simpl.
+      assert (cmd2 = Recv pat). invert H35; eauto. rewrite H in H29. invert H29.
+    + unfold build_data_step. simpl. clean_context. clean_map_lookups. simpl.
+      assert (cmd2 = Send rec_u_id msg). invert H35; eauto. rewrite H0 in H29. invert H29. eexists. unfold updateSentNonce in H37. simpl in H37.
+      (* eapply StepSend. *) admit.
+    + unfold build_data_step. simpl. clean_context. clean_map_lookups. simpl.
+      assert (cmd2 = SignEncrypt k__signid k__encid msg_to msg). invert H35; eauto. rewrite H in H29. invert H29.
+    + unfold build_data_step. simpl. clean_context. clean_map_lookups. simpl.
+      assert (cmd2 = Decrypt (SignedCiphertext c_id)). invert H35; eauto. rewrite H in H29. invert H29.
+    + unfold build_data_step. simpl. clean_context. clean_map_lookups. simpl.
+      assert (cmd2 = Sign k_id msg_to msg). invert H35; eauto. rewrite H in H29. invert H29.
+    + unfold build_data_step. simpl. clean_context. clean_map_lookups. simpl.
+      assert (cmd2 = Verify k_id (SignedCiphertext c_id)). invert H35; eauto. rewrite H in H29. invert H29.
+    + unfold build_data_step. simpl. clean_context. clean_map_lookups. simpl.
+      assert (cmd2 = GenerateSymKey usage). invert H35; eauto. rewrite H in H29. invert H29.
+      eexists. econstructor; eauto. invert H35. clean_context. clean_map_lookups. admit.
+    + unfold build_data_step. simpl. clean_context. clean_map_lookups. simpl.
+      assert (cmd2 = GenerateAsymKey usage). invert H35; eauto. rewrite H in H29. invert H29.
+      eexists. econstructor; eauto. invert H35. clean_context. clean_map_lookups. admit.
+  - 
+Admitted.
+
   Lemma commutes_sound_recur_cmd1' :
     forall {A B C D} suid1 u_id1 lbl1 (bd1 bd1' : data_step0 A B C),
 
@@ -579,6 +837,7 @@ Admitted.
   Proof.
     induction 1; inversion 5; inversion 1
     ; intros.
+    - invert H1.
     Admitted.
 
 Lemma step_step_recurse_ok :
