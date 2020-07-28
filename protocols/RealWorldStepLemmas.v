@@ -1877,13 +1877,23 @@ Section Lameness.
     dismiss_adv.
   Qed.
 
+  Lemma adversary_remains_lame_indexed :
+    forall A B (U U' : universe A B) b lbl uid,
+      lameAdv b U.(adversary)
+      -> indexedRealStep uid lbl U U'
+      -> lameAdv b U'.(adversary).
+  Proof.
+    intros.
+    eapply indexedRealStep_real_step in H0; eauto using adversary_remains_lame.
+  Qed.
+
   Lemma adversary_remains_lame_step :
     forall t__hon t__adv st st' b,
       lameAdv b (fst st).(adversary)
       -> (@step t__hon t__adv) st st'
       -> lameAdv b (fst st').(adversary).
   Proof.
-    invert 2; simpl in *; eauto using adversary_remains_lame.
+    invert 2; simpl in *; eauto using adversary_remains_lame, adversary_remains_lame_indexed.
   Qed.
 
 End Lameness.

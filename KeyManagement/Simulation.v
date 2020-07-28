@@ -41,8 +41,56 @@ Import IdealWorld.IdealNotations
 
 Set Implicit Arguments.
 
-Definition istepSilent {A} (U1 U2 : IdealWorld.universe A) :=
-  IdealWorld.lstep_universe U1 Silent U2.
+
+Section IdealDefiniions.
+
+  Import IdealWorld.
+
+  Definition istepSilent {A} (U1 U2 : universe A) :=
+    lstep_universe U1 Silent U2.
+
+  Inductive indexedIdealStep {A} (uid : user_id) (lbl : label) (U1 U2 : universe A) : Prop :=
+  | IndexedIdealStep : forall u proto chans prms,
+      U1.(users) $? uid = Some u
+      -> lstep_user lbl (U1.(channel_vector), u.(protocol), u.(perms)) (chans, proto, prms)
+      -> U2 = construct_universe
+               chans
+               (U1.(users) $+ (uid, {| protocol := proto ; perms := prms |}))
+      -> indexedIdealStep uid lbl U1 U2.
+
+  Lemma indexedIdealStep_ideal_step :
+    forall A uid lbl U1 U2,
+      @indexedIdealStep A uid lbl U1 U2
+      -> lstep_universe U1 lbl U2.
+  Proof. intros * IND; invert IND; econstructor; eauto. Qed.
+
+End IdealDefiniions.
+
+Section RealDefinitions.
+  Import RealWorld.
+
+  Inductive indexedRealStep {A B} (uid : user_id) (lbl : label) (U1 U2 : universe A B) : Prop :=
+  | IndexedRealStep : forall userData usrs adv cs gks ks qmsgs mycs froms sents cur_n (cmd : user_cmd (Base A)),
+      U1.(users) $? uid = Some userData
+      -> step_user lbl (Some uid)
+                  (build_data_step U1 userData)
+                  (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+      -> U2 = buildUniverse usrs adv cs gks uid {| key_heap  := ks
+                                                   ; msg_heap  := qmsgs
+                                                   ; protocol  := cmd
+                                                   ; c_heap    := mycs
+                                                   ; from_nons := froms
+                                                   ; sent_nons := sents
+                                                   ; cur_nonce := cur_n |}
+      -> indexedRealStep uid lbl U1 U2.
+
+  Lemma indexedRealStep_real_step :
+    forall A B uid lbl U1 U2,
+      @indexedRealStep A B uid lbl U1 U2
+      -> step_universe U1 lbl U2.
+  Proof. intros * IND; invert IND; econstructor; eauto. Qed.
+
+End RealDefinitions.
 
 Inductive chan_key : Set :=
 | Public (ch_id : IdealWorld.channel_id)
@@ -433,13 +481,20 @@ Section Simulation.
     -> universe_ok U__r
     -> adv_universe_ok U__r
     -> advP U__r.(RealWorld.adversary)
-    -> forall ra U__r',
-        RealWorld.step_universe U__r (Messages.Action ra) U__r' (* excludes adversary steps *)
+    -> forall uid U__r' ra,
+        indexedRealStep uid (Action ra) U__r U__r'
         -> exists ia U__i' U__i'',
-          istepSilent^* U__i U__i'
-        /\ IdealWorld.lstep_universe U__i' (Messages.Action ia) U__i''
-        /\ action_matches U__r.(RealWorld.all_ciphers) U__r.(RealWorld.all_keys) ra ia
-        /\ R (RealWorld.peel_adv U__r') U__i''.
+            (indexedIdealStep uid Silent) ^* U__i U__i'
+            /\ indexedIdealStep uid (Action ia) U__i' U__i''
+            /\ action_matches U__r.(RealWorld.all_ciphers) U__r.(RealWorld.all_keys) ra ia
+            /\ R (RealWorld.peel_adv U__r') U__i''.
+    (* -> forall ra U__r', *)
+    (*     RealWorld.step_universe U__r (Messages.Action ra) U__r' (* excludes adversary steps *) *)
+    (*     -> exists ia U__i' U__i'', *)
+    (*       istepSilent^* U__i U__i' *)
+    (*     /\ IdealWorld.lstep_universe U__i' (Messages.Action ia) U__i'' *)
+    (*     /\ action_matches U__r.(RealWorld.all_ciphers) U__r.(RealWorld.all_keys) ra ia *)
+    (*     /\ R (RealWorld.peel_adv U__r') U__i''. *)
 
   Definition honest_actions_safe :=
     forall (U__r : RealWorld.universe A B) U__i,
