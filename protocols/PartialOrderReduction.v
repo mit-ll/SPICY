@@ -20,7 +20,8 @@ From Coq Require Import
      Classical
      Morphisms
      JMeq
-     List.
+     List
+     Lia.
 
 From KeyManagement Require Import
      MyPrelude
@@ -893,8 +894,8 @@ Section TimeMeasures.
 
   Hint Constructors boundRunningTime : core.
 
-  Hint Extern 1 (_ < _) => Omega.omega : core.
-  Hint Extern 1 (_ <= _) => Omega.omega : core.
+  Hint Extern 1 (_ < _) => lia : core.
+  Hint Extern 1 (_ <= _) => lia : core.
 
   Definition queues_size {A} (usrs : honest_users A) : nat :=
     fold (fun uid ud acc => acc + length ud.(msg_heap)) usrs 0.
@@ -910,7 +911,7 @@ Section TimeMeasures.
     forall {A},
       transpose_neqkey eq (fun (_ : Map.key) (u : user_data A) (acc : nat) => acc + length (msg_heap u)).
   Proof.
-    unfold transpose_neqkey; intros; Omega.omega.
+    unfold transpose_neqkey; intros; lia.
   Qed.
 
   Hint Resolve queues_size_proper queues_size_transpose_neqkey : core.
@@ -952,7 +953,7 @@ Section TimeMeasures.
     - rewrite map_add_eq; unfold queues_size.
       rewrite !fold_add; eauto.
       rewrite H2.
-      rewrite app_length; simpl; Omega.omega.
+      rewrite app_length; simpl; lia.
       
     - unfold queues_size.
       rewrite map_ne_swap by eauto.
@@ -977,7 +978,7 @@ Section TimeMeasures.
     destruct (x ==n uid); subst; clean_map_lookups; eauto.
     - rewrite map_add_eq; unfold queues_size.
       rewrite !fold_add; eauto.
-      rewrite H2; simpl; Omega.omega.
+      rewrite H2; simpl; lia.
       
     - unfold queues_size.
       rewrite map_ne_swap by eauto.
@@ -1077,13 +1078,13 @@ Section TimeMeasures.
     induction 1; intros; clean_map_lookups; eauto.
     destruct (uid ==n uid0); subst; clean_map_lookups; eauto.
     - eexists; repeat simple apply conj; eauto.
-      rewrite plus_comm. rewrite <- Nat.add_sub_assoc by Omega.omega.
+      rewrite plus_comm. rewrite <- Nat.add_sub_assoc by lia.
       rewrite Nat.sub_diag, Nat.add_0_r; auto.
 
     - assert (us $- uid $? uid0 = Some u0) by (clean_map_lookups; trivial).
       eapply IHboundRunningTimeUniv in H3; split_ex; eauto.
       eexists; repeat simple apply conj; eauto.
-      rewrite <- Nat.add_sub_assoc by Omega.omega.
+      rewrite <- Nat.add_sub_assoc by lia.
       eapply BrtRecur with (uid1 := uid); eauto.
 
       assert (RW : us $- uid0 $- uid = us $- uid $- uid0).
@@ -1256,7 +1257,7 @@ Section TimeMeasures.
 
       rewrite map_add_remove_eq; eauto.
 
-      Omega.omega.
+      lia.
       
     - unfold lameAdv, build_data_step in *; destruct U; destruct adversary; simpl in *; rewrite H in *.
       invert H0.
@@ -1893,12 +1894,12 @@ Proof.
 
   assert (IN: exists x, SetoidList.InA (eq_key_elt (elt:=V)) (k, x) (elements (elt:=V) m)) by eauto.
   rewrite <- elements_in_iff in IN.
-  assert (k <> k0) by Omega.omega.
+  assert (k <> k0) by lia.
   assert (INM : In k (m $- k0)).
   rewrite in_find_iff, remove_neq_o by auto.
   unfold not; intros; clean_map_lookups.
   eapply H in INM.
-  Omega.omega.
+  lia.
 Qed.
 
 Lemma max_elt_upd_map_elements :
@@ -2663,8 +2664,10 @@ Proof.
 
         firstorder idtac; simpl in *.
 
-        eapply na_deterministic in H11; eauto; split_ands; subst.
-        invert H13.
+        eapply na_deterministic in H11; eauto; split_ands; subst;
+          try match goal with
+              | [ H : JMeq _ _ |- _ ] => invert H
+              end.
         exists x4; exists x5; repeat simple apply conj; eauto; intros; simpl in *.
 
     + destruct u; unfold build_data_step, lameAdv in *; simpl in *.
@@ -2701,7 +2704,9 @@ Proof.
         firstorder idtac; simpl in *.
 
         eapply na_deterministic in H11; eauto; split_ands; subst.
-        invert H16.
+        try match goal with
+            | [ H : JMeq _ _ |- _ ] => invert H
+            end.
         exists x4; exists x5; repeat simple apply conj; eauto; intros; simpl in *.
 
         Unshelve.
@@ -2724,19 +2729,19 @@ Proof.
     exists st; split; intros; eauto.
     destruct st.
     destruct u; simpl in *; subst.
-    destruct n__rt; try Omega.omega.
+    destruct n__rt; try lia.
 
     invert H.
     
     + invert H6; dismiss_adv; simpl in *.
       eapply boundRunningTime_for_element in H2; eauto; split_ex.
-      destruct x; try Omega.omega.
+      destruct x; try lia.
       invert H2.
       unfold build_data_step in *; rewrite <- H8 in H3; invert H3.
 
     + invert H5; simpl in *.
       eapply boundRunningTime_for_element in H2; eauto; split_ex.
-      destruct x; try Omega.omega.
+      destruct x; try lia.
       invert H2.
       unfold build_data_step in *; rewrite <- H11 in H3; invert H3.
     
@@ -2746,7 +2751,7 @@ Proof.
       assert (LAME' : lameAdv b (fst st').(adversary)) by eauto using adversary_remains_lame_step.
       eapply runningTimeMeasure_step in H; eauto; split_ex.
 
-      eapply IHn' in H; try Omega.omega; eauto.
+      eapply IHn' in H; try lia; eauto.
       split_ex.
       exists x0; split; intros; eauto.
       eapply TrcFront; eauto.

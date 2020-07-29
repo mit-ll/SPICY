@@ -164,9 +164,9 @@ Section ConcreteMaps.
 
         assert (In (# S n) (m #- (# n))).
         rewrite in_find_iff; unfold not; intros.
-        rewrite remove_neq_o in H0 by eauto; contra_map_lookup.
+        rewrite remove_neq_o in H0 by eauto using E.lt_not_eq; clean_map_lookups.
+
         specialize (H H0); simpl in H.
-        
         assert (n < S n) by eauto using Nat.lt_succ_diag_r.
         Nat.order.
 
@@ -178,7 +178,7 @@ Section ConcreteMaps.
         
         assert (In (# 0) (m #- (ch1 #& ch2))).
         rewrite in_find_iff; unfold not; intros.
-        rewrite remove_neq_o in H0 by eauto; contra_map_lookup.
+        rewrite remove_neq_o in H0 by clean_map_lookups; clean_map_lookups.
         specialize (H H0); simpl in H; contradiction.
 
     - apply O.max_elt_Empty in Heq.

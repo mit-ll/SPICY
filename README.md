@@ -25,7 +25,7 @@ Now, whenever you want to install a new version, just do:
 ```bash
 opam update
 
-opam switch create coq-<ver> ocaml-base-compiler.4.05.0
+opam switch create coq-<ver> ocaml-base-compiler.4.08.1
 
 opam install coq.<ver>
 opam pin add coq <ver>

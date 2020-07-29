@@ -27,6 +27,7 @@ From KeyManagement Require Import
      MyPrelude
      Common
      Automation
+     ChMaps
      Maps
      Keys
      KeysTheory
@@ -151,6 +152,50 @@ Proof.
     eapply H in H3; eauto.
     contradiction.
 Qed.
+
+(* Definition not_stuck_by_action_matches {t__hon t__adv} *)
+(*            (st : universe t__hon t__adv * IdealWorld.universe t__hon) : Prop := *)
+(*   forall uid u, *)
+(*     (fst st).(users) $? uid = Some u *)
+(*     -> (forall st', indexedStep uid st st' -> False) *)
+(*     -> (forall ru iu' iu'' a__r a__i, *)
+(*           indexedRealStep uid (Action a__r) (fst st) ru *)
+(*           -> (indexedIdealStep uid Silent) ^* (snd st) iu' *)
+(*           -> indexedIdealStep uid (Action a__i) iu' iu'' *)
+(*           -> False). *)
+
+(* Lemma not_stuck_by_action_matches_implies_labels_align : *)
+(*   forall t__hon t__adv st, *)
+(*     @not_stuck_by_action_matches t__hon t__adv st *)
+(*     -> labels_align st. *)
+(* Proof. *)
+(*   unfold not_stuck_by_action_matches, labels_align; *)
+(*     destruct st as [ru iu]; intros. *)
+
+(*   invert H0. *)
+
+(*   destruct (classic (exists st, indexedStep uid (ru,iu) st)). *)
+(*   - split_ex. *)
+(*     repeat *)
+(*       match goal with *)
+(*       | [ H : indexedStep _ _ _ |- _ ] => invert H *)
+(*       | [ H : indexedRealStep _ _ _ _ |- _ ] => invert H *)
+(*       | [ LK1 : users ?ru $? ?uid = Some ?ud1, LK2 : users ?ru $? ?uid = Some ?ud2 |- _ ] => *)
+(*         destruct ru, ud1, ud2; unfold build_data_step in *; simpl in *; clean_map_lookups *)
+(*       | [ S1 : step_user _ (Some ?uid) _ _ , S2 : step_user _ (Some ?uid) _ _ |- _ ] => *)
+(*         eapply user_step_label_deterministic in S1; eauto; clean_context *)
+(*       end. *)
+
+(*       (do 3 eexists); repeat simple apply conj; eauto. *)
+
+(*   - assert (forall st', ~ indexedStep uid (ru,iu) st') by eauto using all_not_not_ex. *)
+(*     eapply H in H3; eauto. *)
+(*     contradiction. *)
+
+(*     Unshelve. *)
+(*     all: eauto. *)
+(*     exact (IdealWorld.Input (IdealWorld.message.Content 1) (Single 1) #0 $0). *)
+(* Qed. *)
 
 Lemma step_reorder :
   forall A B C lbl1 suid1 uid1 (bd1 bd1' : data_step0 A B C),
@@ -846,8 +891,6 @@ Lemma no_model_step_other_user_labeled_step' :
       -> lbl = Action ra
       -> forall cmdc, usrs $? uid = Some (mkUserData ks cmdc qmsgs mycs froms sents n)
       -> forall lbl' ru', indexedRealStep uid' lbl' (mkUniverse usrs adv cs gks) ru'
-      (* -> forall ud', usrs $? uid' = Some ud' *)
-      (* -> forall lbl' bd'', step_user lbl' (Some uid') (build_data_step (mkUniverse usrs adv cs gks) ud') bd'' *)
       (* arguments to fill out label alignment for uid step above *)                                  
       -> (indexedIdealStep uid Silent) ^* iu iu'    
       -> indexedIdealStep uid (Action ia) iu' iu''
@@ -955,6 +998,7 @@ Proof.
   eapply no_model_step_other_user_labeled_step'; eauto.
 Qed.
 
+
 Lemma stuck_model_violation_step' :
   forall t__hon t__adv st st' b,
     @step t__hon t__adv st st'
@@ -963,17 +1007,21 @@ Lemma stuck_model_violation_step' :
     -> syntactically_safe_U (fst st)
     -> not_stuck_by_labels st'
     -> not_stuck_by_labels st.
+    (* -> not_stuck_by_action_matches st' *)
+    (* -> not_stuck_by_action_matches st. *)
 Proof.
   unfold not_stuck_by_labels; intros.
 
   invert H; simpl in *.
 
-  - invert H7; dismiss_adv.
-    simpl in *.
+  - match goal with
+    | [ H : step_universe _ _ _ |- _ ]=> invert H; dismiss_adv
+    end;
+      simpl in *.
 
     destruct (u_id ==n uid); subst; clean_map_lookups.
     + eapply H5.
-      econstructor; eauto.
+      econstructor 1; eauto.
 
     + generalize H8; intros OUSTEP.
       destruct ru, u, userData; simpl in *.

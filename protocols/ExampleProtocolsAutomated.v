@@ -72,6 +72,7 @@ Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
     eapply invariant_weaken.
 
     - apply multiStepClosure_ok; simpl.
+
       gen1.
       gen1.
       gen1.
@@ -99,10 +100,25 @@ Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
         all:clean_map_lookups.
         
       + sets_invert; unfold labels_align; intros;
-          split_ex; subst; intros; rstep; subst.
-        * do 3 eexists; repeat (simple apply conj); eauto.
-        * do 3 eexists; repeat (simple apply conj); eauto.
-        * do 3 eexists; repeat (simple apply conj); eauto.
+          split_ex; subst; simpl; intros;
+            rstep.
+        
+        * subst; do 3 eexists; repeat (simple apply conj);
+            [ solve [ eauto ]
+            | indexedIdealStep; simpl
+            | repeat solve_action_matches1; clean_map_lookups; ChMap.clean_map_lookups
+            ]; eauto; simpl; eauto.
+        * subst; do 3 eexists; repeat (simple apply conj);
+            [ solve [ eauto ]
+            | indexedIdealStep; simpl
+            | repeat solve_action_matches1; clean_map_lookups; ChMap.clean_map_lookups
+            ]; eauto; simpl; eauto.
+
+        * subst; do 3 eexists; repeat (simple apply conj);
+            [ solve [ eauto ]
+            | indexedIdealStep; simpl
+            | repeat solve_action_matches1; clean_map_lookups; ChMap.clean_map_lookups
+            ]; eauto; simpl; eauto.
   Qed.
 
   Lemma U_good : @universe_starts_sane _ Unit b ru0.

@@ -863,7 +863,6 @@ Section MessageEqLemmas.
       match goal with
       | [ H1 : not_replayed ?cs _ _ _ _ = ?tf1, H2 : not_replayed (?cs $+ (_,_)) _ _ _ _ = ?tf2 |- _ ] =>
         assert (tf1 <> tf2) by discriminate
-        ; idtac H1 H2
         ; erewrite not_replayed_same_addnl_cipher in H1 by eauto
         ; rewrite H1 in H2
         ; discriminate
