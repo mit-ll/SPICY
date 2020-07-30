@@ -178,6 +178,8 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
 
   Ltac step3 := rewrite ?union_empty_r.
 
+  (* Set Ltac Profiling. *)
+
   Lemma safe_invariant :
     invariantFor
       {| Initial := {(ru0, iu0)}; Step := @step t__hon t__adv  |}
@@ -220,24 +222,84 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
         all:clean_map_lookups.
         
       + sets_invert; unfold labels_align;
-          split_ex; subst; intros; rstep; subst.
+          split_ex; subst; intros;
+            rstep.
 
-        * (do 3 eexists); repeat (simple apply conj); eauto.
-        * (do 3 eexists); repeat (simple apply conj); eauto.
-        * (do 3 eexists); repeat (simple apply conj); eauto.
-        * (do 3 eexists); repeat (simple apply conj); eauto.
-        * (do 3 eexists); repeat (simple apply conj); eauto.
-        * (do 3 eexists); repeat (simple apply conj); eauto.
-        * (do 3 eexists); repeat (simple apply conj); eauto.
-        * (do 3 eexists); repeat (simple apply conj); eauto.
-        * (do 3 eexists); repeat (simple apply conj); eauto.
-        * (do 3 eexists); repeat (simple apply conj); eauto.
-        * (do 3 eexists); repeat (simple apply conj); eauto.
-        * (do 3 eexists); repeat (simple apply conj); eauto.
-        * (do 3 eexists); repeat (simple apply conj); eauto.
+        Ltac clup :=
+          repeat (
+              equality1 || 
+              match goal with
+              | [ H : context [ _ #+ (?k,_) #? ?k ] |- _ ] =>
+                is_not_evar k
+                ; rewrite ChMap.F.add_eq_o in H by trivial
+              | [ H : context [ _ #+ (?k1,_) #? ?k2 ] |- _ ] =>
+                is_not_evar k1
+                ; is_not_evar k2
+                ; rewrite ChMap.F.add_neq_o in H by congruence
+              end); subst.
+
+        * clup; do 3 eexists; repeat (simple apply conj);
+            [ solve [ eauto ]
+            | indexedIdealStep; simpl
+            | repeat solve_action_matches1; clean_map_lookups; ChMap.clean_map_lookups
+            ]; eauto; simpl; eauto.
+        * clup; do 3 eexists; repeat (simple apply conj);
+            [ solve [ eauto ]
+            | indexedIdealStep; simpl
+            | repeat solve_action_matches1; clean_map_lookups; ChMap.clean_map_lookups
+            ]; eauto; simpl; eauto.
+        * clup; do 3 eexists; repeat (simple apply conj);
+            [ solve [ eauto ]
+            | indexedIdealStep; simpl
+            | repeat solve_action_matches1; clean_map_lookups; ChMap.clean_map_lookups
+            ]; eauto; simpl; eauto.
+
+        * clup; do 3 eexists; repeat (simple apply conj);
+            [ solve [ eauto ]
+            | indexedIdealStep; simpl
+            | repeat solve_action_matches1; clean_map_lookups; ChMap.clean_map_lookups
+            ]; eauto; simpl; eauto.
+
+          repeat (clean_map_lookups; solve_concrete_maps).
+          
+        * clup; do 3 eexists; repeat (simple apply conj);
+            [ solve [ eauto ]
+            | indexedIdealStep; simpl
+            | repeat solve_action_matches1; clean_map_lookups; ChMap.clean_map_lookups
+            ]; eauto; simpl; eauto.
+          repeat (clean_map_lookups; solve_concrete_maps).
+
+        * clup; do 3 eexists; repeat (simple apply conj);
+            [ solve [ eauto ]
+            | indexedIdealStep; simpl
+            | repeat solve_action_matches1; clean_map_lookups; ChMap.clean_map_lookups
+            ]; eauto; simpl; eauto.
+
+        * clup; do 3 eexists; repeat (simple apply conj);
+            [ solve [ eauto ]
+            | indexedIdealStep; simpl
+            | repeat solve_action_matches1; clean_map_lookups; ChMap.clean_map_lookups
+            ]; eauto; simpl; eauto.
+          
+        (* * (do 3 eexists); repeat (simple apply conj); eauto. *)
+        (* * (do 3 eexists); repeat (simple apply conj); eauto. *)
+        (* * (do 3 eexists); repeat (simple apply conj); eauto. *)
+        (* * (do 3 eexists); repeat (simple apply conj); eauto. *)
+        (* * (do 3 eexists); repeat (simple apply conj); eauto. *)
+        (* * (do 3 eexists); repeat (simple apply conj); eauto. *)
+        (* * (do 3 eexists); repeat (simple apply conj); eauto. *)
+        (* * (do 3 eexists); repeat (simple apply conj); eauto. *)
+        (* * (do 3 eexists); repeat (simple apply conj); eauto. *)
+        (* * (do 3 eexists); repeat (simple apply conj); eauto. *)
+        (* * (do 3 eexists); repeat (simple apply conj); eauto. *)
+        (* * (do 3 eexists); repeat (simple apply conj); eauto. *)
+        (* * (do 3 eexists); repeat (simple apply conj); eauto. *)
 
   Qed.
 
+  (* Show Ltac Profile. *)
+  (* Show Ltac Profile "churn2". *)
+  
   Lemma U_good : @universe_starts_sane _ Unit b ru0.
   Proof.
     autounfold;
