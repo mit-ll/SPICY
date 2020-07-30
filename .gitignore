@@ -1,6 +1,10 @@
 # Coq build stuff
 Makefile.coq
 Makefile.coq.conf
+CoqMakefile
+CoqMakefile.conf
+.CoqMakefile.d
+*.log
 .coqdeps.d
 *.swp
 .*.aux

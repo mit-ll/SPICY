@@ -57,7 +57,11 @@ protocols/PartialOrderReduction.v
 protocols/LabelsAlign.v
 protocols/NoResends.v
 
-protocols/SimplePingProtocol.v
-protocols/SimpleEncProtocol.v
-#protocols/ShareKeyProtocol.v
-#protocols/ShareSecretNewKeyProtocol.v
+protocols/ShareSecretProtocol.v
+
+protocols/PORExtended.v
+
+# protocols/SimplePingProtocol.v
+# protocols/SimpleEncProtocol.v
+# protocols/ShareKeyProtocol.v
+# protocols/ShareSecretNewKeyProtocol.v

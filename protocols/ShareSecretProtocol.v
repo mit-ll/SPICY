@@ -258,16 +258,22 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
             [ solve [ eauto ]
             | indexedIdealStep; simpl
             | repeat solve_action_matches1; clean_map_lookups; ChMap.clean_map_lookups
-            ]; eauto; simpl; eauto.
-
-          repeat (clean_map_lookups; solve_concrete_maps).
+            ]; eauto; simpl; eauto;
+              repeat (clean_map_lookups; solve_concrete_maps).
           
         * clup; do 3 eexists; repeat (simple apply conj);
             [ solve [ eauto ]
             | indexedIdealStep; simpl
             | repeat solve_action_matches1; clean_map_lookups; ChMap.clean_map_lookups
-            ]; eauto; simpl; eauto.
-          repeat (clean_map_lookups; solve_concrete_maps).
+            ]; eauto; simpl; eauto;
+              repeat (clean_map_lookups; solve_concrete_maps).
+
+        * clup; do 3 eexists; repeat (simple apply conj);
+            [ solve [ eauto ]
+            | indexedIdealStep; simpl
+            | repeat solve_action_matches1; clean_map_lookups; ChMap.clean_map_lookups
+            ]; eauto; simpl; eauto;
+              repeat (clean_map_lookups; solve_concrete_maps).
 
         * clup; do 3 eexists; repeat (simple apply conj);
             [ solve [ eauto ]
@@ -368,5 +374,14 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
     repeat (simple apply conj);
       eauto using univ_ok_start, adv_univ_ok_start.
   Qed.
+  
 
 End ShareSecretProtocolSecure.
+
+(*
+ * 1) make protocols  518.64s user 0.45s system 99% cpu 8:39.13 total  ~ 6.2GB
+ * 2) add cleanup of chmaps to close:
+ *    make protocols  414.45s user 0.43s system 99% cpu 6:54.90 total  ~ 5.6GB
+ *
+ *
+ *)

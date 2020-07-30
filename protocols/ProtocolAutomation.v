@@ -1557,6 +1557,14 @@ Module Gen.
             || (rewrite ChMaps.ChMap.F.add_eq_o in H by trivial)
             || (destruct (ChMaps.ChMap.F.eq_dec k1 k2); subst)
 
+          | [ H : context [ _ #+ (?k,_) #? ?k ] |- _ ] =>
+            is_not_evar k
+            ; rewrite ChMaps.ChMap.F.add_eq_o in H by trivial
+          | [ H : context [ _ #+ (?k1,_) #? ?k2 ] |- _ ] =>
+            is_not_evar k1
+            ; is_not_evar k2
+            ; rewrite ChMaps.ChMap.F.add_neq_o in H by congruence
+
           | [ H : ?m $? _ = _ |- _ ] => progress (unfold m in H)
           | [ H : RealWorld.msg_accepted_by_pattern _ _ _ _ _ |- _ ] => invert H
           (* | [ H : IdealWorld.msg_permissions_valid _ _ |- _ ] => *)
