@@ -55,22 +55,8 @@ From protocols Require Import
      PartialOrderReduction
 .
 
+Import SimulationAutomation.
 Import SafetyAutomation.
-
-Inductive indexedStep {t__hon t__adv : type} (uid : user_id) :
-  (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon)
-  -> (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon)
-  -> Prop :=
-| RealSilent : forall ru ru' iu,
-    indexedRealStep uid Silent ru ru'
-    -> indexedStep uid (ru, iu) (ru', iu)
-| BothLoud : forall ru ru' iu iu' iu'' ra ia,
-    indexedRealStep uid (Action ra) ru ru'
-    -> (indexedIdealStep uid Silent) ^* iu iu'
-    -> indexedIdealStep uid (Action ia) iu' iu''
-    -> action_matches ru.(all_ciphers) ru.(all_keys) ra ia
-    -> indexedStep uid (ru, iu) (ru', iu'')
-.
 
 Definition not_stuck_by_labels {t__hon t__adv}
            (st : universe t__hon t__adv * IdealWorld.universe t__hon) : Prop :=
@@ -79,49 +65,9 @@ Definition not_stuck_by_labels {t__hon t__adv}
     -> (forall st', indexedStep uid st st' -> False)
     -> (forall lbl ru', indexedRealStep uid lbl (fst st) ru' -> False).
 
-Lemma user_step_label_deterministic :
-  forall A B C lbl1 lbl2 bd bd1' bd2' suid,
-    @step_user A B C lbl1 suid bd bd1'
-    -> step_user lbl2 suid bd bd2'
-    -> lbl1 = lbl2.
-Proof.
-  induction 1; invert 1;
-    subst;
-    eauto;
-    repeat
-      match goal with
-      | [ H : _ = _ |- _ ] => invert H; try contradiction
-      end;
-    eauto.
-
-  invert H.
-  invert H6.
-Qed.
-
 Hint Resolve
      indexedIdealStep_ideal_step
      indexedRealStep_real_step : core.
-
-Lemma syntactically_safe_U_preservation_step :
-  forall t__hon t__adv (st st' : universe t__hon t__adv * IdealWorld.universe t__hon),
-    step st st'
-    -> goodness_predicates (fst st)
-    -> syntactically_safe_U (fst st)
-    -> syntactically_safe_U (fst st').
-Proof.
-  inversion 1; intros; subst; simpl in *; eapply syntactically_safe_U_preservation_stepU; eauto.
-Qed.
-
-Lemma syntactically_safe_U_preservation_steps :
-  forall t__hon t__adv st st',
-    (@step t__hon t__adv) ^* st st'
-    -> goodness_predicates (fst st)
-    -> syntactically_safe_U (fst st)
-    -> syntactically_safe_U (fst st').
-Proof.
-  induction 1; intros; eauto.
-  eapply IHtrc; eauto using syntactically_safe_U_preservation_step, goodness_preservation_step.
-Qed.
 
 Lemma not_stuck_by_labels_implies_labels_align :
   forall t__hon t__adv st,
@@ -152,50 +98,6 @@ Proof.
     eapply H in H3; eauto.
     contradiction.
 Qed.
-
-(* Definition not_stuck_by_action_matches {t__hon t__adv} *)
-(*            (st : universe t__hon t__adv * IdealWorld.universe t__hon) : Prop := *)
-(*   forall uid u, *)
-(*     (fst st).(users) $? uid = Some u *)
-(*     -> (forall st', indexedStep uid st st' -> False) *)
-(*     -> (forall ru iu' iu'' a__r a__i, *)
-(*           indexedRealStep uid (Action a__r) (fst st) ru *)
-(*           -> (indexedIdealStep uid Silent) ^* (snd st) iu' *)
-(*           -> indexedIdealStep uid (Action a__i) iu' iu'' *)
-(*           -> False). *)
-
-(* Lemma not_stuck_by_action_matches_implies_labels_align : *)
-(*   forall t__hon t__adv st, *)
-(*     @not_stuck_by_action_matches t__hon t__adv st *)
-(*     -> labels_align st. *)
-(* Proof. *)
-(*   unfold not_stuck_by_action_matches, labels_align; *)
-(*     destruct st as [ru iu]; intros. *)
-
-(*   invert H0. *)
-
-(*   destruct (classic (exists st, indexedStep uid (ru,iu) st)). *)
-(*   - split_ex. *)
-(*     repeat *)
-(*       match goal with *)
-(*       | [ H : indexedStep _ _ _ |- _ ] => invert H *)
-(*       | [ H : indexedRealStep _ _ _ _ |- _ ] => invert H *)
-(*       | [ LK1 : users ?ru $? ?uid = Some ?ud1, LK2 : users ?ru $? ?uid = Some ?ud2 |- _ ] => *)
-(*         destruct ru, ud1, ud2; unfold build_data_step in *; simpl in *; clean_map_lookups *)
-(*       | [ S1 : step_user _ (Some ?uid) _ _ , S2 : step_user _ (Some ?uid) _ _ |- _ ] => *)
-(*         eapply user_step_label_deterministic in S1; eauto; clean_context *)
-(*       end. *)
-
-(*       (do 3 eexists); repeat simple apply conj; eauto. *)
-
-(*   - assert (forall st', ~ indexedStep uid (ru,iu) st') by eauto using all_not_not_ex. *)
-(*     eapply H in H3; eauto. *)
-(*     contradiction. *)
-
-(*     Unshelve. *)
-(*     all: eauto. *)
-(*     exact (IdealWorld.Input (IdealWorld.message.Content 1) (Single 1) #0 $0). *)
-(* Qed. *)
 
 Lemma step_reorder :
   forall A B C lbl1 suid1 uid1 (bd1 bd1' : data_step0 A B C),
@@ -339,42 +241,6 @@ Proof.
   rewrite merge_perms_sym; trivial.
 Qed.
 
-Lemma user_step_label_deterministic' :
-  forall t t__hon t__adv suid lbl bd bd',
-
-    step_user lbl suid bd bd'
-    
-    -> forall (usrs usrs' : honest_users t__hon) (adv adv' : user_data t__adv) (cmd cmd' : user_cmd t)
-        cs cs' gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' n n' uid uid',
-
-      bd = (usrs,adv,cs,gks,ks,qmsgs,mycs,froms,sents,n,cmd)
-      -> bd' = (usrs',adv',cs',gks',ks',qmsgs',mycs',froms',sents',n',cmd')
-      -> suid = Some uid
-      -> uid' <> uid
-      -> forall cmd1, usrs $? uid = Some (mkUserData ks cmd1 qmsgs mycs froms sents n)
-      -> forall ud, usrs $? uid' = Some ud
-      -> forall lbl' bd'', step_user lbl' (Some uid') (build_data_step (mkUniverse usrs adv cs gks) ud) bd''
-      -> forall usrs'' cmdc, usrs'' = usrs' $+ (uid, mkUserData ks' cmdc qmsgs' mycs' froms' sents' n')
-      -> forall ud', usrs' $? uid' = Some ud'
-      -> forall lbl'' bd''', step_user lbl'' (Some uid') (build_data_step (mkUniverse usrs'' adv' cs' gks') ud') bd'''
-      -> lbl' = lbl''.
-Proof.
-  intros; subst; clean_map_lookups.
-  dt bd''; dt bd'''.
-  pose proof (step_reorder _ _ _ _ _ _ _ _ H eq_refl _ _ _ _ _ _ H6 eq_refl).
-  destruct ud; simpl in *.
-  eapply impact_from_other_user_step with (u_id2 := uid') in H; eauto; split_ex.
-  clean_map_lookups; subst.
-  
-  eapply H0 with (cmdc1' := cmdc) in H4; eauto; clear H0.
-
-  2 : unfold build_data_step; simpl; eauto.
-
-  split_ex; unfold build_data_step in *; simpl in *.
-
-  eapply user_step_label_deterministic in H9; eauto.
-Qed.
-
 Lemma action_matches_addnl_cipher_inp :
   forall cs cid c gks ia t c_id c' pat froms,
     ~ In cid cs
@@ -409,6 +275,42 @@ Proof.
       clean_map_lookups;
       [ econstructor 3 | econstructor 4];
       eauto.
+Qed.
+
+Lemma user_step_label_deterministic' :
+  forall t t__hon t__adv suid lbl bd bd',
+
+    step_user lbl suid bd bd'
+    
+    -> forall (usrs usrs' : honest_users t__hon) (adv adv' : user_data t__adv) (cmd cmd' : user_cmd t)
+        cs cs' gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' n n' uid uid',
+
+      bd = (usrs,adv,cs,gks,ks,qmsgs,mycs,froms,sents,n,cmd)
+      -> bd' = (usrs',adv',cs',gks',ks',qmsgs',mycs',froms',sents',n',cmd')
+      -> suid = Some uid
+      -> uid' <> uid
+      -> forall cmd1, usrs $? uid = Some (mkUserData ks cmd1 qmsgs mycs froms sents n)
+      -> forall ud, usrs $? uid' = Some ud
+      -> forall lbl' bd'', step_user lbl' (Some uid') (build_data_step (mkUniverse usrs adv cs gks) ud) bd''
+      -> forall usrs'' cmdc, usrs'' = usrs' $+ (uid, mkUserData ks' cmdc qmsgs' mycs' froms' sents' n')
+      -> forall ud', usrs' $? uid' = Some ud'
+      -> forall lbl'' bd''', step_user lbl'' (Some uid') (build_data_step (mkUniverse usrs'' adv' cs' gks') ud') bd'''
+      -> lbl' = lbl''.
+Proof.
+  intros; subst; clean_map_lookups.
+  dt bd''; dt bd'''.
+  pose proof (step_reorder _ _ _ _ _ _ _ _ H eq_refl _ _ _ _ _ _ H6 eq_refl).
+  destruct ud; simpl in *.
+  eapply impact_from_other_user_step with (u_id2 := uid') in H; eauto; split_ex.
+  clean_map_lookups; subst.
+  
+  eapply H0 with (cmdc1' := cmdc) in H4; eauto; clear H0.
+
+  2 : unfold build_data_step; simpl; eauto.
+
+  split_ex; unfold build_data_step in *; simpl in *.
+
+  eapply user_step_label_deterministic in H9; eauto.
 Qed.
 
 Lemma no_model_step_other_user_silent_step' :
@@ -545,9 +447,6 @@ Proof.
       eauto using action_matches_addnl_cipher_inp.
 
   - destruct userData; simpl in *; clean_map_lookups.
-
-    Import ProtocolAutomation.
-    Import SimulationAutomation.
 
     destruct ra; process_actions.
 

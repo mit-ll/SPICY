@@ -136,33 +136,6 @@ Proof.
     eauto.
 Qed.
 
-Section PredicatePreservation.
-  Import RealWorld.
-
-  Lemma goodness_preservation_step :
-    forall t__hon t__adv (st st' : universe t__hon t__adv * IdealWorld.universe t__hon),
-      step st st'
-      -> syntactically_safe_U (fst st)
-      -> goodness_predicates (fst st)
-      -> goodness_predicates (fst st').
-  Proof.
-    inversion 1; intros; subst; simpl in *; eauto using goodness_preservation_stepU.
-    eapply indexedRealStep_real_step in H0; eauto using goodness_preservation_stepU.
-  Qed.
-
-  Lemma syntactically_safe_U_preservation_step :
-    forall t__hon t__adv (st st' : universe t__hon t__adv * IdealWorld.universe t__hon),
-      step st st'
-      -> goodness_predicates (fst st)
-      -> syntactically_safe_U (fst st)
-      -> syntactically_safe_U (fst st').
-  Proof.
-    inversion 1; intros; subst; simpl in *; eauto using syntactically_safe_U_preservation_stepU.
-    eapply indexedRealStep_real_step in H0; eauto using syntactically_safe_U_preservation_stepU.
-  Qed.
-
-End PredicatePreservation.
-
 Definition no_resends (sents : sent_nonces) :=
   NoDup sents.
 

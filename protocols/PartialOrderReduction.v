@@ -64,9 +64,6 @@ Require IdealWorld.
 
 Set Implicit Arguments.
 
-Ltac dt bd :=
-  destruct bd as [[[[[[[[[[?usrs ?adv] ?cs] ?gks] ?ks] ?qmsgs] ?mycs] ?froms] ?sents] ?cur_n] ?cmd].
-
 Import SimulationAutomation.
 Import SafetyAutomation.
 
