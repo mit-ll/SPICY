@@ -188,48 +188,11 @@ Inductive step {t__hon t__adv : type} :
 | RealSilent : forall ru ru' iu,
     RealWorld.step_universe ru Silent ru'
     -> step (ru, iu) (ru', iu)
-(* | RealSilent : *)
-(*     forall uid ru ru' iu userData usrs adv cs gks ks qmsgs mycs froms sents cur_n cmd, *)
-(*       ru.(users) $? uid = Some userData *)
-(*     -> step_user Silent (Some uid) *)
-(*                 (build_data_step ru userData) *)
-(*                 (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
-(*     -> ru' = buildUniverse usrs adv cs gks uid {| key_heap  := ks *)
-(*                                                ; msg_heap  := qmsgs *)
-(*                                                ; protocol  := cmd *)
-(*                                                ; c_heap    := mycs *)
-(*                                                ; from_nons := froms *)
-(*                                                ; sent_nons := sents *)
-(*                                                ; cur_nonce := cur_n |} *)
-(*     -> step (ru, iu) (ru', iu) *)
 | BothLoud : forall uid ru ru' iu iu' iu'' ra ia,
     indexedRealStep uid (Action ra) ru ru'
     -> (indexedIdealStep uid Silent) ^* iu iu'
     -> indexedIdealStep uid (Action ia) iu' iu''
     -> action_matches ru.(all_ciphers) ru.(all_keys) ra ia
-                                                    
-    (* forall uid ru ru' iu iu' iu'' userData usrs adv cs gks ks qmsgs mycs froms sents cur_n cmd ra ia idealUser chs' ip' ips', *)
-    (*   ru.(users) $? uid = Some userData *)
-    (* -> step_user (Action ra) (Some uid) *)
-    (*             (build_data_step ru userData) *)
-    (*             (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
-    (* -> ru' = buildUniverse usrs adv cs gks uid {| key_heap  := ks *)
-    (*                                            ; msg_heap  := qmsgs *)
-    (*                                            ; protocol  := cmd *)
-    (*                                            ; c_heap    := mycs *)
-    (*                                            ; from_nons := froms *)
-    (*                                            ; sent_nons := sents *)
-    (*                                            ; cur_nonce := cur_n |} *)
-
-
-    (* -> istepSilent ^* iu iu' *)
-    (* -> iu'.(IdealWorld.users) $? uid = Some idealUser *)
-    (* -> IdealWorld.lstep_user (Action ia) (iu'.(IdealWorld.channel_vector), *)
-    (*                                      idealUser.(IdealWorld.protocol), *)
-    (*                                      idealUser.(IdealWorld.perms)) (chs',ip',ips') *)
-    (* -> iu'' = {| IdealWorld.channel_vector := chs'; *)
-    (*             IdealWorld.users := iu'.(IdealWorld.users) $+ (uid, {| IdealWorld.protocol := ip' ; IdealWorld.perms := ips' |}) |} *)
-    (* -> action_matches ru.(all_ciphers) ru.(all_keys) ra ia *)
     -> step (ru, iu) (ru', iu'')
 .
 

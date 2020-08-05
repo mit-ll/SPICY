@@ -61,6 +61,8 @@ protocols/ShareSecretProtocol.v
 
 protocols/PORExtended.v
 
+protocols/ProtocolFunctions.v
+
 # protocols/SimplePingProtocol.v
 # protocols/SimpleEncProtocol.v
 # protocols/ShareKeyProtocol.v

@@ -5,7 +5,7 @@
  * in this material are those of the author(s) and do not necessarily reflect the views of the 
  * Department of the Air Force.
  * 
- * © 2019 Massachusetts Institute of Technology.
+ * © 2019-2020 Massachusetts Institute of Technology.
  * 
  * MIT Proprietary, Subject to FAR52.227-11 Patent Rights - Ownership by the contractor (May 2014)
  * 
@@ -31,16 +31,15 @@ Require Import
         Simulation
         AdversaryUniverse
         UniverseEqAutomation
-        ExampleProtocols
         ProtocolAutomation
-        SafeProtocol.
+        SafeProtocol
+        ProtocolFunctions.
 
 Require IdealWorld RealWorld.
 
-Import IdealWorld.IdealNotations.
-Import RealWorld.RealWorldNotations.
-
-Import SimulationAutomation.
+Import IdealWorld.IdealNotations
+       RealWorld.RealWorldNotations
+       SimulationAutomation.
 
 Import Sets.
 Module Foo <: EMPTY.
@@ -49,94 +48,85 @@ Module Import SN := SetNotations(Foo).
 
 Set Implicit Arguments.
 
+Open Scope protocol_scope.
+
 Module ShareSecretProtocol.
 
   Section IW.
     Import IdealWorld.
 
-    Notation CH__A2B := (Single 0).
-    Notation CH__B2A := (Single 1).
-    Notation pCH__A2B := 0.
-    Notation pCH__B2A := 1.
+    Notation pCH12 := 0.
+    Notation pCH21 := 1.
+    Notation CH12  := (# pCH12).
+    Notation CH21  := (# pCH21).
 
-    Definition empty_chs : channels := (#0 #+ (CH__A2B, []) #+ (CH__B2A, [])).
+    Notation empty_chs := (#0 #+ (CH12, []) #+ (CH21, [])).
 
-    Definition PERMS__a := $0 $+ (pCH__A2B, owner) $+ (pCH__B2A, reader).
-    Definition PERMS__b := $0 $+ (pCH__A2B, reader) $+ (pCH__B2A, owner).
+    Notation PERMS1 := ($0 $+ (pCH12, owner) $+ (pCH21, reader)).
+    Notation PERMS2 := ($0 $+ (pCH12, reader) $+ (pCH21, owner)).
+
+    Notation ideal_users :=
+      [
+        (mkiUsr USR1 PERMS1 
+                ( chid <- CreateChannel
+                  ; _ <- Send (Permission {| ch_perm := writer ; ch_id := chid |}) CH12
+                  ; m <- @Recv Nat (chid #& pCH21)
+                  ; @Return (Base Nat) (extractContent m)
+        )) ;
+      (mkiUsr USR2 PERMS2
+              ( m <- @Recv Access CH12
+                ; n <- Gen
+                ; _ <- let chid := ch_id (extractPermission m)
+                      in  Send (Content n) (chid #& pCH21)
+                ; @Return (Base Nat) n
+      ))
+      ].
 
     Definition ideal_univ_start :=
-      mkiU empty_chs PERMS__a PERMS__b
-           (* user A *)
-           ( chid <- CreateChannel
-           ; _ <- Send (Permission {| ch_perm := writer ; ch_id := chid |}) CH__A2B
-           ; m <- @Recv Nat (chid #& pCH__B2A)
-           ; @Return (Base Nat) (extractContent m)
-           )
-
-           (* user B *)
-           ( m <- @Recv Access CH__A2B
-           ; n <- Gen
-           ; _ <- let chid := ch_id (extractPermission m)
-                 in  Send (Content n) (chid #& pCH__B2A)
-           ; @Return (Base Nat) n
-           ).
+      mkiU empty_chs ideal_users.
 
   End IW.
 
   Section RW.
     Import RealWorld.
 
-    Definition KID1 : key_identifier := 0.
-    Definition KID2 : key_identifier := 1.
+    Notation KID1 := 0.
+    Notation KID2 := 1.
 
-    Definition KEY1  := MkCryptoKey KID1 Signing AsymKey.
-    Definition KEY2  := MkCryptoKey KID2 Signing AsymKey.
-    Definition KEYS  := $0 $+ (KID1, KEY1) $+ (KID2, KEY2).
+    Notation KEYS := [ skey KID1 ; skey KID2 ].
 
-    Definition A__keys := $0 $+ (KID1, true) $+ (KID2, false).
-    Definition B__keys := $0 $+ (KID1, false) $+ (KID2, true).
+    Notation KEYS1 := ($0 $+ (KID1, true) $+ (KID2, false)).
+    Notation KEYS2 := ($0 $+ (KID1, false) $+ (KID2, true)).
+
+    Notation real_users :=
+      [
+        USR1 with KEYS1 >> ( kp <- GenerateAsymKey Encryption
+                          ; c1 <- Sign KID1 USR2 (Permission (fst kp, false))
+                          ; _  <- Send USR2 c1
+                          ; c2 <- @Recv Nat (SignedEncrypted KID2 (fst kp) true)
+                          ; m  <- Decrypt c2
+                          ; @Return (Base Nat) (extractContent m) ) ;
+
+      USR2 with KEYS2 >> ( c1 <- @Recv Access (Signed KID1 true)
+                        ; v  <- Verify KID1 c1
+                        ; n  <- Gen
+                        ; c2 <- SignEncrypt KID2 (fst (extractPermission (snd v))) USR1 (message.Content n)
+                        ; _  <- Send USR1 c2
+                        ; @Return (Base Nat) n)
+      ].
 
     Definition real_univ_start :=
-      mkrU KEYS A__keys B__keys
-           (* user A *)
-           ( kp <- GenerateAsymKey Encryption
-           ; c1 <- Sign KID1 B (Permission (fst kp, false))
-           ; _  <- Send B c1
-           ; c2 <- @Recv Nat (SignedEncrypted KID2 (fst kp) true)
-           ; m  <- Decrypt c2
-           ; @Return (Base Nat) (extractContent m) )
-
-           (* user B *)
-           ( c1 <- @Recv Access (Signed KID1 true)
-           ; v  <- Verify KID1 c1
-           ; n  <- Gen
-           ; c2 <- SignEncrypt KID2 (fst (extractPermission (snd v))) A (message.Content n)
-           ; _  <- Send A c2
-           ; @Return (Base Nat) n).
-  
+      mkrU (mkKeys KEYS) real_users.
   End RW.
 
   Hint Unfold
-       A B KID1 KID2 KEY1 KEY2 A__keys B__keys
-       PERMS__a PERMS__b
-       real_univ_start mkrU mkrUsr
-       ideal_univ_start mkiU : constants.
-  
-  Import SimulationAutomation.
-
-  Hint Extern 0 (~^* _ _) =>
-    progress(autounfold with constants; simpl).
+       mkiU mkiUsr mkrU mkrUsr
+       mkKeys
+       real_univ_start
+       ideal_univ_start : constants.
 
   Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
     progress(autounfold with constants; simpl).
-
-  Hint Extern 1 (PERMS__a $? _ = _) => unfold PERMS__a.
-  Hint Extern 1 (PERMS__b $? _ = _) => unfold PERMS__b.
-
-  Hint Extern 1 (istepSilent ^* _ _) =>
-  autounfold with constants; simpl;
-    repeat (ideal_single_silent_multistep A);
-    repeat (ideal_single_silent_multistep B); solve_refl.
   
 End ShareSecretProtocol.
 
@@ -148,11 +138,17 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
   Definition t__adv := Unit.
   Definition b := tt.
   Definition iu0  := ideal_univ_start.
-  Definition ru0  := real_univ_start startAdv.
+  Definition ru0  := real_univ_start.
 
   Import Gen Tacs SetLemmas.
 
   Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start mkiU real_univ_start mkrU mkrUsr startAdv : core.
+  Hint Unfold
+       mkiU mkiUsr mkrU mkrUsr
+       mkKeys
+       real_univ_start
+       ideal_univ_start
+       noAdv : core.
 
   Ltac step1 := eapply msc_step_alt; [ unfold oneStepClosure_new; simplify; tidy; rstep; istep | ..].
   Ltac step2 := 
@@ -218,9 +214,8 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
           split_ex; simpl in *; subst; solve_honest_actions_safe;
             clean_map_lookups; eauto 8.
 
-        Unshelve.
-        all:clean_map_lookups.
-        
+        all: unfold mkKeys in *; simpl in *; solve_honest_actions_safe; eauto.
+
       + sets_invert; unfold labels_align;
           split_ex; subst; intros;
             rstep.
@@ -313,7 +308,7 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
     repeat (apply conj); intros; eauto.
     - solve_perm_merges; eauto.
     - econstructor.
-    - unfold AdversarySafety.keys_honest, KEYS; rewrite Forall_natmap_forall; intros.
+    - unfold AdversarySafety.keys_honest; rewrite Forall_natmap_forall; intros.
       econstructor; unfold mkrUsr; simpl.
       rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty; eauto.
       solve_perm_merges.
@@ -334,28 +329,28 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
     intuition eauto;
       simpl in *.
 
-    - unfold KEYS in *; solve_simple_maps; eauto.
+    - solve_simple_maps; eauto.
     - rewrite Forall_natmap_forall; intros.
       solve_simple_maps; simpl;
-        unfold permission_heap_good, KEYS, A__keys, B__keys; intros;
+        unfold permission_heap_good; intros;
           solve_simple_maps; eauto.
 
     - unfold user_cipher_queues_ok.
       rewrite Forall_natmap_forall; intros.
-      cases (A ==n k); cases (B ==n k);
+      cases (USR1 ==n k); cases (USR2 ==n k);
         subst; clean_map_lookups; simpl in *; econstructor; eauto.
 
     - unfold honest_nonces_ok; intros.
       unfold honest_nonce_tracking_ok.
 
-      destruct (u_id ==n A); destruct (u_id ==n B);
-        destruct (rec_u_id ==n A); destruct (rec_u_id ==n B);
+      destruct (u_id ==n USR1); destruct (u_id ==n USR2);
+        destruct (rec_u_id ==n USR1); destruct (rec_u_id ==n USR2);
           subst; try contradiction; try discriminate; clean_map_lookups; simpl;
             repeat (apply conj); intros; clean_map_lookups; eauto.
 
     - unfold honest_users_only_honest_keys; intros.
-      destruct (u_id ==n A);
-        destruct (u_id ==n B);
+      destruct (u_id ==n USR1);
+        destruct (u_id ==n USR2);
         subst;
         simpl in *;
         clean_map_lookups;
