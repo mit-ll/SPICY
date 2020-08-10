@@ -175,9 +175,9 @@ Qed.
 Lemma resend_violation_step' :
   forall t__hon t__adv st st' b,
     @step t__hon t__adv st st'
-    -> lameAdv b (fst st).(adversary)
-    -> no_resends_U (fst st')
-    -> no_resends_U (fst st).
+    -> lameAdv b (fst (fst st)).(adversary)
+    -> no_resends_U (fst (fst st'))
+    -> no_resends_U (fst (fst st)).
 Proof.
   induction 1; unfold no_resends_U; rewrite !Forall_natmap_forall; destruct ru, v; simpl in *; intros.
 
@@ -194,22 +194,33 @@ Proof.
 
   - invert H; unfold build_data_step in *; simpl in *.
     destruct (uid ==n k); subst; clean_map_lookups; simpl in *; eauto.
-    + specialize (H4 k); rewrite add_eq_o in H4 by trivial.
-      specialize (H4 _ eq_refl); simpl in *.
+    + specialize (H5 k); rewrite add_eq_o in H5 by trivial.
+      specialize (H5 _ eq_refl); simpl in *.
       eapply no_resends_user_step; eauto.
-    + specialize (H4 k); rewrite add_neq_o in H4 by congruence.
+    + specialize (H5 k); rewrite add_neq_o in H5 by congruence.
       destruct userData; eapply step_limited_change_other_user with (u_id2 := k) in H7; eauto.
       split_ex; split_ors; clean_map_lookups; simpl in *.
-      specialize (H4 _ H7); eauto.
-      specialize (H4 _ H7); eauto.
+      specialize (H5 _ H7); eauto.
+      specialize (H5 _ H7); eauto.
+
+  - invert H; unfold build_data_step in *; simpl in *.
+    destruct (uid ==n k); subst; clean_map_lookups; simpl in *; eauto.
+    + specialize (H2 k); rewrite add_eq_o in H2 by trivial.
+      specialize (H2 _ eq_refl); simpl in *.
+      eapply no_resends_user_step; eauto.
+    + specialize (H2 k); rewrite add_neq_o in H2 by congruence.
+      destruct userData; eapply step_limited_change_other_user with (u_id2 := k) in H5; eauto.
+      split_ex; split_ors; clean_map_lookups; simpl in *.
+      specialize (H2 _ H5); eauto.
+      specialize (H2 _ H5); eauto.
 Qed.
 
 Lemma resend_violation_step :
   forall t__hon t__adv st st' b,
     @step t__hon t__adv st st'
-    -> lameAdv b (fst st).(adversary)
-    -> ~ no_resends_U (fst st)
-    -> ~ no_resends_U (fst st').
+    -> lameAdv b (fst (fst st)).(adversary)
+    -> ~ no_resends_U (fst (fst st))
+    -> ~ no_resends_U (fst (fst st')).
 Proof.
   unfold not; intros.
   eauto using resend_violation_step'.
@@ -218,9 +229,9 @@ Qed.
 Lemma resend_violation_steps :
   forall t__hon t__adv st st' b,
     (@step t__hon t__adv) ^* st st'
-    -> lameAdv b (fst st).(adversary)
-    -> ~ no_resends_U (fst st)
-    -> ~ no_resends_U (fst st').
+    -> lameAdv b (fst (fst st)).(adversary)
+    -> ~ no_resends_U (fst (fst st))
+    -> ~ no_resends_U (fst (fst st')).
 Proof.
   induction 1; intros; eauto.
 

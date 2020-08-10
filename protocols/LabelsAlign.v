@@ -47,7 +47,7 @@ Require IdealWorld.
 Set Implicit Arguments.
 
 (* forall reachable states labels align *)
-Inductive labels_always_align {A B} : (universe A B * IdealWorld.universe A) -> Prop :=
+Inductive labels_always_align {A B} : @ModelState A B -> Prop :=
 | StepLabelsAlign : 
     forall st,
       (forall st', step st st' -> labels_always_align st')
@@ -55,10 +55,10 @@ Inductive labels_always_align {A B} : (universe A B * IdealWorld.universe A) -> 
       -> labels_always_align st.
 
 Definition stuck_step_implies_stuck_universe_step {t__hon t__adv}
-           (st : universe t__hon t__adv * IdealWorld.universe t__hon) : Prop :=
+           (st : @ModelState t__hon t__adv) : Prop :=
   (forall st', step st st' -> False)
   -> forall lbl ru',
-    step_universe (fst st) lbl ru' -> False.
+    step_universe (fst (fst st)) lbl ru' -> False.
 
 
 (* Definition almostEqual {A}  (ud ud' : user_data A) := *)
@@ -597,48 +597,48 @@ Admitted.
 
 
 
-Lemma labels_align_silent_step' :
-  forall A B C suid lbl bd bd',
+(* Lemma labels_align_silent_step' : *)
+(*   forall A B C suid lbl bd bd', *)
 
-    step_user lbl suid bd bd'
+(*     step_user lbl suid bd bd' *)
 
-    -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks'
-        (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs'
-        froms froms' sents sents' cur_n cur_n' uid,
+(*     -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks' *)
+(*         (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs' *)
+(*         froms froms' sents sents' cur_n cur_n' uid, *)
 
-      bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
-      -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
-      -> suid = Some uid
-      -> forall cmdc,
-          usrs $? uid = Some (mkUserData ks cmdc qmsgs mycs froms sents cur_n)
+(*       bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
+(*       -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd') *)
+(*       -> suid = Some uid *)
+(*       -> forall cmdc, *)
+(*           usrs $? uid = Some (mkUserData ks cmdc qmsgs mycs froms sents cur_n) *)
 
-      -> forall cmdc' iu,
-          labels_align ({|
-                         users := usrs $+ (uid,
-                                           {|
-                                             key_heap := ks';
-                                             protocol := cmdc';
-                                             msg_heap := qmsgs';
-                                             c_heap := mycs';
-                                             from_nons := froms';
-                                             sent_nons := sents';
-                                             cur_nonce := cur_n' |});
-                         adversary := adv';
-                         all_ciphers := cs';
-                         all_keys := gks' |}, iu)
-       -> labels_align ({|
-                         users := usrs;
-                         adversary := adv;
-                         all_ciphers := cs;
-                         all_keys := gks |}, iu).
-Proof.
-  induction 1; inversion 1; inversion 1; intros; subst; eauto.
-  - admit.
-  - unfold labels_align in *; intros.
-    invert H1; simpl in *.
-    destruct userData; unfold build_data_step in *; simpl in *.
+(*       -> forall cmdc' iu, *)
+(*           labels_align ({| *)
+(*                          users := usrs $+ (uid, *)
+(*                                            {| *)
+(*                                              key_heap := ks'; *)
+(*                                              protocol := cmdc'; *)
+(*                                              msg_heap := qmsgs'; *)
+(*                                              c_heap := mycs'; *)
+(*                                              from_nons := froms'; *)
+(*                                              sent_nons := sents'; *)
+(*                                              cur_nonce := cur_n' |}); *)
+(*                          adversary := adv'; *)
+(*                          all_ciphers := cs'; *)
+(*                          all_keys := gks' |}, iu) *)
+(*        -> labels_align ({| *)
+(*                          users := usrs; *)
+(*                          adversary := adv; *)
+(*                          all_ciphers := cs; *)
+(*                          all_keys := gks |}, iu). *)
+(* Proof. *)
+(*   induction 1; inversion 1; inversion 1; intros; subst; eauto. *)
+(*   - admit. *)
+(*   - unfold labels_align in *; intros. *)
+(*     invert H1; simpl in *. *)
+(*     destruct userData; unfold build_data_step in *; simpl in *. *)
 
-Admitted.
+(* Admitted. *)
 
 
 Lemma alignment_violation_step' :
@@ -676,7 +676,7 @@ Admitted.
 Lemma alignment_violation_step :
   forall t__hon t__adv st st' b,
     @step t__hon t__adv st st'
-    -> lameAdv b (fst st).(adversary)
+    -> lameAdv b (fst (fst st)).(adversary)
     -> ~ labels_always_align st
     -> ~ labels_always_align st'.
 Proof.
@@ -687,13 +687,13 @@ Qed.
 Lemma alignment_violation_steps :
   forall t__hon t__adv st st' b,
     (@step t__hon t__adv)^* st st'
-    -> lameAdv b (fst st).(adversary)
+    -> lameAdv b (fst (fst st)).(adversary)
     -> ~ labels_always_align st
     -> ~ labels_always_align st'.
 Proof.
   induction 1; intros; eauto.
 
-  assert (LAME : lameAdv b (fst y).(adversary)) by eauto using adversary_remains_lame_step.
+  assert (LAME : lameAdv b (fst (fst y)).(adversary)) by eauto using adversary_remains_lame_step.
   destruct x, y, z; simpl in *.
 
   generalize H; intros VIOL; eapply alignment_violation_step in VIOL; eauto.

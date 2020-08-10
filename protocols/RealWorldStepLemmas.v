@@ -115,22 +115,21 @@ Section ModelCheckStepLemmas.
        indexedRealStep_real_step : core.
 
   Lemma syntactically_safe_U_preservation_step :
-    forall t__hon t__adv (st st' : universe t__hon t__adv * IdealWorld.universe t__hon),
+    forall t__hon t__adv (st st' : @ModelState t__hon t__adv),
       step st st'
-      -> goodness_predicates (fst st)
-      -> syntactically_safe_U (fst st)
-      -> syntactically_safe_U (fst st').
+      -> goodness_predicates (fst (fst st))
+      -> syntactically_safe_U (fst (fst st))
+      -> syntactically_safe_U (fst (fst st')).
   Proof.
     inversion 1; intros; subst; simpl in *; eapply syntactically_safe_U_preservation_stepU; eauto.
-    
   Qed.
 
   Lemma goodness_preservation_step :
-    forall t__hon t__adv (st st' : universe t__hon t__adv * IdealWorld.universe t__hon),
+    forall t__hon t__adv (st st' : @ModelState t__hon t__adv),
       step st st'
-      -> syntactically_safe_U (fst st)
-      -> goodness_predicates (fst st)
-      -> goodness_predicates (fst st').
+      -> syntactically_safe_U (fst (fst st))
+      -> goodness_predicates (fst (fst st))
+      -> goodness_predicates (fst (fst st')).
   Proof.
     inversion 1; intros; subst; simpl in *; eauto using goodness_preservation_stepU.
   Qed.
@@ -138,9 +137,9 @@ Section ModelCheckStepLemmas.
   Lemma syntactically_safe_U_preservation_steps :
     forall t__hon t__adv st st',
       (@step t__hon t__adv) ^* st st'
-      -> goodness_predicates (fst st)
-      -> syntactically_safe_U (fst st)
-      -> syntactically_safe_U (fst st').
+      -> goodness_predicates (fst (fst st))
+      -> syntactically_safe_U (fst (fst st))
+      -> syntactically_safe_U (fst (fst st')).
   Proof.
     induction 1; intros; eauto.
     eapply IHtrc; eauto using syntactically_safe_U_preservation_step, goodness_preservation_step.
@@ -845,9 +844,9 @@ Section Lameness.
 
   Lemma adversary_remains_lame_step :
     forall t__hon t__adv st st' b,
-      lameAdv b (fst st).(adversary)
+      lameAdv b (fst (fst st)).(adversary)
       -> (@step t__hon t__adv) st st'
-      -> lameAdv b (fst st').(adversary).
+      -> lameAdv b (fst (fst st')).(adversary).
   Proof.
     invert 2; simpl in *; eauto using adversary_remains_lame, adversary_remains_lame_indexed.
   Qed.

@@ -17,6 +17,7 @@
  * as specifically authorized by the U.S. Government may violate any copyrights that exist in this work. *)
 
 From Coq Require Import
+     Classical
      Lists.List.
 
 From KeyManagement Require Import
@@ -180,64 +181,14 @@ Module Import SN := SetNotations(Foo).
 (* Definition iUserStepSilent {A} (U1 U2 : IdealWorld.universe A) := *)
 (*   IdealWorld.lstep_universe U1 Silent U2. *)
 
+Definition ModelState {t__hon t__adv : type} := (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon * bool)%type.
 
-Inductive step {t__hon t__adv : type} :
-  (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon)
-  -> (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon)
-  -> Prop :=
-| RealSilent : forall ru ru' iu,
-    RealWorld.step_universe ru Silent ru'
-    -> step (ru, iu) (ru', iu)
-| BothLoud : forall uid ru ru' iu iu' iu'' ra ia,
-    indexedRealStep uid (Action ra) ru ru'
-    -> (indexedIdealStep uid Silent) ^* iu iu'
-    -> indexedIdealStep uid (Action ia) iu' iu''
-    -> action_matches ru.(all_ciphers) ru.(all_keys) ra ia
-    -> step (ru, iu) (ru', iu'')
-.
-
-(* Lemma step_implies_model_step_user : *)
-(*   forall t__hon t__adv st st' b, *)
-(*     @step t__hon t__adv st st' *)
-(*     -> lameAdv b (fst st).(adversary) *)
-(*     -> exists uid, *)
-(*         model_step_user uid st st'. *)
-(* Proof. *)
-(*   invert 1; intros; subst; simpl in *. *)
-
-(*   invert H0; dismiss_adv; unfold buildUniverse, build_data_step in *; simpl in *. *)
-(*   eexists; econstructor 1; eauto. *)
-
-(*   invert H0; dismiss_adv; unfold buildUniverse, build_data_step in *; simpl in *. *)
-(*   eexists; econstructor 2; eauto. *)
-(* Qed. *)
-
-(* Lemma model_step_user_implies_step : *)
-(*   forall t__hon t__adv st st' uid, *)
-(*     @model_step_user t__hon t__adv uid st st' *)
-(*     -> step st st'. *)
-(* Proof. *)
-(*   invert 1. *)
-(*   econstructor 1; econstructor 1; eauto. *)
-
-(*   econstructor 2; eauto. *)
-(*   econstructor; eauto. *)
-(* Qed. *)
-
-
-
-
-
-
-Definition lift_fst {A B C} (f : A -> C) : (A * B) -> C :=
-  fun p => f (fst p).
-
-Definition safety {t__hon t__adv} (st : RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon) : Prop :=
-  let (ru, iu) := st
+Definition safety {t__hon t__adv} (st : @ModelState t__hon t__adv) : Prop :=
+  let '(ru, iu, b) := st
   in  honest_cmds_safe ru.
 
-Definition labels_align {t__hon t__adv} (st : RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon) : Prop :=
-  let (ru, iu) := st
+Definition labels_align {t__hon t__adv} (st : @ModelState t__hon t__adv) : Prop :=
+  let '(ru, iu, b) := st
   in  forall uid ru' ra,
       indexedRealStep uid (Action ra) ru ru'
       -> exists ia iu' iu'',
@@ -245,10 +196,44 @@ Definition labels_align {t__hon t__adv} (st : RealWorld.universe t__hon t__adv *
         /\ indexedIdealStep uid (Action ia) iu' iu''
         /\ action_matches ru.(RealWorld.all_ciphers) ru.(RealWorld.all_keys) ra ia.
 
+Inductive step {t__hon t__adv : type} :
+    @ModelState t__hon t__adv 
+  -> @ModelState t__hon t__adv
+  -> Prop :=
+| RealSilent : forall ru ru' iu b,
+    RealWorld.step_universe ru Silent ru'
+    -> step (ru, iu, b) (ru', iu, b)
+| BothLoud : forall uid ru ru' iu iu' iu'' ra ia b,
+    indexedRealStep uid (Action ra) ru ru'
+    -> (indexedIdealStep uid Silent) ^* iu iu'
+    -> indexedIdealStep uid (Action ia) iu' iu''
+    -> action_matches ru.(all_ciphers) ru.(all_keys) ra ia
+    -> labels_align (ru, iu, b)
+    -> step (ru, iu, b) (ru', iu'', b)
+| Misalignment : forall uid ru ru' iu ra b,
+    indexedRealStep uid (Action ra) ru ru'
+    -> ~ labels_align (ru, iu, b)
+    -> step (ru, iu, b) (ru', iu, false)
+.
+
+Definition alignment {t__hon t__adv} (st : @ModelState t__hon t__adv) : Prop :=
+  let '(ru, iu, b) := st
+  in  b = true
+    /\ labels_align st.
+
+(* Lemma alignment_true_implies_labels_align : *)
+(*   forall t__hon t__adv ru iu ru' iu', *)
+(*     @step t__hon t__adv (ru,iu,true) (ru',iu',true) *)
+(*     -> labels_align (ru,iu,true) *)
+(*     -> labels_align (ru',iu',true). *)
+(* Proof. *)
+(*   induction 1; intros; eauto. *)
+
+
 Definition TrS {t__hon t__adv} (ru0 : RealWorld.universe t__hon t__adv) (iu0 : IdealWorld.universe t__hon) :=
-  {| Initial := {(ru0, iu0)};
+  {| Initial := {(ru0, iu0, true)};
      Step    := @step t__hon t__adv |}.
-  
+
 Module Type AutomatedSafeProtocol.
 
   Parameter t__hon : type.
@@ -264,8 +249,7 @@ Module Type AutomatedSafeProtocol.
 
   Axiom safe_invariant : invariantFor
                            SYS
-                           (fun st => safety st
-                                 /\ labels_align st ).
+                           (fun st => safety st /\ alignment st ).
 
 End AutomatedSafeProtocol.
 
@@ -352,12 +336,12 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
   Lemma safety_inv : invariantFor SYS safety.
   Proof. eapply invariant_weaken; [ apply safe_invariant | firstorder idtac]. Qed.
 
-  Lemma labels_align_inv : invariantFor SYS labels_align.
+  Lemma labels_align_inv : invariantFor SYS alignment.
   Proof. eapply invariant_weaken; [ apply safe_invariant | firstorder idtac]. Qed.
 
   Hint Resolve safety_inv labels_align_inv.
 
-  Definition reachable_from := (fun ru iu ru' iu' => SYS.(Step)^* (ru, iu) (ru', iu')).
+  Definition reachable_from := (fun ru iu ru' iu' b b' => SYS.(Step)^* (ru, iu, b) (ru', iu', b')).
   (* Definition reachable_froms := (fun st st' => reachable_from (fst st) (snd st) (fst st') (snd st')). *)
   Definition reachable := (fun ru iu => reachable_from ru0 iu0 ru iu).
   (* Definition reachables := (fun st => reachable (fst st) (snd st)). *)
@@ -381,15 +365,15 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
     RealWorld.simpl_universe t__hon
     -> IdealWorld.universe t__hon
     -> Prop :=
-  | RStep : forall ru iu,
-      SYS.(Step) ^* (ru0,iu0) (ru,iu)
+  | RStep : forall ru iu v,
+      SYS.(Step) ^* (ru0,iu0,true) (ru,iu,v)
       -> R (@RealWorld.peel_adv _ t__adv ru) iu.
 
   Lemma single_step_stays_lame :
     forall st st',
       SYS.(Step) st st'
-      -> lameAdv b (adversary (fst st))
-      -> lameAdv b (adversary (fst st')).
+      -> lameAdv b (adversary (fst (fst st)))
+      -> lameAdv b (adversary (fst (fst st'))).
   Proof.
     intros.
     invert H;
@@ -403,14 +387,14 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
   Lemma always_lame' :
     forall st st',
       SYS.(Step) ^* st st'
-      -> forall (ru ru' : RealWorld.universe t__hon t__adv) (iu iu' : IdealWorld.universe t__hon),
-          st = (ru,iu)
-        -> st' = (ru',iu')
+      -> forall (ru ru' : RealWorld.universe t__hon t__adv) (iu iu' : IdealWorld.universe t__hon) v v',
+          st = (ru,iu,v)
+        -> st' = (ru',iu',v')
         -> lameAdv b (adversary ru)
         -> lameAdv b (adversary ru').
   Proof.
     unfold SYS; simpl; intros *; intro H.
-    eapply trc_ind with (P:=fun st st' => lameAdv b (adversary (fst st)) -> lameAdv b (adversary (fst st'))) in H;
+    eapply trc_ind with (P:=fun st st' => lameAdv b (adversary (fst (fst st))) -> lameAdv b (adversary (fst (fst st')))) in H;
       intros;
       subst;
       simpl in *;
@@ -421,9 +405,9 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
   Qed.
 
   Lemma always_lame :
-    forall (ru ru' : RealWorld.universe t__hon t__adv) (iu iu' : IdealWorld.universe t__hon),
+    forall (ru ru' : RealWorld.universe t__hon t__adv) (iu iu' : IdealWorld.universe t__hon) v v',
       lameAdv b (adversary ru)
-      -> SYS.(Step) ^* (ru,iu) (ru',iu')
+      -> SYS.(Step) ^* (ru,iu,v) (ru',iu',v')
       -> lameAdv b (adversary ru').
   Proof.
     intros; eauto using always_lame'.
@@ -508,8 +492,8 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
   Qed.
 
   Lemma reachable_from_silent_step :
-    forall iu (ru U U' : RealWorld.universe t__hon t__adv),
-      SYS.(Step) ^* (ru0,iu0) (ru,iu)
+    forall iu (ru U U' : RealWorld.universe t__hon t__adv) v v',
+      SYS.(Step) ^* (ru0,iu0,v) (ru,iu,v')
       -> step_universe U Silent U'
       -> lameAdv b U.(adversary)
       -> ru.(users) = U.(users)
@@ -538,8 +522,8 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
   Qed.
   
   Lemma reachable_from_labeled_step :
-    forall iu (ru U U' : RealWorld.universe t__hon t__adv) uid a__r,
-      SYS.(Step) ^* (ru0,iu0) (ru,iu)
+    forall iu (ru U U' : RealWorld.universe t__hon t__adv) uid a__r v,
+      SYS.(Step) ^* (ru0,iu0,true) (ru,iu,v)
       -> indexedRealStep uid (Action a__r) U U'
 
       (* -> step_universe U (Action a__r) U' *)
@@ -591,22 +575,6 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
     econstructor 1; eauto.
   Qed.
 
-  (* Lemma message_eq_adv_change : *)
-  (*   forall {t t1 t2} (m__rw : crypto t) (m__iw : IdealWorld.message.message t) *)
-  (*     (U U' : RealWorld.universe t1 t2) (U__i : IdealWorld.universe t1) ch_id, *)
-  (*     message_eq m__rw U m__iw U__i ch_id *)
-  (*     -> users U = users U' *)
-  (*     -> all_ciphers U = all_ciphers U' *)
-  (*     -> all_keys U = all_keys U' *)
-  (*     -> message_eq m__rw U' m__iw U__i ch_id. *)
-  (* Proof. *)
-  (*   intros * MEQ RWU RWC RWK. *)
-  (*   invert MEQ; [ econstructor 1 | econstructor 2 ] *)
-  (*   ; rewrite <- ?RWU, <- ?RWC, <- ?RWK *)
-  (*   ; eauto. *)
-  (* Qed. *)
-
-  (* Hint Resolve message_eq_adv_change : safe. *)
   Hint Constructors action_matches : safe.
   
   Lemma action_matches_adv_change :
@@ -632,20 +600,35 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
 
     pose proof labels_align_inv.
     unfold invariantFor, SYS in H5; simpl in H5.
-    assert ( (ru0,iu0) = (ru0,iu0) \/ False ) as ARG by eauto.
-    specialize (H5 _ ARG _ H3 _ _ _ H0).
+    assert ( (ru0,iu0,true) = (ru0,iu0,true) \/ False ) as ARG by eauto.
+    specialize (H5 _ ARG _ H3).
+    unfold alignment in H5; split_ex; subst.
+    specialize (H6 _ _ _ H0).
 
     split_ex.
-    do 3 eexists; rewrite H4; repeat apply conj; eauto.
+    destruct (classic (labels_align (ru,U__i,true))).
+    
+    - do 3 eexists; rewrite H4; repeat apply conj; eauto.
 
-    econstructor.
+      econstructor.
 
-    eapply trcEnd_trc.
-    generalize (trc_trcEnd H3); intros.
-    econstructor; eauto.
-    unfold SYS; simpl.
-    destruct U__r, ru; simpl in *; subst.
-    econstructor 2; eauto.
+      eapply trcEnd_trc.
+      generalize (trc_trcEnd H3); intros.
+      econstructor; eauto.
+      unfold SYS; simpl.
+      destruct U__r, ru; simpl in *; subst.
+      econstructor 2; eauto.
+
+    - do 3 eexists; rewrite H4; repeat apply conj; eauto.
+
+      econstructor.
+
+      eapply trcEnd_trc.
+      generalize (trc_trcEnd H3); intros.
+      econstructor; eauto.
+      unfold SYS; simpl.
+      destruct U__r, ru; simpl in *; subst.
+      econstructor 3; eauto.
   Qed.
 
   Lemma honest_cmds_safe_adv_change :
@@ -673,7 +656,7 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
 
     pose proof safety_inv.
     unfold invariantFor, SYS in H0; simpl in H0.
-    assert ( (ru0,iu0) = (ru0,iu0) \/ False ) as ARG by eauto.
+    assert ( (ru0,iu0,true) = (ru0,iu0,true) \/ False ) as ARG by eauto.
     specialize (H0 _ ARG _ H3).
     unfold safety in *; eauto with safe.
   Qed.
@@ -689,7 +672,7 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
     pose proof universe_starts_safe; split_ands.
     
     unfold invariantFor in H; simpl in H.
-    assert ( (ru0,iu0) = (ru0,iu0) \/ False ) as ARG by eauto.
+    assert ( (ru0,iu0,true) = (ru0,iu0,true) \/ False ) as ARG by eauto.
     specialize (H _ ARG); clear ARG.
 
     Hint Constructors R : safe.
