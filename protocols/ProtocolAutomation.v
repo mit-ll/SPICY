@@ -35,7 +35,8 @@ Require Import
         SafeProtocol
         Simulation
         Tactics
-        UniverseEqAutomation.
+        UniverseEqAutomation
+        ProtocolFunctions.
 
 Require
   IdealWorld
@@ -612,6 +613,7 @@ Module SimulationAutomation.
     | [ H : Some _ = Some _ |- _ ] => invert H
     | [ H : Some _ = None |- _ ] => discriminate
     | [ H : None = Some _ |- _ ] => discriminate
+    | [ H : mkKeys _ $? _ = _ |- _ ] => unfold mkKeys in H; simpl in H
 
     | [ H : ?m $? ?k = _ |- _ ] => progress (unfold m in H)
     | [ H : ?m $+ (?k1,_) $? ?k1 = _ |- _ ] => rewrite add_eq_o in H by trivial
@@ -956,7 +958,7 @@ Module SimulationAutomation.
     end.
 
   Hint Extern 1 ((indexedIdealStep _ Silent) ^* _ _) =>
-    repeat solve_indexed_silent_multistep; solve_refl.
+    repeat solve_indexed_silent_multistep; solve_refl : core.
 
   Hint Extern 1 (indexedIdealStep _ (Action _) _ _) => indexedIdealStep : core.
 
@@ -1107,7 +1109,7 @@ Module SimulationAutomation.
                        RealWorld.adversary := _;
                        RealWorld.all_ciphers := _;
                        RealWorld.all_keys := _ |} |- _ ] => invert H
-                                                                 
+        | [ H : mkKeys _ $? _ = _ |- _ ] => unfold mkKeys in H; simpl in H
         | [ |- honest_cmds_safe _ ] => unfold honest_cmds_safe; intros; simpl in *
         | [ |- context [ RealWorld.findUserKeys ?usrs ] ] => canonicalize_map usrs
         | [ |- context [ RealWorld.findUserKeys _ ] ] => rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty by eauto
@@ -1132,6 +1134,13 @@ Module SimulationAutomation.
         | [ |- Forall _ _ ] => econstructor
         | [ |- _ /\ _ ] => split
         end; simpl).
+
+  Ltac solve_labels_align :=
+    (do 3 eexists); repeat (simple apply conj);
+    [ solve [ eauto ]
+    | indexedIdealStep; simpl
+    | repeat solve_action_matches1; clean_map_lookups; ChMaps.ChMap.clean_map_lookups
+    ]; eauto; simpl; eauto.
 
 End SimulationAutomation.
 
@@ -1250,6 +1259,7 @@ Module Tacs.
            | [H : (complement _) _ |- _] => invert H
            | [H : { } _ |- _] => invert H
            | [H : { _ } _ |- _] => invert H
+           | [H : _ \/ False |- _ ] => destruct H; [ | contradiction]
            end.
 
   Ltac case_lookup H :=
@@ -1564,7 +1574,7 @@ Module Gen.
             is_not_evar k1
             ; is_not_evar k2
             ; rewrite ChMaps.ChMap.F.add_neq_o in H by congruence
-
+          | [ H : mkKeys _ $? _ = _ |- _ ] => unfold mkKeys in H; simpl in H
           | [ H : ?m $? _ = _ |- _ ] => progress (unfold m in H)
           | [ H : RealWorld.msg_accepted_by_pattern _ _ _ _ _ |- _ ] => invert H
           (* | [ H : IdealWorld.msg_permissions_valid _ _ |- _ ] => *)
@@ -1626,7 +1636,6 @@ Module Gen.
     ; tidy
     ; idtac "rstep start"
     ; rstep
-    ; idtac "rstep done"
     ; idtac "istep start"
     ; istep
     ; idtac "istep done"

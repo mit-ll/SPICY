@@ -30,7 +30,6 @@ Require Import
         Simulation
         AdversaryUniverse
         UniverseEqAutomation
-        ProtocolAutomation
         SafeProtocol.
 
 Require IdealWorld RealWorld.
@@ -39,14 +38,6 @@ Import IdealWorld.IdealNotations
        RealWorld.RealWorldNotations.
 
 Set Implicit Arguments.
-
-(* User ids *)
-Notation USR1 := 0.
-Notation USR2 := 1.
-Notation USR3 := 2.
-(* Definition USR1 : user_id   := 0. *)
-(* Definition USR2 : user_id   := 1. *)
-(* Definition USR3 : user_id   := 2. *)
 
 (* Permissions *)
 Notation owner  := {| IdealWorld.read := true; IdealWorld.write := true |}.
@@ -108,8 +99,14 @@ End RealWorldDefs.
 Definition mkKeys (ks : list key) :=
   fold_left (fun ks k => ks $+ (k.(keyId),k)) ks $0.
 
+Hint Unfold
+     mkiU mkiUsr
+     mkrU mkrUsr
+     mkKeys
+     noAdv : user_build.
+
 Declare Scope protocol_scope.
-Notation "uid 'with' ks >> p" := (MkRUserSpec uid ks p) (at level 80) : protocol_scope.
+Notation "uid 'keys' ks >> p" := (MkRUserSpec uid ks p) (at level 80) : protocol_scope.
 
 Notation "'skey' kid"     := (MkCryptoKey kid Signing AsymKey) (at level 80) : protocol_scope.
 Notation "'ekey' kid"     := (MkCryptoKey kid Encryption AsymKey) (at level 80) : protocol_scope.
