@@ -939,8 +939,15 @@ Module SimulationAutomation.
     simpl_ideal_users_context;
     eapply TrcFront; [ indexedIdealSilentStep |].
 
+  Ltac unBindi :=
+    match goal with
+    | [ |- IdealWorld.lstep_user (Action _) (_,IdealWorld.Bind _ _,_) _ ] =>
+      eapply IdealWorld.LStepBindRecur
+    end.
+
   Ltac ideal_user_labeled_step :=
-    eapply IdealWorld.LStepBindRecur
+    simpl
+    ; repeat unBindi
     ; match goal with
       | [ |- IdealWorld.lstep_user (Action _) (_,IdealWorld.Recv _,_) _ ] =>
         eapply IdealWorld.LStepRecv'; solve_ideal_step_stuff
