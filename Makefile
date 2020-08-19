@@ -54,10 +54,14 @@ exampleprotos: CoqMakefile
 sharesecret: CoqMakefile
 	$(MAKE) -f CoqMakefile protocols/ShareSecretProtocol.vo
 
+secdns: CoqMakefile
+	$(MAKE) -f CoqMakefile pretty-timed TGTS="protocols/SecureDNS.vo"
+
 protocols: exampleprotos sharesecret
 
 timings: CoqMakefile
 	$(MAKE) -f CoqMakefile pretty-timed TGTS="protocols/ShareSecretProtocol.vo protocols/ShareSecretProtocol2.vo"
+
 
 # This should be the last rule, to handle any targets not declared above
 %: invoke-coqmakefile

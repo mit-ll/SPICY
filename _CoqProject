@@ -60,6 +60,7 @@ protocols/NoResends.v
 protocols/ProtocolFunctions.v
 protocols/ShareSecretProtocol.v
 protocols/ShareSecretProtocol2.v
+protocols/SecureDNS.v
 
 protocols/PORExtended.v
 
