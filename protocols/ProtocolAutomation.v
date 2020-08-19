@@ -1109,38 +1109,40 @@ Module SimulationAutomation.
       | [ |- context [_ $k++ _]  ] => erewrite reduce_merge_perms; clean_map_lookups; eauto
       end; trivial.
 
+  Ltac solve_honest_actions_safe1 :=
+    match goal with
+    | [ H : _ = {| RealWorld.users := _;
+                   RealWorld.adversary := _;
+                   RealWorld.all_ciphers := _;
+                   RealWorld.all_keys := _ |} |- _ ] => invert H
+
+    | [ |- honest_cmds_safe _ ] => unfold honest_cmds_safe; intros; simpl in *
+    | [ |- next_cmd_safe _ _ _ _ _ _ ] => unfold next_cmd_safe; intros
+    | [ H : _ $+ (?id1,_) $? ?id2 = _ |- _ ] => is_var id2; destruct (id1 ==n id2); subst; clean_map_lookups
+    | [ H : nextAction _ _ |- _ ] => invert H
+
+    | [ H : mkKeys _ $? _ = _ |- _ ] => unfold mkKeys in H; simpl in H
+    | [ |- context [ RealWorld.findUserKeys ?usrs ] ] => canonicalize_map usrs
+    | [ |- context [ RealWorld.findUserKeys _ ] ] =>
+      rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty by eauto
+    | [ H : RealWorld.findKeysMessage _ $? _ = _ |- _ ] => progress (simpl in H)
+    | [ |- (_ -> _) ] => intros
+    | [ |- context [ _ $+ (_,_) $? _ ] ] => progress clean_map_lookups
+    | [ |- context [ RealWorld.msg_honestly_signed _ _ _ ]] => unfold RealWorld.msg_honestly_signed
+    | [ |- context [ RealWorld.honest_keyb _ _ ]] => unfold RealWorld.honest_keyb
+    | [ |- context [ RealWorld.msg_to_this_user _ _ _ ]] => unfold RealWorld.msg_to_this_user
+    | [ |- context [ RealWorld.msgCiphersSignedOk _ _ _ ]] => unfold RealWorld.msgCiphersSignedOk
+    | [ |- context [ add_key_perm _ _ _ ] ] => unfold add_key_perm
+    | [ |- RealWorld.msg_pattern_safe _ _ ] => econstructor
+    | [ |- RealWorld.honest_key _ _ ] => econstructor
+    | [ |- context [_ $k++ _ $? _ ] ] => progress solve_concrete_perm_merges
+    | [ |- context [ ?m $? _ ] ] => unfold m
+    | [ |- Forall _ _ ] => econstructor
+    | [ |- _ /\ _ ] => split
+    end.
+
   Ltac solve_honest_actions_safe :=
-    repeat
-      ( match goal with
-        | [ H : _ = {| RealWorld.users := _;
-                       RealWorld.adversary := _;
-                       RealWorld.all_ciphers := _;
-                       RealWorld.all_keys := _ |} |- _ ] => invert H
-        | [ H : mkKeys _ $? _ = _ |- _ ] => unfold mkKeys in H; simpl in H
-        | [ |- honest_cmds_safe _ ] => unfold honest_cmds_safe; intros; simpl in *
-        | [ |- context [ RealWorld.findUserKeys ?usrs ] ] => canonicalize_map usrs
-        | [ |- context [ RealWorld.findUserKeys _ ] ] => rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty by eauto
-        | [ H : RealWorld.findKeysMessage _ $? _ = _ |- _ ] => progress (simpl in H)
-        | [ H : _ $+ (?id1,_) $? ?id2 = _ |- _ ] => is_var id2; destruct (id1 ==n id2); subst; clean_map_lookups
-        | [ |- (_ -> _) ] => intros
-        | [ |- context [ _ $+ (_,_) $? _ ] ] => progress clean_map_lookups
-        | [ |- context [ RealWorld.msg_honestly_signed _ _ _ ]] => unfold RealWorld.msg_honestly_signed
-        | [ |- context [ RealWorld.honest_keyb _ _ ]] => unfold RealWorld.honest_keyb
-        | [ |- context [ RealWorld.msg_to_this_user _ _ _ ]] => unfold RealWorld.msg_to_this_user
-        | [ |- context [ RealWorld.msgCiphersSignedOk _ _ _ ]] => unfold RealWorld.msgCiphersSignedOk
-        | [ |- context [ add_key_perm _ _ _ ] ] => unfold add_key_perm
-        | [ |- RealWorld.msg_pattern_safe _ _ ] => econstructor
-        | [ |- RealWorld.honest_key _ _ ] => econstructor
-        | [ |- context [_ $k++ _ $? _ ] ] => progress solve_concrete_perm_merges
-        | [ |- context [ ?m $? _ ] ] => unfold m
-                                             
-        (* | [ |- next_cmd_safe _ _ _ _ _ _ ] => econstructor *)
-        | [ |- next_cmd_safe _ _ _ _ _ _ ] => unfold next_cmd_safe; intros
-        | [ H : nextAction _ _ |- _ ] => invert H
-                                              
-        | [ |- Forall _ _ ] => econstructor
-        | [ |- _ /\ _ ] => split
-        end; simpl).
+    repeat (solve_honest_actions_safe1; simpl).
 
   Ltac solve_labels_align :=
     (do 3 eexists); repeat (simple apply conj);

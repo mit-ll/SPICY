@@ -55,6 +55,7 @@ Module SecureDNSProtocol.
   (* Start with two users, as that is the minimum for any interesting protocol *)
   Notation USR1 := 0.
   Notation USR2 := 1.
+  Notation USR3 := 2.
 
   Notation names :=
     ( $0 $+ (0,10)
@@ -70,16 +71,21 @@ Module SecureDNSProtocol.
     (* Set up initial communication channels so each user can talk directly to the other *)
     Notation pCH12 := 0.
     Notation pCH21 := 1.
+    Notation pCH23 := 2.
+    Notation pCH32 := 3.
     Notation CH12  := (# pCH12).
     Notation CH21  := (# pCH21).
+    Notation CH23  := (# pCH23).
+    Notation CH32  := (# pCH32).
 
     (* This is the initial channel vector, each channel should be represented and start with 
      * no messages.
      *)
-    Notation empty_chs := (#0 #+ (CH12, []) #+ (CH21, [])).
+    Notation empty_chs := (#0 #+ (CH12, []) #+ (CH21, []) #+ (CH23, []) #+ (CH32, [])).
 
     Notation PERMS1 := ($0 $+ (pCH12, writer) $+ (pCH21, reader)).
-    Notation PERMS2 := ($0 $+ (pCH12, reader) $+ (pCH21, writer)).
+    Notation PERMS2 := ($0 $+ (pCH12, reader) $+ (pCH21, writer) $+ (pCH23, writer) $+ (pCH32, reader)).
+    Notation PERMS3 := ($0 $+ (pCH23, reader) $+ (pCH32, writer)).
 
     Fixpoint idealServer (n : nat) {t} (r : << t >>) (c : cmd t) : cmd t :=
       match n with
@@ -93,7 +99,7 @@ Module SecureDNSProtocol.
      *)
     Notation ideal_users :=
       [
-        (* User 1 Specification *)
+        (* Authorative DNS Server Specification *)
         mkiUsr USR1 PERMS1
                 (
                   @idealServer 1 (Base Nat) 1
@@ -109,13 +115,24 @@ Module SecureDNSProtocol.
                 )
         ;
 
-      (* User 2 Specification *)
+      (* Secure DNS Cache Specification *)
       mkiUsr USR2 PERMS2
-              (
-                _ <- Send (Content 0) CH21
-                ; ip1 <- @Recv Nat CH12
-                ; @Return (Base Nat) (extractContent ip1)
-              )
+             (
+               req <- @Recv Nat CH32
+               ; _ <- Send (Content (extractContent req)) CH21
+               ; ip1 <- @Recv Nat CH12
+               ; _ <- Send (Content (extractContent ip1)) CH23
+               ; @Return (Base Nat) (extractContent ip1)
+             )
+        ;
+
+      (* DNS Client Specification *)
+      mkiUsr USR3 PERMS3
+             (
+               _ <- Send (Content 0) CH32
+               ; ip1 <- @Recv Nat CH23
+               ; @Return (Base Nat) (extractContent ip1)
+             )
       ].
 
     (* This is where the entire specification universe gets assembled.  It is unlikely anything
@@ -123,7 +140,7 @@ Module SecureDNSProtocol.
      *)
     Definition ideal_univ_start :=
       mkiU empty_chs ideal_users.
-
+      
   End IW.
 
   Section RW.
@@ -140,11 +157,16 @@ Module SecureDNSProtocol.
     Notation KID2 := 1.
     Notation KID3 := 2.
     Notation KID4 := 3.
+    Notation KID5 := 4.
+    Notation KID6 := 5.
 
-    Notation KEYS := [ skey KID1 ; ekey KID2 ; skey KID3 ; ekey KID4 ].
+    Notation KEYS := [ skey KID1 ; ekey KID2 ; skey KID3 ; ekey KID4 ; skey KID5 ; ekey KID6 ].
 
     Notation KEYS1 := ($0 $+ (KID1, true) $+ (KID2, true) $+ (KID3, false) $+ (KID4, false)).
-    Notation KEYS2 := ($0 $+ (KID1, false) $+ (KID2, false) $+ (KID3, true) $+ (KID4, true)).
+    Notation KEYS2 := ($0 $+ (KID1, false) $+ (KID2, false)
+                        $+ (KID3, true) $+ (KID4, true)
+                        $+ (KID5, false) $+ (KID6, false)).
+    Notation KEYS3 := ($0 $+ (KID3, false) $+ (KID4, false) $+ (KID5, true) $+ (KID6, true)).
 
     Fixpoint realServer (n : nat) {t} (r : << t >>) (c : user_cmd t) : user_cmd t :=
       match n with
@@ -154,11 +176,11 @@ Module SecureDNSProtocol.
 
     Notation real_users :=
       [
-        (* User 1 implementation *)
+        (* Authoritative DNS server implementation *)
         MkRUserSpec USR1 KEYS1
                     (
                       @realServer 1 (Base Nat) 1
-                                  ( c <- @Recv Nat (Signed KID3 true)
+                                  ( c <- @Recv Nat (SignedEncrypted KID3 KID2 true)
                                     ; m <- Decrypt c
                                     ; ip <- match names $? (extractContent m) with
                                            | None    => @Return (Base Nat) 0
@@ -171,12 +193,27 @@ Module SecureDNSProtocol.
                     )
         ;
 
-      (* User 2 implementation *)
+      (* Secure DNS Cache implementation *)
       MkRUserSpec USR2 KEYS2
                   (
-                    c <- SignEncrypt KID3 KID2 USR1 (message.Content 0)
-                    ; _ <- Send USR1 c
-                    ; hostC <- @Recv Nat (Signed KID1 true)
+                    reqc <- @Recv Nat (SignedEncrypted KID5 KID4 true)
+                    ; req <- Decrypt reqc
+                    ; c1 <- SignEncrypt KID3 KID2 USR1 (message.Content (extractContent req))
+                    ; _ <- Send USR1 c1
+                    ; hostC <- @Recv Nat (SignedEncrypted KID1 KID4 true)
+                    ; host <- Decrypt hostC
+                    ; c2 <- SignEncrypt KID3 KID6 USR3 (message.Content (extractContent host))
+                    ; _ <- Send USR3 c2
+                    ; @Return (Base Nat) (extractContent host)
+                  ) 
+        ;
+
+      (* DNS Client implementation *)
+      MkRUserSpec USR3 KEYS3
+                  (
+                    c <- SignEncrypt KID5 KID4 USR2 (message.Content 0)
+                    ; _ <- Send USR2 c
+                    ; hostC <- @Recv Nat (SignedEncrypted KID3 KID6 true)
                     ; host <- Decrypt hostC
                     ; @Return (Base Nat) (extractContent host)
                   ) 
@@ -221,6 +258,66 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
 
   Import Gen Tacs SetLemmas.
 
+  Ltac gen1' :=
+    simplify
+    ; tidy
+    ; idtac "rstep start"
+    ; rstep
+    ; idtac "istep start"
+    ; istep
+    ; idtac "istep done"
+    ; subst
+    ; canonicalize users
+    ; idtac "close start"
+    ; repeat close
+    ; idtac "close done"
+  .
+
+  Ltac msc_st1 := unfold oneStepClosure_new  (* ; repeat gen1' *).
+  Ltac msc_st2 :=
+    simplify
+    ; sets
+    ; split_ex
+    ; propositional
+    ; repeat match goal with
+             | [H : (?x1, ?y1) = ?p |- _] =>
+               match p with
+               | (?x2, ?y2) =>
+                 tryif (concrete x2; concrete y2)
+                 then let H' := fresh H
+                      in assert (H' : (x1, y1) = (x2, y2) -> x1 = x2 /\ y1 = y2)
+                        by equality
+                         ; propositional
+                         ; discriminate
+                 else invert H
+               | _ => invert H
+               end
+             end.
+
+  
+  Ltac mscalt' :=
+    eapply msc_step_alt
+    ; [ solve[ msc_st1; repeat gen1' ]
+      | solve[ msc_st2 | eapply intersect_empty_l ]
+      | rewrite ?union_empty_r ].
+
+  Ltac mscalt :=
+    match goal with
+    | [|- multiStepClosure _ (_ \cup ?wl) ?wl _] => mscalt'
+    end.
+
+  Ltac gen1 :=
+    match goal with
+    | [|- multiStepClosure _ _ { } _] =>
+      eapply MscDone
+    | [|- multiStepClosure _ {(_, _)} {(_, _)} _] =>
+      eapply MscStep
+      ; [ solve[ apply oneStepClosure_grow; gen1' ]
+        | simplify; simpl_sets (sets; tidy)]
+    | [|- multiStepClosure _ (_ \cup ?wl) ?wl _] => mscalt'
+    end.
+
+
   (* These are here to help the proof automation.  Don't change. *)
   Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start real_univ_start : core.
   Hint Unfold
@@ -243,6 +340,35 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
       gen1.
       gen1.
       gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
       
     (* The remaining parts of the proof script shouldn't need to change. *)
     - intros.
@@ -251,16 +377,51 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
       sets_invert; split_ex;
         simpl in *; autounfold with core;
           subst; simpl;
-            unfold safety, labels_align;
-            ( split;
+            unfold safety, labels_align.
+
+      (* 133 *)
+      all : ( split;
               [ solve_honest_actions_safe; clean_map_lookups; eauto 8
               | intros; rstep; subst; solve_labels_align
-              ] ).
+            ] ).
+
+      
+
+      all :
+        (do 2 eexists); repeat simple apply conj; eauto; simpl; unfold not; intros; split_ors; try contradiction;
+        match goal with
+        | [ H : (_,_) = (_,_) |- _ ] => invert H
+        end.
+
+      Unshelve.
+
+
+      (* sets_invert; split_ex; *)
+      (*   simpl in *; autounfold with core; *)
+      (*     subst; simpl; *)
+      (*       unfold safety, labels_align; *)
+      (*       ( split; *)
+      (*         [ solve_honest_actions_safe; clean_map_lookups; eauto 8 *)
+      (*         | intros; rstep; subst; solve_labels_align *)
+      (*         ] ). *)
       
       Unshelve.
       all: auto.
 
   Qed.
+
+
+  (*
+
+  exists (c_id : RealWorld.cipher_id) (c : RealWorld.cipher),
+    RealWorld.SignedCiphertext x2 = RealWorld.SignedCiphertext c_id /\
+    $0 $+ (x, RealWorld.SigEncCipher 4 3 1 (Some 2, 0) (RealWorld.message.Content 0)) $+ (x0,
+    RealWorld.SigEncCipher 2 1 0 (Some 1, 0) (RealWorld.message.Content 0)) $+ (x1,
+    RealWorld.SigEncCipher 0 3 1 (Some 0, 0) (RealWorld.message.Content 10)) $+ (x2,
+    RealWorld.SigEncCipher 2 5 2 (Some 1, 1) (RealWorld.message.Content 10)) $? c_id = Some c /\
+    fst (RealWorld.cipher_nonce c) = Some 1 /\ ~ ((Some 1, 0) = RealWorld.cipher_nonce c \/ False)
+
+*)
 
   (* Show Ltac Profile. *)
   (* Show Ltac Profile "churn2". *)
@@ -284,6 +445,16 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
     autounfold; econstructor; eauto.
   Qed.
 
+  Ltac focus_user :=
+    repeat
+      match goal with
+      | [ H : _ $+ (?k1,_) $? ?k2 = Some ?v |- _ ] =>
+        is_var v;
+        match type of v with
+        | RealWorld.user_data _ => idtac
+        end; destruct (k1 ==n k2); subst; clean_map_lookups
+      end.
+
   Lemma adv_univ_ok_start : adv_universe_ok ru0.
   Proof.
     autounfold; unfold adv_universe_ok; eauto.
@@ -301,20 +472,18 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
 
     - unfold user_cipher_queues_ok.
       rewrite Forall_natmap_forall; intros.
-      cases (USR1 ==n k); cases (USR2 ==n k);
-        subst; clean_map_lookups; simpl in *; econstructor; eauto.
+      focus_user
+      ; simpl in *; econstructor; eauto.
 
     - unfold honest_nonces_ok; intros.
       unfold honest_nonce_tracking_ok.
 
-      destruct (u_id ==n USR1); destruct (u_id ==n USR2);
-        destruct (rec_u_id ==n USR1); destruct (rec_u_id ==n USR2);
-          subst; try contradiction; try discriminate; clean_map_lookups; simpl;
-            repeat (apply conj); intros; clean_map_lookups; eauto.
+      focus_user
+      ; try contradiction; try discriminate; simpl;
+        repeat (apply conj); intros; clean_map_lookups; eauto.
 
     - unfold honest_users_only_honest_keys; intros.
-      destruct (u_id ==n USR1);
-        destruct (u_id ==n USR2);
+      focus_user;
         subst;
         simpl in *;
         clean_map_lookups;
