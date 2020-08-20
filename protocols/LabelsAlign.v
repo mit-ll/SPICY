@@ -429,96 +429,6 @@ Proof.
 (*   Print syntactically_safe_honest_keys_preservation'. *)
 Admitted.
 
-(* Lemma silent_step_then_labeled_step :  *)
-(*   forall {A B C} suid lbl bd bd', *)
-(*     step_user lbl suid bd bd' *)
-(*     -> forall cs cs' (usrs usrs' usrs'': honest_users A) (adv adv' : user_data B) gks gks' *)
-(*         (cmd cmd' : user_cmd C) u_id1 cmdc cmdc' *)
-(*         ks ks' qmsgs qmsgs' mycs mycs' *)
-(*         froms froms' sents sents' cur_n cur_n' suid2 lbl2, *)
-(*       bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
-(*       -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd') *)
-(*       -> lbl = Silent *)
-(*       -> usrs $? u_id1 = Some {| key_heap := ks; *)
-(*                                 protocol := cmdc; *)
-(*                                 msg_heap := qmsgs; *)
-(*                                 c_heap   := mycs; *)
-(*                                 from_nons := froms; *)
-(*                                 sent_nons := sents; *)
-(*                                 cur_nonce := cur_n |} *)
-(*       -> usrs'' = users' $+ (u_id1, {| key_heap := ks'; *)
-(*                                 protocol := cmdc'; *)
-(*                                 msg_heap := qmsgs'; *)
-(*                                 c_heap   := mycs'; *)
-(*                                 from_nons := froms'; *)
-(*                                 sent_nons := sents'; *)
-(*                                 cur_nonce := cur_n' |}) *)
-(*       -> forall D bd2 bd2', *)
-(*           step_user lbl2 suid2 bd2 bd2' *)
-(*           -> forall cmdc2 u_id2 ru ia iu ra *)
-(*               (cmd2 cmd2' : user_cmd D) ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' *)
-(*               froms2 froms2' sents2 sents2' cur_n2 cur_n2', *)
-(*             suid = Some u_id1 *)
-(*             -> suid2 = Some u_id2 *)
-(*             -> lbl2 = Action ra *)
-(*             -> bd2 = (usrs'', adv', cs', gks', ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2) *)
-(*             -> bd2' = (usrs''', adv'', cs'', gks'', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2') *)
-(*             -> u_id1 <> u_id2 *)
-(*             -> ru = buildUniverse usrs adv cs gks u_id1 {| key_heap  := ks *)
-(*                                                           ; msg_heap  := qmsgs *)
-(*                                                           ; protocol  := cmdc *)
-(*                                                           ; c_heap    := mycs *)
-(*                                                           ; from_nons := froms *)
-(*                                                           ; sent_nons := sents *)
-(*                                                           ; cur_nonce := cur_n |} *)
-(*             -> action_matches ra ru ia iu *)
-(*             -> usrs $? u_id2 = Some {| key_heap := ks2; *)
-(*                                       protocol := cmdc2; *)
-(*                                       msg_heap := qmsgs2; *)
-(*                                       c_heap   := mycs2; *)
-(*                                       from_nons := froms2; *)
-(*                                       sent_nons := sents2; *)
-(*                                       cur_nonce := cur_n2 |} *)
-(*             -> forall ru', *)
-(*                   (* step_user (Action ra) (Some u_id2) *) *)
-(*                   (*           (usrs'', adv', cs', gks', ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2) *) *)
-(*                   (*           bd2'' *) *)
-(*                   ru' = buildUniverse usrs' adv' cs' gks' u_id1 {| key_heap  := ks' *)
-(*                                                                      ; msg_heap  := qmsgs' *)
-(*                                                                      ; protocol  := cmdc' *)
-(*                                                                      ; c_heap    := mycs' *)
-(*                                                                      ; from_nons := froms' *)
-(*                                                                      ; sent_nons := sents' *)
-(*                                                                      ; cur_nonce := cur_n' |} *)
-(*                   ->  action_matches ra ru' ia iu. *)
-(* Proof. *)
-(*   induction 6; inversion 4; inversion 1; intros; subst; try discriminate; clean_context. *)
-(*   - specialize (IHstep_user _ _ H). *)
-(*     specialize (IHstep_user _ _ _ _ _ cmdc' eq_refl eq_refl H3). *)
-(*     specialize (IHstep_user _ _ _ _ _ _ _ _ _ _ *)
-(*                             _ _ _ _ _ _ _ _ _ _ *)
-(*                             eq_refl eq_refl eq_refl eq_refl eq_refl H21 eq_refl H34 H35). *)
-(*     eapply IHstep_user; eauto. *)
-(*   - generalize H; intros STEP1. *)
-(*     eapply silent_step_blah in H; eauto. *)
-(*     clean_map_lookups. *)
-(*     invert H41; eauto. *)
-(*     econstructor; eauto. *)
-(*     invert H1. *)
-(*     unfold buildUniverse in *; simpl in *. *)
-(*     eapply silent_step_message_eq with (u_id3 := u_id1); eauto. *)
-(*   - generalize H; intros STEP1. *)
-(*     eapply silent_step_blah in H; eauto. *)
-(*     clean_map_lookups. *)
-(*     invert H41; eauto. *)
-(*     eapply Out; eauto. *)
-(*     invert H2. *)
-(*     unfold buildUniverse in *; simpl in *. *)
-(*     eapply silent_step_message_eq with (u_id3 := u_id1); eauto. *)
-(*     Unshelve. *)
-(*     all: try discriminate; eauto. *)
-(* Qed. *)
-
 Lemma step_reorder_no_recur :
   forall A B C lbl1 suid1 uid1 (bd1 bd1' : data_step0 A B C),
     step_user lbl1 suid1 bd1 bd1'
@@ -539,8 +449,10 @@ Lemma step_reorder_no_recur :
 
             -> nextAction cmd1 cmd1
             -> nextAction cmd2 cmd2
+            -> nextAction cmdc2 cmd2
             (* goodness *)
             -> goodness_predicates (mkUniverse usrs adv cs gks)
+            -> syntactically_safe_U (mkUniverse usrs adv cs gks)
             (* allow protocol to freely vary, since we won't be looking at it *)
             -> usrs $? uid1 = Some (mkUserData ks1 cmdc1 qmsgs1 mycs1 froms1 sents1 cur_n1)
             -> usrs $? uid2 = Some (mkUserData ks2 cmdc2 qmsgs2 mycs2 froms2 sents2 cur_n2)
@@ -621,18 +533,48 @@ Proof.
   - cases cmd2; invert H; invert H1; clean_map_lookups; simpl.
     + eapply nextAction_couldBe in H9. contradiction.
     + eapply nextAction_couldBe in H9. contradiction.
-    + econstructor; eauto. econstructor; eauto.
-    + destruct (uid ==n uid1); subst. econstructor; eauto. econstructor; eauto.
-      unfold keys_mine in *. admit.
-      congruence.
+    + econstructor; eauto. econstructor.
+    + destruct (uid1 ==n uid). econstructor; eauto. econstructor; eauto.
+      intros. unfold syntactically_safe_U in H11. split_ex.
+      specialize (H12 uid2). simpl in *. generalize H14. intro H__new.
+      eapply H12 in H14. destruct H14. destruct H0 as [ H__syn H__typ ]. 
+      split_ex. (* is it possible to send to yourself? *)
+      simpl in *. unfold typingcontext_sound in *.
+      split_ex. specialize (H2 _ msg0 uid).
+      eapply syntactically_safe_na in H10; eauto. split_ex. invert H4. eapply H2 in H15.
+      split_ex. subst. destruct (c_id ==n x0); clean_map_lookups; eauto.
+      unfold keys_mine, findKeysCrypto in *. intros. clean_map_lookups. eapply H19 in H4.
+      eauto. eauto. congruence.
+
       econstructor; eauto. econstructor; eauto.
-      unfold keys_mine in *. admit.
-      congruence.
+      intros. unfold syntactically_safe_U in H12. split_ex.
+      specialize (H12 uid2). simpl in *. generalize H14. intro H__newer.
+      eapply H12 in H__newer. destruct H__newer. destruct H0 as [ H__syn H__typ ]. 
+      split_ex. (* is it possible to send to yourself? *)
+      simpl in *. unfold typingcontext_sound in *.
+      split_ex. specialize (H2 _ msg0 uid).
+      eapply syntactically_safe_na in H10; eauto. split_ex. invert H4. eapply H2 in H16.
+      split_ex. subst. destruct (c_id ==n x0); clean_map_lookups; eauto.
+      unfold keys_mine, findKeysCrypto in *. intros. clean_map_lookups. eapply H20 in H4.
+      eauto. eauto. congruence.
     + econstructor; eauto. econstructor; eauto.
-    + econstructor; eauto. econstructor; eauto. (* message accepted by pattern *) admit.
-    + econstructor; eauto. econstructor; eauto. (* double encrypt, will have different ids *)admit.
     + econstructor; eauto. econstructor; eauto.
-    + econstructor; eauto. econstructor; eauto. (* sign and encrypt will have different cids *) admit.
+      unfold not in *. intros.  invert H.
+      * eapply H40. econstructor.
+      * eapply H40. econstructor; try eassumption. destruct (c_id0 ==n c_id); eauto.
+      * eapply H40. invert H6. econstructor; try eassumption.
+        destruct (c_id0 ==n c_id); subst; eauto.
+           unfold goodness_predicates in H11; split_ands. 
+           unfold message_queues_ok in H5. rewrite Forall_natmap_forall in H5. simpl in H5.
+           specialize (H5 _ _ H14). unfold message_queue_ok in H5; simpl in H5.
+           invert H5. split_ex. specialize (H15 _ eq_refl). tauto. eauto.
+    + econstructor; eauto.
+      eapply StepEncrypt with (c_id1 := next_key (cs $+ (c_id, SigEncCipher k__sign k__enc msg_to (Some uid1, cur_n1) msg))); eauto.
+      clean_map_lookups. eapply next_key_not_in. trivial.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto.
+      eapply StepSign with (c_id1 := next_key (cs $+ (c_id, SigEncCipher k__sign k__enc msg_to (Some uid1, cur_n1) msg))); eauto.
+      clean_map_lookups. eapply next_key_not_in. trivial.
     + econstructor; eauto. econstructor; eauto.
     + econstructor; eauto. econstructor; eauto.
     + econstructor; eauto. econstructor; eauto.
@@ -641,8 +583,7 @@ Proof.
     + eapply nextAction_couldBe in H9. contradiction.
     + econstructor; eauto. econstructor; eauto.
     + destruct (uid ==n uid1); subst. econstructor; eauto. econstructor; eauto. congruence.
-      econstructor; eauto. econstructor; eauto. congruence.
-    + econstructor; eauto. econstructor; eauto.
+      econstructor; eauto. econstructor; eauto. congruence. + econstructor; eauto. econstructor; eauto.
     + econstructor; eauto. econstructor; eauto.
     + econstructor; eauto. econstructor; eauto.
     + econstructor; eauto. econstructor; eauto.
@@ -654,20 +595,48 @@ Proof.
     + eapply nextAction_couldBe in H9. contradiction.
     + eapply nextAction_couldBe in H9. contradiction.
     + econstructor; eauto. econstructor; eauto.
-    + destruct (uid ==n uid1); subst. econstructor; eauto. econstructor; eauto.
-      (* keys mine again *) admit.
-      congruence.
+    + destruct (uid1 ==n uid). econstructor; eauto. econstructor; eauto.
+      intros. unfold syntactically_safe_U in H11. split_ex.
+      specialize (H12 uid2). simpl in *. generalize H14. intro H__new.
+      eapply H12 in H14. destruct H14. destruct H0 as [ H__syn H__typ ]. 
+      split_ex. (* is it possible to send to yourself? *)
+      simpl in *. unfold typingcontext_sound in *.
+      split_ex. specialize (H2 _ msg0 uid).
+      eapply syntactically_safe_na in H10; eauto. split_ex. invert H4. eapply H2 in H15.
+      split_ex. subst. destruct (c_id ==n x0); clean_map_lookups; eauto.
+      unfold keys_mine, findKeysCrypto in *. intros. clean_map_lookups. eapply H19 in H4.
+      eauto. eauto. congruence.
+
       econstructor; eauto. econstructor; eauto.
-      (* keys mine again, try unfolding goodness? *) admit.
-      congruence.
+      intros. unfold syntactically_safe_U in H12. split_ex.
+      specialize (H12 uid2). simpl in *. generalize H14. intro H__newer.
+      eapply H12 in H__newer. destruct H__newer. destruct H0 as [ H__syn H__typ ]. 
+      split_ex. (* is it possible to send to yourself? *)
+      simpl in *. unfold typingcontext_sound in *.
+      split_ex. specialize (H2 _ msg0 uid).
+      eapply syntactically_safe_na in H10; eauto. split_ex. invert H4. eapply H2 in H16.
+      split_ex. subst. destruct (c_id ==n x0); clean_map_lookups; eauto.
+      unfold keys_mine, findKeysCrypto in *. intros. clean_map_lookups. eapply H20 in H4.
+      eauto. eauto. congruence.
     + econstructor; eauto. econstructor; eauto.
-    + unfold goodness_predicates. econstructor; eauto. econstructor; eauto. (* message accepted by pattern *) admit.
-    + unfold goodness_predicates. destruct (c_id ==n c_id0); subst. econstructor; eauto.
-      econstructor; eauto. (* double encrypt, will have different ids *) clean_map_lookups.
-      admit. (* cs $? Datatypes.S c_id0 = None *)
-      econstructor; eauto. econstructor; eauto. admit.
     + econstructor; eauto. econstructor; eauto.
-    + econstructor; eauto. econstructor; eauto. (* sign and encrypt will have different cids *) admit.
+      unfold not in *. intros.  invert H.
+      * eapply H43. econstructor.
+      * eapply H43. invert H6. econstructor; try eassumption.
+        destruct (c_id0 ==n c_id); subst; eauto.
+           unfold goodness_predicates in H11; split_ands. 
+           unfold message_queues_ok in H5. rewrite Forall_natmap_forall in H5. simpl in H5.
+           specialize (H5 _ _ H14). unfold message_queue_ok in H5; simpl in H5.
+           invert H5. split_ex. specialize (H15 _ eq_refl). tauto. eauto.
+      * eapply H43. invert H6. econstructor; try eassumption.
+        destruct (c_id0 ==n c_id); subst; eauto.
+           unfold goodness_predicates in H11; split_ands. 
+           unfold message_queues_ok in H5. rewrite Forall_natmap_forall in H5.
+           specialize (H5 _ _ H14). unfold message_queue_ok in H5; simpl in H5.
+           invert H5. split_ex. specialize (H15 _ eq_refl). tauto.
+    + econstructor; eauto.  eapply StepEncrypt with (c_id1 := next_key (cs $+ (c_id, SigCipher k msg_to (Some uid1, cur_n1) msg))); eauto. clean_map_lookups. eapply next_key_not_in. trivial.
+    + econstructor; eauto. econstructor; eauto.
+    + econstructor; eauto.  eapply StepSign with (c_id1 := next_key (cs $+ (c_id, SigCipher k msg_to (Some uid1, cur_n1) msg))); eauto. clean_map_lookups. eapply next_key_not_in. trivial.
     + econstructor; eauto. econstructor; eauto.
     + econstructor; eauto. econstructor; eauto.
     + econstructor; eauto. econstructor; eauto.
@@ -697,10 +666,12 @@ Proof.
     + econstructor; eauto. econstructor; eauto.
     + econstructor; eauto. econstructor; eauto.
     + econstructor; eauto. econstructor; eauto.
-    + destruct (k_id ==n k_id0). econstructor; eauto. econstructor; eauto. admit.
-      econstructor; eauto. econstructor; eauto. admit.(* double key gen *)
-    + destruct (k_id ==n k_id0). econstructor; eauto. econstructor; eauto. admit.
-      econstructor; eauto. econstructor; eauto. admit.(* double key gen *)
+    + econstructor; eauto. eapply StepGenerateSymKey with
+                               (k_id1 := next_key (gks $+ (k_id, {| keyId := k_id; keyUsage := usage; keyType := SymKey |}))); eauto.
+      eapply next_key_not_in. trivial.
+    + econstructor; eauto. eapply StepGenerateAsymKey with
+                               (k_id1 := next_key (gks $+ (k_id, {| keyId := k_id; keyUsage := usage; keyType := SymKey |}))); eauto.
+      eapply next_key_not_in. trivial.
   - cases cmd2; invert H; invert H1; clean_map_lookups; simpl.
     + eapply nextAction_couldBe in H9. contradiction.
     + eapply nextAction_couldBe in H9. contradiction.
@@ -713,399 +684,401 @@ Proof.
     + econstructor; eauto. econstructor; eauto.
     + econstructor; eauto. econstructor; eauto.
     + econstructor; eauto. econstructor; eauto.
-    + destruct (k_id ==n k_id0). econstructor; eauto. econstructor; eauto. admit.
-      econstructor; eauto. econstructor; eauto. admit. (* double key gen *)
-    + destruct (k_id ==n k_id0). econstructor; eauto. econstructor; eauto. admit.
-      econstructor; eauto. econstructor; eauto. admit.(* double key gen *)
-Admitted.
+    + econstructor; eauto. eapply StepGenerateSymKey with (k_id1 := next_key (gks $+ (k_id, {| keyId := k_id; keyUsage := usage; keyType := AsymKey |}))); eauto.
+      eapply next_key_not_in. trivial.
+    + econstructor; eauto. eapply StepGenerateAsymKey with
+                              (k_id1 := next_key (gks $+ (k_id, {| keyId := k_id; keyUsage := usage; keyType := AsymKey |}))) ; eauto.
+      eapply next_key_not_in. trivial. Unshelve. eauto. eauto. eauto. eauto. eauto. eauto.
+      eauto. eauto. eauto. eauto.
+Qed.
 
-Lemma step_reorder :
-  forall A B C lbl1 suid1 uid1 (bd1 bd1' : data_step0 A B C),
-    step_user lbl1 suid1 bd1 bd1'
-    -> suid1 = Some uid1
-    -> forall D (bd2 bd2' : data_step0 A B D) lbl2 suid2 uid2,
-        step_user lbl2 suid2 bd2 bd2'
-        -> suid2 = Some uid2
-        -> uid1 <> uid2
-        -> forall cs cs1' cs2' (usrs usrs1' usrs2' : honest_users A) (adv adv1' adv2' : user_data B) gks gks1' gks2'
-            ks1 ks1' qmsgs1 qmsgs1' mycs1 mycs1' cmd1 cmd1' froms1 froms1' sents1 sents1' cur_n1 cur_n1'
-            ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' cmd2 cmd2' froms2 froms2' sents2 sents2' cur_n2 cur_n2'
-            cmdc1 cmdc2,
+(* Lemma step_reorder : *)
+(*   forall A B C lbl1 suid1 uid1 (bd1 bd1' : data_step0 A B C), *)
+(*     step_user lbl1 suid1 bd1 bd1' *)
+(*     -> suid1 = Some uid1 *)
+(*     -> forall D (bd2 bd2' : data_step0 A B D) lbl2 suid2 uid2, *)
+(*         step_user lbl2 suid2 bd2 bd2' *)
+(*         -> suid2 = Some uid2 *)
+(*         -> uid1 <> uid2 *)
+(*         -> forall cs cs1' cs2' (usrs usrs1' usrs2' : honest_users A) (adv adv1' adv2' : user_data B) gks gks1' gks2' *)
+(*             ks1 ks1' qmsgs1 qmsgs1' mycs1 mycs1' cmd1 cmd1' froms1 froms1' sents1 sents1' cur_n1 cur_n1' *)
+(*             ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' cmd2 cmd2' froms2 froms2' sents2 sents2' cur_n2 cur_n2' *)
+(*             cmdc1 cmdc2, *)
 
-              bd1  = (usrs,   adv,   cs,   gks,   ks1,  qmsgs1,  mycs1,  froms1,  sents1,  cur_n1,  cmd1)
-            -> bd1' = (usrs1', adv1', cs1', gks1', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd1')
-            -> bd2  = (usrs,   adv,   cs,   gks,   ks2,  qmsgs2,  mycs2,  froms2,  sents2,  cur_n2,  cmd2)
-            -> bd2' = (usrs2', adv2', cs2', gks2', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
+(*               bd1  = (usrs,   adv,   cs,   gks,   ks1,  qmsgs1,  mycs1,  froms1,  sents1,  cur_n1,  cmd1) *)
+(*             -> bd1' = (usrs1', adv1', cs1', gks1', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd1') *)
+(*             -> bd2  = (usrs,   adv,   cs,   gks,   ks2,  qmsgs2,  mycs2,  froms2,  sents2,  cur_n2,  cmd2) *)
+(*             -> bd2' = (usrs2', adv2', cs2', gks2', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2') *)
 
-            (* -> nextAction cmd1 cmdc1 *)            -> nextAction cmd2 cmdc2
-            (* goodness *)
-            (* allow protocol to freely vary, since we won't be looking at it *)
-            -> usrs $? uid1 = Some (mkUserData ks1 cmdc1 qmsgs1 mycs1 froms1 sents1 cur_n1)
-            -> usrs $? uid2 = Some (mkUserData ks2 cmdc2 qmsgs2 mycs2 froms2 sents2 cur_n2)
-            -> forall cmdc1' usrs1'' usr2',
-                usrs1'' = usrs1' $+ (uid1, mkUserData ks1' cmdc1' qmsgs1' mycs1' froms1' sents1' cur_n1')
-                -> usrs1'' $? uid2 = Some usr2'
-                -> exists bd2'',
-                  step_user lbl2 suid2
-                            (build_data_step (mkUniverse usrs1'' adv1' cs1' gks1') usr2') bd2''.
-Proof.
-  induction 1; inversion 5; inversion 1; intros.
-  - admit. (* cmd1 = Bind cmd cmd *)
-  - admit. (* cmd1 = Bind (Return v) cmd *)
-  - invert H0. (* cmd1 = Gen *)
-    + unfold build_data_step. simpl. clean_context. (* cmd2 = Gen *) clean_map_lookups. simpl in *.
-      assert (cmd2 = Bind cmd0 cmd3). invert H41; eauto. rewrite H in H29. invert H29. eexists. admit.
-    (* + assert (cmd2 = Bind cmd0 cmd3). invert H41; eauto. rewrite H in H29. *)
-    (*     clean_map_lookups. admit. (* cmd2 = Bind cmd cmd *) *)
-    + admit. (* cmd2 = Bind (Return v) cmd *)
-    + unfold build_data_step. simpl. clean_context. (* cmd2 = Gen *) clean_map_lookups. simpl in *.
-      assert (cmd2 = Gen). invert H41; eauto. rewrite H in H29. invert H29. eexists. econstructor. eexists.
-    + unfold build_data_step. simpl. clean_context. clean_map_lookups. simpl.
-      assert (cmd2 = Recv pat). invert H35; eauto. rewrite H in H29. invert H29.
-    + unfold build_data_step. simpl. clean_context. clean_map_lookups. simpl.
-      assert (cmd2 = Recv pat). invert H35; eauto. rewrite H in H29. invert H29.
-    + unfold build_data_step. simpl. clean_context. clean_map_lookups. simpl.
-      assert (cmd2 = Send rec_u_id msg). invert H35; eauto. rewrite H0 in H29. invert H29. eexists. unfold updateSentNonce in H37. simpl in H37.
-      (* eapply StepSend. *) admit.
-    + unfold build_data_step. simpl. clean_context. clean_map_lookups. simpl.
-      assert (cmd2 = SignEncrypt k__signid k__encid msg_to msg). invert H35; eauto. rewrite H in H29. invert H29.
-    + unfold build_data_step. simpl. clean_context. clean_map_lookups. simpl.
-      assert (cmd2 = Decrypt (SignedCiphertext c_id)). invert H35; eauto. rewrite H in H29. invert H29.
-    + unfold build_data_step. simpl. clean_context. clean_map_lookups. simpl.
-      assert (cmd2 = Sign k_id msg_to msg). invert H35; eauto. rewrite H in H29. invert H29.
-    + unfold build_data_step. simpl. clean_context. clean_map_lookups. simpl.
-      assert (cmd2 = Verify k_id (SignedCiphertext c_id)). invert H35; eauto. rewrite H in H29. invert H29.
-    + unfold build_data_step. simpl. clean_context. clean_map_lookups. simpl.
-      assert (cmd2 = GenerateSymKey usage). invert H35; eauto. rewrite H in H29. invert H29.
-      eexists. econstructor; eauto. invert H35. clean_context. clean_map_lookups. admit.
-    + unfold build_data_step. simpl. clean_context. clean_map_lookups. simpl.
-      assert (cmd2 = GenerateAsymKey usage). invert H35; eauto. rewrite H in H29. invert H29.
-      eexists. econstructor; eauto. invert H35. clean_context. clean_map_lookups. admit.
-  - 
-Admitted.
+(*             (* -> nextAction cmd1 cmdc1 *)            -> nextAction cmd2 cmdc2 *)
+(*             (* goodness *) *)
+(*             (* allow protocol to freely vary, since we won't be looking at it *) *)
+(*             -> usrs $? uid1 = Some (mkUserData ks1 cmdc1 qmsgs1 mycs1 froms1 sents1 cur_n1) *)
+(*             -> usrs $? uid2 = Some (mkUserData ks2 cmdc2 qmsgs2 mycs2 froms2 sents2 cur_n2) *)
+(*             -> forall cmdc1' usrs1'' usr2', *)
+(*                 usrs1'' = usrs1' $+ (uid1, mkUserData ks1' cmdc1' qmsgs1' mycs1' froms1' sents1' cur_n1') *)
+(*                 -> usrs1'' $? uid2 = Some usr2' *)
+(*                 -> exists bd2'', *)
+(*                   step_user lbl2 suid2 *)
+(*                             (build_data_step (mkUniverse usrs1'' adv1' cs1' gks1') usr2') bd2''. *)
+(* Proof. *)
+(*   induction 1; inversion 5; inversion 1; intros. *)
+(*   - admit. (* cmd1 = Bind cmd cmd *) *)
+(*   - admit. (* cmd1 = Bind (Return v) cmd *) *)
+(*   - invert H0. (* cmd1 = Gen *) *)
+(*     + unfold build_data_step. simpl. clean_context. (* cmd2 = Gen *) clean_map_lookups. simpl in *. *)
+(*       assert (cmd2 = Bind cmd0 cmd3). invert H41; eauto. rewrite H in H29. invert H29. eexists. admit. *)
+(*     (* + assert (cmd2 = Bind cmd0 cmd3). invert H41; eauto. rewrite H in H29. *) *)
+(*     (*     clean_map_lookups. admit. (* cmd2 = Bind cmd cmd *) *) *)
+(*     + admit. (* cmd2 = Bind (Return v) cmd *) *)
+(*     + unfold build_data_step. simpl. clean_context. (* cmd2 = Gen *) clean_map_lookups. simpl in *. *)
+(*       assert (cmd2 = Gen). invert H41; eauto. rewrite H in H29. invert H29. eexists. econstructor. eexists. *)
+(*     + unfold build_data_step. simpl. clean_context. clean_map_lookups. simpl. *)
+(*       assert (cmd2 = Recv pat). invert H35; eauto. rewrite H in H29. invert H29. *)
+(*     + unfold build_data_step. simpl. clean_context. clean_map_lookups. simpl. *)
+(*       assert (cmd2 = Recv pat). invert H35; eauto. rewrite H in H29. invert H29. *)
+(*     + unfold build_data_step. simpl. clean_context. clean_map_lookups. simpl. *)
+(*       assert (cmd2 = Send rec_u_id msg). invert H35; eauto. rewrite H0 in H29. invert H29. eexists. unfold updateSentNonce in H37. simpl in H37. *)
+(*       (* eapply StepSend. *) admit. *)
+(*     + unfold build_data_step. simpl. clean_context. clean_map_lookups. simpl. *)
+(*       assert (cmd2 = SignEncrypt k__signid k__encid msg_to msg). invert H35; eauto. rewrite H in H29. invert H29. *)
+(*     + unfold build_data_step. simpl. clean_context. clean_map_lookups. simpl. *)
+(*       assert (cmd2 = Decrypt (SignedCiphertext c_id)). invert H35; eauto. rewrite H in H29. invert H29. *)
+(*     + unfold build_data_step. simpl. clean_context. clean_map_lookups. simpl. *)
+(*       assert (cmd2 = Sign k_id msg_to msg). invert H35; eauto. rewrite H in H29. invert H29. *)
+(*     + unfold build_data_step. simpl. clean_context. clean_map_lookups. simpl. *)
+(*       assert (cmd2 = Verify k_id (SignedCiphertext c_id)). invert H35; eauto. rewrite H in H29. invert H29. *)
+(*     + unfold build_data_step. simpl. clean_context. clean_map_lookups. simpl. *)
+(*       assert (cmd2 = GenerateSymKey usage). invert H35; eauto. rewrite H in H29. invert H29. *)
+(*       eexists. econstructor; eauto. invert H35. clean_context. clean_map_lookups. admit. *)
+(*     + unfold build_data_step. simpl. clean_context. clean_map_lookups. simpl. *)
+(*       assert (cmd2 = GenerateAsymKey usage). invert H35; eauto. rewrite H in H29. invert H29. *)
+(*       eexists. econstructor; eauto. invert H35. clean_context. clean_map_lookups. admit. *)
+(*   -  *)
+(* Admitted. *)
 
-  Lemma commutes_sound_recur_cmd1' :
-    forall {A B C D} suid1 u_id1 lbl1 (bd1 bd1' : data_step0 A B C),
+(*   Lemma commutes_sound_recur_cmd1' : *)
+(*     forall {A B C D} suid1 u_id1 lbl1 (bd1 bd1' : data_step0 A B C), *)
 
-      step_user lbl1 suid1 bd1 bd1'
-      -> suid1 = Some u_id1
-      -> forall (bd2 bd2' : data_step0 A B D) lbl2 suid2 u_id2,
+(*       step_user lbl1 suid1 bd1 bd1' *)
+(*       -> suid1 = Some u_id1 *)
+(*       -> forall (bd2 bd2' : data_step0 A B D) lbl2 suid2 u_id2, *)
 
-          step_user lbl2 suid2 bd2 bd2'
-          -> suid2 = Some u_id2
-          -> u_id1 <> u_id2
+(*           step_user lbl2 suid2 bd2 bd2' *)
+(*           -> suid2 = Some u_id2 *)
+(*           -> u_id1 <> u_id2 *)
 
-          -> forall cs cs1 cs' (usrs1 usrs1' usrs2 usrs2' : honest_users A) (adv adv1 adv' : user_data B) gks gks1 gks'
-              ks1 ks1' qmsgs1 qmsgs1' mycs1 mycs1' cmd1 cmd1' froms1 froms1' sents1 sents1' cur_n1 cur_n1'
-              ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' cmd2 cmd2' froms2 froms2' sents2 sents2' cur_n2 cur_n2'
-              cmdc1 cmdc1' cmdc2 qmsgs2'',
+(*           -> forall cs cs1 cs' (usrs1 usrs1' usrs2 usrs2' : honest_users A) (adv adv1 adv' : user_data B) gks gks1 gks' *)
+(*               ks1 ks1' qmsgs1 qmsgs1' mycs1 mycs1' cmd1 cmd1' froms1 froms1' sents1 sents1' cur_n1 cur_n1' *)
+(*               ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' cmd2 cmd2' froms2 froms2' sents2 sents2' cur_n2 cur_n2' *)
+(*               cmdc1 cmdc1' cmdc2 qmsgs2'', *)
 
-              bd1  = (usrs1,  adv,  cs,  gks,  ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd1)
-              -> bd1' = (usrs1', adv1, cs1, gks1, ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd1')
-              -> bd2  = (usrs2,  adv1, cs1, gks1, ks2, qmsgs2'', mycs2, froms2, sents2, cur_n2, cmd2)
-              -> bd2' = (usrs2', adv', cs', gks', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
-              (* allow protocol to freely vary, since we won't be looking at it *)
-              -> usrs1 $? u_id1 = Some (mkUserData ks1 cmdc1 qmsgs1 mycs1 froms1 sents1 cur_n1)
-              -> usrs1 $? u_id2 = Some (mkUserData ks2 cmdc2 qmsgs2 mycs2 froms2 sents2 cur_n2)
-              -> usrs1' $? u_id2 = Some (mkUserData ks2 cmdc2 qmsgs2'' mycs2 froms2 sents2 cur_n2)
-              -> usrs2 = usrs1' $+ (u_id1, mkUserData ks1' cmdc1' qmsgs1' mycs1' froms1' sents1' cur_n1')
-              -> encrypted_ciphers_ok (findUserKeys usrs1) cs gks
-              -> message_queues_ok cs usrs1 gks
-              -> keys_and_permissions_good gks usrs1 adv.(key_heap)
-              -> user_cipher_queues_ok cs (findUserKeys usrs1) usrs1
-              (* -> next_cmd_safe (findUserKeys usrs1) cs u_id1 froms1 sents1 cmd1 *)
-              (* -> next_cmd_safe (findUserKeys usrs1) cs u_id2 froms2 sents2 cmd2 *)
+(*               bd1  = (usrs1,  adv,  cs,  gks,  ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd1) *)
+(*               -> bd1' = (usrs1', adv1, cs1, gks1, ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd1') *)
+(*               -> bd2  = (usrs2,  adv1, cs1, gks1, ks2, qmsgs2'', mycs2, froms2, sents2, cur_n2, cmd2) *)
+(*               -> bd2' = (usrs2', adv', cs', gks', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2') *)
+(*               (* allow protocol to freely vary, since we won't be looking at it *) *)
+(*               -> usrs1 $? u_id1 = Some (mkUserData ks1 cmdc1 qmsgs1 mycs1 froms1 sents1 cur_n1) *)
+(*               -> usrs1 $? u_id2 = Some (mkUserData ks2 cmdc2 qmsgs2 mycs2 froms2 sents2 cur_n2) *)
+(*               -> usrs1' $? u_id2 = Some (mkUserData ks2 cmdc2 qmsgs2'' mycs2 froms2 sents2 cur_n2) *)
+(*               -> usrs2 = usrs1' $+ (u_id1, mkUserData ks1' cmdc1' qmsgs1' mycs1' froms1' sents1' cur_n1') *)
+(*               -> encrypted_ciphers_ok (findUserKeys usrs1) cs gks *)
+(*               -> message_queues_ok cs usrs1 gks *)
+(*               -> keys_and_permissions_good gks usrs1 adv.(key_heap) *)
+(*               -> user_cipher_queues_ok cs (findUserKeys usrs1) usrs1 *)
+(*               (* -> next_cmd_safe (findUserKeys usrs1) cs u_id1 froms1 sents1 cmd1 *) *)
+(*               (* -> next_cmd_safe (findUserKeys usrs1) cs u_id2 froms2 sents2 cmd2 *) *)
                                   
-              (* no recursion *)
-              (* -> nextAction cmd1 cmd1 *)
-              -> not (nextAction cmd2 cmd2)
-              (* -> (forall cmd__n x t (m : crypto t), nextAction cmd1 cmd__n -> cmd__n <> Send x m) *)
+(*               (* no recursion *) *)
+(*               (* -> nextAction cmd1 cmd1 *) *)
+(*               -> not (nextAction cmd2 cmd2) *)
+(*               (* -> (forall cmd__n x t (m : crypto t), nextAction cmd1 cmd__n -> cmd__n <> Send x m) *) *)
 
 
-              -> forall bd3 cmdc2',
-                  bd3 = (usrs1,   adv,  cs,  gks,  ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
-                  -> exists bd3' bd4 bd4' lbl3 lbl4 adv2 cs2 gks2 usrs3' usrs4 usrs4' qmsgs3,
-                      step_user lbl3 suid2 bd3 bd3'
-                      /\ bd3' = (usrs3', adv2, cs2, gks2, ks2', qmsgs3, mycs2', froms2', sents2', cur_n2', cmd2')
-                      /\ usrs4 = usrs3' $+ (u_id2, mkUserData ks2' cmdc2' qmsgs3 mycs2' froms2' sents2' cur_n2')
-                      /\ bd4 = (usrs4,   adv2, cs2, gks2, ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd1)
-                      /\ bd4' = (usrs4', adv', cs', gks', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd1')
-                      /\ step_user lbl4 suid1 bd4 bd4'
-                      /\ ( usrs4' $+ (u_id1, mkUserData ks1' cmdc1' qmsgs1' mycs1' froms1' sents1' cur_n1') = 
-                          usrs2' $+ (u_id2, mkUserData ks2' cmdc2' qmsgs2' mycs2' froms2' sents2' cur_n2') )
-  .
-  Proof.
-    induction 1; inversion 5; inversion 1
-    ; intros.
-    - invert H1.
-    Admitted.
+(*               -> forall bd3 cmdc2', *)
+(*                   bd3 = (usrs1,   adv,  cs,  gks,  ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2) *)
+(*                   -> exists bd3' bd4 bd4' lbl3 lbl4 adv2 cs2 gks2 usrs3' usrs4 usrs4' qmsgs3, *)
+(*                       step_user lbl3 suid2 bd3 bd3' *)
+(*                       /\ bd3' = (usrs3', adv2, cs2, gks2, ks2', qmsgs3, mycs2', froms2', sents2', cur_n2', cmd2') *)
+(*                       /\ usrs4 = usrs3' $+ (u_id2, mkUserData ks2' cmdc2' qmsgs3 mycs2' froms2' sents2' cur_n2') *)
+(*                       /\ bd4 = (usrs4,   adv2, cs2, gks2, ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd1) *)
+(*                       /\ bd4' = (usrs4', adv', cs', gks', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd1') *)
+(*                       /\ step_user lbl4 suid1 bd4 bd4' *)
+(*                       /\ ( usrs4' $+ (u_id1, mkUserData ks1' cmdc1' qmsgs1' mycs1' froms1' sents1' cur_n1') =  *)
+(*                           usrs2' $+ (u_id2, mkUserData ks2' cmdc2' qmsgs2' mycs2' froms2' sents2' cur_n2') ) *)
+(*   . *)
+(*   Proof. *)
+(*     induction 1; inversion 5; inversion 1 *)
+(*     ; intros. *)
+(*     - invert H1. *)
+(*     Admitted. *)
 
-Lemma step_step_recurse_ok :
-  forall A B C lbl1 suid1 bd1 bd1',
-    step_user lbl1 suid1 bd1 bd1'
-    -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks'
-        (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs'
-        froms froms' sents sents' cur_n cur_n' uid1,
-      bd1 = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
-      -> bd1' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
-      -> suid1 = Some uid1
-      -> forall cmdc cmdc',
-          usrs $? uid1 = Some (mkUserData ks cmdc qmsgs mycs froms sents cur_n)
-      -> forall D ks2 qmsgs2 mycs2 froms2 sents2 cur_n2 cmd1 (cmd2 : << D >> -> user_cmd (Base A)) uid2,
-          usrs $? uid2 = Some (mkUserData ks2 (Bind cmd1 cmd2) qmsgs2 mycs2 froms2 sents2 cur_n2)
-      -> uid1 <> uid2
-      -> forall bd2' lbl2 ,
-          step_user lbl2 (Some uid2) (usrs, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, Bind cmd1 cmd2) bd2'
-          -> exists lbl3 bd3 qmsgs3,
-            usrs' $? uid2 =
-            Some
-              {| key_heap := ks2;
-                 protocol := Bind cmd1 cmd2;
-                 msg_heap := qmsgs3;
-                 c_heap := mycs2;
-                 from_nons := froms2;
-                 sent_nons := sents2;
-                 cur_nonce := cur_n2 |}
-            -> step_user lbl3 (Some uid2)
-                        (usrs' $+ (uid1,
-                                   {|
-                                     key_heap := ks';
-                                     protocol := cmdc';
-                                     msg_heap := qmsgs';
-                                     c_heap := mycs';
-                                     from_nons := froms';
-                                     sent_nons := sents';
-                                     cur_nonce := cur_n' |}), adv', cs', gks', ks2, qmsgs3, mycs2, froms2, sents2, cur_n2, Bind cmd1 cmd2) bd3.
-Proof.
-  induction 1; inversion 1; inversion 1; intros; subst; eauto.
-  - induction H27.
-    + admit.
-    + admit.
-    + do 3 eexists. intros. 
-Admitted.
-
-
-Lemma step_then_step :
-  forall A B C lbl1 suid1 bd1 bd1',
-    step_user lbl1 suid1 bd1 bd1'
-    -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks'
-        (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs'
-        froms froms' sents sents' cur_n cur_n' uid1,
-      bd1 = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
-      -> bd1' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
-      -> suid1 = Some uid1
-      -> forall cmdc cmdc',
-          usrs $? uid1 = Some (mkUserData ks cmdc qmsgs mycs froms sents cur_n)
-      -> forall ks2 qmsgs2 mycs2 froms2 sents2 cur_n2 cmd2 uid2,
-          usrs $? uid2 = Some (mkUserData ks2 cmd2 qmsgs2 mycs2 froms2 sents2 cur_n2)
-      -> uid1 <> uid2
-      -> forall bd2' lbl2 ,
-          step_user lbl2 (Some uid2) (usrs, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2) bd2'
-      -> exists lbl3 bd3 qmsgs3,
-            usrs' $? uid2 = Some (mkUserData ks2 cmd2 qmsgs3 mycs2 froms2 sents2 cur_n2)
-          -> step_user lbl3 (Some uid2) (usrs' $+ (uid1, (mkUserData ks' cmdc' qmsgs' mycs' froms' sents' cur_n')),
-                                        adv', cs', gks', ks2, qmsgs3, mycs2, froms2, sents2, cur_n2, cmd2) bd3.
-Proof.
-  induction 1; inversion 1; inversion 1; intros; subst; eauto.
-  - invert H27. 
-    (* + destruct cmd1. *)
-    (*   *do 3 eexists; intros; econstructor 2; eauto. *)
-    (*   * admit. *)
-    (*   * exists lbl2. do 2 eexists. intros. econstructor. admit. *)
-    (*   * admit. *)
-    (*   * admit *)
-    + admit.
-    + do 3 eexists; intros; econstructor 2; eauto.
-    + do 3 eexists; intros; econstructor; eauto.
-    + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto.
-     do 3 eexists; intros; econstructor; eauto.
-    + do 3 eexists; intros; econstructor; eauto.
-    + do 3 eexists; intros; econstructor; eauto.
-  - invert H27.
-    + admit.
-    + do 3 eexists; intros; econstructor 2; eauto.
-    + do 3 eexists; intros; econstructor; eauto.
-    + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto.
-     do 3 eexists; intros; econstructor; eauto.
-    + do 3 eexists; intros; econstructor; eauto.
-    + do 3 eexists; intros; econstructor; eauto.
-  - invert H35.
-    + admit.
-    + do 3 eexists; intros; econstructor 2; eauto.
-    + do 3 eexists; intros; econstructor; eauto.
-    + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto.
-     do 3 eexists; intros; econstructor; eauto.
-    + do 3 eexists; intros; econstructor; eauto.
-    + do 3 eexists; intros; econstructor; eauto.
-      (* Verify? *) 
-  - invert H31.
-    + admit.
-    + do 3 eexists; intros; econstructor 2; eauto.
-    + do 3 eexists; intros; econstructor; eauto.
-    + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto.
-     do 3 eexists; intros; econstructor; eauto.
-    + do 3 eexists; intros; econstructor; eauto.
-    + do 3 eexists; intros; econstructor; eauto.
-  (* send *)
-  - invert H35. 
-    + admit.
-    + do 3 eexists; intros; econstructor 2; eauto.
-    + do 3 eexists; intros; econstructor; eauto.
-    + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto.
-     do 3 eexists; intros; econstructor; eauto. admit.
-    + do 3 eexists; intros; econstructor; eauto.
-    + do 3 eexists; intros; econstructor; eauto.
-      (* sign enc*)
-  - invert H37.
-    + admit.
-    + do 3 eexists; intros; econstructor 2; eauto.
-    + do 3 eexists; intros; econstructor; eauto.
-    + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto. admit. admit.
-    + do 3 eexists; intros; econstructor; eauto.
-    + do 3 eexists; intros; econstructor; eauto.
-  - invert H36.
-    + admit.
-    + do 3 eexists; intros; econstructor 2; eauto.
-    + do 3 eexists; intros; econstructor; eauto.
-    + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto.
-     do 3 eexists; intros; econstructor; eauto.
-    + do 3 eexists; intros; econstructor; eauto.
-    + do 3 eexists; intros; econstructor; eauto.
-  (* sign *)
-  - invert H35.
-    + admit.
-    + do 3 eexists; intros; econstructor 2; eauto.
-    + do 3 eexists; intros; econstructor; eauto.
-    + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto. admit. admit.
-    + do 3 eexists; intros; econstructor; eauto.
-    + do 3 eexists; intros; econstructor; eauto.
-  - invert H31.
-    + admit.
-    + do 3 eexists; intros; econstructor 2; eauto.
-    + do 3 eexists; intros; econstructor; eauto.
-    + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto.
-     do 3 eexists; intros; econstructor; eauto.
-    + do 3 eexists; intros; econstructor; eauto.
-    + do 3 eexists; intros; econstructor; eauto.
-  (* gen keys *)
-  - invert H31.
-    + admit.
-    + do 3 eexists; intros; econstructor 2; eauto.
-    + do 3 eexists; intros; econstructor; eauto.
-    + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto.
-     do 3 eexists; intros; econstructor; eauto.
-    + do 3 eexists; intros; econstructor; eauto. admit. (* gks *)
-    + do 3 eexists; intros; econstructor; eauto. admit.
-  - invert H31.
-    + admit.
-    + do 3 eexists; intros; econstructor 2; eauto.
-    + do 3 eexists; intros; econstructor; eauto.
-    + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto.
-     do 3 eexists; intros; econstructor; eauto.
-    + do 3 eexists; intros; econstructor; eauto. admit. (* gks *)
-    + do 3 eexists; intros; econstructor; eauto. admit. 
-Admitted.
+(* Lemma step_step_recurse_ok : *)
+(*   forall A B C lbl1 suid1 bd1 bd1', *)
+(*     step_user lbl1 suid1 bd1 bd1' *)
+(*     -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks' *)
+(*         (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs' *)
+(*         froms froms' sents sents' cur_n cur_n' uid1, *)
+(*       bd1 = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
+(*       -> bd1' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd') *)
+(*       -> suid1 = Some uid1 *)
+(*       -> forall cmdc cmdc', *)
+(*           usrs $? uid1 = Some (mkUserData ks cmdc qmsgs mycs froms sents cur_n) *)
+(*       -> forall D ks2 qmsgs2 mycs2 froms2 sents2 cur_n2 cmd1 (cmd2 : << D >> -> user_cmd (Base A)) uid2, *)
+(*           usrs $? uid2 = Some (mkUserData ks2 (Bind cmd1 cmd2) qmsgs2 mycs2 froms2 sents2 cur_n2) *)
+(*       -> uid1 <> uid2 *)
+(*       -> forall bd2' lbl2 , *)
+(*           step_user lbl2 (Some uid2) (usrs, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, Bind cmd1 cmd2) bd2' *)
+(*           -> exists lbl3 bd3 qmsgs3, *)
+(*             usrs' $? uid2 = *)
+(*             Some *)
+(*               {| key_heap := ks2; *)
+(*                  protocol := Bind cmd1 cmd2; *)
+(*                  msg_heap := qmsgs3; *)
+(*                  c_heap := mycs2; *)
+(*                  from_nons := froms2; *)
+(*                  sent_nons := sents2; *)
+(*                  cur_nonce := cur_n2 |} *)
+(*             -> step_user lbl3 (Some uid2) *)
+(*                         (usrs' $+ (uid1, *)
+(*                                    {| *)
+(*                                      key_heap := ks'; *)
+(*                                      protocol := cmdc'; *)
+(*                                      msg_heap := qmsgs'; *)
+(*                                      c_heap := mycs'; *)
+(*                                      from_nons := froms'; *)
+(*                                      sent_nons := sents'; *)
+(*                                      cur_nonce := cur_n' |}), adv', cs', gks', ks2, qmsgs3, mycs2, froms2, sents2, cur_n2, Bind cmd1 cmd2) bd3. *)
+(* Proof. *)
+(*   induction 1; inversion 1; inversion 1; intros; subst; eauto. *)
+(*   - induction H27. *)
+(*     + admit. *)
+(*     + admit. *)
+(*     + do 3 eexists. intros.  *)
+(* Admitted. *)
 
 
+(* Lemma step_then_step : *)
+(*   forall A B C lbl1 suid1 bd1 bd1', *)
+(*     step_user lbl1 suid1 bd1 bd1' *)
+(*     -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks' *)
+(*         (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs' *)
+(*         froms froms' sents sents' cur_n cur_n' uid1, *)
+(*       bd1 = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
+(*       -> bd1' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd') *)
+(*       -> suid1 = Some uid1 *)
+(*       -> forall cmdc cmdc', *)
+(*           usrs $? uid1 = Some (mkUserData ks cmdc qmsgs mycs froms sents cur_n) *)
+(*       -> forall ks2 qmsgs2 mycs2 froms2 sents2 cur_n2 cmd2 uid2, *)
+(*           usrs $? uid2 = Some (mkUserData ks2 cmd2 qmsgs2 mycs2 froms2 sents2 cur_n2) *)
+(*       -> uid1 <> uid2 *)
+(*       -> forall bd2' lbl2 , *)
+(*           step_user lbl2 (Some uid2) (usrs, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2) bd2' *)
+(*       -> exists lbl3 bd3 qmsgs3, *)
+(*             usrs' $? uid2 = Some (mkUserData ks2 cmd2 qmsgs3 mycs2 froms2 sents2 cur_n2) *)
+(*           -> step_user lbl3 (Some uid2) (usrs' $+ (uid1, (mkUserData ks' cmdc' qmsgs' mycs' froms' sents' cur_n')), *)
+(*                                         adv', cs', gks', ks2, qmsgs3, mycs2, froms2, sents2, cur_n2, cmd2) bd3. *)
+(* Proof. *)
+(*   induction 1; inversion 1; inversion 1; intros; subst; eauto. *)
+(*   - invert H27.  *)
+(*     (* + destruct cmd1. *) *)
+(*     (*   *do 3 eexists; intros; econstructor 2; eauto. *) *)
+(*     (*   * admit. *) *)
+(*     (*   * exists lbl2. do 2 eexists. intros. econstructor. admit. *) *)
+(*     (*   * admit. *) *)
+(*     (*   * admit *) *)
+(*     + admit. *)
+(*     + do 3 eexists; intros; econstructor 2; eauto. *)
+(*     + do 3 eexists; intros; econstructor; eauto. *)
+(*     + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto. *)
+(*      do 3 eexists; intros; econstructor; eauto. *)
+(*     + do 3 eexists; intros; econstructor; eauto. *)
+(*     + do 3 eexists; intros; econstructor; eauto. *)
+(*   - invert H27. *)
+(*     + admit. *)
+(*     + do 3 eexists; intros; econstructor 2; eauto. *)
+(*     + do 3 eexists; intros; econstructor; eauto. *)
+(*     + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto. *)
+(*      do 3 eexists; intros; econstructor; eauto. *)
+(*     + do 3 eexists; intros; econstructor; eauto. *)
+(*     + do 3 eexists; intros; econstructor; eauto. *)
+(*   - invert H35. *)
+(*     + admit. *)
+(*     + do 3 eexists; intros; econstructor 2; eauto. *)
+(*     + do 3 eexists; intros; econstructor; eauto. *)
+(*     + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto. *)
+(*      do 3 eexists; intros; econstructor; eauto. *)
+(*     + do 3 eexists; intros; econstructor; eauto. *)
+(*     + do 3 eexists; intros; econstructor; eauto. *)
+(*       (* Verify? *)  *)
+(*   - invert H31. *)
+(*     + admit. *)
+(*     + do 3 eexists; intros; econstructor 2; eauto. *)
+(*     + do 3 eexists; intros; econstructor; eauto. *)
+(*     + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto. *)
+(*      do 3 eexists; intros; econstructor; eauto. *)
+(*     + do 3 eexists; intros; econstructor; eauto. *)
+(*     + do 3 eexists; intros; econstructor; eauto. *)
+(*   (* send *) *)
+(*   - invert H35.  *)
+(*     + admit. *)
+(*     + do 3 eexists; intros; econstructor 2; eauto. *)
+(*     + do 3 eexists; intros; econstructor; eauto. *)
+(*     + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto. *)
+(*      do 3 eexists; intros; econstructor; eauto. admit. *)
+(*     + do 3 eexists; intros; econstructor; eauto. *)
+(*     + do 3 eexists; intros; econstructor; eauto. *)
+(*       (* sign enc*) *)
+(*   - invert H37. *)
+(*     + admit. *)
+(*     + do 3 eexists; intros; econstructor 2; eauto. *)
+(*     + do 3 eexists; intros; econstructor; eauto. *)
+(*     + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto. admit. admit. *)
+(*     + do 3 eexists; intros; econstructor; eauto. *)
+(*     + do 3 eexists; intros; econstructor; eauto. *)
+(*   - invert H36. *)
+(*     + admit. *)
+(*     + do 3 eexists; intros; econstructor 2; eauto. *)
+(*     + do 3 eexists; intros; econstructor; eauto. *)
+(*     + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto. *)
+(*      do 3 eexists; intros; econstructor; eauto. *)
+(*     + do 3 eexists; intros; econstructor; eauto. *)
+(*     + do 3 eexists; intros; econstructor; eauto. *)
+(*   (* sign *) *)
+(*   - invert H35. *)
+(*     + admit. *)
+(*     + do 3 eexists; intros; econstructor 2; eauto. *)
+(*     + do 3 eexists; intros; econstructor; eauto. *)
+(*     + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto. admit. admit. *)
+(*     + do 3 eexists; intros; econstructor; eauto. *)
+(*     + do 3 eexists; intros; econstructor; eauto. *)
+(*   - invert H31. *)
+(*     + admit. *)
+(*     + do 3 eexists; intros; econstructor 2; eauto. *)
+(*     + do 3 eexists; intros; econstructor; eauto. *)
+(*     + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto. *)
+(*      do 3 eexists; intros; econstructor; eauto. *)
+(*     + do 3 eexists; intros; econstructor; eauto. *)
+(*     + do 3 eexists; intros; econstructor; eauto. *)
+(*   (* gen keys *) *)
+(*   - invert H31. *)
+(*     + admit. *)
+(*     + do 3 eexists; intros; econstructor 2; eauto. *)
+(*     + do 3 eexists; intros; econstructor; eauto. *)
+(*     + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto. *)
+(*      do 3 eexists; intros; econstructor; eauto. *)
+(*     + do 3 eexists; intros; econstructor; eauto. admit. (* gks *) *)
+(*     + do 3 eexists; intros; econstructor; eauto. admit. *)
+(*   - invert H31. *)
+(*     + admit. *)
+(*     + do 3 eexists; intros; econstructor 2; eauto. *)
+(*     + do 3 eexists; intros; econstructor; eauto. *)
+(*     + destruct (rec_u_id ==n uid1); subst. do 3 eexists; intros. econstructor; eauto. *)
+(*      do 3 eexists; intros; econstructor; eauto. *)
+(*     + do 3 eexists; intros; econstructor; eauto. admit. (* gks *) *)
+(*     + do 3 eexists; intros; econstructor; eauto. admit.  *)
+(* Admitted. *)
 
-Lemma labels_align_silent_step' :
-  forall A B C suid lbl bd bd',
-
-    step_user lbl suid bd bd'
-
-    -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks'
-        (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs'
-        froms froms' sents sents' cur_n cur_n' uid,
-
-      bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
-      -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
-      -> suid = Some uid
-      -> forall cmdc,
-          usrs $? uid = Some (mkUserData ks cmdc qmsgs mycs froms sents cur_n)
-
-      -> forall cmdc' iu,
-          labels_align ({|
-                         users := usrs $+ (uid,
-                                           {|
-                                             key_heap := ks';
-                                             protocol := cmdc';
-                                             msg_heap := qmsgs';
-                                             c_heap := mycs';
-                                             from_nons := froms';
-                                             sent_nons := sents';
-                                             cur_nonce := cur_n' |});
-                         adversary := adv';
-                         all_ciphers := cs';
-                         all_keys := gks' |}, iu)
-       -> labels_align ({|
-                         users := usrs;
-                         adversary := adv;
-                         all_ciphers := cs;
-                         all_keys := gks |}, iu).
-Proof.
-  induction 1; inversion 1; inversion 1; intros; subst; eauto.
-  - admit.
-  - unfold labels_align in *; intros.
-    invert H1; simpl in *.
-    destruct userData; unfold build_data_step in *; simpl in *.
-
-Admitted.
 
 
-Lemma alignment_violation_step' :
-  forall t__hon t__adv st st',
-    @step t__hon t__adv st st'
-    (* -> lameAdv b (fst st).(adversary) *)
-    -> labels_always_align st'
-    -> labels_always_align st.
-Proof.
+(* Lemma labels_align_silent_step' : *)
+(*   forall A B C suid lbl bd bd', *)
 
-  induct 1; intros;
-    match goal with
-    | [ H : labels_always_align _ |- _ ] => invert H
-    end.
-  - econstructor; intros.
-    * econstructor; intros.
-      ** admit.
-      ** admit.
-    * invert H.
-      2:admit. (* adversary step, so ignore *)
-      unfold buildUniverse in *.
-      admit.
+(*     step_user lbl suid bd bd' *)
 
-  - 
-  (* we know that we have stepped from (ru,iu) to (ru',iu).  we know that if the user
-   * that stepped was the one from H, then we can use H1 to discharge.
-   * However, if it was another user, stepping from (ru,iu) to st', then
-   * we need to know that the other user wouldn't have messed us up if it went first, but we
-   * know that to be true because of H2 (labels_align (ru',iu)), but we will need to prove that
-   * as a lemma  *)
+(*     -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks' *)
+(*         (cmd cmd' : user_cmd C) ks ks' qmsgs qmsgs' mycs mycs' *)
+(*         froms froms' sents sents' cur_n cur_n' uid, *)
+
+(*       bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
+(*       -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd') *)
+(*       -> suid = Some uid *)
+(*       -> forall cmdc, *)
+(*           usrs $? uid = Some (mkUserData ks cmdc qmsgs mycs froms sents cur_n) *)
+
+(*       -> forall cmdc' iu, *)
+(*           labels_align ({| *)
+(*                          users := usrs $+ (uid, *)
+(*                                            {| *)
+(*                                              key_heap := ks'; *)
+(*                                              protocol := cmdc'; *)
+(*                                              msg_heap := qmsgs'; *)
+(*                                              c_heap := mycs'; *)
+(*                                              from_nons := froms'; *)
+(*                                              sent_nons := sents'; *)
+(*                                              cur_nonce := cur_n' |}); *)
+(*                          adversary := adv'; *)
+(*                          all_ciphers := cs'; *)
+(*                          all_keys := gks' |}, iu) *)
+(*        -> labels_align ({| *)
+(*                          users := usrs; *)
+(*                          adversary := adv; *)
+(*                          all_ciphers := cs; *)
+(*                          all_keys := gks |}, iu). *)
+(* Proof. *)
+(*   induction 1; inversion 1; inversion 1; intros; subst; eauto. *)
+(*   - admit. *)
+(*   - unfold labels_align in *; intros. *)
+(*     invert H1; simpl in *. *)
+(*     destruct userData; unfold build_data_step in *; simpl in *. *)
+
+(* Admitted. *)
 
 
-Admitted.
+(* Lemma alignment_violation_step' : *)
+(*   forall t__hon t__adv st st', *)
+(*     @step t__hon t__adv st st' *)
+(*     (* -> lameAdv b (fst st).(adversary) *) *)
+(*     -> labels_always_align st' *)
+(*     -> labels_always_align st. *)
+(* Proof. *)
 
-Lemma alignment_violation_step :
-  forall t__hon t__adv st st' b,
-    @step t__hon t__adv st st'
-    -> lameAdv b (fst st).(adversary)
-    -> ~ labels_always_align st
-    -> ~ labels_always_align st'.
-Proof.
-  unfold not; intros.
-  eauto using alignment_violation_step'.
-Qed.
+(*   induct 1; intros; *)
+(*     match goal with *)
+(*     | [ H : labels_always_align _ |- _ ] => invert H *)
+(*     end. *)
+(*   - econstructor; intros. *)
+(*     * econstructor; intros. *)
+(*       ** admit. *)
+(*       ** admit. *)
+(*     * invert H. *)
+(*       2:admit. (* adversary step, so ignore *) *)
+(*       unfold buildUniverse in *. *)
+(*       admit. *)
 
-Lemma alignment_violation_steps :
-  forall t__hon t__adv st st' b,
-    (@step t__hon t__adv)^* st st'
-    -> lameAdv b (fst st).(adversary)
-    -> ~ labels_always_align st
-    -> ~ labels_always_align st'.
-Proof.
-  induction 1; intros; eauto.
+(*   -  *)
+(*   (* we know that we have stepped from (ru,iu) to (ru',iu).  we know that if the user *)
+(*    * that stepped was the one from H, then we can use H1 to discharge. *)
+(*    * However, if it was another user, stepping from (ru,iu) to st', then *)
+(*    * we need to know that the other user wouldn't have messed us up if it went first, but we *)
+(*    * know that to be true because of H2 (labels_align (ru',iu)), but we will need to prove that *)
+(*    * as a lemma  *) *)
 
-  assert (LAME : lameAdv b (fst y).(adversary)) by eauto using adversary_remains_lame_step.
-  destruct x, y, z; simpl in *.
 
-  generalize H; intros VIOL; eapply alignment_violation_step in VIOL; eauto.
-Qed.
+(* Admitted. *)
+
+(* Lemma alignment_violation_step : *)
+(*   forall t__hon t__adv st st' b, *)
+(*     @step t__hon t__adv st st' *)
+(*     -> lameAdv b (fst st).(adversary) *)
+(*     -> ~ labels_always_align st *)
+(*     -> ~ labels_always_align st'. *)
+(* Proof. *)
+(*   unfold not; intros. *)
+(*   eauto using alignment_violation_step'. *)
+(* Qed. *)
+
+(* Lemma alignment_violation_steps : *)
+(*   forall t__hon t__adv st st' b, *)
+(*     (@step t__hon t__adv)^* st st' *)
+(*     -> lameAdv b (fst st).(adversary) *)
+(*     -> ~ labels_always_align st *)
+(*     -> ~ labels_always_align st'. *)
+(* Proof. *)
+(*   induction 1; intros; eauto. *)
+
+(*   assert (LAME : lameAdv b (fst y).(adversary)) by eauto using adversary_remains_lame_step. *)
+(*   destruct x, y, z; simpl in *. *)
+
+(*   generalize H; intros VIOL; eapply alignment_violation_step in VIOL; eauto. *)
+(* Qed. *)
