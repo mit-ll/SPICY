@@ -1564,7 +1564,7 @@ Module Gen.
         || match goal with
           | [ H : True |- _ ] => clear H
           | [ H : ?X = ?X |- _ ] => clear H
-          | [ H : ?x = ?y |- _] => assert (x = y) as EQ by (clear H; trivial); clear H; clear EQ
+          (* | [ H : ?x = ?y |- _] => assert (x = y) as EQ by (clear H; trivial); clear H; clear EQ *)
           | [ H: RealWorld.keys_mine _ $0 |- _ ] => clear H
           | [ H : _ $+ (?k1,_) $? ?k2 = None |- _ ] =>
               (rewrite add_neq_o in H by solve_simple_ineq)
