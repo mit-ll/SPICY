@@ -46,18 +46,25 @@ KeyManagement/SyntacticallySafe.v
 
 protocols/ProtocolAutomation.v
 protocols/UniverseEqAutomation.v
-protocols/SafeProtocol.v
 protocols/Sets.v
 protocols/ModelCheck.v
+protocols/ExampleProtocols.v
+protocols/ExampleProtocolsAutomated.v
+
+protocols/SafeProtocol.v
 protocols/RealWorldStepLemmas.v
 protocols/PartialOrderReduction.v
 protocols/LabelsAlign.v
 protocols/NoResends.v
 
-protocols/ExampleProtocols.v
-protocols/ExampleProtocolsAutomated.v
+protocols/ProtocolFunctions.v
+protocols/ShareSecretProtocol.v
+protocols/ShareSecretProtocol2.v
+protocols/SecureDNS.v
 
-protocols/SimplePingProtocol.v
-protocols/SimpleEncProtocol.v
-#protocols/ShareKeyProtocol.v
-#protocols/ShareSecretNewKeyProtocol.v
+protocols/PORExtended.v
+
+# protocols/SimplePingProtocol.v
+# protocols/SimpleEncProtocol.v
+# protocols/ShareKeyProtocol.v
+# protocols/ShareSecretNewKeyProtocol.v

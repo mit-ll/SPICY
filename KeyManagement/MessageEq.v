@@ -14,7 +14,7 @@
  * Delivered to the U.S. Government with Unlimited Rights, as defined in DFARS Part 252.227-7013
  * or 7014 (Feb 2014). Notwithstanding any copyright notice, U.S. Government rights in this work are
  * defined by DFARS 252.227-7013 or DFARS 252.227-7014 as detailed above. Use of this work other than
- *  as specifically authorized by the U.S. Government may violate any copyrights that exist in this work. *)
+ * as specifically authorized by the U.S. Government may violate any copyrights that exist in this work. *)
 From Coq Require Import List.
 
 Require Import
@@ -26,15 +26,44 @@ Require Import
         Common
         Keys
         Tactics
+        IdealWorld
+        RealWorld
 .
 
-Require RealWorld IdealWorld.
+(* Require RealWorld IdealWorld. *)
 Import RealWorld.RealWorldNotations.
 Import IdealWorld.IdealNotations.
 (* assumes that there is a shadow copy of the built message in every store in the cipherheap *)
 (* potential major refactor for usage/id/sym interraction?*)
 
-Fixpoint content_eq  {t__rw t__iw}
+(* Inductive content_eq (gks : keys) : *)
+(*   forall {t__rw t__iw}, RealWorld.message.message t__rw -> IdealWorld.message.message t__iw -> Prop := *)
+
+(* | ContentEq : forall c__rw c__iw, *)
+(*     c__rw = c__iw *)
+(*     ->  content_eq gks (RealWorld.message.Content c__rw) (IdealWorld.message.Content c__iw) *)
+(* | PermissionSymEq : forall kid kt tf ch_id a, *)
+(*     gks $? kid = Some (MkCryptoKey kid kt SymKey) *)
+(*     -> a = IdealWorld.construct_permission true true *)
+(*     -> content_eq gks *)
+(*                  (RealWorld.message.Permission (kid,tf)) *)
+(*                  (IdealWorld.message.Permission (IdealWorld.construct_access a ch_id)) *)
+(* | PermissionAsymSignEq : forall kid tf ch_id a anyB, *)
+(*     gks $? kid = Some (MkCryptoKey kid Signing AsymKey) *)
+(*     -> a = IdealWorld.construct_permission true anyB *)
+(*     -> content_eq gks *)
+(*                  (RealWorld.message.Permission (kid,tf)) *)
+(*                  (IdealWorld.message.Permission (IdealWorld.construct_access a ch_id)) *)
+(* | PermissionAsymEncEq : forall kid tf ch_id a anyB, *)
+(*     gks $? kid = Some (MkCryptoKey kid Encryption AsymKey) *)
+(*     -> a = IdealWorld.construct_permission anyB true *)
+(*     -> content_eq gks *)
+(*                  (RealWorld.message.Permission (kid,tf)) *)
+(*                  (IdealWorld.message.Permission (IdealWorld.construct_access a ch_id)) *)
+
+(* . *)
+
+Fixpoint content_eq {t__rw t__iw}
          (m__rw : RealWorld.message.message t__rw)
          (m__iw : IdealWorld.message.message t__iw) gks : Prop :=
   match (m__rw, m__iw) with
@@ -82,118 +111,67 @@ Definition key_perms_from_message_queue (cs : RealWorld.ciphers) (honestk: key_p
   let cmsgs := clean_messages honestk cs (Some uid) froms msgs
   in  fold_left (fun kys '(existT _ _ m) => kys $k++ RealWorld.findKeysCrypto cs m) cmsgs ks0.
 
+Inductive compat_perm : option bool -> bool -> Prop :=
+| CompatEq :
+    compat_perm (Some false) false
+| CompatNone :
+    compat_perm None false
+| CompatTrue : forall sp,
+    compat_perm sp true.
 
-(* Definition key_perms_from_message_queue (cs : RealWorld.ciphers) (honestk: key_perms) *)
-(*            (msgs : RealWorld.queued_messages) (uid : user_id) (froms : RealWorld.recv_nonces) (ks0 : key_perms) := *)
-(*   match msgs with *)
-(*   | (existT _ _ m :: ms) => if not_replayed cs honestk uid froms m *)
-(*                           then ks0 $k++ RealWorld.findKeysCrypto cs m *)
-(*                           else ks0 *)
-(*   | _                   => ks0 *)
-(*   end. *)
+(* Inductive user_perms_channel_match {A} (uid : user_id) (usr__rw : RealWorld.user_data A) (usr__iw : IdealWorld.user A) *)
+(*           (honestk : key_perms) (cs : RealWorld.ciphers) (c_id : RealWorld.cipher_id) (ch_id : channel_id) : Prop := *)
 
-Inductive user_perms_channel_match {A} (uid : user_id) (usr__rw : RealWorld.user_data A) (usr__iw : IdealWorld.user A)
-          (honestk : key_perms) (cs : RealWorld.ciphers) (c_id : RealWorld.cipher_id) (ch_id : channel_id) : Prop :=
-
-| SigChannel : forall mks cks ks b__read b__write k__sign u_id msg_seq t (m__rw : RealWorld.message.message t),
-    RealWorld.honest_key honestk k__sign
-    -> cs $? c_id = Some (RealWorld.SigCipher k__sign u_id msg_seq m__rw)
-    -> cks = key_perms_from_known_ciphers cs usr__rw.(RealWorld.c_heap) $0
-    -> mks = key_perms_from_message_queue cs honestk usr__rw.(RealWorld.msg_heap) uid usr__rw.(RealWorld.from_nons) $0
-    -> ks = usr__rw.(RealWorld.key_heap) $k++ cks $k++ mks
-    -> resolve_perm usr__iw.(IdealWorld.perms) ch_id = Some (IdealWorld.construct_permission b__read b__write)
-    (* -> ks $? k__sign = None *)
-    -> ks $? k__sign = Some b__write
-    -> b__read = true
-    -> user_perms_channel_match uid usr__rw usr__iw honestk cs c_id ch_id
-| SigEncChannel : forall mks cks ks b__read b__write k__sign k__enc u_id msg_seq t (m__rw : RealWorld.message.message t),
-    RealWorld.honest_key honestk k__sign
-    -> cs $? c_id = Some (RealWorld.SigEncCipher k__sign k__enc u_id msg_seq m__rw)
-    -> cks = key_perms_from_known_ciphers cs usr__rw.(RealWorld.c_heap) $0
-    -> mks = key_perms_from_message_queue cs honestk usr__rw.(RealWorld.msg_heap) uid usr__rw.(RealWorld.from_nons) $0
-    -> ks = usr__rw.(RealWorld.key_heap) $k++ cks $k++ mks
-    -> resolve_perm usr__iw.(IdealWorld.perms) ch_id = Some (IdealWorld.construct_permission b__read b__write)
-    (* -> ( ks $? k__sign = None \/ ks $? k__enc = None ) *)
-    -> ks $? k__sign = Some b__write
-    -> ks $? k__enc  = Some b__read
-    -> user_perms_channel_match uid usr__rw usr__iw honestk cs c_id ch_id
-.
-
-Inductive  message_eq : forall {A B t},
-    RealWorld.crypto t -> RealWorld.universe A B ->
-    IdealWorld.message.message t -> IdealWorld.universe A -> IdealWorld.channel_id -> Prop :=
-| CryptoSigCase : forall {A B t} (U__rw : RealWorld.universe A B) U__iw (m__iw : IdealWorld.message.message t) c_id ch_id k__sign
-                    (m__rw : RealWorld.message.message t) honestk u_id msg_seq,
-    U__rw.(RealWorld.all_ciphers) $? c_id = Some (RealWorld.SigCipher k__sign u_id msg_seq m__rw)
-    -> content_eq m__rw m__iw U__rw.(RealWorld.all_keys)
-    -> honestk = RealWorld.findUserKeys (U__rw.(RealWorld.users))
-    -> (forall u data__rw data__iw,
-	  U__rw.(RealWorld.users) $? u = Some data__rw
-          -> U__iw.(IdealWorld.users) $? u = Some data__iw
-          -> RealWorld.honest_key honestk k__sign
-          -> user_perms_channel_match u data__rw data__iw honestk U__rw.(RealWorld.all_ciphers) c_id ch_id)
-    (* -> (forall u data__rw data__iw b__read b__write, *)
-    (*       U__rw.(RealWorld.users) $? u = Some data__rw *)
-    (*       -> U__iw.(IdealWorld.users) $? u = Some data__iw *)
-    (*       -> RealWorld.honest_key honestk k__sign *)
-    (*       -> resolve_perm data__iw.(IdealWorld.perms) ch_id = Some (IdealWorld.construct_permission b__read b__write) *)
-    (*       -> data__rw.(RealWorld.key_heap) $? k__sign = None *)
-    (*       \/ (data__rw.(RealWorld.key_heap) $? k__sign = Some b__write /\ b__read = true) *)
-    (*   ) *)
-    -> message_eq (RealWorld.SignedCiphertext c_id) U__rw m__iw U__iw ch_id
-
-| CryptoSigEncCase : forall {A B t} (U__rw : RealWorld.universe A B) U__iw (m__iw : IdealWorld.message.message t) c_id ch_id k__sign k__enc
-                       (m__rw : RealWorld.message.message t) honestk u_id msg_seq,
-    U__rw.(RealWorld.all_ciphers) $? c_id = Some (RealWorld.SigEncCipher k__sign k__enc u_id msg_seq m__rw)
-    -> content_eq m__rw m__iw U__rw.(RealWorld.all_keys)
-    -> honestk = RealWorld.findUserKeys U__rw.(RealWorld.users)
-    -> (forall u data__rw data__iw,
-	  U__rw.(RealWorld.users) $? u = Some data__rw
-          -> U__iw.(IdealWorld.users) $? u = Some data__iw
-          -> RealWorld.honest_key honestk k__sign
-          -> RealWorld.honest_key honestk k__enc
-          -> user_perms_channel_match u data__rw data__iw honestk U__rw.(RealWorld.all_ciphers) c_id ch_id
-          (* -> resolve_perm data__iw.(IdealWorld.perms) ch_id = Some (IdealWorld.construct_permission b__read b__write) *)
-          (* -> ( data__rw.(RealWorld.key_heap) $? k__sign = None \/ data__rw.(RealWorld.key_heap) $? k__enc = None ) *)
-          (* \/ ( data__rw.(RealWorld.key_heap) $? k__sign = Some b__write *)
-          (*   /\ data__rw.(RealWorld.key_heap) $? k__enc  = Some b__read) *)
-      )
-    -> message_eq (RealWorld.SignedCiphertext c_id) U__rw m__iw U__iw ch_id.
-
+(* | SigChannel : forall mks cks ks b__read b__write k__sign u_id msg_seq t (m__rw : RealWorld.message.message t), *)
+(*     RealWorld.honest_key honestk k__sign *)
+(*     -> cs $? c_id = Some (RealWorld.SigCipher k__sign u_id msg_seq m__rw) *)
+(*     -> cks = key_perms_from_known_ciphers cs usr__rw.(RealWorld.c_heap) $0 *)
+(*     (* -> mks = key_perms_from_message_queue cs honestk usr__rw.(RealWorld.msg_heap) uid usr__rw.(RealWorld.from_nons) $0 *) *)
+(*     -> mks = $0 *)
+(*     -> ks = usr__rw.(RealWorld.key_heap) $k++ cks $k++ mks *)
+(*     -> resolve_perm usr__iw.(IdealWorld.perms) ch_id = Some (IdealWorld.construct_permission b__read b__write) *)
+(*     -> compat_perm (ks $? k__sign) b__write *)
+(*     -> b__read = true *)
+(*     -> user_perms_channel_match uid usr__rw usr__iw honestk cs c_id ch_id *)
+(* | SigEncChannel : forall mks cks ks b__read b__write k__sign k__enc u_id msg_seq t (m__rw : RealWorld.message.message t), *)
+(*     RealWorld.honest_key honestk k__sign *)
+(*     -> cs $? c_id = Some (RealWorld.SigEncCipher k__sign k__enc u_id msg_seq m__rw) *)
+(*     -> cks = key_perms_from_known_ciphers cs usr__rw.(RealWorld.c_heap) $0 *)
+(*     (* -> mks = key_perms_from_message_queue cs honestk usr__rw.(RealWorld.msg_heap) uid usr__rw.(RealWorld.from_nons) $0 *) *)
+(*     -> mks = $0 *)
+(*     -> ks = usr__rw.(RealWorld.key_heap) $k++ cks $k++ mks *)
+(*     -> resolve_perm usr__iw.(IdealWorld.perms) ch_id = Some (IdealWorld.construct_permission b__read b__write) *)
+(*     -> compat_perm (ks $? k__sign) b__write *)
+(*     -> compat_perm (ks $? k__enc) b__read *)
+(*     -> user_perms_channel_match uid usr__rw usr__iw honestk cs c_id ch_id *)
+(* . *)
 
 (* Inductive  message_eq : forall {A B t}, *)
 (*     RealWorld.crypto t -> RealWorld.universe A B -> *)
 (*     IdealWorld.message.message t -> IdealWorld.universe A -> IdealWorld.channel_id -> Prop := *)
-(* | ContentCase : *)
-(*     forall {A B t} (U__rw : RealWorld.universe A B) U__iw (m__rw : RealWorld.message.message t) m__iw ch_id user_data, *)
-(*       content_eq m__rw m__iw U__rw.(RealWorld.all_keys) *)
-(*     -> (forall u, U__iw.(IdealWorld.users) $? u  = Some user_data *)
-(*             -> resolve_perm user_data.(IdealWorld.perms) ch_id = Some (IdealWorld.construct_permission true true)) *)
-(*     -> message_eq (RealWorld.Content m__rw) U__rw m__iw U__iw ch_id *)
 (* | CryptoSigCase : forall {A B t} (U__rw : RealWorld.universe A B) U__iw (m__iw : IdealWorld.message.message t) c_id ch_id k__sign *)
-(*                     (m__rw : RealWorld.message.message t) b__iw honestk u_id msg_seq, *)
+(*                     (m__rw : RealWorld.message.message t) honestk u_id msg_seq, *)
 (*     U__rw.(RealWorld.all_ciphers) $? c_id = Some (RealWorld.SigCipher k__sign u_id msg_seq m__rw) *)
 (*     -> content_eq m__rw m__iw U__rw.(RealWorld.all_keys) *)
 (*     -> honestk = RealWorld.findUserKeys (U__rw.(RealWorld.users)) *)
 (*     -> (forall u data__rw data__iw, *)
-(* 	  U__rw.(RealWorld.users) $? u = Some data__rw *)
+(*           U__rw.(RealWorld.users) $? u = Some data__rw *)
 (*           -> U__iw.(IdealWorld.users) $? u = Some data__iw *)
-(*           ->  RealWorld.honest_key honestk k__sign *)
-(*           (*sign key is honest.  honest key : find user keys on all users*) *)
-(*           -> (data__rw.(RealWorld.key_heap) $? k__sign = Some true *)
-(*              -> resolve_perm data__iw.(IdealWorld.perms) ch_id = Some (IdealWorld.construct_permission true b__iw))) *)
+(*           -> RealWorld.honest_key honestk k__sign *)
+(*           -> user_perms_channel_match u data__rw data__iw honestk U__rw.(RealWorld.all_ciphers) c_id ch_id *)
+(*       ) *)
 (*     -> message_eq (RealWorld.SignedCiphertext c_id) U__rw m__iw U__iw ch_id *)
+
 (* | CryptoSigEncCase : forall {A B t} (U__rw : RealWorld.universe A B) U__iw (m__iw : IdealWorld.message.message t) c_id ch_id k__sign k__enc *)
 (*                        (m__rw : RealWorld.message.message t) honestk u_id msg_seq, *)
 (*     U__rw.(RealWorld.all_ciphers) $? c_id = Some (RealWorld.SigEncCipher k__sign k__enc u_id msg_seq m__rw) *)
 (*     -> content_eq m__rw m__iw U__rw.(RealWorld.all_keys) *)
-(*     -> honestk = RealWorld.findUserKeys (U__rw.(RealWorld.users)) *)
-(*     -> (forall u data__rw data__iw b__rwenc, *)
-(* 	  U__rw.(RealWorld.users) $? u = Some data__rw *)
+(*     -> honestk = RealWorld.findUserKeys U__rw.(RealWorld.users) *)
+(*     -> (forall u data__rw data__iw, *)
+(*           U__rw.(RealWorld.users) $? u = Some data__rw *)
 (*           -> U__iw.(IdealWorld.users) $? u = Some data__iw *)
 (*           -> RealWorld.honest_key honestk k__sign *)
 (*           -> RealWorld.honest_key honestk k__enc *)
-(*           -> ((data__rw.(RealWorld.key_heap) $? k__sign = Some true *)
-(*               /\ data__rw.(RealWorld.key_heap) $? k__enc = Some b__rwenc) *)
-(*              -> resolve_perm data__iw.(IdealWorld.perms) ch_id = Some (IdealWorld.construct_permission b__rwenc true))) *)
+(*           -> user_perms_channel_match u data__rw data__iw honestk U__rw.(RealWorld.all_ciphers) c_id ch_id *)
+(*       ) *)
 (*     -> message_eq (RealWorld.SignedCiphertext c_id) U__rw m__iw U__iw ch_id. *)

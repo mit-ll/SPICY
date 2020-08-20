@@ -1,6 +1,10 @@
 # Coq build stuff
 Makefile.coq
 Makefile.coq.conf
+CoqMakefile
+CoqMakefile.conf
+.CoqMakefile.d
+*.log
 .coqdeps.d
 *.swp
 .*.aux
@@ -22,6 +26,8 @@ Makefile.coq.conf
 *.v.d
 *.vio
 *.vo
+*.vok
+*.vos
 .coq-native/
 .csdp.cache
 .lia.cache

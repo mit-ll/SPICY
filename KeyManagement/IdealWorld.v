@@ -1,3 +1,4 @@
+
 (* DISTRIBUTION STATEMENT A. Approved for public release. Distribution is unlimited.
  *
  * This material is based upon work supported by the Department of the Air Force under Air Force 
@@ -166,7 +167,15 @@ Inductive screen_msg : forall A, permissions -> message A -> Prop :=
 Fixpoint add_ps_to_set {A} (m : message A) (ps : permissions) : permissions :=
   match m with
   | Content _ => ps
-  | Permission p => ps $+ (p.(ch_id), p.(ch_perm))
+  | Permission (construct_access (construct_permission r w) ch)  =>
+    (* permissions should only increase *)
+    match ps $? ch with
+    | None => ps $+ (ch, construct_permission r w)
+    | Some (construct_permission r' w') =>
+      let r'' := if r then r else r' in
+      let w'' := if w then w else w' in
+      ps $+ (ch, construct_permission r'' w'')
+    end
   | MsgPair m1 m2 => add_ps_to_set m1 (add_ps_to_set m2 ps)
   end.
 
@@ -193,49 +202,41 @@ Inductive lstep_user : forall A, ilabel -> channels * cmd A * permissions -> cha
     lstep_user Silent (cv, Gen, ps) (cv, Return n, ps)
 | LStepCreateChannel : forall ch_id cv ps,
     cv #? (Single ch_id) = None ->
+    ps $? ch_id = None ->
     lstep_user Silent
                (cv, CreateChannel, ps)
                (cv #+ ((Single ch_id), []), @Return ChannelId ch_id, ps $+ (ch_id, creator_permission))
 | LStepSend : forall t (cv cv' : channels) (m : message t) ch_id ps b,
     check_perm ch_id ps {| read := b ; write := true |} ->
     cv' = addMsg cv ch_id m ->
-    (* cv #? (Single ch_id) = Some ch_d -> *)
     screen_msg ps m ->
     lstep_user
       (Action (Output m ch_id cv ps))
       (cv, Send m ch_id, ps) (cv', @Return (Base Unit) tt, ps)
-(* | LStepDualSend : forall t cv (m : message t) ch_id1 ch_id2 ps ch_d b ms, *)
-(*     check_perm (Intersection ch_id1 ch_id2) ps {| read := b ; write := true |} *)
-(*     -> screen_msg ps m *)
-(*     (* replace the following with non-option map lookup? *) *)
-(*     -> (cv #? (Intersection ch_id1 ch_id2) = Some ch_d -> ms = ch_d) *)
-(*       \/ (cv #? (Intersection ch_id1 ch_id2) = None -> ms = []) *)
-(*     -> lstep_user *)
-(*       (Action (Output m (Intersection ch_id1 ch_id2) cv ps)) *)
-(*       (cv, Send m (Intersection ch_id1 ch_id2), ps) *)
-(*       (cv #+ (Intersection ch_id1 ch_id2, (ms ++ [existT _ _ m])), @Return (Base Unit) tt, ps) *)
-| LStepRecv : forall t (cv cv' : channels) ch_d ch_d' ps (m : message t) ch_id b,
+| LStepRecv : forall t (cv : channels) ch_d ps (m : message t) ch_id b,
     cv #? ch_id = Some ch_d
     -> check_perm ch_id ps {| read := true ; write := b |}
-    -> ch_d = (existT _ _ m) :: ch_d'
-    -> cv' = cv #+ (ch_id, ch_d')
+    -> List.In (existT _ _ m) ch_d
+    (* -> ch_d = (existT _ _ m) :: ch_d' *)
+    (* -> cv' = cv #+ (ch_id, ch_d') *)
     -> lstep_user
         (Action (Input m ch_id cv ps))
         (cv, Recv ch_id, ps)
-        (cv', @Return (Message t) m, add_ps_to_set m ps).
+        (cv, @Return (Message t) m, add_ps_to_set m ps).
 
 Hint Extern 1 (check_perm _ _ _) => unfold check_perm; clean_map_lookups : core.
 
-Lemma LStepRecv' : forall t (cv cv' : channels) ch_d ch_d' ps ps' (m : message t) ch_id b,
+Lemma LStepRecv' : forall t (cv : channels) ch_d ps ps' (m : message t) ch_id b,
     cv #? ch_id = Some ch_d
     -> check_perm ch_id ps {| read := true ; write := b |}
-    -> ch_d = (existT _ _ m) :: ch_d'
+    -> List.In (existT _ _ m) ch_d
+    (* -> ch_d = (existT _ _ m) :: ch_d' *)
     -> ps' = add_ps_to_set m ps
-    -> cv' = cv #+ (ch_id, ch_d')
+    (* -> cv' = cv #+ (ch_id, ch_d') *)
     -> lstep_user
         (Action (Input m ch_id cv ps))
         (cv, Recv ch_id, ps)
-        (cv', @Return (Message t) m, ps').
+        (cv, @Return (Message t) m, ps').
 Proof.
   intros; subst; econstructor; eauto. 
 Qed.

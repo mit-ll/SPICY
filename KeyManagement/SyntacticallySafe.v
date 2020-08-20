@@ -160,14 +160,18 @@ Lemma list_setoidlist_iff :
   forall {V} (l : list (nat * V)) k v,
     List.In (k,v) l <-> SetoidList.InA (@eq_key_elt V) (k,v) l.
 Proof.
-  induction l; split; intros; eauto.
-  - invert H.
-  - destruct a; simpl in H; split_ors; eauto.
-    invert H; econstructor; red; eauto.
-    apply IHl in H; eauto.
-  - destruct a; invert H; eauto.
-    invert H1; simpl in *; subst; eauto.
-    eapply IHl in H1; eauto.
+  induction l; split; intros;
+    repeat match goal with
+           | [ H : eq_key_elt _ _ |- _ ] => invert H; simpl in *; subst
+           | [ H : (_,_) = (_,_) |- _ ] => invert H
+           | [ H : List.In _ [] |- _ ] => invert H
+           | [ H : SetoidList.InA _ _ [] |- _ ] => invert H
+           | [ H : List.In _ (?a :: _) |- _ ] => destruct a; simpl in H; split_ors
+           | [ H : SetoidList.InA _ _ (?a :: _) |- _ ] => destruct a; invert H
+           end; eauto 3.
+  - econstructor; red; eauto using Raw.PX.eqke_refl.
+  - eapply IHl in H; eauto.
+  - eapply IHl in H1; eauto.
 Qed.
 
 Lemma in_ids_in_m :

@@ -35,7 +35,8 @@ Require Import
         SafeProtocol
         Simulation
         Tactics
-        UniverseEqAutomation.
+        UniverseEqAutomation
+        ProtocolFunctions.
 
 Require
   IdealWorld
@@ -131,8 +132,8 @@ Ltac equality1 :=
   | [ H : _ = RealWorld.mkUserData _ _ _ |- _ ] => inversion H; clear H
   | [ H : Some _ = Some _ |- _ ] => inversion H; clear H
   | [ H : (_ :: _) = (_ :: _) |- _ ] => inversion H; clear H
-  | [ H : (_ :: _) = ?x |- _ ] => is_var x; inversion H; clear H
-  | [ H : ?x = (_ :: _) |- _ ] => is_var x; inversion H; clear H
+  | [ H : (_ :: _) = ?x |- _ ] => is_var x; invert H
+  | [ H : ?x = (_ :: _) |- _ ] => is_var x; invert H
   | [ H : (_,_) = (_,_) |- _ ] => inversion H; clear H
   | [ H : Action _ = Action _ |- _ ] => inversion H; clear H
   | [ H : RealWorld.Return _ = RealWorld.Return _ |- _ ] => apply invert_return in H
@@ -612,6 +613,7 @@ Module SimulationAutomation.
     | [ H : Some _ = Some _ |- _ ] => invert H
     | [ H : Some _ = None |- _ ] => discriminate
     | [ H : None = Some _ |- _ ] => discriminate
+    | [ H : mkKeys _ $? _ = _ |- _ ] => unfold mkKeys in H; simpl in H
 
     | [ H : ?m $? ?k = _ |- _ ] => progress (unfold m in H)
     | [ H : ?m $+ (?k1,_) $? ?k1 = _ |- _ ] => rewrite add_eq_o in H by trivial
@@ -924,6 +926,49 @@ Module SimulationAutomation.
       end
     end.
 
+  Ltac idealUserSilentStep :=
+    (eapply IdealWorld.LStepBindRecur; i_single_silent_step; solve [ solve_ideal_step_stuff; eauto 2  ])
+    || (i_single_silent_step; solve [ solve_ideal_step_stuff; eauto 2 ]).
+
+  Ltac indexedIdealSilentStep :=
+    econstructor; simpl; [ solve [ clean_map_lookups; trivial ]
+                         | solve [ idealUserSilentStep ]
+                         | reflexivity ].
+
+  Ltac solve_indexed_silent_multistep :=
+    simpl_ideal_users_context;
+    eapply TrcFront; [ indexedIdealSilentStep |].
+
+  Ltac unBindi :=
+    match goal with
+    | [ |- IdealWorld.lstep_user (Action _) (_,IdealWorld.Bind _ _,_) _ ] =>
+      eapply IdealWorld.LStepBindRecur
+    end.
+
+  Ltac ideal_user_labeled_step :=
+    simpl
+    ; repeat unBindi
+    ; match goal with
+      | [ |- IdealWorld.lstep_user (Action _) (_,IdealWorld.Recv _,_) _ ] =>
+        eapply IdealWorld.LStepRecv'; solve_ideal_step_stuff
+      | [ |- IdealWorld.lstep_user (Action _) (_,IdealWorld.Send _ _,_) _ ] =>
+        eapply IdealWorld.LStepSend; solve_ideal_step_stuff
+      end.
+  
+  Ltac indexedIdealStep :=
+    match goal with
+    | [ |- indexedIdealStep _ (Action _) _ ?U' ] =>
+      is_evar U'; simpl_ideal_users_context; (repeat blah1);
+      econstructor; simpl; [ solve [ clean_map_lookups; trivial ]
+                           | ideal_user_labeled_step
+                           | reflexivity ]
+    end.
+
+  Hint Extern 1 ((indexedIdealStep _ Silent) ^* _ _) =>
+    repeat solve_indexed_silent_multistep; solve_refl : core.
+
+  Hint Extern 1 (indexedIdealStep _ (Action _) _ _) => indexedIdealStep : core.
+
   Hint Extern 1 (~^* _ _) => solve [ repeat real_silent_multistep ] : core.
   Hint Extern 1 (istepSilent ^* _ _) => ideal_silent_multistep : core.
 
@@ -952,7 +997,6 @@ Module SimulationAutomation.
   Hint Extern 1 (_ #? _ = _) =>
     reflexivity || (solve [ solve_concrete_maps ] ) || (progress ChMaps.m_equal) || (progress ChMaps.ChMap.clean_map_lookups) : core.
 
-
   Local Ltac merge_perms_helper :=
     repeat match goal with
            | [ |- _ = _ ] => reflexivity
@@ -961,24 +1005,27 @@ Module SimulationAutomation.
   
   Ltac solve_action_matches1 :=
     match goal with
-    | [ |- content_eq _ _ ] => progress simpl
+    | [ |- content_eq _ _ _ ] => progress simpl
     | [ |- action_matches _ _ _ _ ] => progress simpl_real_users_context
     | [ |- action_matches _ _ _ _ ] => progress simpl_ideal_users_context
-    | [ |- action_matches (RealWorld.Output _ _ _ _) _ _ _ ] => eapply Out
-    | [ |- action_matches (RealWorld.Input _ _ _) _ _ _ ] => eapply Inp
-    (* | [ |- message_eq (RealWorld.Content _) _ _ _ _ ] => eapply ContentCase *)
-    | [ |- message_eq (RealWorld.SignedCiphertext ?cid)
-                     {| RealWorld.users := _;
-                        RealWorld.adversary := _;
-                        RealWorld.all_ciphers := _ $+ (?cid, RealWorld.SigCipher _ _ _ _);
-                        RealWorld.all_keys := _ |}
-                     _ _ _ ] => eapply CryptoSigCase
-    | [ |- message_eq (RealWorld.SignedCiphertext ?cid)
-                     {| RealWorld.users := _;
-                        RealWorld.adversary := _;
-                        RealWorld.all_ciphers := _ $+ (?cid, RealWorld.SigEncCipher _ _ _ _ _);
-                        RealWorld.all_keys := _ |}
-                     _ _ _ ] => eapply CryptoSigEncCase; [ solve [ simpl; eauto ] .. | ]
+    | [ H : ?cs $? ?cid = Some (SigCipher _ _ _ _ )
+        |- action_matches ?cs _ (RealWorld.Output (SignedCiphertext ?cid) _ _ _) _ ] => eapply OutSig
+    | [ H : ?cs $? ?cid = Some (SigEncCipher _ _ _ _ _ )
+        |- action_matches ?cs _ (RealWorld.Output (SignedCiphertext ?cid) _ _ _) _ ] => eapply OutEnc
+    | [ H : ?cs $? ?cid = Some (SigCipher _ _ _ _ )
+        |- action_matches ?cs _ (RealWorld.Input (SignedCiphertext ?cid) _ _) _ ] => eapply InpSig
+    | [ H : ?cs $? ?cid = Some (SigEncCipher _ _ _ _ _ )
+        |- action_matches ?cs _ (RealWorld.Input (SignedCiphertext ?cid) _ _) _ ] => eapply InpEnc
+    | [ |- action_matches ?cs _ (RealWorld.Output (SignedCiphertext ?cid) _ _ _) _ ] =>
+      match cs with
+      | context [ _ $+ (cid, SigCipher _ _ _ _)] => eapply OutSig
+      | context [_ $+ (cid, SigEncCipher _ _ _ _ _)] => eapply OutEnc
+      end
+    | [ |- action_matches ?cs _ (RealWorld.Input (SignedCiphertext ?cid) _ _) _ ] =>
+      match cs with
+      | context[ _ $+ (cid, SigCipher _ _ _ _)] => eapply InpSig
+      | context[ _ $+ (cid, SigEncCipher _ _ _ _ _)] => eapply InpEnc
+      end
     | [ H : _ $+ (?k1,_) $? ?k2 = Some ?d__rw |- context [ RealWorld.key_heap ?d__rw $? _ = Some _ ] ] =>
       is_var d__rw; is_var k2; is_not_var k1;
       destruct (k1 ==n k2); subst; clean_map_lookups; simpl
@@ -1062,38 +1109,47 @@ Module SimulationAutomation.
       | [ |- context [_ $k++ _]  ] => erewrite reduce_merge_perms; clean_map_lookups; eauto
       end; trivial.
 
+  Ltac solve_honest_actions_safe1 :=
+    match goal with
+    | [ H : _ = {| RealWorld.users := _;
+                   RealWorld.adversary := _;
+                   RealWorld.all_ciphers := _;
+                   RealWorld.all_keys := _ |} |- _ ] => invert H
+
+    | [ |- honest_cmds_safe _ ] => unfold honest_cmds_safe; intros; simpl in *
+    | [ |- next_cmd_safe _ _ _ _ _ _ ] => unfold next_cmd_safe; intros
+    | [ H : _ $+ (?id1,_) $? ?id2 = _ |- _ ] => is_var id2; destruct (id1 ==n id2); subst; clean_map_lookups
+    | [ H : nextAction _ _ |- _ ] => invert H
+
+    | [ H : mkKeys _ $? _ = _ |- _ ] => unfold mkKeys in H; simpl in H
+    | [ |- context [ RealWorld.findUserKeys ?usrs ] ] => canonicalize_map usrs
+    | [ |- context [ RealWorld.findUserKeys _ ] ] =>
+      rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty by eauto
+    | [ H : RealWorld.findKeysMessage _ $? _ = _ |- _ ] => progress (simpl in H)
+    | [ |- (_ -> _) ] => intros
+    | [ |- context [ _ $+ (_,_) $? _ ] ] => progress clean_map_lookups
+    | [ |- context [ RealWorld.msg_honestly_signed _ _ _ ]] => unfold RealWorld.msg_honestly_signed
+    | [ |- context [ RealWorld.honest_keyb _ _ ]] => unfold RealWorld.honest_keyb
+    | [ |- context [ RealWorld.msg_to_this_user _ _ _ ]] => unfold RealWorld.msg_to_this_user
+    | [ |- context [ RealWorld.msgCiphersSignedOk _ _ _ ]] => unfold RealWorld.msgCiphersSignedOk
+    | [ |- context [ add_key_perm _ _ _ ] ] => unfold add_key_perm
+    | [ |- RealWorld.msg_pattern_safe _ _ ] => econstructor
+    | [ |- RealWorld.honest_key _ _ ] => econstructor
+    | [ |- context [_ $k++ _ $? _ ] ] => progress solve_concrete_perm_merges
+    | [ |- context [ ?m $? _ ] ] => unfold m
+    | [ |- Forall _ _ ] => econstructor
+    | [ |- _ /\ _ ] => split
+    end.
+
   Ltac solve_honest_actions_safe :=
-    repeat
-      ( match goal with
-        | [ H : _ = {| RealWorld.users := _;
-                       RealWorld.adversary := _;
-                       RealWorld.all_ciphers := _;
-                       RealWorld.all_keys := _ |} |- _ ] => invert H
-                                                                 
-        | [ |- honest_cmds_safe _ ] => unfold honest_cmds_safe; intros; simpl in *
-        | [ |- context [ RealWorld.findUserKeys ?usrs ] ] => canonicalize_map usrs
-        | [ |- context [ RealWorld.findUserKeys _ ] ] => rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty by eauto
-        | [ H : RealWorld.findKeysMessage _ $? _ = _ |- _ ] => progress (simpl in H)
-        | [ H : _ $+ (?id1,_) $? ?id2 = _ |- _ ] => is_var id2; destruct (id1 ==n id2); subst; clean_map_lookups
-        | [ |- (_ -> _) ] => intros
-        | [ |- context [ _ $+ (_,_) $? _ ] ] => progress clean_map_lookups
-        | [ |- context [ RealWorld.msg_honestly_signed _ _ _ ]] => unfold RealWorld.msg_honestly_signed
-        | [ |- context [ RealWorld.honest_keyb _ _ ]] => unfold RealWorld.honest_keyb
-        | [ |- context [ RealWorld.msg_to_this_user _ _ _ ]] => unfold RealWorld.msg_to_this_user
-        | [ |- context [ RealWorld.msgCiphersSignedOk _ _ _ ]] => unfold RealWorld.msgCiphersSignedOk
-        | [ |- context [ add_key_perm _ _ _ ] ] => unfold add_key_perm
-        | [ |- RealWorld.msg_pattern_safe _ _ ] => econstructor
-        | [ |- RealWorld.honest_key _ _ ] => econstructor
-        | [ |- context [_ $k++ _ $? _ ] ] => progress solve_concrete_perm_merges
-        | [ |- context [ ?m $? _ ] ] => unfold m
-                                             
-        (* | [ |- next_cmd_safe _ _ _ _ _ _ ] => econstructor *)
-        | [ |- next_cmd_safe _ _ _ _ _ _ ] => unfold next_cmd_safe; intros
-        | [ H : nextAction _ _ |- _ ] => invert H
-                                              
-        | [ |- Forall _ _ ] => econstructor
-        | [ |- _ /\ _ ] => split
-        end; simpl).
+    repeat (solve_honest_actions_safe1; simpl).
+
+  Ltac solve_labels_align :=
+    (do 3 eexists); repeat (simple apply conj);
+    [ solve [ eauto ]
+    | indexedIdealStep; simpl
+    | repeat solve_action_matches1; clean_map_lookups; ChMaps.ChMap.clean_map_lookups
+    ]; eauto; simpl; eauto.
 
 End SimulationAutomation.
 
@@ -1212,6 +1268,7 @@ Module Tacs.
            | [H : (complement _) _ |- _] => invert H
            | [H : { } _ |- _] => invert H
            | [H : { _ } _ |- _] => invert H
+           | [H : _ \/ False |- _ ] => destruct H; [ | contradiction]
            end.
 
   Ltac case_lookup H :=
@@ -1345,6 +1402,10 @@ Module Gen.
 
   Ltac concrete_isteps :=
     match goal with
+    | [H : indexedIdealStep _ _ _ _ |- _ ] =>
+      invert H
+    | [H : (indexedIdealStep _ Silent)^* ?u _ |- _] =>
+      concrete iuniv u; invert H
     | [H : istepSilent^* ?u _ |- _] =>
       concrete iuniv u; invert H
     | [H : istepSilent ?u _ |- _] =>
@@ -1479,13 +1540,15 @@ Module Gen.
                   invert H
                 | [H : action_matches _ _ _ _ |- _] =>
                   invert H
-                | [ H : MessageEq.message_eq _ _ _ _ _ |- _ ] =>
-                  invert H
+                (* | [ H : MessageEq.message_eq _ _ _ _ _ |- _ ] => *)
+                (*   invert H *)
 
                 (* clear out resulting assumption that seems to cause a problem for [close] *)
                 | [ H : forall _ _ _, _ -> _ -> _ -> _ <-> _ |- _ ] => clear H
                 | [ H : forall _ _ _ _, _ -> _ -> _ -> _ -> _ <-> _ |- _ ] => clear H
 
+                | [H : indexedRealStep _ _ _ _ |- _ ] =>
+                  invert H
                 | [H : RealWorld.step_universe ?u _ _ |- _] =>
                   concrete u; churn
                 | [H : RealWorld.step_user _ None _ _ |- _] =>
@@ -1501,7 +1564,10 @@ Module Gen.
         || match goal with
           | [ H : True |- _ ] => clear H
           | [ H : ?X = ?X |- _ ] => clear H
-          | [ H : ?x = ?y |- _] => assert (x = y) as EQ by (clear H; trivial); clear H; clear EQ
+          | [ H : ?x <> ?y |- _ ] => is_not_evar x; is_not_var x; is_not_evar y; is_not_var y; clear H
+          | [ H : ?x = ?y -> False |- _ ] => is_not_evar x; is_not_var x; is_not_evar y; is_not_var y; clear H
+          (* | [ H : ?x <> ?y |- _ ] => concrete x; concrete y; clear H *)
+          (* | [ H : ?x = ?y |- _] => assert (x = y) as EQ by (clear H; trivial); clear H; clear EQ *)
           | [ H: RealWorld.keys_mine _ $0 |- _ ] => clear H
           | [ H : _ $+ (?k1,_) $? ?k2 = None |- _ ] =>
               (rewrite add_neq_o in H by solve_simple_ineq)
@@ -1513,6 +1579,14 @@ Module Gen.
             || (rewrite ChMaps.ChMap.F.add_eq_o in H by trivial)
             || (destruct (ChMaps.ChMap.F.eq_dec k1 k2); subst)
 
+          | [ H : context [ _ #+ (?k,_) #? ?k ] |- _ ] =>
+            is_not_evar k
+            ; rewrite ChMaps.ChMap.F.add_eq_o in H by trivial
+          | [ H : context [ _ #+ (?k1,_) #? ?k2 ] |- _ ] =>
+            is_not_evar k1
+            ; is_not_evar k2
+            ; rewrite ChMaps.ChMap.F.add_neq_o in H by congruence
+          | [ H : mkKeys _ $? _ = _ |- _ ] => unfold mkKeys in H; simpl in H
           | [ H : ?m $? _ = _ |- _ ] => progress (unfold m in H)
           | [ H : RealWorld.msg_accepted_by_pattern _ _ _ _ _ |- _ ] => invert H
           (* | [ H : IdealWorld.msg_permissions_valid _ _ |- _ ] => *)
@@ -1574,7 +1648,6 @@ Module Gen.
     ; tidy
     ; idtac "rstep start"
     ; rstep
-    ; idtac "rstep done"
     ; idtac "istep start"
     ; istep
     ; idtac "istep done"

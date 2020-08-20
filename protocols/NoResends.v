@@ -136,31 +136,6 @@ Proof.
     eauto.
 Qed.
 
-Section PredicatePreservation.
-  Import RealWorld.
-
-  Lemma goodness_preservation_step :
-    forall t__hon t__adv (st st' : universe t__hon t__adv * IdealWorld.universe t__hon),
-      step st st'
-      -> syntactically_safe_U (fst st)
-      -> goodness_predicates (fst st)
-      -> goodness_predicates (fst st').
-  Proof.
-    inversion 1; intros; subst; simpl in *; eapply goodness_preservation_stepU; eauto.
-  Qed.
-
-  Lemma syntactically_safe_U_preservation_step :
-    forall t__hon t__adv (st st' : universe t__hon t__adv * IdealWorld.universe t__hon),
-      step st st'
-      -> goodness_predicates (fst st)
-      -> syntactically_safe_U (fst st)
-      -> syntactically_safe_U (fst st').
-  Proof.
-    inversion 1; intros; subst; simpl in *; eapply syntactically_safe_U_preservation_stepU; eauto.
-  Qed.
-
-End PredicatePreservation.
-
 Definition no_resends (sents : sent_nonces) :=
   NoDup sents.
 
@@ -218,7 +193,7 @@ Proof.
       specialize (H1 _ H4); eauto.
 
   - invert H; unfold build_data_step in *; simpl in *.
-    destruct (u_id ==n k); subst; clean_map_lookups; simpl in *; eauto.
+    destruct (uid ==n k); subst; clean_map_lookups; simpl in *; eauto.
     + specialize (H4 k); rewrite add_eq_o in H4 by trivial.
       specialize (H4 _ eq_refl); simpl in *.
       eapply no_resends_user_step; eauto.
@@ -240,18 +215,6 @@ Proof.
   eauto using resend_violation_step'.
 Qed.
 
-Lemma single_step_stays_lame :
-  forall t__hon t__adv st st' b,
-    (@step t__hon t__adv) st st'
-    -> lameAdv b (adversary (fst st))
-    -> lameAdv b (adversary (fst st')).
-Proof.
-  intros.
-  invert H;
-    simpl in *;
-    eauto using universe_step_preserves_lame_adv.
-Qed.
-
 Lemma resend_violation_steps :
   forall t__hon t__adv st st' b,
     (@step t__hon t__adv) ^* st st'
@@ -261,7 +224,7 @@ Lemma resend_violation_steps :
 Proof.
   induction 1; intros; eauto.
 
-  specialize (single_step_stays_lame H H1); intros.
+  specialize (adversary_remains_lame_step _ _ _ _ _ H1 H); intros.
   destruct x, y, z; simpl in *.
 
   generalize H; intros VIOL; eapply resend_violation_step in VIOL; eauto.
