@@ -1565,6 +1565,7 @@ Module Gen.
           | [ H : True |- _ ] => clear H
           | [ H : ?X = ?X |- _ ] => clear H
           | [ H : ?x <> ?y |- _ ] => is_not_evar x; is_not_var x; is_not_evar y; is_not_var y; clear H
+          | [ H : ?x = ?y -> False |- _ ] => is_not_evar x; is_not_var x; is_not_evar y; is_not_var y; clear H
           (* | [ H : ?x <> ?y |- _ ] => concrete x; concrete y; clear H *)
           (* | [ H : ?x = ?y |- _] => assert (x = y) as EQ by (clear H; trivial); clear H; clear EQ *)
           | [ H: RealWorld.keys_mine _ $0 |- _ ] => clear H
