@@ -212,94 +212,20 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
       gen1.
       
     - intros.
-      simpl in *; split.
+      simpl in *.
       
-      + sets_invert; unfold safety;
-          split_ex; simpl in *; subst; solve_honest_actions_safe;
-            clean_map_lookups; eauto 8.
+      sets_invert; split_ex;
+        simpl in *; autounfold with core;
+          subst; simpl;
+            unfold safety, labels_align;
+            autounfold with constants;
+            ( split;
+              [ solve_honest_actions_safe; clean_map_lookups; eauto 8
+              | intros; rstep; subst; solve_labels_align
+            ]).
 
-        Unshelve.
-        all:clean_map_lookups.
-        
-      + sets_invert; unfold labels_align;
-          split_ex; subst; intros;
-            rstep.
-
-        Ltac clup := subst.
-          (* repeat ( *)
-          (*     equality1 ||  *)
-          (*     match goal with *)
-          (*     | [ H : context [ _ #+ (?k,_) #? ?k ] |- _ ] => *)
-          (*       is_not_evar k *)
-          (*       ; rewrite ChMap.F.add_eq_o in H by trivial *)
-          (*     | [ H : context [ _ #+ (?k1,_) #? ?k2 ] |- _ ] => *)
-          (*       is_not_evar k1 *)
-          (*       ; is_not_evar k2 *)
-          (*       ; rewrite ChMap.F.add_neq_o in H by congruence *)
-          (*     end); subst. *)
-
-        * clup; do 3 eexists; repeat (simple apply conj);
-            [ solve [ eauto ]
-            | indexedIdealStep; simpl
-            | repeat solve_action_matches1; clean_map_lookups; ChMap.clean_map_lookups
-            ]; eauto; simpl; eauto.
-        * subst; do 3 eexists; repeat (simple apply conj);
-            [ solve [ eauto ]
-            | indexedIdealStep; simpl
-            | repeat solve_action_matches1; clean_map_lookups; ChMap.clean_map_lookups
-            ]; eauto; simpl; eauto.
-        * clup; do 3 eexists; repeat (simple apply conj);
-            [ solve [ eauto ]
-            | indexedIdealStep; simpl
-            | repeat solve_action_matches1; clean_map_lookups; ChMap.clean_map_lookups
-            ]; eauto; simpl; eauto.
-
-        * clup; do 3 eexists; repeat (simple apply conj);
-            [ solve [ eauto ]
-            | indexedIdealStep; simpl
-            | repeat solve_action_matches1; clean_map_lookups; ChMap.clean_map_lookups
-            ]; eauto; simpl; eauto;
-              repeat (clean_map_lookups; solve_concrete_maps).
-          
-        * clup; do 3 eexists; repeat (simple apply conj);
-            [ solve [ eauto ]
-            | indexedIdealStep; simpl
-            | repeat solve_action_matches1; clean_map_lookups; ChMap.clean_map_lookups
-            ]; eauto; simpl; eauto;
-              repeat (clean_map_lookups; solve_concrete_maps).
-
-        * clup; do 3 eexists; repeat (simple apply conj);
-            [ solve [ eauto ]
-            | indexedIdealStep; simpl
-            | repeat solve_action_matches1; clean_map_lookups; ChMap.clean_map_lookups
-            ]; eauto; simpl; eauto;
-              repeat (clean_map_lookups; solve_concrete_maps).
-
-        * clup; do 3 eexists; repeat (simple apply conj);
-            [ solve [ eauto ]
-            | indexedIdealStep; simpl
-            | repeat solve_action_matches1; clean_map_lookups; ChMap.clean_map_lookups
-            ]; eauto; simpl; eauto.
-
-        * clup; do 3 eexists; repeat (simple apply conj);
-            [ solve [ eauto ]
-            | indexedIdealStep; simpl
-            | repeat solve_action_matches1; clean_map_lookups; ChMap.clean_map_lookups
-            ]; eauto; simpl; eauto.
-          
-        (* * (do 3 eexists); repeat (simple apply conj); eauto. *)
-        (* * (do 3 eexists); repeat (simple apply conj); eauto. *)
-        (* * (do 3 eexists); repeat (simple apply conj); eauto. *)
-        (* * (do 3 eexists); repeat (simple apply conj); eauto. *)
-        (* * (do 3 eexists); repeat (simple apply conj); eauto. *)
-        (* * (do 3 eexists); repeat (simple apply conj); eauto. *)
-        (* * (do 3 eexists); repeat (simple apply conj); eauto. *)
-        (* * (do 3 eexists); repeat (simple apply conj); eauto. *)
-        (* * (do 3 eexists); repeat (simple apply conj); eauto. *)
-        (* * (do 3 eexists); repeat (simple apply conj); eauto. *)
-        (* * (do 3 eexists); repeat (simple apply conj); eauto. *)
-        (* * (do 3 eexists); repeat (simple apply conj); eauto. *)
-        (* * (do 3 eexists); repeat (simple apply conj); eauto. *)
+      Unshelve.
+      all: auto.
 
   Qed.
 

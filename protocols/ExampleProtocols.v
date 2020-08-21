@@ -41,8 +41,8 @@ Import RealWorld.RealWorldNotations.
 Set Implicit Arguments.
 
 (* User ids *)
-Definition A : user_id   := 0.
-Definition B : user_id   := 1.
+Definition A   := 0.
+Definition B   := 1.
 
 Notation owner  := {| IdealWorld.read := true; IdealWorld.write := true |}.
 Notation reader := {| IdealWorld.read := true; IdealWorld.write := false |}.
@@ -147,7 +147,6 @@ Module SignPingSendProtocol.
   End RW.
 
   Hint Unfold
-       A B 
        PERMS__a PERMS__b
        real_univ_start mkrU mkrUsr
        ideal_univ_start mkiU : constants.
