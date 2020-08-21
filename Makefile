@@ -57,6 +57,9 @@ sharesecret: CoqMakefile
 secdns: CoqMakefile
 	$(MAKE) -f CoqMakefile pretty-timed TGTS="protocols/SecureDNS.vo"
 
+nsproto: CoqMakefile
+	$(MAKE) -f CoqMakefile protocols/NeedhamSchroeder.vo
+
 protocols: exampleprotos sharesecret
 
 timings: CoqMakefile
