@@ -52,7 +52,6 @@ Open Scope protocol_scope.
 
 Module MyProtocol.
 
-  (* Start with two users, as that is the minimum for any interesting protocol *)
   Notation USRA := 0.
   Notation USRB := 1.
   Notation SERVER := 2.
@@ -77,23 +76,47 @@ Module MyProtocol.
     Notation PERMSA := ($0 $+ (pCHA, owner) $+ (pCHS, writer)).
     Notation PERMSB := ($0 $+ (pCHB, owner) $+ (pCHS, writer)).
 
+    Notation server_db := ($0
+                            $+ (USRA, (Permission {| ch_perm := writer ; ch_id := CHA|}))
+                            $+ (USRB, (Permission {| ch_perm := writer ; ch_id := CHB|}))).
+
     (* Fill in the users' protocol specifications here, adding additional users as needed.
      * Note that all users must return an element of the same type, and that type needs to 
      * be one of: ...
      *)
     Notation ideal_users :=
       [
-        (* User 1 Specification *)
-        mkiUsr USR1 PERMS1
-                (
-                  ret 1
-                )
+       mkiUsr USRA PERMSA
+              (
+                _ <- Send (MsgPair USRA USRB) CHS
+                ; B <- @Recv Access CHS 
+                ; m <- Gen
+                ; _ <- Send m (# B)
+                ; ret m
+              )
         ;
 
-      (* User 2 Specification *)
-      mkiUsr USR2 PERMS2
+      mkiUsr USRB PERMSB
               (
-                ret 1
+                m <- @Recv Nat CHB
+                ; ret m
+              )
+        ;
+      (* User 2 Specification *)
+      (* can I repeat this or does it need to finish? *)
+      mkiUsr SERVER PERMSS
+              (
+                m__r <- @Recv (TPair Nat Nat) CHS
+                ; dest_m__s <- match m__r with
+                        | MsgPair d req =>
+                          match server_db $? req with
+                          | Some p => (d, p)
+                          | None => (d, (Permission {| ch_perm := writer ; ch_id := CHS|}))
+                          end
+                        | _ => (USRA, (Permission {| ch_perm := writer ; ch_id := CHS|}))
+                        end
+                ; _ <- Send (snd dest_m__s) (fst dest_m__s) 
+                ; ret 1
               )
       ].
 
