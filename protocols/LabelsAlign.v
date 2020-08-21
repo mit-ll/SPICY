@@ -379,4 +379,4 @@ Proof.
       congruence. econstructor; eauto. econstructor; eauto. congruence. econstructor; eauto.
       econstructor; eauto. 2: congruence. 
       eassumption. econstructor; eauto. econstructor; eauto.
-    + invert
+      Admitted.
