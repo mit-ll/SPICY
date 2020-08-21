@@ -1157,7 +1157,33 @@ Import SimulationAutomation Sets.
 Module Foo <: EMPTY.
 End Foo.
 Module Import SN := SetNotations(Foo).
-Tactic Notation "sets" := MyPrelude.sets.
+
+Ltac sets0 := Sets.sets ltac:(simpl in *; intuition (subst; auto; try equality; try linear_arithmetic)).
+
+Ltac sets :=
+  propositional;
+  try match goal with
+      | [ |- @eq (?T -> Prop) _ _ ] =>
+        change (T -> Prop) with (set T)
+      end;
+  try match goal with
+      | [ |- @eq (set _) _ _ ] =>
+        let x := fresh "x" in
+        apply sets_equal; intro x;
+        repeat match goal with
+               | [ H : @eq (set _) _ _ |- _ ] => apply (f_equal (fun f => f x)) in H;
+                                               apply eq_iff in H
+               end
+      end; sets0;
+  try match goal with
+      | [ H : @eq (set ?T) _ _, x : ?T |- _ ] =>
+        repeat match goal with
+               | [ H : @eq (set T) _ _ |- _ ] => apply (f_equal (fun f => f x)) in H;
+                                               apply eq_iff in H
+               end;
+        solve [ sets0 ]
+      end.
+(* Tactic Notation "sets" := MyPrelude.sets. *)
 
 Module SetLemmas.
   Lemma setminus_empty_subtr : forall {A} (s : set A),
