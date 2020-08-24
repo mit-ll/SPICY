@@ -57,13 +57,15 @@ Module SecureDNSProtocol.
   Notation USR2 := 1.
   Notation USR3 := 2.
 
-  Notation names :=
-    ( $0 $+ (0,10)
-         $+ (1,11)
-         $+ (2,12)
-         $+ (3,13)
-         $+ (4,14)
-    ).
+  Parameter names : NatMap.t nat.
+  
+  (* Notation names := *)
+  (*   ( $0 $+ (0,10) *)
+  (*        $+ (1,11) *)
+  (*        $+ (2,12) *)
+  (*        $+ (3,13) *)
+  (*        $+ (4,14) *)
+  (*   ). *)
 
   Section IW.
     Import IdealWorld.
@@ -101,18 +103,19 @@ Module SecureDNSProtocol.
       [
         (* Authorative DNS Server Specification *)
         mkiUsr USR1 PERMS1
-                (
-                  @idealServer 1 (Base Nat) 1
+               (
+                 @idealServer 1 (Base Nat) 1
                               (
                                 m <- @Recv Nat CH21
-                                ; ip <- match names $? extractContent m with
-                                       | None    => @Return (Base Nat) 0
-                                       | Some ip => @Return (Base Nat) ip
-                                       end
-                                ; _ <- Send (Content ip) CH12
+                                ; let ip := match names $? extractContent m with
+                                            | None   => 0
+                                            | Some a => a
+                                            end
+                                  in
+                                  _ <- Send (Content ip) CH12
                                 ; @Return (Base Nat) ip
-                              ) 
-                )
+                              )
+               )
         ;
 
       (* Secure DNS Cache Specification *)
@@ -182,11 +185,11 @@ Module SecureDNSProtocol.
                       @realServer 1 (Base Nat) 1
                                   ( c <- @Recv Nat (SignedEncrypted KID3 KID2 true)
                                     ; m <- Decrypt c
-                                    ; ip <- match names $? (extractContent m) with
-                                           | None    => @Return (Base Nat) 0
-                                           | Some ip => @Return (Base Nat) ip
-                                           end
-                                    ; ipC <- SignEncrypt KID1 KID4 USR2 (message.Content ip)
+                                    ; let ip := match names $? (extractContent m) with
+                                                | None   => 0
+                                                | Some a => a
+                                                end
+                                      in ipC <- SignEncrypt KID1 KID4 USR2 (message.Content ip)
                                     ; _ <- Send USR2 ipC
                                     ; @Return (Base Nat) ip
                                   )
@@ -240,6 +243,7 @@ End SecureDNSProtocol.
 Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
 
   Import SecureDNSProtocol.
+  Print SecureDNSProtocol.
 
   (* Some things may need to change here.  t__hon is where we place the 
    * type that the protocol computes.  It is set to Nat now, because we
@@ -368,7 +372,6 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
       gen1.
       gen1.
       gen1.
-      gen1.
       
     (* The remaining parts of the proof script shouldn't need to change. *)
     - intros.
@@ -379,32 +382,18 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
           subst; simpl;
             unfold safety, labels_align.
 
-      (* 133 *)
+      (* 129 *)
       all : ( split;
               [ solve_honest_actions_safe; clean_map_lookups; eauto 8
               | intros; rstep; subst; solve_labels_align
             ] ).
 
-      
+      (* all : *)
+      (*   (do 2 eexists); repeat simple apply conj; eauto; simpl; unfold not; intros; split_ors; try contradiction; *)
+      (*   match goal with *)
+      (*   | [ H : (_,_) = (_,_) |- _ ] => invert H *)
+      (*   end. *)
 
-      all :
-        (do 2 eexists); repeat simple apply conj; eauto; simpl; unfold not; intros; split_ors; try contradiction;
-        match goal with
-        | [ H : (_,_) = (_,_) |- _ ] => invert H
-        end.
-
-      Unshelve.
-
-
-      (* sets_invert; split_ex; *)
-      (*   simpl in *; autounfold with core; *)
-      (*     subst; simpl; *)
-      (*       unfold safety, labels_align; *)
-      (*       ( split; *)
-      (*         [ solve_honest_actions_safe; clean_map_lookups; eauto 8 *)
-      (*         | intros; rstep; subst; solve_labels_align *)
-      (*         ] ). *)
-      
       Unshelve.
       all: auto.
 
