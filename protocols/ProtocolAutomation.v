@@ -1153,6 +1153,7 @@ Module SimulationAutomation.
     | [ |- _ /\ _ ] => repeat simple apply conj
     (* | [ |- context [ _ = RealWorld.cipher_nonce _ ]] => progress (simpl) *)
     | [ |- ~ (_ \/ _) ] => unfold not; intros; split_ors; subst; try contradiction
+    | [ H : (_,_) = (_,_) |- _ ] => invert H
     end.
 
   Ltac solve_honest_actions_safe :=
