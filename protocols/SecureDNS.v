@@ -243,7 +243,6 @@ End SecureDNSProtocol.
 Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
 
   Import SecureDNSProtocol.
-  Print SecureDNSProtocol.
 
   (* Some things may need to change here.  t__hon is where we place the 
    * type that the protocol computes.  It is set to Nat now, because we
@@ -393,6 +392,8 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
       (*   match goal with *)
       (*   | [ H : (_,_) = (_,_) |- _ ] => invert H *)
       (*   end. *)
+
+      all: simpl; solve_honest_actions_safe.
 
       Unshelve.
       all: auto.
