@@ -84,48 +84,52 @@ Module MyProtocol.
      * Note that all users must return an element of the same type, and that type needs to 
      * be one of: ...
      *)
-    Notation ideal_users :=
+    Definition wtf := mkiU empty_chs [mkiUsr SERVER PERMSS (@Return (Base Nat) 0)].
+    Notation i_us := [mkiUsr SERVER PERMSS (@Return (Base Nat) 0)].
+    Definition wtFF := mkiU empty_chs i_us.
+    Definition ideal_users :=
       [
-       mkiUsr USRA PERMSA
-              (
-                _ <- Send (MsgPair USRA USRB) CHS
-                ; B <- @Recv Access CHS 
-                ; m <- Gen
-                ; _ <- Send m (# B)
-                ; ret m
-              )
-        ;
+      (*  mkiUsr USRA PERMSA *)
+      (*         ( *)
+      (*           (* _ <- Send (MsgPair USRA USRB) CHS *) *)
+      (*           (* ; B <- @Recv Access CHS  *) *)
+      (*           (* ; m <- Gen *) *)
+      (*           (* ; _ <- Send m (# B) *) *)
+      (*           ; @Return (Base Nat) 0 *)
+      (*         ) *)
+      (*   ; *)
 
-      mkiUsr USRB PERMSB
-              (
-                m <- @Recv Nat CHB
-                ; ret m
-              )
-        ;
+
+      (* mkiUsr USRB PERMSB *)
+      (*         ( *)
+      (*           m <- @Recv Nat CHB *)
+      (*           ; @Return (Base Nat) m *)
+      (*         ) *)
+      (*   ; *)
       (* User 2 Specification *)
       (* can I repeat this or does it need to finish? *)
       mkiUsr SERVER PERMSS
               (
-                m__r <- @Recv (TPair Nat Nat) CHS
-                ; dest_m__s <- match m__r with
-                        | MsgPair d req =>
-                          match server_db $? req with
-                          | Some p => (d, p)
-                          | None => (d, (Permission {| ch_perm := writer ; ch_id := CHS|}))
-                          end
-                        | _ => (USRA, (Permission {| ch_perm := writer ; ch_id := CHS|}))
-                        end
-                ; _ <- Send (snd dest_m__s) (fst dest_m__s) 
-                ; ret 1
+                (* m__r <- @Recv (TPair Nat Nat) CHS *)
+                (* ; dest_m__s <- match m__r with *)
+                (*         | MsgPair d req => *)
+                (*           match server_db $? req with *)
+                (*           | Some p => (d, p) *)
+                (*           | None => (d, (Permission {| ch_perm := writer ; ch_id := CHS|})) *)
+                (*           end *)
+                (*         | _ => (USRA, (Permission {| ch_perm := writer ; ch_id := CHS|})) *)
+                (*         end *)
+                (* ; _ <- Send (snd dest_m__s) (fst dest_m__s) *)
+                 @Return (Base Nat) 0
               )
       ].
 
-    (* This is where the entire specification universe gets assembled.  It is unlikely anything
-     * will need to change here.
-     *)
-    Definition ideal_univ_start :=
-      mkiU empty_chs ideal_users.
-
+    (* This is where the entire specification universe gets assembled.  It is unlikely anything *)
+    (*  * will need to change here. *)
+    Definition ideal_univ_start := mkiU empty_chs ideal_users.
+      @mkiU Nat empty_chs.
+Print ideal_univ_start.
+       empty_chs ideal_users.
   End IW.
 
   Section RW.
@@ -154,8 +158,7 @@ Module MyProtocol.
                       ret 1
                     )
         ; 
-
-      (* User 2 implementation *)
+(* User 2 implementation *)
       MkRUserSpec USR2 KEYS2
                   (
                     ret 1
