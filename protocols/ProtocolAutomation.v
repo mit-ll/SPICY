@@ -1109,6 +1109,17 @@ Module SimulationAutomation.
       | [ |- context [_ $k++ _]  ] => erewrite reduce_merge_perms; clean_map_lookups; eauto
       end; trivial.
 
+  Ltac simplify_terms :=
+    unfold RealWorld.msgCiphersSignedOk;
+    unfold RealWorld.msg_honestly_signed;
+    unfold RealWorld.msg_signing_key;
+    unfold RealWorld.msg_to_this_user;
+    unfold RealWorld.msg_destination_user;
+    unfold RealWorld.cipher_signing_key;
+    unfold RealWorld.honest_keyb;
+    unfold RealWorld.cipher_nonce;
+    unfold add_key_perm.
+
   Ltac solve_honest_actions_safe1 :=
     match goal with
     | [ H : _ = {| RealWorld.users := _;
@@ -1128,21 +1139,25 @@ Module SimulationAutomation.
     | [ H : RealWorld.findKeysMessage _ $? _ = _ |- _ ] => progress (simpl in H)
     | [ |- (_ -> _) ] => intros
     | [ |- context [ _ $+ (_,_) $? _ ] ] => progress clean_map_lookups
-    | [ |- context [ RealWorld.msg_honestly_signed _ _ _ ]] => unfold RealWorld.msg_honestly_signed
-    | [ |- context [ RealWorld.honest_keyb _ _ ]] => unfold RealWorld.honest_keyb
-    | [ |- context [ RealWorld.msg_to_this_user _ _ _ ]] => unfold RealWorld.msg_to_this_user
-    | [ |- context [ RealWorld.msgCiphersSignedOk _ _ _ ]] => unfold RealWorld.msgCiphersSignedOk
-    | [ |- context [ add_key_perm _ _ _ ] ] => unfold add_key_perm
+    (* | [ |- context [ RealWorld.msg_honestly_signed _ _ _ ]] => unfold RealWorld.msg_honestly_signed *)
+    (* | [ |- context [ RealWorld.honest_keyb _ _ ]] => unfold RealWorld.honest_keyb *)
+    (* | [ |- context [ RealWorld.msg_to_this_user _ _ _ ]] => unfold RealWorld.msg_to_this_user *)
+    (* | [ |- context [ RealWorld.msgCiphersSignedOk _ _ _ ]] => unfold RealWorld.msgCiphersSignedOk *)
+    (* | [ |- context [ add_key_perm _ _ _ ] ] => unfold add_key_perm *)
     | [ |- RealWorld.msg_pattern_safe _ _ ] => econstructor
     | [ |- RealWorld.honest_key _ _ ] => econstructor
     | [ |- context [_ $k++ _ $? _ ] ] => progress solve_concrete_perm_merges
     | [ |- context [ ?m $? _ ] ] => unfold m
     | [ |- Forall _ _ ] => econstructor
-    | [ |- _ /\ _ ] => split
+    | [ |- exists x y, (_ /\ _)] => (do 2 eexists); repeat simple apply conj; eauto 2
+    | [ |- _ /\ _ ] => repeat simple apply conj
+    (* | [ |- context [ _ = RealWorld.cipher_nonce _ ]] => progress (simpl) *)
+    | [ |- ~ (_ \/ _) ] => unfold not; intros; split_ors; subst; try contradiction
+    | [ H : (_,_) = (_,_) |- _ ] => invert H
     end.
 
   Ltac solve_honest_actions_safe :=
-    repeat (solve_honest_actions_safe1; simpl).
+    repeat (solve_honest_actions_safe1 || (progress simplify_terms) (* ; simpl; cbn *)).
 
   Ltac solve_labels_align :=
     (do 3 eexists); repeat (simple apply conj);
@@ -1159,8 +1174,7 @@ End Foo.
 Module Import SN := SetNotations(Foo).
 
 Ltac sets0 := Sets.sets ltac:(simpl in *; intuition (subst; auto; try equality; try linear_arithmetic)).
-
-Ltac sets :=
+Ltac sets' :=
   propositional;
   try match goal with
       | [ |- @eq (?T -> Prop) _ _ ] =>
@@ -1183,7 +1197,8 @@ Ltac sets :=
                end;
         solve [ sets0 ]
       end.
-(* Tactic Notation "sets" := MyPrelude.sets. *)
+
+Tactic Notation "sets" := sets'.
 
 Module SetLemmas.
   Lemma setminus_empty_subtr : forall {A} (s : set A),
