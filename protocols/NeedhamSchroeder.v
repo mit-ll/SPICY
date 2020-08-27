@@ -76,60 +76,54 @@ Module MyProtocol.
     Notation PERMSA := ($0 $+ (pCHA, owner) $+ (pCHS, writer)).
     Notation PERMSB := ($0 $+ (pCHB, owner) $+ (pCHS, writer)).
 
-    Notation server_db := ($0
-                            $+ (USRA, (Permission {| ch_perm := writer ; ch_id := CHA|}))
-                            $+ (USRB, (Permission {| ch_perm := writer ; ch_id := CHB|}))).
+    Definition server_db := ($0
+                            $+ (USRA, (Permission {| ch_perm := writer ; ch_id := pCHA|}))
+                            $+ (USRB, (Permission {| ch_perm := writer ; ch_id := pCHB|}))).
 
     (* Fill in the users' protocol specifications here, adding additional users as needed.
      * Note that all users must return an element of the same type, and that type needs to 
      * be one of: ...
      *)
-    Definition wtf := mkiU empty_chs [mkiUsr SERVER PERMSS (@Return (Base Nat) 0)].
-    Definition i_us : list (user_id * user Nat) := [@mkiUsr Nat SERVER PERMSS (@Return (Base Nat) 0)].
-    Definition wtFF := mkiU empty_chs i_us.
-    Definition ideal_users :=
+    Definition ideal_users : list (user_id * user Nat) :=
       [
-      (*  mkiUsr USRA PERMSA *)
-      (*         ( *)
-      (*           (* _ <- Send (MsgPair USRA USRB) CHS *) *)
-      (*           (* ; B <- @Recv Access CHS  *) *)
-      (*           (* ; m <- Gen *) *)
-      (*           (* ; _ <- Send m (# B) *) *)
-      (*           ; @Return (Base Nat) 0 *)
-      (*         ) *)
-      (*   ; *)
+       mkiUsr USRA PERMSA
+              (
+                _ <- Send (MsgPair (Content USRA) (Content USRB)) CHS
+                ; B <- @Recv Access CHS
+                ; m <- Gen
+                ; _ <- Send (Content m) (# match B with Permission b => b.(ch_id) end)
+                ; @Return (Base Nat) m
+              )
+        ;
 
 
-      (* mkiUsr USRB PERMSB *)
-      (*         ( *)
-      (*           m <- @Recv Nat CHB *)
-      (*           ; @Return (Base Nat) m *)
-      (*         ) *)
-      (*   ; *)
+      mkiUsr USRB PERMSB
+              (
+                m <- @Recv Nat CHB
+                ; @Return (Base Nat) (match m with Content m' => m' end)
+              )
+        ;
       (* User 2 Specification *)
       (* can I repeat this or does it need to finish? *)
       mkiUsr SERVER PERMSS
               (
-                (* m__r <- @Recv (TPair Nat Nat) CHS *)
-                (* ; dest_m__s <- match m__r with *)
-                (*         | MsgPair d req => *)
-                (*           match server_db $? req with *)
-                (*           | Some p => (d, p) *)
-                (*           | None => (d, (Permission {| ch_perm := writer ; ch_id := CHS|})) *)
-                (*           end *)
-                (*         | _ => (USRA, (Permission {| ch_perm := writer ; ch_id := CHS|})) *)
-                (*         end *)
-                (* ; _ <- Send (snd dest_m__s) (fst dest_m__s) *)
-                 @Return (Base Nat) 0
+                m__r <- @Recv (TPair Nat Nat) CHS
+                ; _ <- match m__r with
+                        | MsgPair (Content d) (Content req) =>
+                          match server_db $? req with
+                          | Some p => Send p CHA
+                          | _ => @Return (Base Unit) tt
+                          end
+                        | _ => @Return (Base Unit) tt 
+                        end
+                ; @Return (Base Nat) 1
               )
       ].
 
     (* This is where the entire specification universe gets assembled.  It is unlikely anything *)
     (*  * will need to change here. *)
     Definition ideal_univ_start := mkiU empty_chs ideal_users.
-      @mkiU Nat empty_chs.
-Print ideal_univ_start.
-       empty_chs ideal_users.
+
   End IW.
 
   Section RW.
