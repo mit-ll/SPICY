@@ -85,7 +85,7 @@ Module MyProtocol.
      * be one of: ...
      *)
     Definition wtf := mkiU empty_chs [mkiUsr SERVER PERMSS (@Return (Base Nat) 0)].
-    Notation i_us := [mkiUsr SERVER PERMSS (@Return (Base Nat) 0)].
+    Definition i_us : list (user_id * user Nat) := [@mkiUsr Nat SERVER PERMSS (@Return (Base Nat) 0)].
     Definition wtFF := mkiU empty_chs i_us.
     Definition ideal_users :=
       [
