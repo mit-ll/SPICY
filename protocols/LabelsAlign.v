@@ -380,3 +380,45 @@ Proof.
       econstructor; eauto. 2: congruence. 
       eassumption. econstructor; eauto. econstructor; eauto.
       Admitted.
+
+Lemma step_reorder_recur :
+  forall A B C lbl1 suid1 uid1 (bd1 bd1' : data_step0 A B C),
+    step_user lbl1 suid1 bd1 bd1'
+    -> suid1 = Some uid1
+    -> forall D (bd2 bd2' : data_step0 A B D) lbl2 suid2 uid2,
+        step_user lbl2 suid2 bd2 bd2'
+        -> suid2 = Some uid2
+        -> uid1 <> uid2
+        -> forall cs cs1' cs2' (usrs usrs1' usrs2' : honest_users A) (adv adv1' adv2' : user_data B) gks gks1' gks2'
+            ks1 ks1' qmsgs1 qmsgs1' mycs1 mycs1' cmd1 cmd1' froms1 froms1' sents1 sents1' cur_n1 cur_n1'
+            ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' cmd2 cmd2' froms2 froms2' sents2 sents2' cur_n2 cur_n2'
+            cmdc1 cmdc2,
+
+              bd1  = (usrs,   adv,   cs,   gks,   ks1,  qmsgs1,  mycs1,  froms1,  sents1,  cur_n1,  cmd1)
+            -> bd1' = (usrs1', adv1', cs1', gks1', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd1')
+            -> bd2  = (usrs,   adv,   cs,   gks,   ks2,  qmsgs2,  mycs2,  froms2,  sents2,  cur_n2,  cmd2)
+            -> bd2' = (usrs2', adv2', cs2', gks2', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
+
+            (* -> nextAction cmd1 cmd1 *)
+            (* -> nextAction cmd2 cmd2 *)
+            -> nextAction cmdc2 cmd2
+            (* goodness *)
+            -> goodness_predicates (mkUniverse usrs adv cs gks)
+            -> syntactically_safe_U (mkUniverse usrs adv cs gks)
+            (* allow protocol to freely vary, since we won't be looking at it *)
+            -> usrs $? uid1 = Some (mkUserData ks1 cmdc1 qmsgs1 mycs1 froms1 sents1 cur_n1)
+            -> usrs $? uid2 = Some (mkUserData ks2 cmdc2 qmsgs2 mycs2 froms2 sents2 cur_n2)
+            -> forall cmdc1' usrs1'', 
+                usrs1'' = usrs1' $+ (uid1, mkUserData ks1' cmdc1' qmsgs1' mycs1' froms1' sents1' cur_n1')
+                -> usrs1'' $? uid2 = Some {| key_heap := ks2;
+                                            protocol := cmdc2;
+                                            msg_heap := qmsgs2;
+                                            c_heap := mycs2;
+                                            from_nons := froms2;
+                                            sent_nons := sents2;
+                                            cur_nonce := cur_n2 |}
+                -> exists bd2'',
+                  step_user lbl2 suid2
+                            (usrs1'', adv1', cs1', gks1', ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2) bd2''.
+Proof.
+Admitted.
