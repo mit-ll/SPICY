@@ -196,6 +196,41 @@ Definition labels_align {t__hon t__adv} (st : @ModelState t__hon t__adv) : Prop 
         /\ indexedIdealStep uid (Action ia) iu' iu''
         /\ action_matches ru.(RealWorld.all_ciphers) ru.(RealWorld.all_keys) ra ia.
 
+Inductive misalignment {t__hon t__adv} (uid : user_id) (st : @ModelState t__hon t__adv) (ra : RealWorld.action) :
+  IdealWorld.universe t__hon
+  -> Prop :=
+| NoLabeledStep :
+    forall iu iu',
+      (indexedIdealStep uid Silent)^* iu iu'
+      -> iu = snd (fst st)
+      -> (forall lbl iu'', indexedIdealStep uid lbl iu' iu'' -> False)
+      -> misalignment uid st ra iu'
+| ActionMismatch :
+    forall ru iu iu' iu'' ia,
+      (indexedIdealStep uid Silent)^* iu iu'
+      -> indexedIdealStep uid (Action ia) iu' iu''
+      -> ru = fst (fst st)
+      -> iu = snd (fst st)
+      -> ~ action_matches ru.(all_ciphers) ru.(all_keys) ra ia
+      -> misalignment uid st ra iu''
+.
+
+Lemma labels_not_align_means_misalignment :
+  forall t__hon t__adv st,
+    ~ @labels_align t__hon t__adv st
+    -> exists uid ru' ra iu,
+      indexedRealStep uid (Action ra) (fst (fst st)) ru'
+      /\ @misalignment t__hon t__adv uid st ra iu.
+Proof.
+  unfold labels_align; intros.
+  destruct st as [[ru iu] v].
+  eapply not_all_ex_not in H; split_ex.
+  eapply not_all_ex_not in H; split_ex.
+  eapply not_all_ex_not in H; split_ex.
+  eapply not_all_ex_not in H; split_ex.
+
+Admitted.
+
 Inductive step {t__hon t__adv : type} :
     @ModelState t__hon t__adv 
   -> @ModelState t__hon t__adv
@@ -210,9 +245,15 @@ Inductive step {t__hon t__adv : type} :
     -> action_matches ru.(all_ciphers) ru.(all_keys) ra ia
     -> labels_align (ru, iu, b)
     -> step (ru, iu, b) (ru', iu'', b)
-| Misalignment : forall uid ru ru' iu ra b,
+| MisalignedOther : forall uid ru ru' iu iu' iu'' ra ia b,
     indexedRealStep uid (Action ra) ru ru'
+    -> (indexedIdealStep uid Silent) ^* iu iu'
+    -> indexedIdealStep uid (Action ia) iu' iu''
     -> ~ labels_align (ru, iu, b)
+    -> step (ru, iu, b) (ru', iu'', false)
+| MisalignedMe : forall uid ru ru' iu iu' ra b,
+    indexedRealStep uid (Action ra) ru ru'
+    -> misalignment uid (ru, iu, b) ra iu'
     -> step (ru, iu, b) (ru', iu, false)
 .
 
@@ -607,7 +648,7 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
 
     split_ex.
     destruct (classic (labels_align (ru,U__i,true))).
-    
+
     - do 3 eexists; rewrite H4; repeat apply conj; eauto.
 
       econstructor.
@@ -628,6 +669,7 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
       econstructor; eauto.
       unfold SYS; simpl.
       destruct U__r, ru; simpl in *; subst.
+      
       econstructor 3; eauto.
   Qed.
 
