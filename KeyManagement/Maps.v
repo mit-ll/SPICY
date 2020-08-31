@@ -346,22 +346,39 @@ Module MyOrderedMap (OT : UsualOrderedType).
     apply map_eq_Equal; unfold Equal; intros;
     (repeat solve_simple_maps1); trivial.
 
+  Local Ltac dupKey k m :=
+    match m with
+    | add k _ _  => idtac
+    | add _ _ ?m' => dupKey k m'
+    end.
+
   Ltac canonicalize_map m :=
     match m with
     | context [ add ?k ?v ?m1 ] =>
-      match m1 with
-      | context [ add k _ _ ] =>
-        assert ( CANON : m = m $- k $+ (k,v) ); [ 
-          maps_equal
-        | repeat
-            (rewrite map_add_remove_eq in CANON by trivial)
-          || (rewrite map_add_remove_neq in CANON by eauto)
-          || (rewrite remove_not_in_map_idempotent in CANON by eauto)
-        ]; rewrite !CANON;
-        match type of CANON with
-        | _ = ?m' => clear CANON; try canonicalize_map m'
-        end
+      dupKey k m1;
+      let CANON := fresh "CANON" in
+      assert ( CANON : m = m $- k $+ (k,v) ) by maps_equal; 
+      repeat
+        (rewrite map_add_remove_eq in CANON by trivial)
+      || (rewrite map_add_remove_neq in CANON by eauto)
+      || (rewrite remove_not_in_map_idempotent in CANON by eauto)
+      ; rewrite !CANON;
+      match type of CANON with
+      | _ = ?m' => clear CANON; try canonicalize_map m'
       end
+      (* match m1 with *)
+      (* | context [ add k _ _ ] => *)
+      (*   assert ( CANON : m = m $- k $+ (k,v) ); [  *)
+      (*     maps_equal *)
+      (*   | repeat *)
+      (*       (rewrite map_add_remove_eq in CANON by trivial) *)
+      (*     || (rewrite map_add_remove_neq in CANON by eauto) *)
+      (*     || (rewrite remove_not_in_map_idempotent in CANON by eauto) *)
+      (*   ]; rewrite !CANON; *)
+      (*   match type of CANON with *)
+      (*   | _ = ?m' => clear CANON; try canonicalize_map m' *)
+      (*   end *)
+      (* end *)
     end.
 
   Lemma canonicalize_map_test1 :

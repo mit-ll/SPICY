@@ -57,11 +57,13 @@ protocols/PartialOrderReduction.v
 protocols/LabelsAlign.v
 protocols/NoResends.v
 
+protocols/ProtocolFunctions.v
 protocols/ShareSecretProtocol.v
+protocols/ShareSecretProtocol2.v
+protocols/NeedhamSchroeder.v
+protocols/SecureDNS.v
 
 protocols/PORExtended.v
-
-protocols/ProtocolFunctions.v
 
 # protocols/SimplePingProtocol.v
 # protocols/SimpleEncProtocol.v

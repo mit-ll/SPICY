@@ -5,7 +5,7 @@
  * in this material are those of the author(s) and do not necessarily reflect the views of the 
  * Department of the Air Force.
  * 
- * © 2019-2020 Massachusetts Institute of Technology.
+ * © 2020 Massachusetts Institute of Technology.
  * 
  * MIT Proprietary, Subject to FAR52.227-11 Patent Rights - Ownership by the contractor (May 2014)
  * 
@@ -50,50 +50,92 @@ Set Implicit Arguments.
 
 Open Scope protocol_scope.
 
-Module ShareSecretProtocol.
+Module MyProtocol.
 
-  (* User ids *)
-  Notation USR1 := 0.
-  Notation USR2 := 1.
+  Notation USRA := 0.
+  Notation USRB := 1.
+  Notation SERVER := 2.
 
   Section IW.
     Import IdealWorld.
 
-    Notation pCH12 := 0.
-    Notation pCH21 := 1.
-    Notation CH12  := (# pCH12).
-    Notation CH21  := (# pCH21).
+    (* Initial communication channels so each user can talk directly to the other *)
+    Notation pCHS := 0.
+    Notation pCHA := 1.
+    Notation pCHB := 2.
+    Notation CHS  := (# pCHS).
+    Notation CHA  := (# pCHA).
+    Notation CHB  := (# pCHB).
 
-    Notation empty_chs := (#0 #+ (CH12, []) #+ (CH21, [])).
+    (* This is the initial channel vector, each channel should be represented and start with 
+     * no messages.
+     *)
+    Notation empty_chs := (#0 #+ (CHS, []) #+ (CHA, []) #+ (CHB, [])).
 
-    Notation PERMS1 := ($0 $+ (pCH12, owner) $+ (pCH21, reader)).
-    Notation PERMS2 := ($0 $+ (pCH12, reader) $+ (pCH21, owner)).
+    Notation PERMSS := ($0 $+ (pCHS, owner) $+ (pCHA, writer) $+ (pCHB, writer)).
+    Notation PERMSA := ($0 $+ (pCHA, owner) $+ (pCHS, writer)).
+    Notation PERMSB := ($0 $+ (pCHB, owner) $+ (pCHS, writer)).
 
-    Notation ideal_users :=
+    Definition server_db := ($0
+                            $+ (USRA, (Permission {| ch_perm := writer ; ch_id := pCHA|}))
+                            $+ (USRB, (Permission {| ch_perm := writer ; ch_id := pCHB|}))).
+
+    (* Fill in the users' protocol specifications here, adding additional users as needed.
+     * Note that all users must return an element of the same type, and that type needs to 
+     * be one of: ...
+     *)
+    Definition ideal_users : list (user_id * user Nat) :=
       [
-        (mkiUsr USR1 PERMS1 
-                ( chid <- CreateChannel
-                  ; _ <- Send (Permission {| ch_perm := writer ; ch_id := chid |}) CH12
-                  ; m <- @Recv Nat (chid #& pCH21)
-                  ; @Return (Base Nat) (extractContent m)
-        )) ;
-      (mkiUsr USR2 PERMS2
-              ( m <- @Recv Access CH12
-                ; n <- Gen
-                ; _ <- let chid := ch_id (extractPermission m)
-                      in  Send (Content n) (chid #& pCH21)
-                ; @Return (Base Nat) n
-      ))
+       mkiUsr USRA PERMSA
+              (
+                _ <- Send (MsgPair (Content USRA) (Content USRB)) CHS
+                ; B <- @Recv Access CHS
+                ; m <- Gen
+                ; _ <- Send (Content m) (# match B with Permission b => b.(ch_id) end)
+                ; @Return (Base Nat) m
+              )
+        ;
+
+
+      mkiUsr USRB PERMSB
+              (
+                m <- @Recv Nat CHB
+                ; @Return (Base Nat) (match m with Content m' => m' end)
+              )
+        ;
+      (* User 2 Specification *)
+      (* can I repeat this or does it need to finish? *)
+      mkiUsr SERVER PERMSS
+              (
+                m__r <- @Recv (TPair Nat Nat) CHS
+                ; _ <- match m__r with
+                        | MsgPair (Content d) (Content req) =>
+                          match server_db $? req with
+                          | Some p => Send p CHA
+                          | _ => @Return (Base Unit) tt
+                          end
+                        | _ => @Return (Base Unit) tt 
+                        end
+                ; @Return (Base Nat) 1
+              )
       ].
 
-    Definition ideal_univ_start :=
-      mkiU empty_chs ideal_users.
+    (* This is where the entire specification universe gets assembled.  It is unlikely anything *)
+    (*  * will need to change here. *)
+    Definition ideal_univ_start := mkiU empty_chs ideal_users.
 
   End IW.
 
   Section RW.
     Import RealWorld.
 
+    (* Key management needs to be bootstrapped.  Since all honest users must only send signed
+     * messages, we need some way of initially distributing signing keys in order to be able
+     * to begin secure communication.  This is analagous in the real world where we need to 
+     * have some sort of trust relationship in order to distribute trusted keys.
+     * 
+     * Here, each user has a public asymmetric signing key.
+     *)
     Notation KID1 := 0.
     Notation KID2 := 1.
 
@@ -104,25 +146,27 @@ Module ShareSecretProtocol.
 
     Notation real_users :=
       [
-        USR1 keys KEYS1 >> ( kp <- GenerateAsymKey Encryption
-                          ; c1 <- Sign KID1 USR2 (Permission (fst kp, false))
-                          ; _  <- Send USR2 c1
-                          ; c2 <- @Recv Nat (SignedEncrypted KID2 (fst kp) true)
-                          ; m  <- Decrypt c2
-                          ; @Return (Base Nat) (extractContent m) ) ;
-
-      USR2 keys KEYS2 >> ( c1 <- @Recv Access (Signed KID1 true)
-                        ; v  <- Verify KID1 c1
-                        ; n  <- Gen
-                        ; c2 <- SignEncrypt KID2 (fst (extractPermission (snd v))) USR1 (message.Content n)
-                        ; _  <- Send USR1 c2
-                        ; @Return (Base Nat) n)
+        (* User 1 implementation *)
+        MkRUserSpec USR1 KEYS1
+                    (
+                      ret 1
+                    )
+        ; 
+(* User 2 implementation *)
+      MkRUserSpec USR2 KEYS2
+                  (
+                    ret 1
+                  ) 
       ].
 
+    (* Here is where we put the implementation universe together.  Like above, it is 
+     * unlikely anything will need to change here.
+     *)
     Definition real_univ_start :=
       mkrU (mkKeys KEYS) real_users.
   End RW.
 
+  (* These are here to help the proof automation.  Don't change. *)
   Hint Unfold
        real_univ_start
        ideal_univ_start
@@ -131,20 +175,30 @@ Module ShareSecretProtocol.
   Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
     progress(autounfold with user_build; simpl).
   
-End ShareSecretProtocol.
+End MyProtocol.
 
-Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
+Module MyProtocolSecure <: AutomatedSafeProtocol.
 
-  Import ShareSecretProtocol.
+  Import MyProtocol.
 
+  (* Some things may need to change here.  t__hon is where we place the 
+   * type that the protocol computes.  It is set to Nat now, because we
+   * return a natual number.
+   *)
   Definition t__hon := Nat.
   Definition t__adv := Unit.
-  Definition b := tt.
+  Definition b    := tt.
+
+  (* These two variables hook up the starting points for both specification and
+   * implementation universes.  If you followed the template above, this shouldn't
+   * need to be changed.
+   *)
   Definition iu0  := ideal_univ_start.
   Definition ru0  := real_univ_start.
 
   Import Gen Tacs SetLemmas.
 
+  (* These are here to help the proof automation.  Don't change. *)
   Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start real_univ_start : core.
   Hint Unfold
        mkiU mkiUsr mkrU mkrUsr
@@ -159,34 +213,16 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
     eapply invariant_weaken.
 
     - eapply multiStepClosure_ok; simpl.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
+      (* Calls to gen1 will need to be addded here until the model checking terminates. *)
       gen1.
       gen1.
       
+    (* The remaining parts of the proof script shouldn't need to change. *)
     - intros.
       simpl in *.
 
       sets_invert; split_ex;
-        simpl in *; autounfold with core;
+        simpl in *; autounfold with core.
           subst; simpl;
             unfold safety, labels_align;
             ( split;
@@ -272,12 +308,4 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
   Qed.
   
 
-End ShareSecretProtocolSecure.
-
-(*
- * 1) make protocols  518.64s user 0.45s system 99% cpu 8:39.13 total  ~ 6.2GB
- * 2) add cleanup of chmaps to close:
- *    make protocols  414.45s user 0.43s system 99% cpu 6:54.90 total  ~ 5.6GB
- *
- *
- *)
+End MyProtocolSecure.

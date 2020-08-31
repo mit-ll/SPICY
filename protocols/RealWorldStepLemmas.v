@@ -914,4 +914,389 @@ Section OtherUserStep.
     econstructor; eauto.
     congruence.
   Qed.
+
 End OtherUserStep.
+
+
+Section ActionMatches.
+  Import SimulationAutomation.
+  Import SafetyAutomation.
+
+  Lemma invert_step_label :
+    forall A B C suid lbl bd bd',
+      step_user lbl suid bd bd'
+
+      -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks' (cmd cmd' : user_cmd C)
+          ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' a,
+
+        bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+        -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+        -> lbl = Action a
+        -> (exists t (msg : crypto t) pat msgs,
+              a = Input msg pat froms
+              /\ qmsgs = (existT crypto t msg) :: msgs
+              /\ msg_accepted_by_pattern cs suid froms pat msg
+              /\ nextAction cmd (@Recv t pat))
+          \/ (exists t (msg : crypto t) from_usr to_usr,
+                a = Output msg from_usr (Some to_usr) sents
+                /\ incl (findCiphers msg) mycs
+                /\ nextAction cmd (Send to_usr msg)).
+  Proof.
+    induction 1; inversion 1; inversion 1; intros; try discriminate; subst; eauto.
+    - assert (Action a = Action a) as REFL by apply eq_refl.
+      eapply IHstep_user in REFL; eauto.
+      split_ors; subst.
+      left; (do 4 eexists); repeat simple apply conj; eauto.
+      econstructor; eauto.
+
+      right; (do 4 eexists); repeat simple apply conj; eauto.
+      econstructor; eauto.
+      
+    - invert H20.
+      left; (do 4 eexists); repeat simple apply conj; eauto.
+      econstructor.
+    - invert H20.
+      right; (do 4 eexists); repeat simple apply conj; eauto.
+      econstructor.
+  Qed.
+
+  Lemma action_matches_other_user_silent_step' :
+    forall A B C lbl suid bd bd',
+
+      step_user lbl suid bd bd'
+
+      -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks' (cmd cmd' : user_cmd C)
+          ks1 ks1' qmsgs1 qmsgs1' mycs1 mycs1' froms1 froms1' sents1 sents1' cur_n1 cur_n1' uid1,
+
+        bd = (usrs, adv, cs, gks, ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd)
+        -> bd' = (usrs', adv', cs', gks', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd')
+        -> suid = Some uid1
+        -> lbl = Silent
+        -> message_queues_ok cs usrs gks
+        -> encrypted_ciphers_ok (findUserKeys usrs) cs gks
+        -> user_cipher_queues_ok cs (findUserKeys usrs) usrs
+        -> keys_and_permissions_good gks usrs adv.(key_heap)
+        -> forall ctx uids sty, syntactically_safe uid1 uids ctx cmd sty
+        -> typingcontext_sound ctx usrs cs uid1
+        -> uids = compute_ids usrs
+        -> forall cmd1 cmd2 cmd2' uid2 ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' froms2 froms2' sents2 sents2' cur_n2 cur_n2' a
+            usrs'' adv'' cs'' gks'',
+            uid1 <> uid2
+            -> usrs $? uid1 = Some (mkUserData ks1 cmd1 qmsgs1 mycs1 froms1 sents1 cur_n1)
+            -> usrs $? uid2 = Some (mkUserData ks2 cmd2 qmsgs2 mycs2 froms2 sents2 cur_n2)
+            -> step_user (Action a) (Some uid2)
+                        (usrs, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
+                        (usrs'', adv'', cs'', gks'', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
+            -> forall ia,
+                action_matches cs gks a ia 
+                -> action_matches cs' gks' a ia.
+  Proof.
+
+    Ltac action_matches_solver :=
+      repeat (
+          match goal with
+          | [ H : step_user (Action _) _ _ _ |- _ ] =>
+            eapply invert_step_label in H; eauto; split_ors; split_ex; subst; simpl
+          | [ H : action_matches _ _ _ _ |- _ ] => invert H
+          | [ H : Input _ _ _ = _ |- _ ] => invert H
+          | [ H : Output _ _ _ _ = _ |- _ ] => invert H
+          end || solve_action_matches1).
+    
+    induction 1; inversion 1; inversion 1; intros; subst;
+      try discriminate.
+
+    invert H30.
+    eapply IHstep_user in H8; eauto.
+
+    all : solve [action_matches_solver; eauto 8 using message_content_eq_addnl_key ].
+  Qed.
+
+  Lemma action_matches_other_user_silent_step :
+    forall A B cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks' cmd1 cmd1'
+      ks1 ks1' qmsgs1 qmsgs1' mycs1 mycs1' froms1 froms1' sents1 sents1' cur_n1 cur_n1' uid1,
+
+      step_user Silent (Some uid1)
+                (usrs, adv, cs, gks, ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd1)
+                (usrs', adv', cs', gks', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd1')
+
+      -> message_queues_ok cs usrs gks
+      -> encrypted_ciphers_ok (findUserKeys usrs) cs gks
+      -> user_cipher_queues_ok cs (findUserKeys usrs) usrs
+      -> keys_and_permissions_good gks usrs adv.(key_heap)
+      -> forall ctx uids sty, syntactically_safe uid1 uids ctx cmd1 sty
+      -> typingcontext_sound ctx usrs cs uid1
+      -> uids = compute_ids usrs
+      -> forall cmd2 cmd2' uid2 ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' froms2 froms2' sents2 sents2' cur_n2 cur_n2' a
+          usrs'' adv'' cs'' gks'',
+          uid1 <> uid2
+          -> usrs $? uid1 = Some (mkUserData ks1 cmd1 qmsgs1 mycs1 froms1 sents1 cur_n1)
+          -> usrs $? uid2 = Some (mkUserData ks2 cmd2 qmsgs2 mycs2 froms2 sents2 cur_n2)
+          -> step_user (Action a) (Some uid2)
+                      (usrs, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
+                      (usrs'', adv'', cs'', gks'', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
+          -> forall ia,
+              action_matches cs gks a ia 
+              -> action_matches cs' gks' a ia.
+  Proof.
+    intros; eapply action_matches_other_user_silent_step'
+              with (cmd := cmd1) (cmd' := cmd1') (cmd1 := cmd1) (uid1 := uid1) (uid2 := uid2).
+    exact H.
+    14: exact H9.
+    all: reflexivity || eauto.
+  Qed.
+
+  (* Hint Resolve *)
+  (*      message_eq_user_add_nochange_cs_ks_msgs_inv *)
+  (*      message_eq_user_decrypt_msg_inv *)
+  (*      message_eq_user_add_addnl_cipher_inv *)
+  (*      message_eq_user_add_addnl_key_inv *)
+  (*      : core. *)
+
+  Lemma input_action_na :
+    forall t__hon t__adv t lbl suid bd bd',
+      step_user lbl suid bd bd'
+                
+      -> forall (usrs usrs' : honest_users t__hon) (adv adv' : user_data t__adv) (cmd cmd' : user_cmd t)
+          cs cs' gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' n n' uid a,
+
+        bd = (usrs,adv,cs,gks,ks,qmsgs,mycs,froms,sents,n,cmd)
+        -> bd' = (usrs',adv',cs',gks',ks',qmsgs',mycs',froms',sents',n',cmd')
+        -> suid = Some uid
+        -> lbl = Action a
+        -> forall t__m (msg : crypto t__m) pat froms'',
+            a = Input msg pat froms''
+            -> exists t__m pat, nextAction cmd (@Recv t__m pat)
+                        /\ (exists qmsgs'', qmsgs = (existT _ _ msg) :: qmsgs'').
+
+  Proof.
+    induction 1; inversion 1; inversion 1; intros; subst; try discriminate; eauto.
+
+    specialize (IHstep_user _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+                            eq_refl eq_refl eq_refl eq_refl
+                            _ _ _ _ eq_refl); split_ex.
+    (do 2 eexists); split; [ econstructor | ]; eauto.
+
+    invert H32; eauto.
+    (do 2 eexists); split; eauto.
+    econstructor.
+  Qed.
+
+  Lemma output_action_na :
+    forall t__hon t__adv t lbl suid bd bd',
+      step_user lbl suid bd bd'
+                
+      -> forall (usrs usrs' : honest_users t__hon) (adv adv' : user_data t__adv) (cmd cmd' : user_cmd t)
+          cs cs' gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' n n' uid a,
+
+        bd = (usrs,adv,cs,gks,ks,qmsgs,mycs,froms,sents,n,cmd)
+        -> bd' = (usrs',adv',cs',gks',ks',qmsgs',mycs',froms',sents',n',cmd')
+        -> suid = Some uid
+        -> lbl = Action a
+        -> forall t__m (msg : crypto t__m) sents'' to from, a = Output msg from to sents''
+                                                  -> sents'' = sents
+                                                    /\ from = Some uid
+                                                    /\ exists rec_u_id rec_u,
+                                                        nextAction cmd (Send rec_u_id msg)
+                                                        /\ to = Some rec_u_id
+                                                        /\ usrs $? rec_u_id = Some rec_u
+                                                        /\ rec_u_id <> uid.
+  Proof.
+    induction 1; inversion 1; inversion 1; intros; subst; try discriminate; eauto.
+
+    assert (sents'' = sents0 /\
+            from = Some uid /\
+            (exists (rec_u_id : user_id) (rec_u : user_data A),
+                nextAction cmd1 (Send rec_u_id msg)
+                /\ to = Some rec_u_id /\ usrs0 $? rec_u_id = Some rec_u /\ rec_u_id <> uid)) by eauto.
+    split_ex; subst.
+    repeat simple apply conj; eauto.
+    (do 2 eexists); repeat simple apply conj; eauto.
+    econstructor; eauto.
+
+    invert H32.
+    repeat simple apply conj; eauto.
+    (do 2 eexists); repeat simple apply conj; eauto.
+    econstructor; eauto.
+    unfold not; intros; subst; contradiction.
+  Qed.
+
+  Lemma action_matches_other_user_silent_step_inv' :
+    forall A B C lbl suid bd bd',
+
+      step_user lbl suid bd bd'
+
+      -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks' (cmd cmd' : user_cmd C)
+          ks1 ks1' qmsgs1 qmsgs1' mycs1 mycs1' froms1 froms1' sents1 sents1' cur_n1 cur_n1' uid1,
+
+        bd = (usrs, adv, cs, gks, ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd)
+        -> bd' = (usrs', adv', cs', gks', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd')
+        -> suid = Some uid1
+        -> lbl = Silent
+        -> message_queues_ok cs usrs gks
+        -> encrypted_ciphers_ok (findUserKeys usrs) cs gks
+        -> user_cipher_queues_ok cs (findUserKeys usrs) usrs
+        -> keys_and_permissions_good gks usrs adv.(key_heap)
+        -> forall uids, uids = compute_ids usrs
+        -> forall cmd1 cmd2 cmd2' uid2 ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' froms2 froms2' sents2 sents2' cur_n2 cur_n2' a
+            usrs'' adv'' cs'' gks'',
+
+              uid1 <> uid2
+              -> usrs $? uid1 = Some (mkUserData ks1 cmd1 qmsgs1 mycs1 froms1 sents1 cur_n1)
+              -> usrs $? uid2 = Some (mkUserData ks2 cmd2 qmsgs2 mycs2 froms2 sents2 cur_n2)
+              -> forall ctx uids sty, syntactically_safe uid2 uids ctx cmd2 sty
+              -> typingcontext_sound ctx usrs cs uid2
+                                (* -> forall t__n (cmd__n : user_cmd t__n) s, nextAction cmd cmd__n *)
+                                (*                                -> summarize cmd2 s *)
+                                (*                                -> commutes cmd__n s *)
+              -> step_user (Action a) (Some uid2)
+                          (usrs, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
+                          (usrs'', adv'', cs'', gks'', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
+              -> forall ia,
+                  action_matches cs' gks' a ia
+                  -> action_matches cs gks a ia. 
+  Proof.
+    induction 1; inversion 1; inversion 1; intros; subst;
+      try discriminate; eauto.
+
+    - invert H46; [
+        econstructor 1
+      | econstructor 2
+      | econstructor 3
+      | econstructor 4]; eauto;
+        destruct (c_id ==n cid); subst; clean_map_lookups; eauto.
+
+      eapply input_action_na in H45; eauto; split_ex; subst.
+      unfold message_queues_ok in H35; rewrite Forall_natmap_forall in H35;
+        eapply H35 in H42; simpl in *.
+      invert H42; split_ex.
+      specialize (H8 _ eq_refl); clean_map_lookups.
+      
+      eapply output_action_na in H45; eauto; split_ex; subst.
+      eapply syntactically_safe_na in H8; eauto; split_ex.
+      invert H5; unfold typingcontext_sound in *; split_ex; process_ctx.
+      repeat equality1; clean_map_lookups.
+      
+    - action_matches_solver;
+        destruct (c_id ==n cid); subst; clean_map_lookups; eauto; repeat equality1; subst.
+      
+      unfold message_queues_ok in H33; rewrite Forall_natmap_forall in H33;
+        eapply H33 in H40; simpl in *.
+      invert H40; split_ex; simpl in *.
+      specialize (H4 _ eq_refl); clean_map_lookups.
+      
+      eapply syntactically_safe_na in H5; eauto; split_ex.
+      invert H3; unfold typingcontext_sound in *; split_ex; process_ctx.
+      repeat equality1; clean_map_lookups.
+
+    - action_matches_solver; eauto.
+
+      Local Ltac p :=
+        repeat 
+          match goal with
+          | [ MQ : message_queues_ok _ _ _, USRS : _ $? _ = Some {| msg_heap := (_ :: _) |}
+              |- _ ] => 
+            unfold message_queues_ok in MQ;
+            rewrite Forall_natmap_forall in MQ;
+            eapply MQ in USRS; simpl in *
+          | [ H : message_queue_ok _ _ (_ :: _) _ |- _ ] => invert H; split_ex
+          | [ H : (forall _ _, findKeysCrypto _ _ $? _ = Some _ -> _) |- _ ] => progress (simpl in H); context_map_rewrites
+          | [ H : syntactically_safe _ _ _ ?cmd _, NA : nextAction ?cmd (Send _ _) |- _ ] =>
+            eapply syntactically_safe_na in H; eauto; split_ex
+          | [ H : syntactically_safe _ _ _ ?c _ |- _ ] =>
+            is_not_var c;
+            invert H; unfold typingcontext_sound in *; split_ex; process_ctx
+          end;
+        repeat equality1;
+        clean_map_lookups;
+        eapply message_content_eq_addnl_key_inv; eauto.
+      
+      p.
+
+      eapply syntactically_safe_na in H5; eauto; split_ex.
+      assert (msg_pattern_safe (findUserKeys usrs') x1)
+        by (unfold typingcontext_sound in *; split_ex; invert H0; eauto).
+      assert (@msg_honestly_signed (findUserKeys usrs') x cs' (SignedCiphertext cid) = true) by eauto.
+      unfold msg_honestly_signed, msg_signing_key in H5; context_map_rewrites; simpl in H5.
+      rewrite <- honest_key_honest_keyb in H5; invert H5.
+      encrypted_ciphers_prop.
+      eapply message_content_eq_addnl_key_inv; eauto.
+      intros.
+      eapply H19 in H5; eauto.
+      keys_and_permissions_prop.
+      eapply H12 in H5; eauto; split_ex; clean_map_lookups.
+
+      p; simpl in *; encrypted_ciphers_prop; eauto.
+      eapply H22 in H4; split_ex; subst.
+      keys_and_permissions_prop.
+      eapply H17 in H3; split_ex; clean_map_lookups.
+
+      p; simpl in *; encrypted_ciphers_prop; eauto.
+      eapply H25 in H4; split_ex; subst.
+      keys_and_permissions_prop.
+      eapply H17 in H4; split_ex; clean_map_lookups.
+      
+    - action_matches_solver; eauto.
+
+      p.
+
+      eapply syntactically_safe_na in H5; eauto; split_ex.
+      assert (msg_pattern_safe (findUserKeys usrs') x1)
+        by (unfold typingcontext_sound in *; split_ex; invert H0; eauto).
+      assert (@msg_honestly_signed (findUserKeys usrs') x cs' (SignedCiphertext cid) = true) by eauto.
+      unfold msg_honestly_signed, msg_signing_key in H5; context_map_rewrites; simpl in H5.
+      rewrite <- honest_key_honest_keyb in H5; invert H5.
+      encrypted_ciphers_prop.
+      eapply message_content_eq_addnl_key_inv; eauto.
+      intros.
+      eapply H19 in H5; eauto.
+      keys_and_permissions_prop.
+      eapply H12 in H5; eauto; split_ex; clean_map_lookups.
+
+      p; simpl in *; encrypted_ciphers_prop; eauto.
+      eapply H22 in H4; split_ex; subst.
+      keys_and_permissions_prop.
+      eapply H17 in H3; split_ex; clean_map_lookups.
+
+      p; simpl in *; encrypted_ciphers_prop; eauto.
+      eapply H25 in H4; split_ex; subst.
+      keys_and_permissions_prop.
+      eapply H17 in H4; split_ex; clean_map_lookups.
+  Qed.
+
+  Lemma action_matches_other_user_silent_step_inv :
+    forall A B cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks' cmd1 cmd1'
+      ks1 ks1' qmsgs1 qmsgs1' mycs1 mycs1' froms1 froms1' sents1 sents1' cur_n1 cur_n1' uid1,
+
+      step_user Silent (Some uid1)
+                (usrs, adv, cs, gks, ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd1)
+                (usrs', adv', cs', gks', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd1')
+
+      -> message_queues_ok cs usrs gks
+      -> encrypted_ciphers_ok (findUserKeys usrs) cs gks
+      -> user_cipher_queues_ok cs (findUserKeys usrs) usrs
+      -> keys_and_permissions_good gks usrs adv.(key_heap)
+      -> forall uids, uids = compute_ids usrs
+                -> forall cmd2 cmd2' uid2 ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' froms2 froms2' sents2 sents2' cur_n2 cur_n2' a
+                    usrs'' adv'' cs'' gks'',
+            uid1 <> uid2
+            -> usrs $? uid1 = Some (mkUserData ks1 cmd1 qmsgs1 mycs1 froms1 sents1 cur_n1)
+            -> usrs $? uid2 = Some (mkUserData ks2 cmd2 qmsgs2 mycs2 froms2 sents2 cur_n2)
+            -> forall ctx sty, syntactically_safe uid2 uids ctx cmd2 sty
+            -> typingcontext_sound ctx usrs cs uid2
+            (* -> forall t__n (cmd__n : user_cmd t__n) s, nextAction cmd1 cmd__n *)
+            (* -> summarize cmd2 s *)
+            (* -> commutes cmd__n s *)
+            -> step_user (Action a) (Some uid2)
+                        (usrs, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
+                        (usrs'', adv'', cs'', gks'', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
+            -> forall ia,
+                action_matches cs' gks' a ia
+                -> action_matches cs gks a ia.
+  Proof.
+    intros; eapply action_matches_other_user_silent_step_inv'
+              with (cmd := cmd1) (cmd' := cmd1') (cmd1 := cmd1) (uid1 := uid1) (uid2 := uid2).
+    exact H.
+    all: reflexivity || eauto.
+  Qed.
+
+End ActionMatches.
