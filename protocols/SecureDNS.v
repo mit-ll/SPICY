@@ -330,8 +330,8 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
 
   Lemma safe_invariant :
     invariantFor
-      {| Initial := {(ru0, iu0)}; Step := @step t__hon t__adv  |}
-      (fun st => safety st /\ labels_align st ).
+      {| Initial := {(ru0, iu0, true)}; Step := @step t__hon t__adv  |}
+      (fun st => safety st /\ alignment st ).
   Proof.
     eapply invariant_weaken.
 
@@ -379,19 +379,12 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
       sets_invert; split_ex;
         simpl in *; autounfold with core;
           subst; simpl;
-            unfold safety, labels_align.
-
+            unfold safety, alignment;
       (* 129 *)
-      all : ( split;
-              [ solve_honest_actions_safe; clean_map_lookups; eauto 8
-              | intros; rstep; subst; solve_labels_align
-            ] ).
-
-      (* all : *)
-      (*   (do 2 eexists); repeat simple apply conj; eauto; simpl; unfold not; intros; split_ors; try contradiction; *)
-      (*   match goal with *)
-      (*   | [ H : (_,_) = (_,_) |- _ ] => invert H *)
-      (*   end. *)
+            ( split;
+            [ solve_honest_actions_safe; clean_map_lookups; eauto 8
+            | split; trivial; intros; rstep; subst; solve_labels_align
+            ]).
 
       all: simpl; solve_honest_actions_safe.
 

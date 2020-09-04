@@ -134,7 +134,8 @@ Ltac equality1 :=
   | [ H : (_ :: _) = (_ :: _) |- _ ] => inversion H; clear H
   | [ H : (_ :: _) = ?x |- _ ] => is_var x; invert H
   | [ H : ?x = (_ :: _) |- _ ] => is_var x; invert H
-  | [ H : (_,_) = (_,_) |- _ ] => inversion H; clear H
+  | [ H : (_,_) = (_,_) |- _ ] => invert H (* inversion H; clear H *)
+  (* | [ H : (_,_,_) = (_,_,_) |- _ ] => inversion H; clear H *)
   | [ H : Action _ = Action _ |- _ ] => inversion H; clear H
   | [ H : RealWorld.Return _ = RealWorld.Return _ |- _ ] => apply invert_return in H
   | [ H : existT _ _ _ = existT _ _ _ |- _ ] => apply inj_pair2 in H
@@ -578,8 +579,71 @@ Module SimulationAutomation.
 
       | [ H: step_universe ?U Silent _ |- _ ] => is_not_var U; invert H
       | [ H: step_universe _ _ _ |- _ ] => invert H
-
       end.
+
+    Ltac prove_alignment1 :=
+      match goal with
+      | [ |- labels_align _ ] => unfold labels_align; intros
+      | [ H : _ = Output _ _ _ _ |- _ ] => invert H
+      | [ H : Output _ _ _ _ = _ |- _ ] => invert H
+      | [ H : _ = Input _ _ _ |- _ ] => invert H
+      | [ H : Input _ _ _ = _ |- _ ] => invert H
+      | [ H : indexedRealStep _ _ _ _ |- _ ] => invert H
+      | [ H : users _ $? _ = Some _ |- _ ] =>
+        progress (autounfold in H; simpl in H)
+      | [ H : _ $+ (_,_) $? _ = Some _ |- _ ] => progress clean_map_lookups
+      | [ H : _ $+ (?k1,_) $? ?k2 = Some _ |- _ ] => destruct (k1 ==n k2); subst
+      | [ H : step_user (Action _) (Some ?uid) _ _ |- _ ] =>
+        progress (autounfold in H; unfold RealWorld.build_data_step in H; simpl in H)
+      | [ H : step_user _ (Some ?u) (_,_,_,_,_,_,_,_,_,_,?cmd) _ |- _ ] =>
+        is_not_var u; is_not_evar u;
+        match cmd with
+        | Return _ => apply step_user_inv_ret in H; contradiction
+        | Bind _ _ => apply step_user_inv_bind in H; split_ands; split_ors; split_ands; subst; try discriminate
+        | Gen => apply step_user_inv_gen in H
+        | Send _ _ => apply step_user_inv_send in H
+        | Recv _ => apply step_user_inv_recv in H; split_ex; split_ors; try discriminate
+        | SignEncrypt _ _ _ _ => apply step_user_inv_enc in H
+        | Decrypt _ => apply step_user_inv_dec in H
+        | Sign _ _ _ => apply step_user_inv_sign in H
+        | Verify _ _ => apply step_user_inv_verify in H
+        | GenerateSymKey _ => apply step_user_inv_gensym in H
+        | GenerateAsymKey _ => apply step_user_inv_genasym in H
+        | _ => idtac "***Missing inversion: " cmd; intuition idtac; subst; (progress (simpl in H) || invert H)
+        end; split_ex; try discriminate; subst
+      | [ |- exists _ _ _, _ ] => simpl; (do 3 eexists); repeat simple apply conj
+      end
+      || equality1.
+    
+    Lemma label_align_step_split :
+      forall t__hon t__adv st st',
+        @step t__hon t__adv st st'
+        -> labels_align st
+        -> forall ru ru' iu iu' b b' a,
+            st = (ru,iu,b)
+            -> st' = (ru',iu',b')
+            -> lameAdv a ru.(adversary)
+            -> b = b'
+              /\ exists uid,
+                ( indexedRealStep uid Silent ru ru' /\ iu = iu' )
+                \/ exists iu0 ra ia, 
+                  indexedRealStep uid (Action ra) ru ru'
+                  /\ (indexedIdealStep uid Silent) ^* iu iu0
+                  /\ indexedIdealStep uid (Action ia) iu0 iu'
+                  /\ action_matches (all_ciphers ru) (all_keys ru) ra ia.
+    Proof.
+      intros.
+      subst; invert H; try contradiction.
+
+      - invert H2; split; eexists; left; eauto.
+        split; eauto; econstructor; eauto.
+        unfold build_data_step in *; unfold lameAdv in H3; rewrite H3 in *.
+        invert H.
+      - split; eexists; right; eauto 10.
+
+        Unshelve.
+        auto.
+    Qed.
 
   End T.
 
@@ -1496,7 +1560,7 @@ Module Gen.
               | Prop => fail 1
               | _ =>
                 match A with
-                | ((RealWorld.universe _ _) * (IdealWorld.universe _))%type =>
+                | ((RealWorld.universe _ _) * (IdealWorld.universe _) * bool)%type =>
                   fail 2
                 | _  =>
                   match p with
@@ -1532,6 +1596,29 @@ Module Gen.
                         end
           end.
 
+  Ltac step_model1 :=
+    match goal with
+    | [ S : step ?st ?st' |- _ ] =>
+      concrete st; is_var st';
+      match st' with
+      | (_,_,_) => fail 2
+      | (?f,_) => destruct f as [?ru ?iu]
+      | _ => destruct st' as [[?ru ?iu] ?b]
+      end
+    | [ S : step ?st _ |- _ ] =>
+      concrete st;
+      match goal with
+      | [ LA : labels_align ?st |- _ ] =>
+        eapply label_align_step_split in S; (reflexivity || eauto 2)
+      (* | [ LA : labels_align st |- _ ] => *)
+      (*   assert (exists b, lameAdv b (fst (fst st)).(adversary)) *)
+      (*     by (unfold lameAdv; simpl; eexists; reflexivity); *)
+      (*   split_ex *)
+      | _ =>
+        idtac "proving alignment"; assert (labels_align st) by ((repeat prove_alignment1); eauto)
+      end
+    end.
+
   Ltac tidy :=
     autounfold
     ; intros
@@ -1557,8 +1644,10 @@ Module Gen.
                simpl in H
              | [H : exists _, _ |- _] =>
                invert H; propositional; subst
+             (* | [H : step ?st _ |- _] => *)
+             (*   concrete st; invert H *)
              | [H : step ?st _ |- _] =>
-               concrete st; invert H
+               progress ((repeat step_model1); split_ex; split_ors; subst)
              | [H : In _ $0 |- _] =>
                invert H
              | [H : Raw.PX.MapsTo _ _ $0 |- _] =>
@@ -1587,6 +1676,8 @@ Module Gen.
                 (* clear out resulting assumption that seems to cause a problem for [close] *)
                 | [ H : forall _ _ _, _ -> _ -> _ -> _ <-> _ |- _ ] => clear H
                 | [ H : forall _ _ _ _, _ -> _ -> _ -> _ -> _ <-> _ |- _ ] => clear H
+                | [ H : (forall _ _ _, indexedRealStep _ _ ?ru _ -> exists _ _ _, (indexedIdealStep _ _) ^* ?iu _ /\ _) |- _ ] =>
+                  clear H
 
                 | [H : indexedRealStep _ _ _ _ |- _ ] =>
                   invert H
@@ -1652,7 +1743,7 @@ Module Gen.
 
   Ltac close :=
     match goal with
-    | [|- [_ | _] (?ru, ?iu)] =>
+    | [|- [_ | _] (?ru, ?iu, _)] =>
       concrete ru
       ; concrete iuniv iu
       ; tidy
@@ -1661,7 +1752,7 @@ Module Gen.
       ; solve[ eauto
              | canonicalize users
                ; equality ]
-    | [|- (?inv1 \cup ?inv2) (?ru, ?iu)] =>
+    | [|- (?inv1 \cup ?inv2) (?ru, ?iu, _)] =>
       concrete inv1
       ; concrete ru
       ; concrete iuniv iu
@@ -1669,7 +1760,7 @@ Module Gen.
              | idtac "left fails; trying right"; right; close
              | idtac "something is horribly wrong" (* prevent an infinite loop *)
              ]
-    | [|- ?inv (?ru, ?iu)] =>
+    | [|- ?inv (?ru, ?iu, _)] =>
       is_evar inv
       ; concrete ru
       ; concrete iuniv iu
@@ -1705,7 +1796,7 @@ Module Gen.
       (* eapply MscDone; apply prove_oneStepClosure *)
       (* ; [ solve[ sets ] *)
       (*   | solve[ rewrite ?union_assoc; gen1' ]] *)
-    | [|- multiStepClosure _ {(_, _)} {(_, _)} _] =>
+    | [|- multiStepClosure _ {(_,_,_)} {(_,_,_)} _] =>
       eapply MscStep
       ; [ solve[ apply oneStepClosure_grow; gen1' ]
         | simplify; simpl_sets (sets; tidy)]
@@ -1738,3 +1829,4 @@ Module Gen.
   Ltac gen := repeat gen1.
 
 End Gen.
+                     

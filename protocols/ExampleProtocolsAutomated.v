@@ -64,10 +64,64 @@ Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
 
   Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start mkiU real_univ_start mkrU mkrUsr startAdv : core.
 
+  Section Test.
+    Section RW.
+      Import RealWorld.
+      Import RealWorldNotations.
+      
+      Definition testU :=
+        mkrU $0 $0 $0
+             (* user A *)
+             ( n  <- Gen; Return n )
+             (* user B *)
+             ( @Return (Base Nat) 1 ) startAdv.
+
+      Definition testU' y :=
+        mkrU $0 $0 $0
+             (* user A *)
+             ( n  <- Return y; Return n )
+             (* user B *)
+             ( @Return (Base Nat) 1 ) startAdv.
+
+    End RW.
+
+    Section IW.
+      Import IdealWorld.
+      Import IdealNotations.
+      
+      Definition testI :=
+        mkiU #0 $0 $0
+             (* user A *)
+             ( n <- Gen; Return n)
+             (* user B *)
+             ( ret 1 ).
+    End IW.
+
+    Lemma sets_test1 :
+      { (false,false,false) } \cap { (true,false,false) } = { }.
+    Proof.
+      sets.
+    Qed.
+
+    Lemma sets_test2 :
+      { (testU, testI, true) } \cap { (testU, testI, false) } = { }.
+    Proof.
+      sets.
+    Qed.
+
+    (* Lemma sets_test3 : *)
+    (*   { ([, testI, true) } \cap { (testU, testI, false) } = { }. *)
+    (* Proof. *)
+    (*   sets. *)
+    (* Qed. *)
+  End Test.
+
+  Import RealWorld.
+      
   Lemma safe_invariant :
     invariantFor
-      {| Initial := {(ru0, iu0)}; Step := @step t__hon t__adv  |}
-      (fun st => safety st /\ labels_align st ).
+      {| Initial := {(ru0, iu0, true)}; Step := @step t__hon t__adv  |}
+      (fun st => safety st /\ alignment st ).
   Proof.
     eapply invariant_weaken.
 
@@ -85,7 +139,6 @@ Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
       gen1.
       gen1.
       gen1.
-
       (* time(gen). *)
       
     - intros.
@@ -99,26 +152,8 @@ Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
         Unshelve.
         all:clean_map_lookups.
         
-      + sets_invert; unfold labels_align; intros;
-          split_ex; subst; simpl; intros;
-            rstep.
-        
-        * subst; do 3 eexists; repeat (simple apply conj);
-            [ solve [ eauto ]
-            | indexedIdealStep; simpl
-            | repeat solve_action_matches1; clean_map_lookups; ChMap.clean_map_lookups
-            ]; eauto; simpl; eauto.
-        * subst; do 3 eexists; repeat (simple apply conj);
-            [ solve [ eauto ]
-            | indexedIdealStep; simpl
-            | repeat solve_action_matches1; clean_map_lookups; ChMap.clean_map_lookups
-            ]; eauto; simpl; eauto.
-
-        * subst; do 3 eexists; repeat (simple apply conj);
-            [ solve [ eauto ]
-            | indexedIdealStep; simpl
-            | repeat solve_action_matches1; clean_map_lookups; ChMap.clean_map_lookups
-            ]; eauto; simpl; eauto.
+      + sets_invert;
+          unfold alignment; split_ex; subst; split; trivial; repeat prove_alignment1; eauto 3.
   Qed.
 
   Lemma U_good : @universe_starts_sane _ Unit b ru0.
@@ -208,8 +243,8 @@ Module SimpleEncProtocolSecure <: AutomatedSafeProtocol.
 
   Lemma safe_invariant :
     invariantFor
-      {| Initial := {(ru0, iu0)}; Step := @step t__hon t__adv  |}
-      (fun st => safety st /\ labels_align st ).
+      {| Initial := {(ru0, iu0, true)}; Step := @step t__hon t__adv  |}
+      (fun st => safety st /\ alignment st ).
   Proof.
     eapply invariant_weaken.
 
@@ -237,11 +272,8 @@ Module SimpleEncProtocolSecure <: AutomatedSafeProtocol.
         Unshelve.
         all:clean_map_lookups.
         
-      + sets_invert; unfold labels_align;
-          split_ex; subst; intros; rstep; subst.
-        * do 3 eexists; repeat (simple apply conj); eauto.
-        * do 3 eexists; repeat (simple apply conj); eauto.
-        * do 3 eexists; repeat (simple apply conj); eauto.
+      + sets_invert;
+          unfold alignment; split_ex; subst; split; trivial; repeat prove_alignment1; eauto 3.
   Qed.
 
   Lemma U_good : @universe_starts_sane _ Unit b ru0.

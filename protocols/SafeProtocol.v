@@ -165,22 +165,6 @@ Module Foo <: EMPTY.
 End Foo.
 Module Import SN := SetNotations(Foo).
 
-(* Inductive step (t__hon t__adv : type) : *)
-(*   (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon) *)
-(*   -> (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon) *)
-(*   -> Prop := *)
-(* | RealSilent : forall ru ru' iu, *)
-(*     RealWorld.step_universe ru Silent ru' -> step (ru, iu) (ru', iu) *)
-(* | BothLoud : forall ru ru' ra ia iu iu' iu'', *)
-(*     RealWorld.step_universe ru (Action ra) ru' *)
-(*     -> istepSilent^* iu iu' *)
-(*     -> IdealWorld.lstep_universe iu' (Action ia) iu'' *)
-(*     -> action_matches ru.(RealWorld.all_ciphers) ru.(RealWorld.all_keys) ra ia *)
-(*     -> step (ru, iu) (ru', iu''). *)
-
-(* Definition iUserStepSilent {A} (U1 U2 : IdealWorld.universe A) := *)
-(*   IdealWorld.lstep_universe U1 Silent U2. *)
-
 Definition ModelState {t__hon t__adv : type} := (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon * bool)%type.
 
 Definition safety {t__hon t__adv} (st : @ModelState t__hon t__adv) : Prop :=
@@ -196,41 +180,6 @@ Definition labels_align {t__hon t__adv} (st : @ModelState t__hon t__adv) : Prop 
         /\ indexedIdealStep uid (Action ia) iu' iu''
         /\ action_matches ru.(RealWorld.all_ciphers) ru.(RealWorld.all_keys) ra ia.
 
-Inductive misalignment {t__hon t__adv} (uid : user_id) (st : @ModelState t__hon t__adv) (ra : RealWorld.action) :
-  IdealWorld.universe t__hon
-  -> Prop :=
-| NoLabeledStep :
-    forall iu iu',
-      (indexedIdealStep uid Silent)^* iu iu'
-      -> iu = snd (fst st)
-      -> (forall lbl iu'', indexedIdealStep uid lbl iu' iu'' -> False)
-      -> misalignment uid st ra iu'
-| ActionMismatch :
-    forall ru iu iu' iu'' ia,
-      (indexedIdealStep uid Silent)^* iu iu'
-      -> indexedIdealStep uid (Action ia) iu' iu''
-      -> ru = fst (fst st)
-      -> iu = snd (fst st)
-      -> ~ action_matches ru.(all_ciphers) ru.(all_keys) ra ia
-      -> misalignment uid st ra iu''
-.
-
-Lemma labels_not_align_means_misalignment :
-  forall t__hon t__adv st,
-    ~ @labels_align t__hon t__adv st
-    -> exists uid ru' ra iu,
-      indexedRealStep uid (Action ra) (fst (fst st)) ru'
-      /\ @misalignment t__hon t__adv uid st ra iu.
-Proof.
-  unfold labels_align; intros.
-  destruct st as [[ru iu] v].
-  eapply not_all_ex_not in H; split_ex.
-  eapply not_all_ex_not in H; split_ex.
-  eapply not_all_ex_not in H; split_ex.
-  eapply not_all_ex_not in H; split_ex.
-
-Admitted.
-
 Inductive step {t__hon t__adv : type} :
     @ModelState t__hon t__adv 
   -> @ModelState t__hon t__adv
@@ -245,15 +194,17 @@ Inductive step {t__hon t__adv : type} :
     -> action_matches ru.(all_ciphers) ru.(all_keys) ra ia
     -> labels_align (ru, iu, b)
     -> step (ru, iu, b) (ru', iu'', b)
-| MisalignedOther : forall uid ru ru' iu iu' iu'' ra ia b,
+| MisalignedCanStep : forall uid ru ru' iu iu' iu'' ra ia b,
     indexedRealStep uid (Action ra) ru ru'
     -> (indexedIdealStep uid Silent) ^* iu iu'
     -> indexedIdealStep uid (Action ia) iu' iu''
     -> ~ labels_align (ru, iu, b)
     -> step (ru, iu, b) (ru', iu'', false)
-| MisalignedMe : forall uid ru ru' iu iu' ra b,
+| MisalignedCantStep : forall uid ru ru' iu iu' ra b,
     indexedRealStep uid (Action ra) ru ru'
-    -> misalignment uid (ru, iu, b) ra iu'
+    -> (indexedIdealStep uid Silent) ^* iu iu'
+    -> (forall lbl iu'', indexedIdealStep uid lbl iu' iu'' -> False)
+    -> ~ labels_align (ru, iu, b)
     -> step (ru, iu, b) (ru', iu, false)
 .
 
@@ -261,15 +212,6 @@ Definition alignment {t__hon t__adv} (st : @ModelState t__hon t__adv) : Prop :=
   let '(ru, iu, b) := st
   in  b = true
     /\ labels_align st.
-
-(* Lemma alignment_true_implies_labels_align : *)
-(*   forall t__hon t__adv ru iu ru' iu', *)
-(*     @step t__hon t__adv (ru,iu,true) (ru',iu',true) *)
-(*     -> labels_align (ru,iu,true) *)
-(*     -> labels_align (ru',iu',true). *)
-(* Proof. *)
-(*   induction 1; intros; eauto. *)
-
 
 Definition TrS {t__hon t__adv} (ru0 : RealWorld.universe t__hon t__adv) (iu0 : IdealWorld.universe t__hon) :=
   {| Initial := {(ru0, iu0, true)};
@@ -566,11 +508,6 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
     forall iu (ru U U' : RealWorld.universe t__hon t__adv) uid a__r v,
       SYS.(Step) ^* (ru0,iu0,true) (ru,iu,v)
       -> indexedRealStep uid (Action a__r) U U'
-
-      (* -> step_universe U (Action a__r) U' *)
-      (* -> istepSilent^* U__i U__i' *)
-      (* -> IdealWorld.lstep_universe U__i' (Action a__i) U__i'' *)
-      (* -> action_matches a__r ru' a__i U__i'' *)
 
       -> lameAdv b U.(adversary)
       -> ru.(users) = U.(users)

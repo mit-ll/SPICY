@@ -182,8 +182,8 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
 
   Lemma safe_invariant :
     invariantFor
-      {| Initial := {(ru0, iu0)}; Step := @step t__hon t__adv  |}
-      (fun st => safety st /\ labels_align st ).
+      {| Initial := {(ru0, iu0, true)}; Step := @step t__hon t__adv  |}
+      (fun st => safety st /\ alignment st ).
   Proof.
     eapply invariant_weaken.
 
@@ -217,11 +217,10 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
       sets_invert; split_ex;
         simpl in *; autounfold with core;
           subst; simpl;
-            unfold safety, labels_align;
-            autounfold with constants;
+            unfold safety, alignment;
             ( split;
-              [ solve_honest_actions_safe; clean_map_lookups; eauto 8
-              | intros; rstep; subst; solve_labels_align
+            [ solve_honest_actions_safe; clean_map_lookups; eauto 8
+            | split; trivial; intros; rstep; subst; solve_labels_align
             ]).
 
       Unshelve.

@@ -46,7 +46,7 @@ lib: CoqMakefile
 	$(MAKE) -f CoqMakefile KeyManagement/AdversarySafety.vo
 
 por: CoqMakefile
-	$(MAKE) -f CoqMakefile protocols/PORExtended.vo
+	$(MAKE) -f CoqMakefile protocols/PartialOrderReduction.vo
 
 exampleprotos: CoqMakefile
 	$(MAKE) -f CoqMakefile protocols/ExampleProtocolsAutomated.vo

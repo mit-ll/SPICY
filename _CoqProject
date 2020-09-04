@@ -63,8 +63,6 @@ protocols/ShareSecretProtocol2.v
 protocols/NeedhamSchroeder.v
 protocols/SecureDNS.v
 
-protocols/PORExtended.v
-
 # protocols/SimplePingProtocol.v
 # protocols/SimpleEncProtocol.v
 # protocols/ShareKeyProtocol.v

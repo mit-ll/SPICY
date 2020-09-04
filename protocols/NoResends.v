@@ -215,14 +215,14 @@ Proof.
       specialize (H4 _ H5); eauto.
   - invert H; unfold build_data_step in *; simpl in *.
     destruct (uid ==n k); subst; clean_map_lookups; simpl in *; eauto.
-    + specialize (H2 k); rewrite add_eq_o in H2 by trivial.
-      specialize (H2 _ eq_refl); simpl in *.
+    + specialize (H4 k); rewrite add_eq_o in H4 by trivial.
+      specialize (H4 _ eq_refl); simpl in *.
       eapply no_resends_user_step; eauto.
-    + specialize (H2 k); rewrite add_neq_o in H2 by congruence.
+    + specialize (H4 k); rewrite add_neq_o in H4 by congruence.
       destruct userData; eapply step_limited_change_other_user with (u_id2 := k) in H5; eauto.
       split_ex; split_ors; clean_map_lookups; simpl in *.
-      specialize (H2 _ H5); eauto.
-      specialize (H2 _ H5); eauto.
+      specialize (H4 _ H5); eauto.
+      specialize (H4 _ H5); eauto.
 Qed.
 
 Lemma resend_violation_step :
