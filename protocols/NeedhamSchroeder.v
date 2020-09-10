@@ -1,3 +1,4 @@
+(* remember to add key for signing for all valid server users *)
 (* DISTRIBUTION STATEMENT A. Approved for public release. Distribution is unlimited.
  *
  * This material is based upon work supported by the Department of the Air Force under Air Force 
@@ -52,8 +53,8 @@ Open Scope protocol_scope.
 
 Module MyProtocol.
 
-  Notation USRA := 0.
-  Notation USRB := 1.
+  Notation USR__A := 0.
+  Notation USR__B := 1.
   Notation SERVER := 2.
 
   Section IW.
@@ -72,13 +73,13 @@ Module MyProtocol.
      *)
     Notation empty_chs := (#0 #+ (CHS, []) #+ (CHA, []) #+ (CHB, [])).
 
-    Notation PERMSS := ($0 $+ (pCHS, owner) $+ (pCHA, writer) $+ (pCHB, writer)).
-    Notation PERMSA := ($0 $+ (pCHA, owner) $+ (pCHS, writer)).
-    Notation PERMSB := ($0 $+ (pCHB, owner) $+ (pCHS, writer)).
+    Notation PERMS__S := ($0 $+ (pCHS, owner) $+ (pCHA, writer) $+ (pCHB, writer)).
+    Notation PERMS__A := ($0 $+ (pCHS, owner) $+ (pCHA, owner)).
+    Notation PERMS__B := ($0 $+ (pCHS, owner) $+ (pCHB, owner)).
 
-    Definition server_db := ($0
-                            $+ (USRA, (Permission {| ch_perm := writer ; ch_id := pCHA|}))
-                            $+ (USRB, (Permission {| ch_perm := writer ; ch_id := pCHB|}))).
+    Definition Iserver_db := ($0
+                            $+ (USR__A, (Permission {| ch_perm := writer ; ch_id := pCHA|}))
+                            $+ (USR__B, (Permission {| ch_perm := writer ; ch_id := pCHB|}))).
 
     (* Fill in the users' protocol specifications here, adding additional users as needed.
      * Note that all users must return an element of the same type, and that type needs to 
@@ -86,18 +87,19 @@ Module MyProtocol.
      *)
     Definition ideal_users : list (user_id * user Nat) :=
       [
-       mkiUsr USRA PERMSA
+       mkiUsr USR__A PERMS__A
               (
-                _ <- Send (MsgPair (Content USRA) (Content USRB)) CHS
+                _ <- Send (MsgPair (Content pCHA) (Content USR__B)) CHS
                 ; B <- @Recv Access CHS
                 ; m <- Gen
-                ; _ <- Send (Content m) (# match B with Permission b => b.(ch_id) end)
+                ; _ <- Send (Content m) (# match B with Permission b => b.(ch_id)  end)
+                    (* should this be an intersection? *)
                 ; @Return (Base Nat) m
               )
         ;
 
 
-      mkiUsr USRB PERMSB
+      mkiUsr USR__B PERMS__B
               (
                 m <- @Recv Nat CHB
                 ; @Return (Base Nat) (match m with Content m' => m' end)
@@ -105,17 +107,13 @@ Module MyProtocol.
         ;
       (* User 2 Specification *)
       (* can I repeat this or does it need to finish? *)
-      mkiUsr SERVER PERMSS
+      mkiUsr SERVER PERMS__S
               (
                 m__r <- @Recv (TPair Nat Nat) CHS
-                ; _ <- match m__r with
-                        | MsgPair (Content d) (Content req) =>
-                          match server_db $? req with
-                          | Some p => Send p CHA
-                          | _ => @Return (Base Unit) tt
-                          end
-                        | _ => @Return (Base Unit) tt 
-                        end
+                ; _ <- match Iserver_db $? (extractContent (msgSnd m__r)) with 
+                      | Some p => Send p (# (extractContent (msgFst m__r)))
+                      | _ => @Return (Base Unit) tt
+                      end
                 ; @Return (Base Nat) 1
               )
       ].
@@ -136,26 +134,58 @@ Module MyProtocol.
      * 
      * Here, each user has a public asymmetric signing key.
      *)
-    Notation KID1 := 0.
-    Notation KID2 := 1.
+    Notation KID__A := 0.
+    Notation KID__B := 1.
+    Notation KID__S := 2.
 
-    Notation KEYS := [ skey KID1 ; skey KID2 ].
 
-    Notation KEYS1 := ($0 $+ (KID1, true) $+ (KID2, false)).
-    Notation KEYS2 := ($0 $+ (KID1, false) $+ (KID2, true)).
+    Notation KEYS := [ (MkCryptoKey KID__A Encryption AsymKey) ;
+                         (MkCryptoKey KID__B Encryption AsymKey) ;
+                         (MkCryptoKey KID__S Signing SymKey) ].
 
-    Notation real_users :=
+    Notation KEYS__A := ($0 $+ (KID__A, true) $+ (KID__S, true)).
+    Notation KEYS__B := ($0 $+ (KID__B, true) $+ (KID__S, true)).
+    Notation KEYS__S := ($0 $+ (KID__S, true) $+ (KID__A, false) $+ (KID__B, false)).
+
+    Notation Rserver_db := ($0 $+ (USR__A, KID__A) $+ (USR__B, KID__B)).
+
+    Definition real_users : list (@RUserSpec Nat) :=
+    (* Notation real_users := *)
       [
         (* User 1 implementation *)
-        MkRUserSpec USR1 KEYS1
+        MkRUserSpec USR__A KEYS__A
                     (
-                      ret 1
+                      m1 <- Sign KID__A SERVER (MsgPair (message.Content USR__A) (message.Content USR__B))
+                      ; _ <- Send SERVER m1
+                      ; c <- @Recv (Access) (Signed KID__S true)
+                      ; m2 <- Verify KID__S c
+                      ; k <- @Return (Base Nat) (fst (extractPermission (snd m2)))
+                      ; g <- Gen
+                      ; m3 <- SignEncrypt KID__A k USR__B (message.Content g)
+                      ; _ <- Send USR__B m3
+                      ; @Return (Base Nat) g
                     )
         ; 
 (* User 2 implementation *)
-      MkRUserSpec USR2 KEYS2
+      MkRUserSpec USR__B KEYS__B
                   (
-                    ret 1
+                    c <- @Recv (Nat) (SignedEncrypted KID__S KID__B true)
+                    ; m <- Decrypt c
+                    ; @Return (Base Nat) (extractContent m)
+                  ) 
+        ; 
+(* User 2 implementation *)
+      MkRUserSpec SERVER KEYS__S
+                  (
+                    p__r <- @Recv (TPair Nat Nat) (Signed KID__S true)
+                    ; m__r <- Verify KID__S p__r
+                    ; m__s <- match Rserver_db $? (extractContent (msgSnd (snd m__r))) with 
+                          | Some p => Sign KID__S (extractContent (msgFst (snd m__r))) (message.Permission (p, false))
+                          | _ => Sign KID__S (extractContent (msgFst (snd m__r))) (message.Permission (KID__S, false))
+                          end
+                    ; _ <- Send (extractContent (msgFst (snd m__r))) m__s
+
+                    ; @Return (Base Nat) 1
                   ) 
       ].
 
