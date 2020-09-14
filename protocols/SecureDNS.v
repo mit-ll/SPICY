@@ -383,7 +383,7 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
       (* 129 *)
             ( split;
             [ solve_honest_actions_safe; clean_map_lookups; eauto 8
-            | split; trivial; intros; rstep; subst; solve_labels_align
+            | simpl; split; trivial; intros; rstep; subst; solve_labels_align
             ]).
 
       all: simpl; solve_honest_actions_safe.
@@ -392,19 +392,6 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
       all: auto.
 
   Qed.
-
-
-  (*
-
-  exists (c_id : RealWorld.cipher_id) (c : RealWorld.cipher),
-    RealWorld.SignedCiphertext x2 = RealWorld.SignedCiphertext c_id /\
-    $0 $+ (x, RealWorld.SigEncCipher 4 3 1 (Some 2, 0) (RealWorld.message.Content 0)) $+ (x0,
-    RealWorld.SigEncCipher 2 1 0 (Some 1, 0) (RealWorld.message.Content 0)) $+ (x1,
-    RealWorld.SigEncCipher 0 3 1 (Some 0, 0) (RealWorld.message.Content 10)) $+ (x2,
-    RealWorld.SigEncCipher 2 5 2 (Some 1, 1) (RealWorld.message.Content 10)) $? c_id = Some c /\
-    fst (RealWorld.cipher_nonce c) = Some 1 /\ ~ ((Some 1, 0) = RealWorld.cipher_nonce c \/ False)
-
-*)
 
   (* Show Ltac Profile. *)
   (* Show Ltac Profile "churn2". *)
