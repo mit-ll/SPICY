@@ -6672,9 +6672,7 @@ Inductive traceMatches : list RealWorld.action -> list IdealWorld.action -> Prop
 | TrMatchesNothing :
     traceMatches [] []
 | TrMatchesLabel : forall {A B}(U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A) a__r acts__r a__i acts__i,
-      rCouldGenerate U__r (a__r :: acts__r)
-    -> iCouldGenerate U__i (a__i :: acts__i)
-    -> traceMatches acts__r acts__i
+      traceMatches acts__r acts__i
     -> action_matches U__r.(RealWorld.all_ciphers) U__r.(RealWorld.all_keys) a__r a__i
     -> traceMatches (a__r :: acts__r) (a__i :: acts__i)
 .
@@ -6793,10 +6791,13 @@ Proof.
     exists (a__i :: x0); split; eauto using indexed_ideal_multi_silent_stays_could_generate.
 Qed.
 
+Notation "u1 <<| u2 " :=
+  (exists b, lameAdv b u1.(RealWorld.adversary)
+      /\ refines (lameAdv b) u1 u2) (no associativity, at level 70).
+
 Theorem refines_could_generate :
-  forall A B (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A) (b : RealWorld.denote (RealWorld.Base B)),
-    U__r <| U__i \ lameAdv b
-    -> lameAdv b U__r.(RealWorld.adversary)
+  forall A B (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A),
+    U__r <<| U__i
     -> universe_starts_ok U__r
     -> forall U__ra advcode acts__r,
       U__ra = add_adversary U__r advcode
@@ -6806,7 +6807,8 @@ Theorem refines_could_generate :
         /\ traceMatches acts__r acts__i.
 Proof.
   intros.
-  unfold refines in H; destruct H as [R H].
+  unfold refines in H.
+  destruct H as [b [LAME [R H]]].
 
   assert (simulates (lameAdv b) R U__r U__i) as SIM by assumption;
     unfold simulates in SIM; split_ands.
@@ -6819,7 +6821,7 @@ Proof.
     with (R := R)
          (B := B)
          (U__r := U__ra)
-         (R' := (fun (ur : RealWorld.simpl_universe A) (ui : IdealWorld.universe A) => R (strip_adversary_simpl ur) ui)); auto.
+         (R' := (fun ur ui => R (strip_adversary_simpl ur) ui)); auto.
   Qed.
 
 Print Assumptions refines_could_generate.

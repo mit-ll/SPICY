@@ -45,9 +45,8 @@ From KeyManagement Require Import
 
 From protocols Require Import
      RealWorldStepLemmas
-     ExampleProtocols
      ModelCheck
-     ProtocolAutomation
+     ProtocolFunctions
      SafeProtocol
      LabelsAlign
      NoResends
@@ -64,28 +63,8 @@ Require IdealWorld.
 
 Set Implicit Arguments.
 
-Import SimulationAutomation.
+(* Import SimulationAutomation. *)
 Import SafetyAutomation.
-
-Ltac step_usr uid :=
-  match goal with
-  | [ H : RealWorld.step_user _ (Some uid) (_,_,_,_,_,_,_,_,_,_,?cmd) _ |- _ ] =>
-    match cmd with
-    | Return _ => apply step_user_inv_ret in H; contradiction
-    | Bind _ _ => apply step_user_inv_bind in H; split_ands; split_ors; split_ands; subst; try discriminate
-    | Gen => apply step_user_inv_gen in H
-    | Send _ _ => apply step_user_inv_send in H
-    | Recv _ => apply step_user_inv_recv in H
-    | SignEncrypt _ _ _ _ => apply step_user_inv_enc in H
-    | Decrypt _ => apply step_user_inv_dec in H
-    | Sign _ _ _ => apply step_user_inv_sign in H
-    | Verify _ _ => apply step_user_inv_verify in H
-    | GenerateSymKey _ => apply step_user_inv_gensym in H
-    | GenerateAsymKey _ => apply step_user_inv_genasym in H
-    | _ => idtac "***Missing inversion: " cmd; invert H
-    end
-  end; split_ex; split_ors; split_ex; subst.
-
 
 Section CommutationLemmas.
 
@@ -670,7 +649,11 @@ Section CommutationLemmas.
       autorewrite with find_user_keys; trivial.
     - destruct (u_id2 ==n rec_u_id); subst; clean_map_lookups; simpl in *.
       (do 6 eexists); split; [ | econstructor]; try congruence; eauto.
+      simpl; rewrite !map_add_eq; trivial.
+
       (do 6 eexists); split; [ | econstructor]; try congruence; eauto.
+      maps_equal; clean_map_lookups; trivial.
+
     - (do 6 eexists); split; [ | econstructor]; eauto.
     - (do 6 eexists); split; [ | econstructor]; eauto.
     - (do 6 eexists); split; [ | econstructor]; eauto.
@@ -1083,6 +1066,7 @@ Section TimeMeasures.
       eexists; repeat simple apply conj; eauto.
       rewrite <- Nat.add_sub_assoc by lia.
       eapply BrtRecur with (uid1 := uid); eauto.
+      clean_map_lookups; trivial.
 
       assert (RW : us $- uid0 $- uid = us $- uid $- uid0).
       apply map_eq_Equal; unfold Equal; intros.
@@ -1398,17 +1382,16 @@ Section NextSteps.
 
   Inductive nextStep {A B} (* (us : honest_users A) *)
             (u_id : user_id) (userData : user_data A)
-    : universe A B -> rlabel -> universe A B  -> Prop :=
+    : universe A B (* -> rlabel -> universe A B *)  -> Prop :=
 
-  | Here : forall U U' lbl,
+  | Here : forall U,
 
       NatMap.O.max_elt U.(users) = Some (u_id, userData)
       (* NatMap.O.max_elt us = Some (u_id, userData) *)
-      -> indexedRealStep u_id lbl U U'
-      (* -> U.(users) $? u_id = Some userData *)
-      -> nextStep (* us *) u_id userData U lbl U'
+      (* -> indexedRealStep u_id lbl U U' *)
+      -> nextStep (* us *) u_id userData U (* lbl U' *)
 
-  | There : forall (U U' : universe A B) lbl summaries u_id' userData',
+  | There : forall (U : universe A B) summaries u_id' userData',
 
       NatMap.O.max_elt U.(users) = Some (u_id', userData')
       (* NatMap.O.max_elt us = Some (u_id', userData') *)
@@ -1424,20 +1407,20 @@ Section NextSteps.
                                 -> commutes cmd__n s
                                 -> False))
       -> u_id <> u_id'
-      -> indexedRealStep u_id lbl U U'
+      (* -> indexedRealStep u_id lbl U U' *)
       (* -> nextStep (us $- u_id') u_id userData U lbl U' *)
-      -> nextStep (* us *) u_id userData U lbl U'.
+      -> nextStep (* us *) u_id userData U (* lbl U' *).
 
   Inductive stepC (t__hon t__adv : type) :
       @ModelState t__hon t__adv
     -> @ModelState t__hon t__adv
     -> Prop :=
 
-  | StepNextC : forall ru ru' rlbl iu iu' u_id ud st st' v v',
-      nextStep (* ru.(users) *) u_id ud ru rlbl ru'
+  | StepNextC : forall ru ru' (* rlbl *) iu iu' u_id ud st st' v v',
+      nextStep (* ru.(users) *) u_id ud ru
       -> st = (ru,iu,v)
       -> st' = (ru',iu',v')
-      -> step  st st'
+      -> indexedModelStep u_id st st'
       -> stepC st st'.
   
 
@@ -2124,48 +2107,48 @@ Qed.
 
 Hint Resolve indexedIdealSteps_ideal_steps : core.
 
-Inductive indexedModelStep {t__hon t__adv : type} (uid : user_id) :
-    @ModelState t__hon t__adv 
-  -> @ModelState t__hon t__adv
-  -> Prop :=
-| RealSilenti : forall ru ru' iu b,
-    indexedRealStep uid Silent ru ru'
-    -> indexedModelStep uid (ru, iu, b) (ru', iu, b)
-| BothLoudi : forall ru ru' iu iu' iu'' ra ia b,
-    indexedRealStep uid (Action ra) ru ru'
-    -> (indexedIdealStep uid Silent) ^* iu iu'
-    -> indexedIdealStep uid (Action ia) iu' iu''
-    -> action_matches ru.(all_ciphers) ru.(all_keys) ra ia
-    -> labels_align (ru, iu, b)
-    -> indexedModelStep uid (ru, iu, b) (ru', iu'', b)
-| MisalignedCanStepi : forall ru ru' iu iu' iu'' ra ia b,
-    indexedRealStep uid (Action ra) ru ru'
-    -> (indexedIdealStep uid Silent) ^* iu iu'
-    -> indexedIdealStep uid (Action ia) iu' iu''
-    -> ~ labels_align (ru, iu, b)
-    -> indexedModelStep uid (ru, iu, b) (ru', iu'', false)
-| MisalignedCantStepi : forall ru ru' iu iu' ra b,
-    indexedRealStep uid (Action ra) ru ru'
-    -> (indexedIdealStep uid Silent) ^* iu iu'
-    -> (forall lbl iu'', indexedIdealStep uid lbl iu' iu'' -> False)
-    -> ~ labels_align (ru, iu, b)
-    -> indexedModelStep uid (ru, iu, b) (ru', iu, false)
-.
+(* Inductive indexedModelStep {t__hon t__adv : type} (uid : user_id) : *)
+(*     @ModelState t__hon t__adv  *)
+(*   -> @ModelState t__hon t__adv *)
+(*   -> Prop := *)
+(* | RealSilenti : forall ru ru' iu b, *)
+(*     indexedRealStep uid Silent ru ru' *)
+(*     -> indexedModelStep uid (ru, iu, b) (ru', iu, b) *)
+(* | BothLoudi : forall ru ru' iu iu' iu'' ra ia b, *)
+(*     indexedRealStep uid (Action ra) ru ru' *)
+(*     -> (indexedIdealStep uid Silent) ^* iu iu' *)
+(*     -> indexedIdealStep uid (Action ia) iu' iu'' *)
+(*     -> action_matches ru.(all_ciphers) ru.(all_keys) ra ia *)
+(*     -> labels_align (ru, iu, b) *)
+(*     -> indexedModelStep uid (ru, iu, b) (ru', iu'', b) *)
+(* | MisalignedCanStepi : forall ru ru' iu iu' iu'' ra ia b, *)
+(*     indexedRealStep uid (Action ra) ru ru' *)
+(*     -> (indexedIdealStep uid Silent) ^* iu iu' *)
+(*     -> indexedIdealStep uid (Action ia) iu' iu'' *)
+(*     -> ~ labels_align (ru, iu, b) *)
+(*     -> indexedModelStep uid (ru, iu, b) (ru', iu'', false) *)
+(* | MisalignedCantStepi : forall ru ru' iu iu' ra b, *)
+(*     indexedRealStep uid (Action ra) ru ru' *)
+(*     -> (indexedIdealStep uid Silent) ^* iu iu' *)
+(*     -> (forall lbl iu'', indexedIdealStep uid lbl iu' iu'' -> False) *)
+(*     -> ~ labels_align (ru, iu, b) *)
+(*     -> indexedModelStep uid (ru, iu, b) (ru', iu, false) *)
+(* . *)
 
-Lemma indexedModelStep_step :
-  forall t__hon t__adv uid st st',
-    @indexedModelStep t__hon t__adv uid st st'
-    -> step st st'.
-Proof.
-  intros.
-  invert H; [
-    econstructor 1
-  | econstructor 2
-  | econstructor 3
-  | econstructor 4 ]; eauto.
+(* Lemma indexedModelStep_step : *)
+(*   forall t__hon t__adv uid st st', *)
+(*     @indexedModelStep t__hon t__adv uid st st' *)
+(*     -> step st st'. *)
+(* Proof. *)
+(*   intros. *)
+(*   invert H; [ *)
+(*     econstructor 1 *)
+(*   | econstructor 2 *)
+(*   | econstructor 3 *)
+(*   | econstructor 4 ]; eauto. *)
 
-  invert H0; econstructor; eauto.
-Qed.
+(*   invert H0; econstructor; eauto. *)
+(* Qed. *)
 
 Hint Constructors indexedModelStep indexedIdealStep indexedRealStep : core.
 Hint Resolve action_matches_other_user_silent_step_inv : core.
@@ -2319,6 +2302,7 @@ Proof.
         eapply commutes_noblock with (usrs := users ru) (usrs1' := usrs) in (*na*) H7; eauto; split_ex.
         exfalso; split_ex; eapply H4; eauto.
         econstructor; eauto.
+        clean_map_lookups; trivial.
 
       * eapply labeled_action_never_commutes in H9; eauto; contradiction.
 
@@ -2492,7 +2476,6 @@ Proof.
       econstructor; eauto.
       econstructor 1; eauto.
       econstructor 1; eauto.
-      symmetry; trivial.
 
     + destruct (uid ==n uid0); subst; clean_map_lookups.
 
@@ -2548,12 +2531,8 @@ Proof.
       * (do 2 eexists); repeat simple apply conj; eauto.
         econstructor 1; eauto.
         econstructor; eauto.
-        econstructor 2; eauto; simpl.
+        econstructor 2; eauto; simpl in *.
         
-        all: simpl.
-        econstructor; eauto.
-        symmetry; trivial.
-
         unfold goodness_predicates in *; split_ex; simpl in *. 
         specialize (H2 _ _ _ H0 eq_refl); split_ex.
         eapply action_matches_other_user_silent_step; eauto.
@@ -2619,11 +2598,8 @@ Proof.
       econstructor 1; eauto.
       econstructor; eauto.
       econstructor 3; eauto.
-      econstructor; eauto.
-      symmetry; trivial.
       eauto.
       eauto.
-
 
     + destruct (uid ==n uid0); subst; clean_map_lookups.
 
@@ -2672,10 +2648,10 @@ Proof.
       econstructor 1; eauto.
       econstructor; eauto.
       econstructor 4; eauto.
-      econstructor; eauto.
-      symmetry; trivial.
+      (* econstructor; eauto. *)
+      (* symmetry; trivial. *)
       eapply silent_step_labels_still_misaligned with (b := b0) (b' := b0) in H14; eauto.
-      eauto.
+      eauto. 
       eauto.
 Qed.
 
@@ -2804,6 +2780,9 @@ Proof.
   invert H0.
   unfold not in *; intros.
   split_ors; subst; eauto.
+  apply H; split; eauto.
+
+  hnf in H2; split_ex; discriminate.
 Qed.
 
 Lemma violations_translate :
@@ -2822,7 +2801,6 @@ Proof.
   induct n; intros.
 
   invert H; eexists; split; eauto.
-  econstructor.
 
   destruct (
       classic (
@@ -2866,23 +2844,7 @@ Proof.
     econstructor. 2-3: reflexivity.
     econstructor 1; eauto.
 
-    unfold build_data_step in *; simpl in *.
-    invert H13; eauto.
-
-    Local Ltac xx arg :=
-      repeat 
-        match goal with
-        | [ H : indexedRealStep arg _ _ _ |- _ ] =>
-          invert H; clean_map_lookups
-        | [ H1 : step_user Silent ?u _ _ , H2 : step_user (Action _) ?u _ _ |- _ ] =>
-          pose proof (user_step_label_deterministic _ _ _ _ _ _ _ _ _ H1 H2); discriminate
-        | [ H1 : step_user (Action _) ?u _ _ , H2 : step_user (Action _) ?u _ _ |- _ ] =>
-          pose proof (user_step_label_deterministic _ _ _ _ _ _ _ _ _ H1 H2); clear H1
-        | [ H : Action _ = Action _ |- _ ] => invert H
-        end.
-
-    1-3: xx x.
-    eapply indexedModelStep_step; eauto.
+    unfold build_data_step in *; simpl in *; eauto.
 
     (* Labeled *)
     exists x1; split; eauto.
@@ -2893,10 +2855,7 @@ Proof.
     econstructor. 2-3: reflexivity.
     econstructor 1; eauto.
 
-    unfold build_data_step in *; simpl in *.
-    invert H13; [ xx x ..]; eauto.
-
-    eapply indexedModelStep_step; eauto.
+    unfold build_data_step in *; simpl in *; eauto.
     
   - invert H.
 
@@ -2937,10 +2896,11 @@ Proof.
         clean_map_lookups.
         eapply StepNextC with (u_id := u_id); eauto.
 
-      * econstructor; eauto.
+      * econstructor; try reflexivity.
+        2: eauto.
         generalize (na_always_exists (protocol x1)); intros; split_ex.
         econstructor 2; eauto.
-        
+
         split_ors.
         left; unfold not; intros; eauto.
         right; intros.
@@ -2977,7 +2937,8 @@ Proof.
         clean_map_lookups.
         econstructor; eauto.
 
-      * econstructor; eauto.
+      * econstructor; try reflexivity.
+        2: eauto.
         generalize (na_always_exists (protocol x1)); intros; split_ex.
         econstructor 2; eauto.
         
@@ -3013,7 +2974,8 @@ Proof.
         clean_map_lookups.
         econstructor; eauto.
 
-      * econstructor; eauto.
+      * econstructor; try reflexivity.
+        2: eauto.
         generalize (na_always_exists (protocol x1)); intros; split_ex.
         econstructor 2; eauto.
         
@@ -3049,7 +3011,8 @@ Proof.
         clean_map_lookups.
         econstructor; eauto.
 
-      * econstructor; eauto.
+      * econstructor; try reflexivity.
+        2: eauto.
         generalize (na_always_exists (protocol x1)); intros; split_ex.
         econstructor 2; eauto.
         
@@ -3130,7 +3093,6 @@ Proof.
       eapply IHn' in H; try lia; eauto.
       split_ex.
       exists x0; split; intros; eauto.
-      eapply TrcFront; eauto.
 
     + firstorder idtac; simpl in *.
       exists st; split; intros; eauto.
@@ -3397,6 +3359,7 @@ Proof.
   simpl in *; split_ex; subst.
   split_ors; try contradiction; subst.
 
+  hnf in H7; split_ex; simpl in H5; subst.
   assert (SS : syntactically_safe_U (fst (fst (ru', iu', true)))) by eauto.
   unfold honest_cmds_safe; intros.
 
@@ -3411,11 +3374,11 @@ Proof.
     simpl in *; split_ex.
 
     unfold syntactically_safe_U in SS;
-      specialize (SS _ _ _ H7 eq_refl); split_ex.
+      specialize (SS _ _ _ H8 eq_refl); split_ex.
 
     assert (exists lbl, indexedRealStep u_id lbl ru' ru'') by (invert H9; eauto).
     split_ex.
-    invert H14.
+    invert H13.
 
     unfold build_data_step, buildUniverse in *; simpl in *.
     clean_map_lookups.
@@ -3438,7 +3401,7 @@ Proof.
     subst.
     clear H9.
     unfold syntactically_safe_U in SS;
-      specialize (SS _ _ _ H7 eq_refl); split_ex.
+      specialize (SS _ _ _ H8 eq_refl); split_ex.
     simpl in *.
 
     pose proof (na_always_exists (protocol u)); split_ex.

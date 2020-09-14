@@ -30,8 +30,9 @@ Require Import
         Simulation
         AdversaryUniverse
         UniverseEqAutomation
-        ProtocolAutomation
-        SafeProtocol.
+        SafeProtocol
+        ProtocolFunctions
+        ProtocolAutomation.
 
 Require IdealWorld RealWorld.
 

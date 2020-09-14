@@ -36,9 +36,14 @@ From KeyManagement Require Import
      AdversarySafety.
 
 From protocols Require Import
-     ProtocolAutomation
+     ProtocolFunctions
      SafeProtocol
 .
+
+From KeyManagement Require
+     ChMaps.
+
+Import ChMaps.ChMapNotation ChMaps.ChNotation.
 
 Ltac dismiss_adv :=
   repeat
@@ -585,7 +590,7 @@ Section MessageEqLemmas.
         end.
 
       assert (RW : ks1' $k++ ks2' $k++ ks3' $? kid = None).
-      repeat eapply merge_perms_adds_no_new_perms; eauto.
+      repeat eapply merge_perms_adds_no_new_perms; clean_map_lookups; eauto.
       rewrite RW; eauto.
   Qed.
 
@@ -919,7 +924,7 @@ End OtherUserStep.
 
 
 Section ActionMatches.
-  Import SimulationAutomation.
+  (* Import SimulationAutomation. *)
   Import SafetyAutomation.
 
   Lemma invert_step_label :
@@ -1000,7 +1005,25 @@ Section ActionMatches.
           | [ H : action_matches _ _ _ _ |- _ ] => invert H
           | [ H : Input _ _ _ = _ |- _ ] => invert H
           | [ H : Output _ _ _ _ = _ |- _ ] => invert H
-          end || solve_action_matches1).
+          | [ H : _ $? ?cid = Some (SigCipher _ _ _ _ )
+              |- action_matches ?cs _ (RealWorld.Output (SignedCiphertext ?cid) _ _ _) _ ] => eapply OutSig
+          | [ H : _ $? ?cid = Some (SigEncCipher _ _ _ _ _ )
+              |- action_matches ?cs _ (RealWorld.Output (SignedCiphertext ?cid) _ _ _) _ ] => eapply OutEnc
+          | [ H : _ $? ?cid = Some (SigCipher _ _ _ _ )
+              |- action_matches ?cs _ (RealWorld.Input (SignedCiphertext ?cid) _ _) _ ] => eapply InpSig
+          | [ H : _ $? ?cid = Some (SigEncCipher _ _ _ _ _ )
+              |- action_matches ?cs _ (RealWorld.Input (SignedCiphertext ?cid) _ _) _ ] => eapply InpEnc
+          | [ |- action_matches ?cs _ (RealWorld.Output (SignedCiphertext ?cid) _ _ _) _ ] =>
+            match cs with
+            | context [ _ $+ (cid, SigCipher _ _ _ _)] => eapply OutSig
+            | context [_ $+ (cid, SigEncCipher _ _ _ _ _)] => eapply OutEnc
+            end
+          | [ |- action_matches ?cs _ (RealWorld.Input (SignedCiphertext ?cid) _ _) _ ] =>
+            match cs with
+            | context[ _ $+ (cid, SigCipher _ _ _ _)] => eapply InpSig
+            | context[ _ $+ (cid, SigEncCipher _ _ _ _ _)] => eapply InpEnc
+            end
+          end ).  (* || solve_action_matches1). *)
     
     induction 1; inversion 1; inversion 1; intros; subst;
       try discriminate.
@@ -1008,7 +1031,7 @@ Section ActionMatches.
     invert H30.
     eapply IHstep_user in H8; eauto.
 
-    all : solve [action_matches_solver; eauto 8 using message_content_eq_addnl_key ].
+    all : action_matches_solver; eauto 8 using message_content_eq_addnl_key.
   Qed.
 
   Lemma action_matches_other_user_silent_step :
@@ -1044,13 +1067,6 @@ Section ActionMatches.
     14: exact H9.
     all: reflexivity || eauto.
   Qed.
-
-  (* Hint Resolve *)
-  (*      message_eq_user_add_nochange_cs_ks_msgs_inv *)
-  (*      message_eq_user_decrypt_msg_inv *)
-  (*      message_eq_user_add_addnl_cipher_inv *)
-  (*      message_eq_user_add_addnl_key_inv *)
-  (*      : core. *)
 
   Lemma input_action_na :
     forall t__hon t__adv t lbl suid bd bd',
@@ -1117,7 +1133,6 @@ Section ActionMatches.
     repeat simple apply conj; eauto.
     (do 2 eexists); repeat simple apply conj; eauto.
     econstructor; eauto.
-    unfold not; intros; subst; contradiction.
   Qed.
 
   Lemma action_matches_other_user_silent_step_inv' :

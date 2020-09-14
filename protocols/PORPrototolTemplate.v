@@ -33,7 +33,8 @@ Require Import
         UniverseEqAutomation
         ProtocolAutomation
         SafeProtocol
-        ProtocolFunctions.
+        ProtocolFunctions
+        PartialOrderReduction.
 
 Require IdealWorld RealWorld.
 
@@ -180,6 +181,11 @@ Module MyProtocolSecure <: AutomatedSafeProtocol.
        mkiU mkiUsr mkrU mkrUsr
        mkKeys
     : core.
+
+  Lemma safe_invariant' :
+    invariantFor
+      {| Initial := {(ru0, iu0, true)}; Step := @stepC t__hon t__adv  |}
+      (fun st => safety st /\ alignment st ).
 
   Lemma safe_invariant :
     invariantFor

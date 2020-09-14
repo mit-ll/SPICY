@@ -208,10 +208,55 @@ Inductive step {t__hon t__adv : type} :
     -> step (ru, iu, b) (ru', iu, false)
 .
 
+Inductive indexedModelStep {t__hon t__adv : type} (uid : user_id) :
+    @ModelState t__hon t__adv 
+  -> @ModelState t__hon t__adv
+  -> Prop :=
+| RealSilenti : forall ru ru' iu b,
+    indexedRealStep uid Silent ru ru'
+    -> indexedModelStep uid (ru, iu, b) (ru', iu, b)
+| BothLoudi : forall ru ru' iu iu' iu'' ra ia b,
+    indexedRealStep uid (Action ra) ru ru'
+    -> (indexedIdealStep uid Silent) ^* iu iu'
+    -> indexedIdealStep uid (Action ia) iu' iu''
+    -> action_matches ru.(all_ciphers) ru.(all_keys) ra ia
+    -> labels_align (ru, iu, b)
+    -> indexedModelStep uid (ru, iu, b) (ru', iu'', b)
+| MisalignedCanStepi : forall ru ru' iu iu' iu'' ra ia b,
+    indexedRealStep uid (Action ra) ru ru'
+    -> (indexedIdealStep uid Silent) ^* iu iu'
+    -> indexedIdealStep uid (Action ia) iu' iu''
+    -> ~ labels_align (ru, iu, b)
+    -> indexedModelStep uid (ru, iu, b) (ru', iu'', false)
+| MisalignedCantStepi : forall ru ru' iu iu' ra b,
+    indexedRealStep uid (Action ra) ru ru'
+    -> (indexedIdealStep uid Silent) ^* iu iu'
+    -> (forall lbl iu'', indexedIdealStep uid lbl iu' iu'' -> False)
+    -> ~ labels_align (ru, iu, b)
+    -> indexedModelStep uid (ru, iu, b) (ru', iu, false)
+.
+
+Lemma indexedModelStep_step :
+  forall t__hon t__adv uid st st',
+    @indexedModelStep t__hon t__adv uid st st'
+    -> step st st'.
+Proof.
+  intros.
+  invert H; [
+    econstructor 1
+  | econstructor 2
+  | econstructor 3
+  | econstructor 4 ]; eauto.
+
+  invert H0; econstructor; eauto.
+Qed.
+
 Definition alignment {t__hon t__adv} (st : @ModelState t__hon t__adv) : Prop :=
-  let '(ru, iu, b) := st
-  in  b = true
-    /\ labels_align st.
+  snd st = true
+  /\ labels_align st.
+  (* let '(ru, iu, b) := st *)
+  (* in  b = true *)
+  (*   /\ labels_align st. *)
 
 Definition TrS {t__hon t__adv} (ru0 : RealWorld.universe t__hon t__adv) (iu0 : IdealWorld.universe t__hon) :=
   {| Initial := {(ru0, iu0, true)};
@@ -580,7 +625,8 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
     unfold invariantFor, SYS in H5; simpl in H5.
     assert ( (ru0,iu0,true) = (ru0,iu0,true) \/ False ) as ARG by eauto.
     specialize (H5 _ ARG _ H3).
-    unfold alignment in H5; split_ex; subst.
+    unfold alignment in H5; simpl in H5; subst.
+    split_ex; subst.
     specialize (H6 _ _ _ H0).
 
     split_ex.

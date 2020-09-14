@@ -31,6 +31,7 @@ Require Import
         Simulation
         AdversaryUniverse
         UniverseEqAutomation
+        ProtocolFunctions
         ExampleProtocols
         ProtocolAutomation
         SafeProtocol.
@@ -217,10 +218,10 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
       sets_invert; split_ex;
         simpl in *; autounfold with core;
           subst; simpl;
-            unfold safety, alignment;
+            unfold safety, alignment; unfold A,B; simpl;
             ( split;
-            [ solve_honest_actions_safe; clean_map_lookups; eauto 8
-            | split; trivial; intros; rstep; subst; solve_labels_align
+              [ solve_honest_actions_safe; clean_map_lookups; eauto 8
+              | split; trivial; intros; rstep; subst; solve_labels_align
             ]).
 
       Unshelve.
