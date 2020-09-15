@@ -237,12 +237,13 @@ Module MyProtocolSecure <: AutomatedSafeProtocol.
   Hint Unfold
        mkiU mkiUsr mkrU mkrUsr
        mkKeys
+       real_users
     : core.
 
   Lemma safe_invariant :
     invariantFor
-      {| Initial := {(ru0, iu0)}; Step := @step t__hon t__adv  |}
-      (fun st => safety st /\ labels_align st ).
+      {| Initial := {(ru0, iu0, true)}; Step := @step t__hon t__adv  |}
+      (fun st => safety st /\ alignment st ).
   Proof.
     eapply invariant_weaken.
 

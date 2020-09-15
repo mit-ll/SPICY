@@ -330,8 +330,8 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
 
   Lemma safe_invariant :
     invariantFor
-      {| Initial := {(ru0, iu0)}; Step := @step t__hon t__adv  |}
-      (fun st => safety st /\ labels_align st ).
+      {| Initial := {(ru0, iu0, true)}; Step := @step t__hon t__adv  |}
+      (fun st => safety st /\ alignment st ).
   Proof.
     eapply invariant_weaken.
 
@@ -379,19 +379,12 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
       sets_invert; split_ex;
         simpl in *; autounfold with core;
           subst; simpl;
-            unfold safety, labels_align.
-
+            unfold safety, alignment;
       (* 129 *)
-      all : ( split;
-              [ solve_honest_actions_safe; clean_map_lookups; eauto 8
-              | intros; rstep; subst; solve_labels_align
-            ] ).
-
-      (* all : *)
-      (*   (do 2 eexists); repeat simple apply conj; eauto; simpl; unfold not; intros; split_ors; try contradiction; *)
-      (*   match goal with *)
-      (*   | [ H : (_,_) = (_,_) |- _ ] => invert H *)
-      (*   end. *)
+            ( split;
+            [ solve_honest_actions_safe; clean_map_lookups; eauto 8
+            | simpl; split; trivial; intros; rstep; subst; solve_labels_align
+            ]).
 
       all: simpl; solve_honest_actions_safe.
 
@@ -399,19 +392,6 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
       all: auto.
 
   Qed.
-
-
-  (*
-
-  exists (c_id : RealWorld.cipher_id) (c : RealWorld.cipher),
-    RealWorld.SignedCiphertext x2 = RealWorld.SignedCiphertext c_id /\
-    $0 $+ (x, RealWorld.SigEncCipher 4 3 1 (Some 2, 0) (RealWorld.message.Content 0)) $+ (x0,
-    RealWorld.SigEncCipher 2 1 0 (Some 1, 0) (RealWorld.message.Content 0)) $+ (x1,
-    RealWorld.SigEncCipher 0 3 1 (Some 0, 0) (RealWorld.message.Content 10)) $+ (x2,
-    RealWorld.SigEncCipher 2 5 2 (Some 1, 1) (RealWorld.message.Content 10)) $? c_id = Some c /\
-    fst (RealWorld.cipher_nonce c) = Some 1 /\ ~ ((Some 1, 0) = RealWorld.cipher_nonce c \/ False)
-
-*)
 
   (* Show Ltac Profile. *)
   (* Show Ltac Profile "churn2". *)

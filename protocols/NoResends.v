@@ -38,8 +38,7 @@ From KeyManagement Require Import
      AdversarySafety.
 
 From protocols Require Import
-     ExampleProtocols
-     ProtocolAutomation
+     ProtocolFunctions
      SafeProtocol
      RealWorldStepLemmas
 .
@@ -47,94 +46,7 @@ From protocols Require Import
 Set Implicit Arguments.
 
 Import RealWorldNotations.
-Import SimulationAutomation.
 Import SafetyAutomation.
-
-Section TestProto.
-
-  Notation KID1 := 0.
-  Notation KID2 := 1.
-
-  Definition KEY1  := MkCryptoKey KID1 Signing AsymKey.
-  Definition KEY2  := MkCryptoKey KID2 Signing AsymKey.
-  Definition KEYS  := $0 $+ (KID1, KEY1) $+ (KID2, KEY2).
-
-  Definition A__keys := $0 $+ (KID1, true) $+ (KID2, false).
-  Definition B__keys := $0 $+ (KID1, false) $+ (KID2, true).
-
-  Definition real_univ_start :=
-    mkrU KEYS A__keys B__keys
-         (* user A *)
-         ( kp <- GenerateAsymKey Encryption
-           ; c1 <- Sign KID1 B (Permission (fst kp, false))
-           ; _  <- Send B c1
-           ; c2 <- @Recv Nat (SignedEncrypted KID2 (fst kp) true)
-           ; m  <- Decrypt c2
-           ; @Return (Base Nat) (extractContent m) )
-
-         (* user B *)
-         ( c1 <- @Recv Access (Signed KID1 true)
-           ; v  <- Verify KID1 c1
-           ; n  <- Gen
-           ; c2 <- SignEncrypt KID2 (fst (extractPermission (snd v))) A (message.Content n)
-           ; _  <- Send A c2
-           ; @Return (Base Nat) n).
-  
-End TestProto.
-
-Hint Constructors
-     HonestKey
-     syntactically_safe
-  : core.
-
-Lemma share_secret_synctactically_safe :
-  U_syntactically_safe (real_univ_start startAdv).
-Proof.
-  unfold U_syntactically_safe, real_univ_start, mkrU, mkrUsr, A__keys, B__keys; simpl; 
-    intros; subst.
-
-  destruct (u_id ==n A); destruct (u_id ==n B); subst; clean_map_lookups; simpl.
-
-  - eexists.
-
-    econstructor.
-    econstructor.
-
-    intros; econstructor; simpl; eauto.
-    econstructor; simpl; eauto.
-
-    intros; destruct (fst a ==n k_id); subst; clean_map_lookups; eauto.
-    econstructor; simpl; eauto.
-    destruct a; simpl; econstructor; eauto.
-
-    econstructor; simpl; eauto.
-    econstructor; simpl; eauto.
-
-    intros; econstructor; subst; eauto.
-    econstructor; simpl; eauto 8.
-
-  - eexists.
-
-    econstructor.
-    econstructor.
-    econstructor; eauto.
-
-    intros; econstructor; simpl.
-    econstructor; simpl; eauto 8.
-
-    intros; econstructor; simpl.
-    econstructor; simpl; eauto.
-
-    intros; econstructor; simpl; eauto.
-    econstructor; simpl; simpl.
-
-    eapply HonestKeyFromMsgVerify; eauto.
-    intros; econstructor; simpl; eauto 8.
-    intros; clean_map_lookups.
-
-    congruence.
-    eauto.
-Qed.
 
 Definition no_resends (sents : sent_nonces) :=
   NoDup sents.
@@ -175,9 +87,9 @@ Qed.
 Lemma resend_violation_step' :
   forall t__hon t__adv st st' b,
     @step t__hon t__adv st st'
-    -> lameAdv b (fst st).(adversary)
-    -> no_resends_U (fst st')
-    -> no_resends_U (fst st).
+    -> lameAdv b (fst (fst st)).(adversary)
+    -> no_resends_U (fst (fst st'))
+    -> no_resends_U (fst (fst st)).
 Proof.
   induction 1; unfold no_resends_U; rewrite !Forall_natmap_forall; destruct ru, v; simpl in *; intros.
 
@@ -194,22 +106,43 @@ Proof.
 
   - invert H; unfold build_data_step in *; simpl in *.
     destruct (uid ==n k); subst; clean_map_lookups; simpl in *; eauto.
+    + specialize (H5 k); rewrite add_eq_o in H5 by trivial.
+      specialize (H5 _ eq_refl); simpl in *.
+      eapply no_resends_user_step; eauto.
+    + specialize (H5 k); rewrite add_neq_o in H5 by congruence.
+      destruct userData; eapply step_limited_change_other_user with (u_id2 := k) in H7; eauto.
+      split_ex; split_ors; clean_map_lookups; simpl in *.
+      specialize (H5 _ H7); eauto.
+      specialize (H5 _ H7); eauto.
+
+  - invert H; unfold build_data_step in *; simpl in *.
+    destruct (uid ==n k); subst; clean_map_lookups; simpl in *; eauto.
     + specialize (H4 k); rewrite add_eq_o in H4 by trivial.
       specialize (H4 _ eq_refl); simpl in *.
       eapply no_resends_user_step; eauto.
     + specialize (H4 k); rewrite add_neq_o in H4 by congruence.
-      destruct userData; eapply step_limited_change_other_user with (u_id2 := k) in H7; eauto.
+      destruct userData; eapply step_limited_change_other_user with (u_id2 := k) in H5; eauto.
       split_ex; split_ors; clean_map_lookups; simpl in *.
-      specialize (H4 _ H7); eauto.
-      specialize (H4 _ H7); eauto.
+      specialize (H4 _ H5); eauto.
+      specialize (H4 _ H5); eauto.
+  - invert H; unfold build_data_step in *; simpl in *.
+    destruct (uid ==n k); subst; clean_map_lookups; simpl in *; eauto.
+    + specialize (H4 k); rewrite add_eq_o in H4 by trivial.
+      specialize (H4 _ eq_refl); simpl in *.
+      eapply no_resends_user_step; eauto.
+    + specialize (H4 k); rewrite add_neq_o in H4 by congruence.
+      destruct userData; eapply step_limited_change_other_user with (u_id2 := k) in H5; eauto.
+      split_ex; split_ors; clean_map_lookups; simpl in *.
+      specialize (H4 _ H5); eauto.
+      specialize (H4 _ H5); eauto.
 Qed.
 
 Lemma resend_violation_step :
   forall t__hon t__adv st st' b,
     @step t__hon t__adv st st'
-    -> lameAdv b (fst st).(adversary)
-    -> ~ no_resends_U (fst st)
-    -> ~ no_resends_U (fst st').
+    -> lameAdv b (fst (fst st)).(adversary)
+    -> ~ no_resends_U (fst (fst st))
+    -> ~ no_resends_U (fst (fst st')).
 Proof.
   unfold not; intros.
   eauto using resend_violation_step'.
@@ -218,9 +151,9 @@ Qed.
 Lemma resend_violation_steps :
   forall t__hon t__adv st st' b,
     (@step t__hon t__adv) ^* st st'
-    -> lameAdv b (fst st).(adversary)
-    -> ~ no_resends_U (fst st)
-    -> ~ no_resends_U (fst st').
+    -> lameAdv b (fst (fst st)).(adversary)
+    -> ~ no_resends_U (fst (fst st))
+    -> ~ no_resends_U (fst (fst st')).
 Proof.
   induction 1; intros; eauto.
 
