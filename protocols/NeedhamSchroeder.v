@@ -155,7 +155,7 @@ Module MyProtocol.
         (* User 1 implementation *)
         MkRUserSpec USR__A KEYS__A
                     (
-                      m1 <- Sign KID__A SERVER (MsgPair (message.Content USR__A) (message.Content USR__B))
+                      m1 <- Sign KID__S SERVER (MsgPair (message.Content USR__A) (message.Content USR__B))
                       ; _ <- Send SERVER m1
                       ; c <- @Recv (Access) (Signed KID__S true)
                       ; m2 <- Verify KID__S c
@@ -244,7 +244,9 @@ Module MyProtocolSecure <: AutomatedSafeProtocol.
     eapply invariant_weaken.
 
     - eapply multiStepClosure_ok; simpl.
-      (* Calls to gen1 will need to be addded here until the model checking terminates. *)
+      (* Calls to gen1 will need to be added here until the model checking terminates. *)
+      gen1.
+      gen1.
       gen1.
       gen1.
       
@@ -257,7 +259,7 @@ Module MyProtocolSecure <: AutomatedSafeProtocol.
           subst; simpl;
             unfold safety, labels_align;
             ( split;
-            [ solve_honest_actions_safe; clean_map_lookups; eauto 8
+            [ solve_honest_actions_safe; clean_map_lookups; eauto 10
             | intros; rstep; subst; solve_labels_align
             ]).
       
