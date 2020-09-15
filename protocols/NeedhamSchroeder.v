@@ -61,9 +61,9 @@ Module MyProtocol.
     Import IdealWorld.
 
     (* Initial communication channels so each user can talk directly to the other *)
-    Notation pCHS := 0.
-    Notation pCHA := 1.
-    Notation pCHB := 2.
+    Notation pCHA := 0.
+    Notation pCHB := 1.
+    Notation pCHS := 2.
     Notation CHS  := (# pCHS).
     Notation CHA  := (# pCHA).
     Notation CHB  := (# pCHB).
@@ -78,8 +78,12 @@ Module MyProtocol.
     Notation PERMS__B := ($0 $+ (pCHS, owner) $+ (pCHB, owner)).
 
     Definition Iserver_db := ($0
-                            $+ (USR__A, (Permission {| ch_perm := writer ; ch_id := pCHA|}))
-                            $+ (USR__B, (Permission {| ch_perm := writer ; ch_id := pCHB|}))).
+                               $+ (USR__A, (Permission {| ch_perm := writer ; ch_id := pCHA|}))
+                               $+ (USR__B, (Permission {| ch_perm := writer ; ch_id := pCHB|}))).
+
+    Definition user_lookup_db := ($0
+                                   $+ (USR__A, CHA)
+                                   $+ (USR__B, CHB)).
 
     (* Fill in the users' protocol specifications here, adding additional users as needed.
      * Note that all users must return an element of the same type, and that type needs to 
@@ -89,7 +93,7 @@ Module MyProtocol.
       [
        mkiUsr USR__A PERMS__A
               (
-                _ <- Send (MsgPair (Content pCHA) (Content USR__B)) CHS
+                _ <- Send (MsgPair (Content USR__A) (Content USR__B)) CHS
                 ; B <- @Recv Access CHS
                 ; m <- Gen
                 ; _ <- Send (Content m) (# match B with Permission b => b.(ch_id)  end)
@@ -244,6 +248,16 @@ Module MyProtocolSecure <: AutomatedSafeProtocol.
 
     - eapply multiStepClosure_ok; simpl.
       (* Calls to gen1 will need to be added here until the model checking terminates. *)
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
       gen1.
       gen1.
       gen1.
