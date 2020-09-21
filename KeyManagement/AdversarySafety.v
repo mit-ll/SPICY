@@ -4892,6 +4892,97 @@ Proof.
          (B := B)
          (U__r := U__ra)
          (R' := (fun ur ui => R (strip_adversary_simpl ur) ui)); auto.
-  Qed.
+Qed.
+
+(* Inductive inout := *)
+(* | SendAct (uid : user_id) *)
+(* | RecAct (uid : user_id). *)
+
+(* Section SimpleTrCouldGenerate. *)
+(*   Section RW. *)
+(*     Import RealWorld. *)
+
+(*     Inductive trRCouldGenerate : forall {A B}, *)
+(*         universe A B -> list inout -> Prop := *)
+(*     | TrRCgNothing : forall A B (U : universe A B), *)
+(*         trRCouldGenerate U [] *)
+(*     | TrRCgSilent : forall A B (U U' : universe A B) acts, *)
+(*         RealWorld.step_universe U Silent U' *)
+(*         -> trRCouldGenerate U' acts *)
+(*         -> trRCouldGenerate U  acts *)
+(*     | TrRCgLabeled : forall A B (U U': universe A B) usrs adv cs gks acts u_id userData *)
+(*                     ks qmsgs cmd mycs froms sents cur_n a io, *)
+(*         step_user (Action a) (Some u_id) *)
+(*                     (build_data_step U userData) *)
+(*                     (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
+(*         -> U.(users) $? u_id = Some userData *)
+(*         -> U' = buildUniverse usrs adv cs gks u_id {| key_heap  := ks *)
+(*                                                      ; msg_heap  := qmsgs *)
+(*                                                      ; protocol  := cmd *)
+(*                                                      ; c_heap    := mycs *)
+(*                                                      ; from_nons := froms *)
+(*                                                      ; sent_nons := sents *)
+(*                                                      ; cur_nonce := cur_n |} *)
+(*         -> io = match a with *)
+(*                | Input _ _ _ => RecAct u_id *)
+(*                | Output _ _ _ _ => SendAct u_id *)
+(*                end *)
+(*         -> trRCouldGenerate U' acts *)
+(*         -> trRCouldGenerate U (io :: acts) *)
+(*     . *)
+(*   End RW. *)
+(*   Section IW. *)
+(*     Import IdealWorld. *)
+
+(*     Inductive TrICouldGenerate : forall {A}, *)
+(*         universe A -> list inout -> Prop := *)
+(*     | ICgNothing : forall A (U : universe A), *)
+(*         TrICouldGenerate U [] *)
+(*     | ICgSilent : forall A (U U' : universe A) acts, *)
+(*         istepSilent U U' *)
+(*         -> TrICouldGenerate U' acts *)
+(*         -> TrICouldGenerate U acts *)
+(*     | ICgLabeled : forall A (U U' : IdealWorld.universe A) acts a, *)
+(*         IdealWorld.lstep_universe U (Action a) U' *)
+(*         -> TrICouldGenerate U' acts *)
+(*         -> TrICouldGenerate U (a :: acts) *)
+(*     . *)
+    
+
+(* | Input  t (msg : crypto t) (pat : msg_pat) (froms : recv_nonces) *)
+(* | Output t (msg : crypto t) (from_user : option user_id) (to_user : option user_id) (sents : sent_nonces) *)
+
+(*          Inductive rCouldGenerate : forall {A B}, *)
+(*     RealWorld.universe A B -> list RealWorld.action -> Prop := *)
+(* | RCgNothing : forall A B (U : RealWorld.universe A B), *)
+(*     rCouldGenerate U [] *)
+(* | RCgSilent : forall A B (U U' : RealWorld.universe A B) acts, *)
+(*       RealWorld.step_universe U Silent U' *)
+(*     -> rCouldGenerate U' acts *)
+(*     -> rCouldGenerate U acts *)
+(* | RCgLabeled : forall A B (U U' : RealWorld.universe A B) acts a, *)
+(*       RealWorld.step_universe U (Action a) U' *)
+(*     -> rCouldGenerate U' acts *)
+(*     -> rCouldGenerate U (a :: acts) *)
+(* . *)
+
+(* Inductive iCouldGenerate : forall {A}, *)
+(*     IdealWorld.universe A -> list IdealWorld.action -> Prop := *)
+(* | ICgNothing : forall A (U : IdealWorld.universe A), *)
+(*     iCouldGenerate U [] *)
+(* | ICgSilent : forall A (U U' : IdealWorld.universe A) acts, *)
+(*       istepSilent U U' *)
+(*     -> iCouldGenerate U' acts *)
+(*     -> iCouldGenerate U acts *)
+(* | ICgLabeled : forall A (U U' : IdealWorld.universe A) acts a, *)
+(*       IdealWorld.lstep_universe U (Action a) U' *)
+(*     -> iCouldGenerate U' acts *)
+(*     -> iCouldGenerate U (a :: acts) *)
+(* . *)
+
+
+
+
+
 
 Print Assumptions refines_could_generate.

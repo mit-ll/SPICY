@@ -224,6 +224,8 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
               | split; trivial; intros; rstep; subst; solve_labels_align
             ]).
 
+      all: unfold B__keys, KID1, KID2 in *; solve_merges.
+
       Unshelve.
       all: auto.
 

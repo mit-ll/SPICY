@@ -140,19 +140,19 @@ Ltac m_equal :=
 
 Section ConcreteMaps.
 
-  Definition next_key {V} (m : ChMap.t V) : channel_id :=
+  Definition next_key_nat {V} (m : ChMap.t V) : nat :=
     match O.max_elt m with
-    | None => Single 0
-    | Some (Single k, v) => Single (S k)
-    | Some (k1 #& k2, v) => Single 0
+    | None => 0
+    | Some (Single k, v) => S k
+    | Some (k1 #& k2, v) => 0
     end.
 
   Lemma next_key_not_in :
     forall {V} (m : ChMap.t V) k,
-      k = next_key m
+      k = # (next_key_nat m)
       -> m #? k = None.
   Proof.
-    unfold next_key; intros.
+    unfold next_key_nat; intros.
     cases (O.max_elt m); subst.
     - destruct p; simpl.
       destruct k.

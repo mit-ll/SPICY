@@ -357,38 +357,75 @@ Module SimulationAutomation.
   Ltac rstep_univ uid :=
     eapply  RealWorld.StepUser; simpl; swap 2 3; [ pick_user uid | ..]; (try eapply @eq_refl); simpl.
 
-  Ltac solve_ideal_step_stuff :=
-    repeat (
-        match goal with
-        | [ H : # ?x = # ?y -> False |- _ ] => assert (x <> y) by congruence; clear H
-        | [ |- Forall _ _ ] => econstructor
-        | [ |- {| IdealWorld.channel_vector := _; IdealWorld.users := _ |} = _] => smash_universe; solve_concrete_maps
-        | [ |- _ = {| IdealWorld.channel_vector := _; IdealWorld.users := _ |}] => smash_universe; solve_concrete_maps
-        | [ |- IdealWorld.screen_msg _ _ ] => econstructor
-        | [ |- IdealWorld.permission_subset _ _ ] => econstructor
-        | [ |- IdealWorld.check_perm _ _ _ ] => unfold IdealWorld.check_perm
-        | [ |- ?m #? (# ?k) = None ] =>
-          solve [ is_evar k; unify (# k) (ChMaps.next_key m); apply ChMaps.next_key_not_in; trivial ] 
-        | [ |- (match ?m $+ (?kid1,_) $? ?kid1 with _ => _ end) ] => rewrite add_eq_o by trivial
-        | [ |- (match ?m $+ (?kid2,_) $? ?kid1 with _ => _ end) ] => rewrite add_neq_o by solve_simple_ineq (* auto 2 *)
-        | [ |- context [ #0 #? _ ]] => rewrite ChMaps.ChMap.lookup_empty_none
-        | [ |- _ = _ ] => reflexivity
-        | [ |- context [ _ $? _ ] ] => solve_concrete_maps
-        | [ |- context [ _ #? _ ] ] => solve_concrete_maps
-        end; simpl).
+  Ltac rw H :=
+    (rewrite ChMaps.ChMap.F.add_neq_o in H by congruence)
+    || (rewrite ChMaps.ChMap.F.add_eq_o in H by congruence).
 
-  (* match goal with *)
-  (* | [ |- Forall _ _ ] => econstructor *)
-  (* | [ |- {| IdealWorld.channel_vector := _; IdealWorld.users := _ |} = _] => smash_universe; solve_concrete_maps *)
-  (* | [ |- _ = {| IdealWorld.channel_vector := _; IdealWorld.users := _ |}] => smash_universe; solve_concrete_maps *)
-  (* | [ |- IdealWorld.screen_msg _ _ ] => econstructor *)
-  (* | [ |- IdealWorld.permission_subset _ _ ] => econstructor *)
-  (* | [ |- IdealWorld.check_perm _ _ _ ] => unfold IdealWorld.check_perm *)
-  (* | [ |- context [ _ #? _ ] ] => solve_concrete_maps *)
-  (* | [ |- ?m #? (# ?k) = None ] => *)
-  (*   solve [ is_evar k; unify (# k) (ChMaps.next_key m); apply ChMaps.next_key_not_in; trivial ]  *)
-  (* | [ |- _ = _ ] => reflexivity *)
-  (* end; simpl). *)
+  Ltac solve_ideal_step_stuff1 :=
+    match goal with
+    | [ H : context [ _ #+ (_,_) #? _ ] |- _ ] => progress (repeat rw H)
+    | [ Heq : ?k = _, H : _ #+ (?k1,_) #? ?k2 = None |- _ ] =>
+      match k2 with
+      | # k => idtac k
+      | _ => fail 1
+      end;
+      assert (k1 <> k2)
+        by (destruct (ChMaps.ChMap.F.eq_dec k1 k2); clear Heq; try assumption;
+            unfold ChMaps.ChannelType.eq in *; subst; ChMaps.ChMap.clean_map_lookups);
+      ChMaps.ChMap.clean_map_lookups
+    | [ H : # ?x = # ?y -> False |- _ ] => assert (x <> y) by congruence; clear H
+    | [ |- Forall _ _ ] => econstructor
+    | [ |- {| IdealWorld.channel_vector := _; IdealWorld.users := _ |} = _] => smash_universe; solve_concrete_maps
+    | [ |- _ = {| IdealWorld.channel_vector := _; IdealWorld.users := _ |}] => smash_universe; solve_concrete_maps
+    | [ |- IdealWorld.screen_msg _ _ ] => econstructor
+    | [ |- IdealWorld.permission_subset _ _ ] => econstructor
+    | [ |- IdealWorld.check_perm _ _ _ ] => unfold IdealWorld.check_perm
+    | [ |- ?m #? (# ?k) = None ] =>
+      solve [ is_evar k; unify k (ChMaps.next_key_nat m); apply ChMaps.next_key_not_in; trivial ]
+    | [ |- context [ ChMaps.next_key_nat ?m ]] =>
+      match goal with
+      | [ |- context [ IdealWorld.addMsg ] ] => unfold IdealWorld.addMsg; simpl
+      | _ => 
+        idtac "posing"
+        ; pose proof (ChMaps.next_key_not_in m _ eq_refl)
+        ; let k := fresh "k" in
+          let Heq := fresh "Heq"
+          in remember (ChMaps.next_key_nat m) as k eqn:Heq
+      end
+    | [ |- (match ?m $+ (?kid1,_) $? ?kid1 with _ => _ end) ] => rewrite add_eq_o by trivial
+    | [ |- (match ?m $+ (?kid2,_) $? ?kid1 with _ => _ end) ] => rewrite add_neq_o by solve_simple_ineq (* auto 2 *)
+    | [ |- context [ #0 #? _ ]] => rewrite ChMaps.ChMap.lookup_empty_none
+    | [ |- _ = _ ] => subst; reflexivity
+    | [ |- context [ _ $? _ ] ] => solve_concrete_maps
+    | [ |- context [ _ #? _ ] ] => solve_concrete_maps
+    end; simpl.
+
+  Ltac solve_ideal_step_stuff := repeat solve_ideal_step_stuff1.
+
+  (* Ltac solve_ideal_step_stuff := *)
+  (*   repeat ( *)
+  (*       match goal with *)
+  (*       | [ H : # ?x = # ?y -> False |- _ ] => assert (x <> y) by congruence; clear H *)
+  (*       | [ |- Forall _ _ ] => econstructor *)
+  (*       | [ |- {| IdealWorld.channel_vector := _; IdealWorld.users := _ |} = _] => smash_universe; solve_concrete_maps *)
+  (*       | [ |- _ = {| IdealWorld.channel_vector := _; IdealWorld.users := _ |}] => smash_universe; solve_concrete_maps *)
+  (*       | [ |- IdealWorld.screen_msg _ _ ] => econstructor *)
+  (*       | [ |- IdealWorld.permission_subset _ _ ] => econstructor *)
+  (*       | [ |- IdealWorld.check_perm _ _ _ ] => unfold IdealWorld.check_perm *)
+  (*       | [ |- ?m #? (# ?k) = None ] => *)
+  (*         solve [ is_evar k; unify k (ChMaps.next_key_nat m); apply ChMaps.next_key_not_in; trivial ] *)
+  (*       | [ |- context [ ChMaps.next_key_nat ?m ]] => *)
+  (*         pose proof (ChMaps.next_key_not_in m _ eq_refl) *)
+  (*         ; let k := fresh "k" in *)
+  (*           let Heq := fresh "Heq" *)
+  (*           in remember (ChMaps.next_key_nat m) as k eqn:Heq *)
+  (*       | [ |- (match ?m $+ (?kid1,_) $? ?kid1 with _ => _ end) ] => rewrite add_eq_o by trivial *)
+  (*       | [ |- (match ?m $+ (?kid2,_) $? ?kid1 with _ => _ end) ] => rewrite add_neq_o by solve_simple_ineq (* auto 2 *) *)
+  (*       | [ |- context [ #0 #? _ ]] => rewrite ChMaps.ChMap.lookup_empty_none *)
+  (*       | [ |- _ = _ ] => subst; reflexivity *)
+  (*       | [ |- context [ _ $? _ ] ] => solve_concrete_maps *)
+  (*       | [ |- context [ _ #? _ ] ] => solve_concrete_maps *)
+  (*       end; simpl). *)
 
   Ltac isilent_step_univ uid :=
     eapply IdealWorld.LStepUser'; simpl; swap 2 3; [ pick_user uid | ..]; (try simple eapply @eq_refl);
@@ -725,7 +762,7 @@ Module SimulationAutomation.
       | [ |- context [_ || true]  ] => rewrite orb_true_r
       | [ |- context [$0 $k++ _] ] => rewrite merge_perms_left_identity
       | [ |- context [_ $k++ $0] ] => rewrite merge_perms_right_identity
-      | [ |- context [_ $k++ _]  ] => erewrite reduce_merge_perms; clean_map_lookups; eauto
+      | [ |- context [_ $k++ _]  ] => erewrite reduce_merge_perms by (clean_map_lookups; eauto)
       end; trivial.
 
   Ltac simplify_terms :=
@@ -738,6 +775,71 @@ Module SimulationAutomation.
     unfold RealWorld.honest_keyb;
     unfold RealWorld.cipher_nonce;
     unfold add_key_perm.
+
+  Ltac assert_lkp ks k tac :=
+    let ev' := fresh "ev"
+    in  evar (ev' : option bool);
+        let ev := eval unfold ev' in ev'
+          in (clear ev'
+              ; match ks with
+                | ?ks1 $k++ ?ks2 => assert (ks $? k = ev) by tac
+                | _ => assert (ks $? k = ev) by tac
+                end).
+
+  Ltac bldLkup ks k tac :=
+    match goal with
+    | [ H : ks $? k = ?ans |- _ ] => idtac (* idtac "done with: " ks *)
+    | _ => 
+      match ks with
+      | ?ks1 $k++ ?ks2 => (* idtac "splitting: " ks1 " and " ks2; *) bldLkup ks1 k tac; bldLkup ks2 k tac
+      | _ => idtac (* "will build: " ks *)
+      end; assert_lkp ks k tac
+    end.
+
+  Ltac prove_lookup :=
+    solve [
+        repeat
+          match goal with
+          | [ |- None = _ ] => reflexivity
+          | [ |- Some _ = _ ] => reflexivity
+          | [ |- $0 $? _ = _ ] => rewrite lookup_empty_none
+          | [ |- ?ks $+ (?k1,_) $? ?k2 = _ ] =>
+            (rewrite add_eq_o by trivial)
+            || (rewrite add_neq_o by auto 2)
+            || fail 2
+          | [ |- ?m $? _ = _ ] => progress (unfold m)
+          | [ H1 : ?ks1 $? ?kid = Some _
+                   , H2 : ?ks2 $? ?kid = Some _ |- ?ks1 $k++ ?ks2 $? ?kid = _ ]
+            => rewrite (merge_perms_chooses_greatest _ _ H1 H2) by trivial; unfold greatest_permission; simpl
+          | [ H1 : ?ks1 $? ?kid = Some _
+                   , H2 : ?ks2 $? ?kid = None |- ?ks1 $k++ ?ks2 $? ?kid = _ ]
+            => rewrite (merge_perms_adds_ks1 _ _ _ H1 H2) by trivial
+          | [ H1 : ?ks1 $? ?kid = None
+                   , H2 : ?ks2 $? ?kid = Some _ |- ?ks1 $k++ ?ks2 $? ?kid = _ ]
+            => rewrite (merge_perms_adds_ks2 _ _ _ H1 H2) by trivial
+          | [ H1 : ?ks1 $? ?kid = None
+                   , H2 : ?ks2 $? ?kid = None |- ?ks1 $k++ ?ks2 $? ?kid = _ ]
+            => rewrite (merge_perms_adds_no_new_perms _ _ _ H1 H2) by trivial
+          | [ H : ?ks1 $? ?kid = _ |- ?ks1 $k++ ?ks2 $? ?kid = _ ] =>
+            assert_lkp ks2 kid prove_lookup
+          | [ H : ?ks2 $? ?kid = _ |- ?ks1 $k++ ?ks2 $? ?kid = _ ] =>
+            assert_lkp ks1 kid prove_lookup
+          | [ |- ?ks1 $k++ ?ks2 $? ?kid = _ ] =>
+            assert_lkp ks1 kid prove_lookup
+            ; assert_lkp ks2 kid prove_lookup
+          end
+      ].
+
+  Ltac solve_merges :=
+    repeat
+      match goal with
+      | [ |- context [true || _]  ] => rewrite orb_true_l
+      | [ |- context [_ || true]  ] => rewrite orb_true_r
+      | [ |- context [ _ $k++ $0 ] ] => rewrite merge_perms_right_identity
+      | [ |- context [ $0 $k++ _ ] ] => rewrite merge_perms_left_identity
+      | [ RW : ?ks $? ?k = _ |- context [ ?ks $? ?k ] ] => rewrite RW
+      | [ |- context [ ?ks $? ?k ] ] => (* idtac "building: " ks; *) bldLkup ks k prove_lookup
+      end; trivial.
 
   Ltac solve_honest_actions_safe1 :=
     match goal with
@@ -765,12 +867,14 @@ Module SimulationAutomation.
     (* | [ |- context [ add_key_perm _ _ _ ] ] => unfold add_key_perm *)
     | [ |- RealWorld.msg_pattern_safe _ _ ] => econstructor
     | [ |- RealWorld.honest_key _ _ ] => econstructor
-    | [ |- context [_ $k++ _ $? _ ] ] => progress solve_concrete_perm_merges
+    (* | [ |- context [_ $k++ _ $? _ ] ] => progress solve_concrete_perm_merges *)
+    | [ |- context [_ $k++ _ $? _ ] ] => progress solve_merges
     | [ |- context [ ?m $? _ ] ] => unfold m
     | [ |- Forall _ _ ] => econstructor
     | [ |- exists x y, (_ /\ _)] => (do 2 eexists); repeat simple apply conj; eauto 2
     | [ |- _ /\ _ ] => repeat simple apply conj
     (* | [ |- context [ _ = RealWorld.cipher_nonce _ ]] => progress (simpl) *)
+    | [ |- ~ List.In _ _ ] => progress simpl
     | [ |- ~ (_ \/ _) ] => unfold not; intros; split_ors; subst; try contradiction
     | [ H : (_,_) = (_,_) |- _ ] => invert H
     end.
@@ -1330,10 +1434,16 @@ Module Gen.
         || match goal with
           | [ H : True |- _ ] => clear H
           | [ H : ?X = ?X |- _ ] => clear H
-          | [ H : ?x <> ?y |- _ ] => concrete x; concrete y; clear H
-          | [ H : ?x = ?y -> False |- _ ] => concrete x; concrete y; clear H
-          (* | [ H : ?x <> ?y |- _ ] => concrete x; concrete y; clear H *)
-          (* | [ H : ?x = ?y |- _] => assert (x = y) as EQ by (clear H; trivial); clear H; clear EQ *)
+          | [ H : ?x <> ?y |- _ ] =>
+            match type of x with
+            | nat => concrete x; concrete y; clear H
+            end
+          | [ H : ?x = ?y -> False |- _ ] =>
+            match type of x with
+            | nat => concrete x; concrete y; clear H
+            end
+          (* | [ H : ?x <> ?y |- _ ] => assert (x <> y) by (clear H; congruence); clear H *)
+          (* | [ H : ?x = ?y -> False |- _ ] => assert (x = y -> False) by (clear H; congruence); clear H *)
           | [ H: RealWorld.keys_mine _ $0 |- _ ] => clear H
           | [ H : _ $+ (?k1,_) $? ?k2 = None |- _ ] =>
               (rewrite add_neq_o in H by solve_simple_ineq)
@@ -1355,8 +1465,6 @@ Module Gen.
           | [ H : mkKeys _ $? _ = _ |- _ ] => unfold mkKeys in H; simpl in H
           | [ H : ?m $? _ = _ |- _ ] => progress (unfold m in H)
           | [ H : RealWorld.msg_accepted_by_pattern _ _ _ _ _ |- _ ] => invert H
-          (* | [ H : IdealWorld.msg_permissions_valid _ _ |- _ ] => *)
-          (*   generalize (Forall_inv H); generalize (Forall_inv_tail H); clear H; intros *)
           | [ H : IdealWorld.screen_msg _ _ |- _ ] => invert H
           | [ H : IdealWorld.permission_subset _ _ |- _ ] => invert H
           | [ H : context [ IdealWorld.addMsg _ _ _ ] |- _ ] => unfold IdealWorld.addMsg in H; simpl in H
@@ -1367,7 +1475,10 @@ Module Gen.
           | [ H : context [_ || false]  |- _] => rewrite orb_false_r in H
           | [ H : context [$0 $k++ _] |- _] => rewrite merge_perms_left_identity in H
           | [ H : context [_ $k++ $0] |- _] => rewrite merge_perms_right_identity in H
-          | [ H : context [_ $k++ _]  |- _] => erewrite reduce_merge_perms in H; clean_map_lookups; eauto
+          | [ H : context [_ $k++ _]  |- _] =>
+            erewrite reduce_merge_perms in H by (clean_map_lookups; eauto)
+          | [ H : context [_ $k++ _]  |- _] =>
+            unfold merge_perms, add_key_perm, fold in H; simpl in H; clean_map_lookups
           | [ H : context [match ?m $? _ with _ => _ end] |- _] => progress (unfold m in H)
           | [ H : match _ $+ (?k1,_) $? ?k2 with _ => _ end = _ |- _ ] =>
             (rewrite add_neq_o in H by solve_simple_ineq)
