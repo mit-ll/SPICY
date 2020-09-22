@@ -89,7 +89,7 @@ Module ShareSecretSymmetricEncProtocol.
               ( m <- @Recv Access CH12
                 ; chid <- CreateChannel
                 ; _ <- Send (sharePerm chid owner) (getPerm m #& pCH21)
-                ; m <- @Recv Nat (getPerm m #& pCH21)
+                ; m <- @Recv Nat (chid #& pCH12)
                 ; @Return (Base Nat) (extractContent m)
       ))
       ].
@@ -137,6 +137,7 @@ Module ShareSecretSymmetricEncProtocol.
                     ; v  <- Verify KID1 c1
                     ; kp <- GenerateSymKey Encryption
                     ; c2 <- SignEncrypt KID2 (getKey (snd v)) USR1 (sharePrivKey kp)
+                    ; _  <- Send USR1 c2
                     ; c3 <- @Recv Nat (SignedEncrypted KID1 (fst kp) true)
                     ; m  <- Decrypt c3
                     ; @Return (Base Nat) (extractContent m) )
@@ -158,7 +159,7 @@ End ShareSecretSymmetricEncProtocol.
 
 Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
 
-  Import ShareSecretProtocol.
+  Import ShareSecretSymmetricEncProtocol.
 
   Definition t__hon := Nat.
   Definition t__adv := Unit.
@@ -171,8 +172,26 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
   Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start real_univ_start : core.
   Hint Unfold
        mkiU mkiUsr mkrU mkrUsr
+       sharePerm getPerm
+       sharePrivKey sharePubKey getKey
        mkKeys
     : core.
+
+  Lemma next_key_natmap_exists :
+    forall {V} (m : NatMap.t V),
+    exists k, m $? k = None.
+  Proof.
+    intros.
+    exists (next_key m); eauto using Maps.next_key_not_in.
+  Qed.
+
+  Lemma next_key_chmap_exists :
+    forall {V} (m : ChMap.t V),
+    exists k, m #? (# k) = None.
+  Proof.
+    intros.
+    exists (next_key_nat m); eauto using next_key_not_in.
+  Qed.
 
   Lemma safe_invariant :
     invariantFor
@@ -204,6 +223,16 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
       gen1.
       gen1.
       gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
       
     - intros.
       simpl in *.
@@ -213,8 +242,8 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
           subst; simpl;
             unfold safety, alignment;
             ( split;
-            [ solve_honest_actions_safe; clean_map_lookups; eauto 8
-            | simpl; split; trivial; intros; rstep; subst; solve_labels_align
+            [ try solve [ solve_honest_actions_safe; clean_map_lookups; eauto 8 ]
+            | try solve [ simpl; split; trivial; intros; rstep; subst; solve_labels_align ]
             ]).
       
       Unshelve.
