@@ -115,7 +115,7 @@ Module MyProtocol.
               (
                 m__r <- @Recv (TPair Nat Nat) CHS
                 ; _ <- match Iserver_db $? (extractContent (msgSnd m__r)) with 
-                      | Some p => Send p (# (extractContent (msgFst m__r)))
+                      | Some p => Send p CHS
                       | _ => @Return (Base Unit) tt
                       end
                 ; @Return (Base Nat) 1
@@ -171,11 +171,7 @@ Module MyProtocol.
                     )
         ; 
 (* User 2 implementation *)
-      MkRUserSpec USR__B KEYS__B
-                  (
-                    c <- @Recv (Nat) (SignedEncrypted KID__S KID__B true)
-                    ; m <- Decrypt c
-                    ; @Return (Base Nat) (extractContent m)
+      MkRUserSpec USR__B KEYS__B (c <- @Recv (Nat) (SignedEncrypted KID__S KID__B true) ; m <- Decrypt c ; @Return (Base Nat) (extractContent m)
                   ) 
         ; 
 (* User 2 implementation *)
@@ -257,11 +253,40 @@ Module MyProtocolSecure <: AutomatedSafeProtocol.
       gen1.
       gen1.
       gen1.
+      gen1. 
       gen1.
       gen1.
       gen1.
-      gen1.
-      gen1.
+      gen1. (* breaks here *)
+      (* gen1. *)
+      (* gen1. *)
+      match goal with 
+    | [|- multiStepClosure _ (_ \cup ?wl) ?wl _] =>
+      eapply msc_step_alt
+      ; [ solve[ unfold oneStepClosure_new; repeat gen1' ]
+        | solve[ simplify
+                 ; sets
+                 ; split_ex
+                 ; propositional
+                 ; repeat match goal with
+                          | [H : (?x1, ?y1) = ?p |- _] =>
+                            match p with
+                            | (?x2, ?y2) =>
+                              tryif (concrete x2; concrete y2)
+                              then let H' := fresh H
+                                   in assert (H' : (x1, y1) = (x2, y2) -> x1 = x2 /\ y1 = y2)
+                                     by equality
+                                      ; propositional
+                                      ; discriminate
+                              else invert H
+                            | _ => invert H
+                            end
+                          end
+               | eapply intersect_empty_l]
+        | rewrite ?union_empty_r ]
+      end.
+        
+      gen1. (* fails here *)
       gen1.
       
     (* The remaining parts of the proof script shouldn't need to change. *)
