@@ -159,6 +159,12 @@ Section IdealWorldDefs.
     {| channel_vector := cv;
        users := fold_left (fun us u => us $+ (fst u, snd u)) usrs $0
     |}.
+
+  Definition sharePerm (pid : perm_id) (p : permission) :=
+    Permission (construct_access p pid).
+
+  Definition getPerm (m : message Access) : perm_id :=
+    ch_id (extractPermission m).
     
 End IdealWorldDefs.
 
@@ -199,6 +205,15 @@ Section RealWorldDefs.
            all_keys    := gks
         |}.
 
+  Definition sharePrivKey (kp : key_permission) :=
+    Permission (fst kp, true).
+
+  Definition sharePubKey (kp : key_permission) :=
+    Permission (fst kp, false).
+
+  Definition getKey (m : message Access) : key_identifier :=
+    fst (extractPermission m).
+
 End RealWorldDefs.
 
 Definition mkKeys (ks : list key) :=
@@ -206,9 +221,19 @@ Definition mkKeys (ks : list key) :=
 
 Hint Unfold
      mkiU mkiUsr
+     sharePerm getPerm
      mkrU mkrUsr
+     sharePrivKey sharePubKey getKey
      mkKeys
      noAdv : user_build.
+
+Hint Unfold
+     mkiU mkiUsr
+     sharePerm getPerm
+     mkrU mkrUsr
+     sharePrivKey sharePubKey getKey
+     mkKeys
+     noAdv : core.
 
 Declare Scope protocol_scope.
 (* Notation "uid 'keys' ks >> p" := (MkRUserSpec uid ks p) (at level 80) : protocol_scope. *)

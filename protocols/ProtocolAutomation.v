@@ -841,6 +841,119 @@ Module SimulationAutomation.
       | [ |- context [ ?ks $? ?k ] ] => (* idtac "building: " ks; *) bldLkup ks k prove_lookup
       end; trivial.
 
+  Lemma reduce_merge_perms_r :
+    forall perms1 perms2 kid p2,
+      perms1 $? kid = None
+      -> perms1 $k++ (perms2 $+ (kid,p2)) = perms1 $+ (kid,p2) $k++ (perms2 $- kid).
+  Proof.
+    intros.
+    eapply map_eq_Equal; unfold Equal; intros.
+    cases (perms1 $? y);
+      cases (perms2 $? y);
+      destruct (kid ==n y); subst;
+        clean_map_lookups.
+
+    - erewrite !merge_perms_chooses_greatest; eauto; clean_map_lookups; try reflexivity.
+
+    - erewrite merge_perms_adds_ks1 with (ks1 := perms1) (ks2 := perms2 $+ (kid, p2)); eauto.
+      erewrite merge_perms_adds_ks1 with (ks1 := perms1 $+ (kid, p2)) (ks2 := perms2 $- kid); eauto.
+
+    - erewrite merge_perms_adds_ks2 with (ks1 := perms1) (ks2 := perms2 $+ (y, p2)); eauto.
+      erewrite merge_perms_adds_ks1 with (ks1 := perms1 $+ (y, p2)) (ks2 := perms2 $- y); eauto.
+
+    - erewrite merge_perms_adds_ks2 with (ks1 := perms1) (ks2 := perms2 $+ (kid, p2) ); eauto.
+      erewrite merge_perms_adds_ks2 with (ks1 := perms1 $+ (kid, p2)) (ks2 := perms2 $- kid); eauto.
+
+    - erewrite merge_perms_adds_ks2 with (ks1 := perms1); eauto; clean_map_lookups; try reflexivity.
+      erewrite merge_perms_adds_ks1 with (ks1 := perms1 $+ (y, p2)) (ks2 := perms2 $- y); eauto.
+
+    - rewrite !merge_perms_adds_no_new_perms; eauto.
+
+  Qed.
+
+  Lemma reduce_merge_perms_both :
+    forall perms1 perms2 kid p1 p2,
+      perms1 $? kid = Some p1
+      -> perms1 $k++ (perms2 $+ (kid,p2)) = perms1 $+ (kid,greatest_permission p1 p2) $k++ (perms2 $- kid).
+  Proof.
+    intros.
+    eapply map_eq_Equal; unfold Equal; intros.
+    cases (perms1 $? y);
+      cases (perms2 $? y);
+      destruct (kid ==n y); subst;
+        clean_map_lookups.
+
+    - erewrite merge_perms_chooses_greatest; eauto; clean_map_lookups; try reflexivity.
+      erewrite merge_perms_adds_ks1 with (ks1 := perms1 $+ (y, greatest_permission b p2)) (ks2 := perms2 $- y); eauto.
+
+    - erewrite !merge_perms_chooses_greatest; eauto; clean_map_lookups; try reflexivity.
+
+    - erewrite merge_perms_chooses_greatest; eauto; clean_map_lookups; try reflexivity.
+      erewrite merge_perms_adds_ks1 with (ks1 := perms1 $+ (y, greatest_permission b p2)) (ks2 := perms2 $- y); eauto.
+
+    - erewrite merge_perms_adds_ks1 with (ks1 := perms1) (ks2 := perms2 $+ (kid, p2)); eauto.
+      erewrite merge_perms_adds_ks1 with (ks1 := perms1 $+ (kid, greatest_permission p1 p2)) (ks2 := perms2 $- kid); eauto.
+
+    - erewrite merge_perms_adds_ks2 with (ks1 := perms1) (ks2 := perms2 $+ (kid, p2)); eauto.
+      erewrite merge_perms_adds_ks2 with (ks1 := perms1 $+ (kid, greatest_permission p1 p2)) (ks2 := perms2 $- kid); eauto.
+
+    - rewrite !merge_perms_adds_no_new_perms; eauto.
+
+  Qed.
+
+  Ltac xx := clean_map_lookups;
+             try match goal with
+                 | [ |- $0 $? _ = _ ] => rewrite lookup_empty_none
+                 end;
+             eauto.
+
+  Ltac find_merge_rewrite ks1 ks2 :=
+    match ks1 with
+    | ?ks1' $k++ ?ks2' =>
+      find_merge_rewrite ks1' ks2'
+    | _ => match ks2 with
+          | ?ks $+ (?k,?p) =>
+            assert_lkp ks1 k xx
+            ; match goal with
+              | [ H : ks1 $? k = ?opt |- _ ] =>
+                match opt with
+                | Some ?p' =>
+                  rewrite reduce_merge_perms_both with (perms1 := ks1) (perms2 := ks) (kid := k) (p1 := p') (p2 := p)
+                | None =>
+                  rewrite reduce_merge_perms_r with (perms1 := ks1) (perms2 := ks) (kid := k) (p2 := p)
+                end
+              end
+          end
+    end.
+
+  Lemma remove_empty :
+    forall k V, (@empty V) $- k = $0.
+  Proof.
+    intros.
+    eapply map_eq_Equal; unfold Equal; intros; eauto.
+  Qed.
+
+  Ltac elim_removes1 :=
+    (rewrite !map_add_remove_eq by trivial)
+    || (rewrite !map_add_remove_neq by eauto)
+    || (rewrite !remove_empty).
+
+  Ltac elim_removes := repeat elim_removes.
+
+  Ltac reduce_merges :=
+    repeat
+      match goal with
+      | [ |- context [true || _]  ] => rewrite orb_true_l
+      | [ |- context [_ || true]  ] => rewrite orb_true_r
+      | [ |- context [ _ $k++ $0 ] ] => rewrite merge_perms_right_identity
+      | [ |- context [ $0 $k++ _ ] ] => rewrite merge_perms_left_identity
+      | [ |- context [ _ $- _ ]] => elim_removes1
+      | [ |- context [ ?ks1 $k++ ?ks2 ]] =>
+        find_merge_rewrite ks1 ks2
+      | [ RW : ?ks $? ?k = _ |- context [ ?ks $? ?k ] ] => rewrite RW
+      end; trivial.
+
+
   Ltac solve_honest_actions_safe1 :=
     match goal with
     | [ H : _ = {| RealWorld.users := _;
@@ -868,6 +981,7 @@ Module SimulationAutomation.
     | [ |- RealWorld.msg_pattern_safe _ _ ] => econstructor
     | [ |- RealWorld.honest_key _ _ ] => econstructor
     (* | [ |- context [_ $k++ _ $? _ ] ] => progress solve_concrete_perm_merges *)
+    | [ |- context [_ $k++ _ ] ] => progress reduce_merges
     | [ |- context [_ $k++ _ $? _ ] ] => progress solve_merges
     | [ |- context [ ?m $? _ ] ] => unfold m
     | [ |- Forall _ _ ] => econstructor

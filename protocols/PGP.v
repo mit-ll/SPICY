@@ -5,7 +5,7 @@
  * in this material are those of the author(s) and do not necessarily reflect the views of the 
  * Department of the Air Force.
  * 
- * © 2019-2020 Massachusetts Institute of Technology.
+ * © 2020 Massachusetts Institute of Technology.
  * 
  * MIT Proprietary, Subject to FAR52.227-11 Patent Rights - Ownership by the contractor (May 2014)
  * 
@@ -50,7 +50,7 @@ Set Implicit Arguments.
 
 Open Scope protocol_scope.
 
-Module ShareSecretSymmetricEncProtocol.
+Module PGPProtocol.
 
   (* User ids *)
   Notation USR1 := 0.
@@ -67,24 +67,21 @@ Module ShareSecretSymmetricEncProtocol.
     Notation empty_chs := (#0 #+ (CH12, []) #+ (CH21, [])).
 
     Notation PERMS1 := ($0 $+ (pCH12, owner) $+ (pCH21, reader)).
-    Notation PERMS2 := ($0 $+ (pCH12, reader) $+ (pCH21, owner)).
+    Notation PERMS2 := ($0 $+ (pCH12, reader) $+ (pCH21, writer)).
 
-    Notation ideal_users :=
+    Definition ideal_users :=
       [
         (mkiUsr USR1 PERMS1 
-                ( chid <- CreateChannel
-                  ; _ <- Send (sharePerm chid writer) CH12
-                  ; m <- @Recv Access (chid #& pCH21)
-                  ; n <- Gen
-                  ; _ <- Send (Content n) (getPerm m #& pCH12)
-                  ; @Return (Base Nat) n
+                ( m1 <- @Recv Access CH21
+                  ; m2 <- @Recv Nat (getPerm m1 #& pCH21)
+                  ; @Return (Base Nat) (extractContent m2)
         )) ;
       (mkiUsr USR2 PERMS2
-              ( m <- @Recv Access CH12
-                ; chid <- CreateChannel
-                ; _ <- Send (sharePerm chid owner) (getPerm m #& pCH21)
-                ; m <- @Recv Nat (chid #& pCH12)
-                ; @Return (Base Nat) (extractContent m)
+              ( chid <- CreateChannel
+                ; _ <- Send (sharePerm chid owner) CH21
+                ; n <- Gen
+                ; _ <- Send (Content n) (chid #& pCH21)
+                ; @Return (Base Nat) n
       ))
       ].
 
@@ -95,37 +92,34 @@ Module ShareSecretSymmetricEncProtocol.
 
   Section RW.
     Import RealWorld.
+    Import RealWorld.message.
 
     Notation KID1 := 0.
     Notation KID2 := 1.
+    Notation KID3 := 2.
 
-    Notation KEYS := [ skey KID1 ; skey KID2 ].
+    Notation KEYS := [ skey KID1 ; skey KID2 ; ekey KID3 ].
 
-    Notation KEYS1 := ($0 $+ (KID1, true) $+ (KID2, false)).
-    Notation KEYS2 := ($0 $+ (KID1, false) $+ (KID2, true)).
+    Notation KEYS1 := ($0 $+ (KID1, true) $+ (KID2, false) $+ (KID3, true)).
+    Notation KEYS2 := ($0 $+ (KID1, false) $+ (KID2, true) $+ (KID3, false)).
 
     Definition real_users :=
       [
         MkRUserSpec USR1 KEYS1
-                    ( kp <- GenerateAsymKey Encryption
-                      ; c1 <- Sign KID1 USR2 (sharePubKey kp)
-                      ; _  <- Send USR2 c1
-                      ; c2 <- @Recv Access (SignedEncrypted KID2 (fst kp) true)
-                      ; m  <- Decrypt c2
-                      ; n  <- Gen
-                      ; c3 <- SignEncrypt KID1 (getKey m) USR2 (message.Content n)
-                      ; _  <- Send USR2 c3
-                      ; @Return (Base Nat) n) ;
+                    ( c1 <- @Recv Access (SignedEncrypted KID2 KID3 true)
+                      ; m1 <- Decrypt c1
+                      ; c2 <- @Recv Nat (SignedEncrypted KID2 (getKey m1) true)
+                      ; m2 <- Decrypt c2
+                      ; @Return (Base Nat) (extractContent m2)) ;
 
       MkRUserSpec USR2 KEYS2
-                  ( c1 <- @Recv Access (Signed KID1 true)
-                    ; v  <- Verify KID1 c1
-                    ; kp <- GenerateSymKey Encryption
-                    ; c2 <- SignEncrypt KID2 (getKey (snd v)) USR1 (sharePrivKey kp)
+                  ( kp <- GenerateSymKey Encryption
+                    ; c1 <- SignEncrypt KID2 KID3 USR1 (sharePrivKey kp)
+                    ; _  <- Send USR1 c1
+                    ; n  <- Gen
+                    ; c2 <- SignEncrypt KID2 (fst kp) USR1 (Content n)
                     ; _  <- Send USR1 c2
-                    ; c3 <- @Recv Nat (SignedEncrypted KID1 (fst kp) true)
-                    ; m  <- Decrypt c3
-                    ; @Return (Base Nat) (extractContent m) )
+                    ; @Return (Base Nat) n )
       ].
 
     Definition real_univ_start :=
@@ -140,11 +134,11 @@ Module ShareSecretSymmetricEncProtocol.
   Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
     progress(autounfold with user_build; simpl).
   
-End ShareSecretSymmetricEncProtocol.
+End PGPProtocol.
 
-Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
+Module PGPProtocolSecure <: AutomatedSafeProtocol.
 
-  Import ShareSecretSymmetricEncProtocol.
+  Import PGPProtocol.
 
   Definition t__hon := Nat.
   Definition t__adv := Unit.
@@ -180,16 +174,6 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
     eapply invariant_weaken.
 
     - eapply multiStepClosure_ok; simpl.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
       gen1.
       gen1.
       gen1.
@@ -303,7 +287,7 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
   Qed.
   
 
-End ShareSecretProtocolSecure.
+End PGPProtocolSecure.
 
 (*
  * 1) make protocols  518.64s user 0.45s system 99% cpu 8:39.13 total  ~ 6.2GB
