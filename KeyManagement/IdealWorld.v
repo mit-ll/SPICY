@@ -180,8 +180,8 @@ Fixpoint add_ps_to_set {A} (m : message A) (ps : permissions) : permissions :=
   end.
 
 Inductive action : Type :=
-| Input  t (msg : message t) (ch_id : channel_id) (cs : channels) (ps : permissions)
-| Output t (msg : message t) (ch_id : channel_id) (cs : channels) (ps : permissions)
+| Input  t (msg : message t) (uid : user_id) (ch_id : channel_id) (cs : channels) (ps : permissions)
+| Output t (msg : message t) (uid : user_id) (ch_id : channel_id) (cs : channels) (ps : permissions)
 .
 
 Definition addMsg (cv : channels) (ch_id : channel_id) {t} (m : message t) : channels :=
@@ -192,49 +192,49 @@ Definition addMsg (cv : channels) (ch_id : channel_id) {t} (m : message t) : cha
 
 Definition ilabel := @label action.
 
-Inductive lstep_user : forall A, ilabel -> channels * cmd A * permissions -> channels * cmd A * permissions -> Prop :=
-| LStepBindRecur : forall {result result'} lbl (c1 c1' : cmd result') (c2 : <<result'>> -> cmd result) cv cv' ps ps',
-    lstep_user lbl (cv, c1, ps) (cv', c1', ps') ->
-    lstep_user lbl (cv, (Bind c1 c2), ps) (cv', (Bind c1' c2), ps')
-| LStepBindProceed : forall {result result'} (v : <<result'>>) (c2 : <<result'>> -> cmd result) cv ps,
-    lstep_user Silent (cv, (Bind (Return v) c2), ps) (cv, c2 v, ps)
-| LStepGen : forall cv ps n,
-    lstep_user Silent (cv, Gen, ps) (cv, Return n, ps)
-| LStepCreateChannel : forall ch_id cv ps,
+Inductive lstep_user : forall A, user_id -> ilabel -> channels * cmd A * permissions -> channels * cmd A * permissions -> Prop :=
+| LStepBindRecur : forall {result result'} uid lbl (c1 c1' : cmd result') (c2 : <<result'>> -> cmd result) cv cv' ps ps',
+    lstep_user uid lbl (cv, c1, ps) (cv', c1', ps') ->
+    lstep_user uid lbl (cv, (Bind c1 c2), ps) (cv', (Bind c1' c2), ps')
+| LStepBindProceed : forall {result result'} (v : <<result'>>) (c2 : <<result'>> -> cmd result) uid cv ps,
+    lstep_user uid Silent (cv, (Bind (Return v) c2), ps) (cv, c2 v, ps)
+| LStepGen : forall uid cv ps n,
+    lstep_user uid Silent (cv, Gen, ps) (cv, Return n, ps)
+| LStepCreateChannel : forall uid ch_id cv ps,
     cv #? (Single ch_id) = None ->
     ps $? ch_id = None ->
-    lstep_user Silent
+    lstep_user uid Silent
                (cv, CreateChannel, ps)
                (cv #+ ((Single ch_id), []), @Return ChannelId ch_id, ps $+ (ch_id, creator_permission))
-| LStepSend : forall t (cv cv' : channels) (m : message t) ch_id ps b,
+| LStepSend : forall t (cv cv' : channels) (m : message t) uid ch_id ps b,
     check_perm ch_id ps {| read := b ; write := true |} ->
     cv' = addMsg cv ch_id m ->
     screen_msg ps m ->
-    lstep_user
-      (Action (Output m ch_id cv ps))
+    lstep_user uid
+      (Action (Output m uid ch_id cv ps))
       (cv, Send m ch_id, ps) (cv', @Return (Base Unit) tt, ps)
-| LStepRecv : forall t (cv : channels) ch_d ps (m : message t) ch_id b,
+| LStepRecv : forall t (cv : channels) ch_d ps (m : message t) uid ch_id b,
     cv #? ch_id = Some ch_d
     -> check_perm ch_id ps {| read := true ; write := b |}
     -> List.In (existT _ _ m) ch_d
     (* -> ch_d = (existT _ _ m) :: ch_d' *)
     (* -> cv' = cv #+ (ch_id, ch_d') *)
-    -> lstep_user
-        (Action (Input m ch_id cv ps))
+    -> lstep_user uid
+        (Action (Input m uid ch_id cv ps))
         (cv, Recv ch_id, ps)
         (cv, @Return (Message t) m, add_ps_to_set m ps).
 
 Hint Extern 1 (check_perm _ _ _) => unfold check_perm; clean_map_lookups : core.
 
-Lemma LStepRecv' : forall t (cv : channels) ch_d ps ps' (m : message t) ch_id b,
+Lemma LStepRecv' : forall t (cv : channels) ch_d ps ps' (m : message t) uid ch_id b,
     cv #? ch_id = Some ch_d
     -> check_perm ch_id ps {| read := true ; write := b |}
     -> List.In (existT _ _ m) ch_d
     (* -> ch_d = (existT _ _ m) :: ch_d' *)
     -> ps' = add_ps_to_set m ps
     (* -> cv' = cv #+ (ch_id, ch_d') *)
-    -> lstep_user
-        (Action (Input m ch_id cv ps))
+    -> lstep_user uid
+        (Action (Input m uid ch_id cv ps))
         (cv, Recv ch_id, ps)
         (cv, @Return (Message t) m, ps').
 Proof.
@@ -244,7 +244,7 @@ Qed.
 Inductive lstep_universe : forall {A}, universe A -> ilabel -> universe A -> Prop :=
 | LStepUser : forall A (U : universe A) u_id u proto chans perms' lbl,
     U.(users) $? u_id = Some u
-    -> lstep_user lbl (U.(channel_vector), u.(protocol), u.(perms)) (chans, proto, perms')
+    -> lstep_user u_id lbl (U.(channel_vector), u.(protocol), u.(perms)) (chans, proto, perms')
     -> lstep_universe U lbl (construct_universe
                              chans
                              (U.(users) $+ (u_id, {| protocol := proto ; perms := perms' |}))).
@@ -252,7 +252,7 @@ Inductive lstep_universe : forall {A}, universe A -> ilabel -> universe A -> Pro
 
 Lemma LStepUser' : forall A (U U': universe A) u_id u proto chans perms' lbl,
     U.(users) $? u_id = Some u
-    -> lstep_user lbl (U.(channel_vector), u.(protocol), u.(perms)) (chans, proto, perms')
+    -> lstep_user u_id lbl (U.(channel_vector), u.(protocol), u.(perms)) (chans, proto, perms')
     -> U' = (construct_universe
               chans
               (U.(users) $+ (u_id, {| protocol := proto ; perms := perms' |})))

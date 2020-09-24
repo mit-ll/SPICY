@@ -103,6 +103,7 @@ Proof.
       destruct userData; eapply silent_step_nochange_other_user with (u_id2 := k) in H4; eauto.
       clean_map_lookups; simpl in *.
       specialize (H1 _ H4); eauto.
+      unfold mkULbl in *; destruct lbl; try discriminate; trivial.
 
   - invert H; unfold build_data_step in *; simpl in *.
     destruct (uid ==n k); subst; clean_map_lookups; simpl in *; eauto.

@@ -2381,12 +2381,14 @@ Section SingleAdversarySimulates.
 
       msg_queue_prop; eapply encrypted_ciphers_ok_addnl_pubk; auto.
       specialize_msg_ok; eauto.
-     Qed.
+    Qed.
+
+    Locate action_adversary_safe.
 
     Lemma honest_labeled_step_univ_ok :
-      forall {A B} (U U' : universe A B) a__r,
+      forall {A B} (U U' : universe A B) uid a__r,
         universe_ok U
-        -> step_universe U (Action a__r) U'
+        -> step_universe (Some uid) U (Action (uid, a__r)) U'
         -> action_adversary_safe (findUserKeys U.(users)) U.(all_ciphers) a__r
         -> message_queues_ok U.(all_ciphers) U.(users) U.(all_keys)
         -> universe_ok U'.
@@ -2396,6 +2398,7 @@ Section SingleAdversarySimulates.
       destruct U; destruct userData.
       unfold buildUniverse, build_data_step in *; simpl in *.
       eapply honest_labeled_step_encrypted_ciphers_ok; eauto.
+      unfold mkULbl in H7; destruct lbl; invert H7; trivial.
     Qed.
 
     Lemma honest_message_findKeysCrypto_same_after_cleaning :
@@ -2903,23 +2906,24 @@ Section SingleAdversarySimulates.
     Qed.
 
     Lemma honest_cmds_implies_safe_actions :
-      forall {A B} (U U' : universe A B) a__r,
-        step_universe U (Action a__r) U'
+      forall {A B} (U U' : universe A B) uid a__r,
+        step_universe (Some uid) U (Action (uid,a__r)) U'
         -> honest_cmds_safe U
         -> action_adversary_safe (findUserKeys U.(users)) U.(all_ciphers) a__r.
     Proof.
       invert 1; intros; eauto.
       unfold honest_cmds_safe in H.
       destruct U; destruct userData; simpl in *.
-      specialize (H _ _ _ eq_refl H0); simpl in *.
+      specialize (H _ _ _ eq_refl H1); simpl in *.
+      destruct lbl; invert H4.
       eapply honest_cmd_implies_safe_action; eauto.
       reflexivity.
     Qed.
 
     Lemma labeled_step_adv_univ_implies_adv_universe_ok :
-      forall {A B} (U U' : universe A B) lbl a,
-        step_universe U lbl U'
-        -> lbl = Action a
+      forall {A B} (U U' : universe A B) lbl uid a,
+        step_universe (Some uid) U lbl U'
+        -> lbl = Action (uid,a)
         -> honest_cmds_safe U
         -> universe_ok U
         -> adv_universe_ok U
@@ -2933,8 +2937,10 @@ Section SingleAdversarySimulates.
       destruct U; destruct userData.
       unfold build_data_step in *; simpl in *.
       split_ands.
-      specialize (H1 _ _ _ eq_refl H4);
+      specialize (H1 _ _ _ eq_refl H5);
         simpl in *.
+
+      destruct lbl; invert H8.
 
       repeat simple apply conj.
       
@@ -2950,8 +2956,8 @@ Section SingleAdversarySimulates.
     Qed.
 
     Lemma silent_step_adv_univ_implies_adv_universe_ok :
-      forall {A B} (U U' : universe A B),
-        step_universe U Silent U'
+      forall {A B} (U U' : universe A B) suid,
+        step_universe suid U Silent U'
         -> honest_cmds_safe U
         -> encrypted_ciphers_ok (findUserKeys U.(users)) U.(all_ciphers) U.(all_keys)
         -> adv_universe_ok U
@@ -2959,10 +2965,16 @@ Section SingleAdversarySimulates.
     Proof.
       intros.
       unfold honest_cmds_safe in *.
+      
       invert H;
         unfold adv_universe_ok in *;
         destruct U; [destruct userData | destruct adversary];
           unfold build_data_step in *; simpl in *;
+            destruct lbl;
+            repeat
+              match goal with
+              | [ H : Silent = mkULbl (Action _) _  |- _ ] => unfold mkULbl in H; simpl in H; discriminate
+              end;
             intuition idtac.
 
       eapply honest_silent_step_keys_good; eauto.
@@ -2978,6 +2990,19 @@ Section SingleAdversarySimulates.
       specialize (H0 _ _ _ eq_refl H3); simpl in H0.
       eapply honest_users_only_honest_keys_honest_steps; eauto.
       
+      eapply adv_step_keys_good; eauto.
+      eapply adv_step_user_cipher_queues_ok; eauto.
+      
+      eapply adv_step_message_queues_ok; eauto.
+      eapply users_permission_heaps_good_merged_permission_heaps_good; unfold keys_and_permissions_good in *; split_ands; eauto.
+      unfold keys_and_permissions_good in *; split_ands; eauto.
+      
+      eapply adv_step_adv_cipher_queue_ok; eauto.
+      eapply adv_step_adv_message_queue_ok; eauto.
+      eapply adv_step_adv_no_honest_keys; eauto.
+      eapply adv_step_honest_nonces_ok; eauto.
+      eapply honest_users_only_honest_keys_adv_steps; eauto.
+
       eapply adv_step_keys_good; eauto.
       eapply adv_step_user_cipher_queues_ok; eauto.
       
@@ -3043,8 +3068,8 @@ Section SingleAdversarySimulates.
 
     Lemma labeled_univ_step_inv :
       forall {A B} (U U' : universe A B) a
-        (usrs : honest_users A) (adv : user_data B) gks cs,
-        step_universe U (Action a) U'
+        (usrs : honest_users A) (adv : user_data B) gks cs uid,
+        step_universe (Some uid) U (Action (uid,a)) U'
         -> U = {| users        := usrs
                ; adversary    := adv
                ; all_ciphers  := cs
@@ -3071,7 +3096,7 @@ Section SingleAdversarySimulates.
     Proof.
       intros.
       invert H; eauto.
-      invert H1.
+      destruct lbl; invert H5.
       unfold build_data_step; simpl.
       repeat eexists; intuition eauto.
     Qed.
@@ -3990,7 +4015,7 @@ Section SingleAdversarySimulates.
         -> U' = buildUniverse usrs adv cs gks u_id {| key_heap := ks ; msg_heap := qmsgs ; protocol := cmd ; c_heap := mycs ; from_nons := froms ; sent_nons := sents ; cur_nonce := cur_n |}
         -> honest_users_only_honest_keys U.(users)
         -> honest_cmds_safe U
-        -> step_universe (strip_adversary_univ U b) Silent (strip_adversary_univ U' b)
+        -> step_universe (Some u_id) (strip_adversary_univ U b) Silent (strip_adversary_univ U' b)
         \/ strip_adversary_univ U b = strip_adversary_univ U' b.
     Proof.
       intros.
@@ -4021,21 +4046,23 @@ Section SingleAdversarySimulates.
           f_equal.
 
           assert (step_user Silent (Some u_id)
-       (users,
-       {|
-       key_heap := key_heap0;
-       protocol := protocol0;
-       msg_heap := msg_heap0;
-       c_heap := c_heap0;
-       from_nons := from_nons0;
-       sent_nons := sent_nons0;
-       cur_nonce := cur_nonce0 |}, all_ciphers, all_keys, key_heap, msg_heap, c_heap, from_nons, sent_nons, cur_nonce, protocol)
-       (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)) as STEP by assumption.
+                            (users,
+                             {|
+                               key_heap := key_heap0;
+                               protocol := protocol0;
+                               msg_heap := msg_heap0;
+                               c_heap := c_heap0;
+                               from_nons := from_nons0;
+                               sent_nons := sent_nons0;
+                               cur_nonce := cur_nonce0 |}, all_ciphers, all_keys, key_heap, msg_heap,
+                             c_heap, from_nons, sent_nons, cur_nonce, protocol)
+                            (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)) as STEP by assumption.
           eapply honest_silent_step_nochange_honestk_clean_ciphers_msgs_usrs in H3; eauto; split_ands.
 
           eapply honest_silent_step_nochange_clean_adv_messages.
           exact STEP.
           all: (reflexivity || eassumption).
+        + trivial.
 
       - right.
         unfold strip_adversary_univ, buildUniverse; simpl.
@@ -4118,15 +4145,15 @@ Section SingleAdversarySimulates.
     (* Hint Resolve honest_cmds_safe_advuniv. *)
 
     Lemma silent_step_advuniv_implies_univ_ok :
-      forall {A B} (U U' : universe A B) lbl,
-        step_universe U lbl U'
+      forall {A B} (U U' : universe A B) lbl suid,
+        step_universe suid U lbl U'
         -> lbl = Silent
         -> adv_universe_ok U
         -> honest_cmds_safe U
         -> universe_ok U
         -> universe_ok U'.
      Proof.
-       intros A B U U' lbl STEP e AUOK HCS UOK;
+       intros A B U U' lbl SUID STEP e AUOK HCS UOK;
          rewrite e in *; clear e.
 
        unfold adv_universe_ok in AUOK; split_ands.
@@ -4144,6 +4171,7 @@ Section SingleAdversarySimulates.
          unfold honest_cmds_safe in HCS;
            specialize (HCS _ _ _ eq_refl H7); simpl in HCS.
          eapply honest_silent_step_adv_univ_enc_ciphers_ok; simpl; eauto.
+         unfold mkULbl in H10; destruct lbl0; try discriminate; trivial.
        
        - destruct U.
          unfold build_data_step, buildUniverseAdv in *; simpl in *.
@@ -4181,8 +4209,8 @@ Section SingleAdversarySimulates.
       -> universe_ok U__ra
       -> adv_universe_ok U__ra
       -> R (RealWorld.peel_adv (strip_adversary_univ U__ra b)) U__i
-      -> forall U__ra',
-          RealWorld.step_universe U__ra Silent U__ra'
+      -> forall suid U__ra',
+          RealWorld.step_universe suid U__ra Silent U__ra'
           -> exists U__i', istepSilent ^* U__i U__i'
                  (* /\ universe_ok U__ra' *)
                  /\ R (strip_adversary U__ra') U__i'.
@@ -4204,7 +4232,7 @@ Section SingleAdversarySimulates.
     assert (honest_cmds_safe U__r) as HCS by debug eauto.
 
     match goal with
-    | [ H : RealWorld.step_universe _ _ _ |- _ ] => invert H
+    | [ H : RealWorld.step_universe _ _ _ _ |- _ ] => invert H
     end.
 
     (* Honest step *)
@@ -4213,12 +4241,13 @@ Section SingleAdversarySimulates.
         as U__ra'.
 
       apply honest_cmds_safe_advuniv in HCS.
+      unfold RealWorld.mkULbl in H16; destruct lbl; try discriminate.
       pose proof (silent_honest_step_advuniv_implies_stripped_univ_step_or_none b H1 H2 H6 H13 H14 HeqU__ra' H12 HCS); split_ors.
 
       + assert (lameAdv b (RealWorld.adversary (strip_adversary_univ U__ra b)))
           as LAME by (unfold lameAdv, strip_adversary_univ; simpl; trivial).
 
-        specialize (H _ _ H3 STRIP_UNIV_OK STRIP_ADV_UNIV_OK LAME _ H4); split_ex; split_ands; eauto.
+        specialize (H _ _ H3 STRIP_UNIV_OK STRIP_ADV_UNIV_OK LAME _ _ H4); split_ex; split_ands; eauto.
 
       + exists U__i; intuition idtac; eauto.
         destruct U__ra; destruct U__ra'; simpl in *.
@@ -4393,10 +4422,10 @@ Section SingleAdversarySimulates.
   Qed.
 
   Lemma action_matches_strip :
-    forall cs gks honestk ra ia,
+    forall cs gks honestk uid ra ia,
       action_matches (clean_ciphers honestk cs) (clean_keys honestk gks)
-                     (strip_action honestk cs ra) ia
-      -> action_matches cs gks ra ia.
+                     (uid, strip_action honestk cs ra) ia
+      -> action_matches cs gks (uid,ra) ia.
   Proof.
     intros.
     Hint Constructors action_matches : core.
@@ -4430,7 +4459,7 @@ Section SingleAdversarySimulates.
           -> exists a__i U__i' U__i'',
             (indexedIdealStep uid Silent) ^* U__i U__i'
             /\ indexedIdealStep uid (Action a__i) U__i' U__i''
-            /\ action_matches U__ra.(RealWorld.all_ciphers) U__ra.(RealWorld.all_keys) a__r a__i
+            /\ action_matches U__ra.(RealWorld.all_ciphers) U__ra.(RealWorld.all_keys) (uid,a__r) a__i
               /\ R (strip_adversary U__ra') U__i''.
   Proof.
     intros.
@@ -4674,15 +4703,15 @@ Section SingleAdversarySimulates.
 End SingleAdversarySimulates.
 
 Inductive rCouldGenerate : forall {A B},
-    RealWorld.universe A B -> list RealWorld.action -> Prop :=
+    RealWorld.universe A B -> list RealWorld.uaction -> Prop :=
 | RCgNothing : forall A B (U : RealWorld.universe A B),
     rCouldGenerate U []
-| RCgSilent : forall A B (U U' : RealWorld.universe A B) acts,
-      RealWorld.step_universe U Silent U'
+| RCgSilent : forall A B (U U' : RealWorld.universe A B) suid acts,
+      RealWorld.step_universe suid U Silent U'
     -> rCouldGenerate U' acts
     -> rCouldGenerate U acts
-| RCgLabeled : forall A B (U U' : RealWorld.universe A B) acts a,
-      RealWorld.step_universe U (Action a) U'
+| RCgLabeled : forall A B (U U' : RealWorld.universe A B) suid acts a,
+      RealWorld.step_universe suid U (Action a) U'
     -> rCouldGenerate U' acts
     -> rCouldGenerate U (a :: acts)
 .
@@ -4714,13 +4743,15 @@ Proof.
 Qed.
 
 Lemma labeled_real_step_implies_indexed_step :
-  forall A B U U' a,
-    @RealWorld.step_universe A B U (Action a) U'
-    -> exists uid, indexedRealStep uid (Action a) U U'.
+  forall A B U U' uid a,
+    @RealWorld.step_universe A B (Some uid) U (Action (uid,a)) U'
+    -> indexedRealStep uid (Action a) U U'.
 Proof.
   intros * STEP.
   invert STEP.
-  eexists; econstructor; intuition eauto.
+  econstructor; intuition eauto.
+  unfold RealWorld.mkULbl in H3; destruct lbl; try discriminate.
+  invert H3; eauto.
 Qed.
 
 Lemma indexed_ideal_multi_silent_stays_could_generate :
@@ -4738,7 +4769,7 @@ Hint Resolve
      ideal_multi_silent_stays_could_generate
      indexed_ideal_multi_silent_stays_could_generate : core.
 
-Inductive traceMatches : list RealWorld.action -> list IdealWorld.action -> Prop :=
+Inductive traceMatches : list RealWorld.uaction -> list IdealWorld.action -> Prop :=
 | TrMatchesNothing :
     traceMatches [] []
 | TrMatchesLabel : forall {A B}(U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A) a__r acts__r a__i acts__i,
@@ -4769,6 +4800,16 @@ Proof.
   assumption.
 Qed.
 
+Lemma labeled_step_uid_same :
+  forall t__hon t__adv uid1 uid2 U U' a,
+    @RealWorld.step_universe t__hon t__adv (Some uid1) U (Action (uid2,a)) U'
+    -> uid1 = uid2.
+Proof.
+  intros.
+  invert H.
+  unfold RealWorld.mkULbl in H4; destruct lbl; invert H4; trivial.
+Qed.
+
 Lemma simulates_could_generate :
   forall A B (R R' : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop) (b : RealWorld.denote (RealWorld.Base B)),
     R' = (fun ur ui => R (strip_adversary_simpl ur) ui)
@@ -4788,7 +4829,7 @@ Proof.
   induction 8; intros; subst; intuition eauto;
     assert (awesomeAdv (RealWorld.adversary U)) as AWE by (unfold awesomeAdv; trivial).
 
-  - generalize (H0 _ _ H7 H3 H4 AWE _ H5); intro STEPPED;
+  - generalize (H0 _ _ H7 H3 H4 AWE _ _ H5); intro STEPPED;
       destruct STEPPED as [U__i' STEPPED]; split_ands.
 
     rewrite strip_adv_simpl_peel_same_as_strip_adv in H8.
@@ -4809,7 +4850,9 @@ Proof.
 
     eapply ideal_multi_silent_stays_could_generate with (acts__i:=x) in H; eauto.
 
-  - generalize (labeled_real_step_implies_indexed_step H5); intros; split_ex.
+  - destruct a, suid; [ | invert H5].
+    assert (u0 = u) by (eauto using labeled_step_uid_same); subst.
+    generalize (labeled_real_step_implies_indexed_step H5); intros; split_ex.
     generalize (H1 _ _ H7 H3 H4 AWE _ _ _ H); intro STEPPED;
       destruct STEPPED as [a__i STEPPED];
       destruct STEPPED as [U__i' STEPPED];
@@ -4858,7 +4901,7 @@ Proof.
     specialize (IHrCouldGenerate R _ b HeqR' H0 H1 H2 UOK AUOK _ INR'); split_ex; split_ands.
 
     eapply indexedIdealStep_ideal_step in H9.
-    exists (a__i :: x0); split; eauto using indexed_ideal_multi_silent_stays_could_generate.
+    exists (a__i :: x); split; eauto using indexed_ideal_multi_silent_stays_could_generate.
 Qed.
 
 Notation "u1 <<| u2 " :=
@@ -4894,95 +4937,128 @@ Proof.
          (R' := (fun ur ui => R (strip_adversary_simpl ur) ui)); auto.
 Qed.
 
-(* Inductive inout := *)
-(* | SendAct (uid : user_id) *)
-(* | RecAct (uid : user_id). *)
+Inductive inout :=
+| SendAct (uid : user_id)
+| RecAct (uid : user_id).
 
-(* Section SimpleTrCouldGenerate. *)
-(*   Section RW. *)
-(*     Import RealWorld. *)
+Definition iaction_inout (a : IdealWorld.action) : inout :=
+  match a with
+  | IdealWorld.Input  _ uid _ _ _ => RecAct uid
+  | IdealWorld.Output _ uid _ _ _ => SendAct uid
+  end.
 
-(*     Inductive trRCouldGenerate : forall {A B}, *)
-(*         universe A B -> list inout -> Prop := *)
-(*     | TrRCgNothing : forall A B (U : universe A B), *)
-(*         trRCouldGenerate U [] *)
-(*     | TrRCgSilent : forall A B (U U' : universe A B) acts, *)
-(*         RealWorld.step_universe U Silent U' *)
-(*         -> trRCouldGenerate U' acts *)
-(*         -> trRCouldGenerate U  acts *)
-(*     | TrRCgLabeled : forall A B (U U': universe A B) usrs adv cs gks acts u_id userData *)
-(*                     ks qmsgs cmd mycs froms sents cur_n a io, *)
-(*         step_user (Action a) (Some u_id) *)
-(*                     (build_data_step U userData) *)
-(*                     (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) *)
-(*         -> U.(users) $? u_id = Some userData *)
-(*         -> U' = buildUniverse usrs adv cs gks u_id {| key_heap  := ks *)
-(*                                                      ; msg_heap  := qmsgs *)
-(*                                                      ; protocol  := cmd *)
-(*                                                      ; c_heap    := mycs *)
-(*                                                      ; from_nons := froms *)
-(*                                                      ; sent_nons := sents *)
-(*                                                      ; cur_nonce := cur_n |} *)
-(*         -> io = match a with *)
-(*                | Input _ _ _ => RecAct u_id *)
-(*                | Output _ _ _ _ => SendAct u_id *)
-(*                end *)
-(*         -> trRCouldGenerate U' acts *)
-(*         -> trRCouldGenerate U (io :: acts) *)
-(*     . *)
-(*   End RW. *)
-(*   Section IW. *)
-(*     Import IdealWorld. *)
+Definition uaction_inout (a : RealWorld.uaction) : inout :=
+  match a with
+  | (uid,RealWorld.Input  _ _ _) => RecAct uid
+  | (uid,RealWorld.Output _ _ _ _) => SendAct uid
+  end.
 
-(*     Inductive TrICouldGenerate : forall {A}, *)
-(*         universe A -> list inout -> Prop := *)
-(*     | ICgNothing : forall A (U : universe A), *)
-(*         TrICouldGenerate U [] *)
-(*     | ICgSilent : forall A (U U' : universe A) acts, *)
-(*         istepSilent U U' *)
-(*         -> TrICouldGenerate U' acts *)
-(*         -> TrICouldGenerate U acts *)
-(*     | ICgLabeled : forall A (U U' : IdealWorld.universe A) acts a, *)
-(*         IdealWorld.lstep_universe U (Action a) U' *)
-(*         -> TrICouldGenerate U' acts *)
-(*         -> TrICouldGenerate U (a :: acts) *)
-(*     . *)
+Inductive rCouldGen : forall {A B},
+    RealWorld.universe A B -> list inout -> Prop :=
+| RcgNothing : forall A B (U : RealWorld.universe A B),
+    rCouldGen U []
+| RcgSilent : forall A B (U U' : RealWorld.universe A B) suid uids,
+      RealWorld.step_universe suid U Silent U'
+    -> rCouldGen U' uids
+    -> rCouldGen U uids
+| RcgLabeled : forall A B (U U' : RealWorld.universe A B) suid uids a,
+      RealWorld.step_universe suid U (Action a) U'
+    -> rCouldGen U' uids
+    -> rCouldGen U (uaction_inout a :: uids)
+.
+
+Inductive iCouldGen : forall {A},
+    IdealWorld.universe A -> list inout -> Prop :=
+| IcgNothing : forall A (U : IdealWorld.universe A),
+    iCouldGen U []
+| IcgSilent : forall A (U U' : IdealWorld.universe A) uids,
+      istepSilent U U'
+    -> iCouldGen U' uids
+    -> iCouldGen U uids
+| IcgLabeled : forall A (U U' : IdealWorld.universe A) uids a,
+    IdealWorld.lstep_universe U (Action a) U'
+    -> iCouldGen U' uids
+    -> iCouldGen U (iaction_inout a :: uids)
+.
+
+Hint Constructors rCouldGen iCouldGen.
+
+Lemma real_labeled_step_in_out :
+  forall {A B C} lbl suid bd bd',
+    RealWorld.step_user lbl suid bd bd'
+              
+    -> forall (usrs usrs' : RealWorld.honest_users A) (adv adv' : RealWorld.user_data B) cs cs' gks gks'
+        uid ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' (cmd cmd' : RealWorld.user_cmd C) a,
+      
+      bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+      -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+      -> suid = Some uid
+      -> lbl = Action a
+      -> (exists t msg rec_u_id, a = @RealWorld.Output t msg suid (Some rec_u_id) sents)
+      \/ (exists t msg pat, a = @RealWorld.Input t msg pat froms).
+Proof.
+  induction 1; inversion 1; inversion 1; invert 2; try discriminate; subst; eauto.
+Qed.
+
+Lemma more_complicated_trace_ex :
+  forall t__hon t__adv U tr,
+    @rCouldGen t__hon t__adv U tr
+    -> exists tr', rCouldGenerate U tr'
+           /\ tr = List.map uaction_inout tr'.
+Proof.
+  induction 1; split_ex; eauto.
+  subst.
+  invert H.
+  unfold RealWorld.mkULbl in H5; destruct lbl; invert H5.
+  generalize H3; intros; eapply real_labeled_step_in_out in H3; eauto; try reflexivity.
+
+  split_ors; split_ex;
+    exists ((u_id,a0) :: x); subst; simpl; split; eauto.
+
+  eapply RCgLabeled; eauto.
+  econstructor; eauto.
+
+  eapply RCgLabeled; eauto.
+  econstructor; eauto.
+Qed.
+
+Lemma icouldgetnerate_icouldgen :
+  forall t__hon U acts__i,
+    @iCouldGenerate t__hon U acts__i
+    -> forall acts__r,
+      traceMatches acts__r acts__i
+      -> iCouldGen U (List.map uaction_inout acts__r).
+Proof.
+  induction 1; intros; eauto.
+  - destruct acts__r; [|invert H]; simpl; eauto.
+  - destruct acts__r; [invert H1|].
+    invert H1.
+    eapply IHiCouldGenerate in H5.
+    simpl.
+
+    assert (uaction_inout u = iaction_inout a) as RW.
+    invert H7; trivial.
     
+    rewrite RW; eauto.
+Qed.
 
-(* | Input  t (msg : crypto t) (pat : msg_pat) (froms : recv_nonces) *)
-(* | Output t (msg : crypto t) (from_user : option user_id) (to_user : option user_id) (sents : sent_nonces) *)
+Theorem refines_could_gen :
+  forall A B (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A),
+    U__r <<| U__i
+    -> universe_starts_ok U__r
+    -> forall U__ra advcode,
+        U__ra = add_adversary U__r advcode
+        -> forall acts,
+          rCouldGen U__ra acts
+          -> iCouldGen U__i acts.
+Proof.
+  intros.
+  eapply more_complicated_trace_ex in H2; eauto; split_ex; subst.
 
-(*          Inductive rCouldGenerate : forall {A B}, *)
-(*     RealWorld.universe A B -> list RealWorld.action -> Prop := *)
-(* | RCgNothing : forall A B (U : RealWorld.universe A B), *)
-(*     rCouldGenerate U [] *)
-(* | RCgSilent : forall A B (U U' : RealWorld.universe A B) acts, *)
-(*       RealWorld.step_universe U Silent U' *)
-(*     -> rCouldGenerate U' acts *)
-(*     -> rCouldGenerate U acts *)
-(* | RCgLabeled : forall A B (U U' : RealWorld.universe A B) acts a, *)
-(*       RealWorld.step_universe U (Action a) U' *)
-(*     -> rCouldGenerate U' acts *)
-(*     -> rCouldGenerate U (a :: acts) *)
-(* . *)
+  eapply refines_could_generate in H2; eauto.
+  split_ex.
 
-(* Inductive iCouldGenerate : forall {A}, *)
-(*     IdealWorld.universe A -> list IdealWorld.action -> Prop := *)
-(* | ICgNothing : forall A (U : IdealWorld.universe A), *)
-(*     iCouldGenerate U [] *)
-(* | ICgSilent : forall A (U U' : IdealWorld.universe A) acts, *)
-(*       istepSilent U U' *)
-(*     -> iCouldGenerate U' acts *)
-(*     -> iCouldGenerate U acts *)
-(* | ICgLabeled : forall A (U U' : IdealWorld.universe A) acts a, *)
-(*       IdealWorld.lstep_universe U (Action a) U' *)
-(*     -> iCouldGenerate U' acts *)
-(*     -> iCouldGenerate U (a :: acts) *)
-(* . *)
-
-
-
-
-
+  eapply icouldgetnerate_icouldgen; eauto.
+Qed.
 
 Print Assumptions refines_could_generate.

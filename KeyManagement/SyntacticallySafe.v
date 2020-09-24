@@ -1709,8 +1709,8 @@ Section PredicatePreservation.
       (* /\ adv_message_queue_ok U.(users) U.(all_ciphers) U.(all_keys) U.(adversary).(msg_heap). *)
 
   Lemma goodness_preservation_stepU :
-    forall {A B} (U U' : universe A B) lbl,
-      step_universe U lbl U'
+    forall {A B} (U U' : universe A B) suid lbl,
+      step_universe suid U lbl U'
       -> syntactically_safe_U U
       -> goodness_predicates U
       -> goodness_predicates U'.
@@ -1720,7 +1720,7 @@ Section PredicatePreservation.
     invert H.
 
     - unfold goodness_predicates, syntactically_safe_U in *; simpl in *.
-      destruct lbl, U, userData;
+      destruct lbl0, U, userData;
         unfold build_data_step in *; simpl in *;
           specialize (H0 _ _ _ H2 eq_refl); split_ex; simpl in *.
     
@@ -1896,8 +1896,8 @@ Section PredicatePreservation.
   Qed.
 
   Lemma syntactically_safe_U_preservation_stepU :
-    forall A B (U U' : universe A B) lbl,
-      step_universe U lbl U'
+    forall A B (U U' : universe A B) suid lbl,
+      step_universe suid U lbl U'
       -> goodness_predicates U
       -> syntactically_safe_U U
       -> syntactically_safe_U U'.

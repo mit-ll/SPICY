@@ -154,8 +154,8 @@ Module SignPingSendProtocol.
   
   Import SimulationAutomation.
 
-  Hint Extern 0 (~^* _ _) =>
-    progress(autounfold with constants; simpl).
+  (* Hint Extern 0 (~^* _ _) => *)
+  (*   progress(autounfold with constants; simpl). *)
 
   Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
     progress(autounfold with constants; simpl).
@@ -230,8 +230,8 @@ Module EncPingSendProtocol.
   
   Import SimulationAutomation.
 
-  Hint Extern 0 (~^* _ _) =>
-    progress(autounfold with constants; simpl).
+  (* Hint Extern 0 (~^* _ _) => *)
+  (*   progress(autounfold with constants; simpl). *)
 
   Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
     progress(autounfold with constants; simpl).

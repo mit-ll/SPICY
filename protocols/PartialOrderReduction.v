@@ -1213,8 +1213,8 @@ Section TimeMeasures.
   Qed.
 
   Lemma boundRunningTime_univ_step :
-    forall A B (U U' : universe A B) lbl b n__rt n__qs,
-      step_universe U lbl U'
+    forall A B (U U' : universe A B) suid lbl b n__rt n__qs,
+      step_universe suid U lbl U'
       -> lameAdv b U.(adversary)
       -> boundRunningTimeUniv U.(users) n__rt
       -> queues_size U.(users) = n__qs
@@ -1253,8 +1253,8 @@ Section TimeMeasures.
   Hint Constructors runningTimeMeasure : core.
 
   Lemma runningTimeMeasure_stepU :
-    forall A B (U U' : universe A B) lbl b n,
-      step_universe U lbl U'
+    forall A B (U U' : universe A B) suid lbl b n,
+      step_universe suid U lbl U'
       -> lameAdv b U.(adversary)
       -> runningTimeMeasure U n
       -> exists n',
@@ -1312,16 +1312,16 @@ Section TimeMeasures.
     nat -> universe A B  -> universe A B -> Prop :=
   | RStepsiO : forall U,
       rstepsi O U U
-  | RStepsiS : forall lbl U U' U'' i,
-      step_universe U lbl U'
+  | RStepsiS : forall suid lbl U U' U'' i,
+      step_universe suid U lbl U'
       -> rstepsi i U' U''
       -> rstepsi (1 + i) U U''.
 
   Hint Constructors rstepsi : core.
 
   Lemma rsteps_rstepsi :
-    forall A B pr (U U' : universe A B),
-      trc3 step_universe pr U U'
+    forall A B pr (U U' : universe A B) suid,
+      trc3 (step_universe suid) pr U U'
       -> exists i, rstepsi i U U'.
   Proof.
     induction 1; split_ex; eauto.
@@ -1578,7 +1578,7 @@ Lemma summarize_univ_step :
 Proof.
   inversion 1; subst; unfold summarize_univ; simpl in *; intros;
     match goal with
-    | [ H : step_universe _ _ _ |- _ ] => invert H; dismiss_adv
+    | [ H : step_universe _ _ _ _ |- _ ] => invert H; dismiss_adv
     | [ H : indexedRealStep _ _ _ _ |- _ ] => invert H
     end.
 
@@ -1848,9 +1848,9 @@ Lemma user_step_implies_universe_step :
               (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
               (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
     -> usrs $? uid = Some (mkUserData ks cmd qmsgs mycs froms sents cur_n)
-    -> step_universe
+    -> step_universe (Some uid)
         (mkUniverse usrs adv cs gks)
-        lbl
+        match lbl with | Silent => Silent | Action a => Action (uid,a) end
         (buildUniverse usrs' adv' cs' gks' uid (mkUserData ks' cmd' qmsgs' mycs' froms' sents' cur_n')).
 Proof.
   intros; destruct lbl;
@@ -1966,8 +1966,8 @@ Proof.
 Qed.
 
 Lemma step_univ_inv' :
-  forall t__hon t__adv lbl ru ru' b,
-    @step_universe t__hon t__adv ru lbl ru'
+  forall t__hon t__adv lbl suid ru ru' b,
+    @step_universe t__hon t__adv suid ru lbl ru'
     -> lameAdv b ru.(adversary)
     -> exists uid ud lbl bd,
       ru.(users) $? uid = Some ud
@@ -1978,9 +1978,6 @@ Lemma step_univ_inv' :
 Proof.
   induction 1; intros; dismiss_adv; subst; eauto 8.
 Qed.
-
-
-
 
 Lemma add_key_perm_as_merge :
   forall ks kid,
@@ -2272,10 +2269,11 @@ Proof.
     invert H; simpl in *;
       repeat
         match goal with
-        | [ H : step_universe _ _ _ |- _ ] => invert H; dismiss_adv
+        | [ H : step_universe _ _ _ _ |- _ ] => invert H; dismiss_adv
         | [ H : indexedRealStep _ _ _ _ |- _ ] => invert H
         | [ H : O.max_elt _ = Some _ |- _ ] =>
           apply NatMap.O.max_elt_MapsTo in H; rewrite find_mapsto_iff in H
+        | [ H : Silent = mkULbl ?lbl _ |- _ ] => unfold mkULbl in H; destruct lbl; try discriminate
         end.
 
     + destruct (uid ==n u_id); subst; clean_map_lookups.
@@ -2301,6 +2299,7 @@ Proof.
 
         eapply commutes_noblock with (usrs := users ru) (usrs1' := usrs) in (*na*) H7; eauto; split_ex.
         exfalso; split_ex; eapply H4; eauto.
+        econstructor; eauto.
         econstructor; eauto.
         clean_map_lookups; trivial.
 
@@ -2332,6 +2331,9 @@ Proof.
             exfalso; split_ex; eapply H4; eauto;
               econstructor; eauto.
 
+        eapply RealWorld.StepUser with (u_id := uid); eauto; simpl; eauto.
+        eapply RealWorld.StepUser with (u_id := uid); eauto; simpl; eauto.
+
       * eapply labeled_action_never_commutes in H9; eauto; contradiction.
 
     + destruct (uid ==n uid0); subst; clean_map_lookups.
@@ -2360,6 +2362,9 @@ Proof.
             exfalso; split_ex; eapply H4; eauto;
               econstructor; eauto.
 
+        eapply RealWorld.StepUser with (u_id := uid); eauto; simpl; eauto.
+        eapply RealWorld.StepUser with (u_id := uid); eauto; simpl; eauto.
+        
       * eapply labeled_action_never_commutes in H9; eauto; contradiction.
 
     + destruct (uid ==n uid0); subst; clean_map_lookups.
@@ -2388,6 +2393,9 @@ Proof.
             exfalso; split_ex; eapply H4; eauto;
               econstructor; eauto.
 
+        eapply RealWorld.StepUser with (u_id := uid); eauto; simpl; eauto.
+        eapply RealWorld.StepUser with (u_id := uid); eauto; simpl; eauto.
+
       * eapply labeled_action_never_commutes in H9; eauto; contradiction.
 
   - assert (LAME: lameAdv b (adversary (fst (fst st)))) by assumption.
@@ -2406,9 +2414,11 @@ Proof.
     dt bd; destruct ud; simpl in *.
 
     invert H; simpl in *;
+      repeat
       match goal with
-      | [ H : step_universe _ _ _ |- _ ] => invert H; dismiss_adv
+      | [ H : step_universe _ _ _ _ |- _ ] => invert H; dismiss_adv
       | [ H : indexedRealStep _ _ _ _ |- _ ] => invert H
+      | [ H : Silent = mkULbl ?lbl _ |- _ ] => unfold mkULbl in H; destruct lbl; try discriminate
       end;
       match goal with
       | [ H : O.max_elt _ = Some _ |- _ ] =>
@@ -2436,9 +2446,9 @@ Proof.
         eapply max_elt_non_stepped_user with (uid := uid) (uid' := uid0) in MAX; eauto; split_ex.
       rename x0 into msg_heap'.
 
-      specialize (IHstepsi _ _ H16 _ _ next); simpl in *.
+      specialize (IHstepsi _ _ H17 _ _ next); simpl in *.
 
-      apply NatMap.O.max_elt_MapsTo in H16; rewrite find_mapsto_iff in H16; clean_map_lookups.
+      apply NatMap.O.max_elt_MapsTo in H17; rewrite find_mapsto_iff in H17; clean_map_lookups.
       eapply commutes_noblock with (usrs := users ru) (usrs1' := usrs0) in next; eauto; split_ex.
       
       eapply IHstepsi in H13; clear IHstepsi; eauto 2.
@@ -2465,10 +2475,10 @@ Proof.
 
       invert H13; clear_labeled_commuting_steps uid.
 
-      eapply commutes_sound with (u_id1 := uid0) (u_id2 := uid) in H21; eauto.
+      eapply commutes_sound with (u_id1 := uid0) (u_id2 := uid) in H22; eauto.
       split_ex; subst.
 
-      unfold build_data_step in H21; destruct ru; simpl in *.
+      unfold build_data_step in H22; destruct ru; simpl in *.
       dt x13; dt x14; destruct x15; simpl in *.
 
       (do 2 eexists); repeat simple apply conj; eauto.
@@ -2721,7 +2731,7 @@ Proof.
   rename ru1 into ru.
   rename ru2 into ru'.
 
-  assert (exists lbl, step_universe ru lbl ru').
+  assert (exists lbl, step_universe (Some uid) ru lbl ru').
   invert H4;
     match goal with
     | [ H : indexedRealStep _ _ _ _ |- _ ] => 
@@ -2880,7 +2890,7 @@ Proof.
 
     generalize H8; intros STEP; invert H8;
       match goal with
-      | [ H : step_universe _ _ _ |- _ ] => invert H
+      | [ H : step_universe _ _ _ _ |- _ ] => invert H
       | [ H : indexedRealStep _ _ _ _ |- _ ] => invert H
       end.
 
@@ -2889,6 +2899,7 @@ Proof.
       specialize (H5 x1); simpl in H2; split_ex.
       eapply not_and_or in H5; split_ors; try contradiction.
       eapply not_and_or in H5.
+      unfold mkULbl in H10; destruct lbl; try discriminate.
 
       destruct (x0 ==n u_id); subst; clean_map_lookups.
       * generalize (O.max_elt_MapsTo H7); intros MT.
@@ -2911,12 +2922,12 @@ Proof.
         apply not_all_ex_not in H5; split_ex.
 
         apply imply_to_and in H5; split_ands.
-        apply imply_to_and in H10; split_ands.
         apply imply_to_and in H11; split_ands.
+        apply imply_to_and in H12; split_ands.
 
         firstorder idtac; simpl in *.
 
-        eapply na_deterministic in H11; eauto; split_ands; subst;
+        eapply na_deterministic in H12; eauto; split_ands; subst;
           try match goal with
               | [ H : JMeq _ _ |- _ ] => invert H
               end.
@@ -3064,7 +3075,7 @@ Proof.
       eapply boundRunningTime_for_element in H2; eauto; split_ex.
       destruct x; try lia.
       invert H2.
-      unfold build_data_step in *; rewrite <- H8 in H3; invert H3.
+      unfold build_data_step in *; rewrite <- H9 in H3; invert H3.
 
     + invert H6; simpl in *.
       eapply boundRunningTime_for_element in H2; eauto; split_ex.

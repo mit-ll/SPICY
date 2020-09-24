@@ -125,8 +125,8 @@ Module ShareSecretProtocol.
   
   Import SimulationAutomation.
 
-  Hint Extern 0 (~^* _ _) =>
-    progress(autounfold with constants; simpl).
+  (* Hint Extern 0 (~^* _ _) => *)
+  (*   progress(autounfold with constants; simpl). *)
 
   Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
     progress(autounfold with constants; simpl).
@@ -187,6 +187,7 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
       (fun st => safety st /\ alignment st ).
   Proof.
     eapply invariant_weaken.
+    autounfold with *.
 
     - apply multiStepClosure_ok; simpl.
       gen1.
@@ -223,8 +224,6 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
               [ solve_honest_actions_safe; clean_map_lookups; eauto 8
               | split; trivial; intros; rstep; subst; solve_labels_align
             ]).
-
-      all: unfold B__keys, KID1, KID2 in *; solve_merges.
 
       Unshelve.
       all: auto.

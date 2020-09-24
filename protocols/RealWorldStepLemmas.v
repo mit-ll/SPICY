@@ -60,11 +60,11 @@ Ltac dt bd :=
   destruct bd as [[[[[[[[[[?usrs ?adv] ?cs] ?gks] ?ks] ?qmsgs] ?mycs] ?froms] ?sents] ?cur_n] ?cmd].
 
 Lemma universe_predicates_preservation :
-  forall {A B} (U U' : universe A B) lbl,
+  forall {A B} (U U' : universe A B) suid lbl,
     universe_ok U
     -> adv_universe_ok U
     -> honest_cmds_safe U
-    -> step_universe U lbl U'
+    -> step_universe suid U lbl U'
     -> universe_ok U'
       /\ adv_universe_ok U'.
 Proof.
@@ -72,9 +72,16 @@ Proof.
   destruct lbl;
     intuition eauto.
 
-  unfold adv_universe_ok in *; split_ands;
-    eapply honest_labeled_step_univ_ok;
-    eauto using honest_cmds_implies_safe_actions.
+  - destruct u, suid; [| invert STEP].
+    generalize STEP; eapply labeled_step_uid_same in STEP; subst.
+    intros.
+    unfold adv_universe_ok in *; split_ands;
+      eapply honest_labeled_step_univ_ok;
+      eauto using honest_cmds_implies_safe_actions.
+
+  - destruct u, suid; [| invert STEP].
+    generalize STEP; eapply labeled_step_uid_same in STEP; subst.
+    intros; eauto.
 Qed.
 
 Section ModelCheckStepLemmas.
@@ -92,7 +99,7 @@ Section ModelCheckStepLemmas.
       indexedRealStep uid (Action ra) ru ru'
       -> (indexedIdealStep uid Silent) ^* iu iu'
       -> indexedIdealStep uid (Action ia) iu' iu''
-      -> action_matches ru.(all_ciphers) ru.(all_keys) ra ia
+      -> action_matches ru.(all_ciphers) ru.(all_keys) (uid,ra) ia
       -> indexedStep uid (ru, iu) (ru', iu'')
   .
 
@@ -825,9 +832,9 @@ Section Lameness.
   Qed.
 
   Lemma adversary_remains_lame :
-    forall A B (U U' : universe A B) b lbl,
+    forall A B (U U' : universe A B) b suid lbl,
       lameAdv b U.(adversary)
-      -> step_universe U lbl U'
+      -> step_universe suid U lbl U'
       -> lameAdv b U'.(adversary).
   Proof.
     inversion 2; subst; simpl in *; subst; 
@@ -993,8 +1000,8 @@ Section ActionMatches.
                         (usrs, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
                         (usrs'', adv'', cs'', gks'', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
             -> forall ia,
-                action_matches cs gks a ia 
-                -> action_matches cs' gks' a ia.
+                action_matches cs gks (uid2, a) ia 
+                -> action_matches cs' gks' (uid2, a) ia.
   Proof.
 
     Ltac action_matches_solver :=
@@ -1006,19 +1013,19 @@ Section ActionMatches.
           | [ H : Input _ _ _ = _ |- _ ] => invert H
           | [ H : Output _ _ _ _ = _ |- _ ] => invert H
           | [ H : _ $? ?cid = Some (SigCipher _ _ _ _ )
-              |- action_matches ?cs _ (RealWorld.Output (SignedCiphertext ?cid) _ _ _) _ ] => eapply OutSig
+              |- action_matches ?cs _ (_, RealWorld.Output (SignedCiphertext ?cid) _ _ _) _ ] => eapply OutSig
           | [ H : _ $? ?cid = Some (SigEncCipher _ _ _ _ _ )
-              |- action_matches ?cs _ (RealWorld.Output (SignedCiphertext ?cid) _ _ _) _ ] => eapply OutEnc
+              |- action_matches ?cs _ (_, RealWorld.Output (SignedCiphertext ?cid) _ _ _) _ ] => eapply OutEnc
           | [ H : _ $? ?cid = Some (SigCipher _ _ _ _ )
-              |- action_matches ?cs _ (RealWorld.Input (SignedCiphertext ?cid) _ _) _ ] => eapply InpSig
+              |- action_matches ?cs _ (_, RealWorld.Input (SignedCiphertext ?cid) _ _) _ ] => eapply InpSig
           | [ H : _ $? ?cid = Some (SigEncCipher _ _ _ _ _ )
-              |- action_matches ?cs _ (RealWorld.Input (SignedCiphertext ?cid) _ _) _ ] => eapply InpEnc
-          | [ |- action_matches ?cs _ (RealWorld.Output (SignedCiphertext ?cid) _ _ _) _ ] =>
+              |- action_matches ?cs _ (_, RealWorld.Input (SignedCiphertext ?cid) _ _) _ ] => eapply InpEnc
+          | [ |- action_matches ?cs _ (_, RealWorld.Output (SignedCiphertext ?cid) _ _ _) _ ] =>
             match cs with
             | context [ _ $+ (cid, SigCipher _ _ _ _)] => eapply OutSig
             | context [_ $+ (cid, SigEncCipher _ _ _ _ _)] => eapply OutEnc
             end
-          | [ |- action_matches ?cs _ (RealWorld.Input (SignedCiphertext ?cid) _ _) _ ] =>
+          | [ |- action_matches ?cs _ (_, RealWorld.Input (SignedCiphertext ?cid) _ _) _ ] =>
             match cs with
             | context[ _ $+ (cid, SigCipher _ _ _ _)] => eapply InpSig
             | context[ _ $+ (cid, SigEncCipher _ _ _ _ _)] => eapply InpEnc
@@ -1058,8 +1065,8 @@ Section ActionMatches.
                       (usrs, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
                       (usrs'', adv'', cs'', gks'', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
           -> forall ia,
-              action_matches cs gks a ia 
-              -> action_matches cs' gks' a ia.
+              action_matches cs gks (uid2, a) ia 
+              -> action_matches cs' gks' (uid2, a) ia.
   Proof.
     intros; eapply action_matches_other_user_silent_step'
               with (cmd := cmd1) (cmd' := cmd1') (cmd1 := cmd1) (uid1 := uid1) (uid2 := uid2).
@@ -1167,8 +1174,8 @@ Section ActionMatches.
                           (usrs, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
                           (usrs'', adv'', cs'', gks'', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
               -> forall ia,
-                  action_matches cs' gks' a ia
-                  -> action_matches cs gks a ia. 
+                  action_matches cs' gks' (uid2, a) ia
+                  -> action_matches cs gks (uid2, a) ia. 
   Proof.
     induction 1; inversion 1; inversion 1; intros; subst;
       try discriminate; eauto.
@@ -1184,10 +1191,10 @@ Section ActionMatches.
       unfold message_queues_ok in H35; rewrite Forall_natmap_forall in H35;
         eapply H35 in H42; simpl in *.
       invert H42; split_ex.
-      specialize (H8 _ eq_refl); clean_map_lookups.
+      specialize (H7 _ eq_refl); clean_map_lookups.
       
       eapply output_action_na in H45; eauto; split_ex; subst.
-      eapply syntactically_safe_na in H8; eauto; split_ex.
+      eapply syntactically_safe_na in H7; eauto; split_ex.
       invert H5; unfold typingcontext_sound in *; split_ex; process_ctx.
       repeat equality1; clean_map_lookups.
       
@@ -1215,67 +1222,55 @@ Section ActionMatches.
             eapply MQ in USRS; simpl in *
           | [ H : message_queue_ok _ _ (_ :: _) _ |- _ ] => invert H; split_ex
           | [ H : (forall _ _, findKeysCrypto _ _ $? _ = Some _ -> _) |- _ ] => progress (simpl in H); context_map_rewrites
-          | [ H : syntactically_safe _ _ _ ?cmd _, NA : nextAction ?cmd (Send _ _) |- _ ] =>
+          | [ H : syntactically_safe _ _ _ ?cmd _, NA : nextAction ?cmd _ |- _ ] =>
+            is_var cmd;
+            idtac cmd;
             eapply syntactically_safe_na in H; eauto; split_ex
-          | [ H : syntactically_safe _ _ _ ?c _ |- _ ] =>
-            is_not_var c;
+            ; idtac "clearing" NA
+            ; clear NA
+          | [ H : syntactically_safe _ _ _ (Send _ _) _ |- _ ] =>
             invert H; unfold typingcontext_sound in *; split_ex; process_ctx
+          | [ TCS : typingcontext_sound ?ctx ?usrs _ _ ,
+              SS : syntactically_safe _ _ ?ctx (Recv ?p) _,
+              MA : msg_accepted_by_pattern ?cs _ _ _ ?msg |- _ ] =>
+
+            let MHS := fresh "MHS" in
+            assert (msg_pattern_safe (findUserKeys usrs) p)
+              by (unfold typingcontext_sound in TCS; split_ex; invert SS; eauto)
+            ; clear SS
+            ; assert (msg_honestly_signed (findUserKeys usrs) cs msg = true) as MHS by eauto
+            ; unfold msg_honestly_signed, msg_signing_key in MHS
+            ; context_map_rewrites
+            ; simpl in MHS
+            ; rewrite <- honest_key_honest_keyb in MHS
+            ; invert MHS
           end;
         repeat equality1;
         clean_map_lookups;
         eapply message_content_eq_addnl_key_inv; eauto.
       
-      p.
+      Local Ltac p' :=
+        p
+        ; try match goal with
+              | [ RW : _ = ?x, FK : findUserKeys _ $? cipher_signing_key ?x = Some true |- _ ] =>
+                rewrite <- RW in FK
+                ; clear RW
+                ; simpl in FK
+              end
+        ; encrypted_ciphers_prop
+        ; repeat
+            match goal with
+            | [ H : (forall _ _, findKeysMessage ?msg $? _ = _ -> _), ARG : findKeysMessage ?msg $? _ = Some _ |- _ ] =>
+              apply H in ARG
+              ; keys_and_permissions_prop
+            | [ H : permission_heap_good ?gks ?honestk, HK : ?honestk $? ?k = Some true  |- ?gks $? ?k <> None ] =>
+              apply H in HK; split_ex; clean_map_lookups
+            end.
 
-      eapply syntactically_safe_na in H5; eauto; split_ex.
-      assert (msg_pattern_safe (findUserKeys usrs') x1)
-        by (unfold typingcontext_sound in *; split_ex; invert H0; eauto).
-      assert (@msg_honestly_signed (findUserKeys usrs') x cs' (SignedCiphertext cid) = true) by eauto.
-      unfold msg_honestly_signed, msg_signing_key in H5; context_map_rewrites; simpl in H5.
-      rewrite <- honest_key_honest_keyb in H5; invert H5.
-      encrypted_ciphers_prop.
-      eapply message_content_eq_addnl_key_inv; eauto.
-      intros.
-      eapply H19 in H5; eauto.
-      keys_and_permissions_prop.
-      eapply H12 in H5; eauto; split_ex; clean_map_lookups.
-
-      p; simpl in *; encrypted_ciphers_prop; eauto.
-      eapply H22 in H4; split_ex; subst.
-      keys_and_permissions_prop.
-      eapply H17 in H3; split_ex; clean_map_lookups.
-
-      p; simpl in *; encrypted_ciphers_prop; eauto.
-      eapply H25 in H4; split_ex; subst.
-      keys_and_permissions_prop.
-      eapply H17 in H4; split_ex; clean_map_lookups.
+      all: p'.
       
-    - action_matches_solver; eauto.
+    - action_matches_solver; eauto; p'.
 
-      p.
-
-      eapply syntactically_safe_na in H5; eauto; split_ex.
-      assert (msg_pattern_safe (findUserKeys usrs') x1)
-        by (unfold typingcontext_sound in *; split_ex; invert H0; eauto).
-      assert (@msg_honestly_signed (findUserKeys usrs') x cs' (SignedCiphertext cid) = true) by eauto.
-      unfold msg_honestly_signed, msg_signing_key in H5; context_map_rewrites; simpl in H5.
-      rewrite <- honest_key_honest_keyb in H5; invert H5.
-      encrypted_ciphers_prop.
-      eapply message_content_eq_addnl_key_inv; eauto.
-      intros.
-      eapply H19 in H5; eauto.
-      keys_and_permissions_prop.
-      eapply H12 in H5; eauto; split_ex; clean_map_lookups.
-
-      p; simpl in *; encrypted_ciphers_prop; eauto.
-      eapply H22 in H4; split_ex; subst.
-      keys_and_permissions_prop.
-      eapply H17 in H3; split_ex; clean_map_lookups.
-
-      p; simpl in *; encrypted_ciphers_prop; eauto.
-      eapply H25 in H4; split_ex; subst.
-      keys_and_permissions_prop.
-      eapply H17 in H4; split_ex; clean_map_lookups.
   Qed.
 
   Lemma action_matches_other_user_silent_step_inv :
@@ -1305,8 +1300,8 @@ Section ActionMatches.
                         (usrs, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
                         (usrs'', adv'', cs'', gks'', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
             -> forall ia,
-                action_matches cs' gks' a ia
-                -> action_matches cs gks a ia.
+                action_matches cs' gks' (uid2,a) ia
+                -> action_matches cs gks (uid2,a) ia.
   Proof.
     intros; eapply action_matches_other_user_silent_step_inv'
               with (cmd := cmd1) (cmd' := cmd1') (cmd1 := cmd1) (uid1 := uid1) (uid2 := uid2).

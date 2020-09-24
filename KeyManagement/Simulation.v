@@ -52,7 +52,7 @@ Section IdealDefiniions.
   Inductive indexedIdealStep {A} (uid : user_id) (lbl : label) (U1 U2 : universe A) : Prop :=
   | IndexedIdealStep : forall u proto chans prms,
       U1.(users) $? uid = Some u
-      -> lstep_user lbl (U1.(channel_vector), u.(protocol), u.(perms)) (chans, proto, prms)
+      -> lstep_user uid lbl (U1.(channel_vector), u.(protocol), u.(perms)) (chans, proto, prms)
       -> U2 = construct_universe
                chans
                (U1.(users) $+ (uid, {| protocol := proto ; perms := prms |}))
@@ -87,7 +87,7 @@ Section RealDefinitions.
   Lemma indexedRealStep_real_step :
     forall A B uid lbl U1 U2,
       @indexedRealStep A B uid lbl U1 U2
-      -> step_universe U1 lbl U2.
+      -> step_universe (Some uid) U1 (mkULbl lbl uid) U2.
   Proof. intros * IND; invert IND; econstructor; eauto. Qed.
 
 End RealDefinitions.
@@ -105,51 +105,33 @@ Inductive chan_key : Set :=
 .
 
 Inductive action_matches (cs : RealWorld.ciphers) (gks : keys) :
-  RealWorld.action -> IdealWorld.action -> Prop :=
+  RealWorld.uaction -> IdealWorld.action -> Prop :=
 
 | InpSig : forall t (m__rw : RealWorld.crypto t) (msg__rw : RealWorld.message.message t) (m__iw : IdealWorld.message.message t)
           kid uid seq froms p cid ch_id chans ps,
     m__rw = RealWorld.SignedCiphertext cid
     -> cs $? cid = Some (RealWorld.SigCipher kid uid seq msg__rw)
     -> content_eq msg__rw m__iw gks
-    -> action_matches cs gks (RealWorld.Input m__rw p froms) (IdealWorld.Input m__iw ch_id chans ps)
+    -> action_matches cs gks (uid, RealWorld.Input m__rw p froms) (IdealWorld.Input m__iw uid ch_id chans ps)
 | InpEnc : forall t (m__rw : RealWorld.crypto t) (msg__rw : RealWorld.message.message t) (m__iw : IdealWorld.message.message t)
           kid1 kid2 uid seq froms p cid ch_id chans ps,
     m__rw = RealWorld.SignedCiphertext cid
     -> cs $? cid = Some (RealWorld.SigEncCipher kid1 kid2 uid seq msg__rw)
     -> content_eq msg__rw m__iw gks
-    -> action_matches cs gks (RealWorld.Input m__rw p froms) (IdealWorld.Input m__iw ch_id chans ps)
+    -> action_matches cs gks (uid, RealWorld.Input m__rw p froms) (IdealWorld.Input m__iw uid ch_id chans ps)
 | OutSig : forall t (m__rw : RealWorld.crypto t) (msg__rw : RealWorld.message.message t) (m__iw : IdealWorld.message.message t)
-          kid uid seq to from sents cid ch_id chans ps,
+          kid seq to from sents cid ch_id chans ps,
     m__rw = RealWorld.SignedCiphertext cid
-    -> cs $? cid = Some (RealWorld.SigCipher kid uid seq msg__rw)
+    -> cs $? cid = Some (RealWorld.SigCipher kid to seq msg__rw)
     -> content_eq msg__rw m__iw gks
-    -> action_matches cs gks (RealWorld.Output m__rw to from sents) (IdealWorld.Output m__iw ch_id chans ps)
+    -> action_matches cs gks (from, RealWorld.Output m__rw (Some from) (Some to) sents) (IdealWorld.Output m__iw from ch_id chans ps)
 | OutEnc : forall t (m__rw : RealWorld.crypto t) (msg__rw : RealWorld.message.message t) (m__iw : IdealWorld.message.message t)
-          kid1 kid2 uid seq to from sents cid ch_id chans ps,
+          kid1 kid2 seq to from sents cid ch_id chans ps,
     m__rw = RealWorld.SignedCiphertext cid
-    -> cs $? cid = Some (RealWorld.SigEncCipher kid1 kid2 uid seq msg__rw)
+    -> cs $? cid = Some (RealWorld.SigEncCipher kid1 kid2 to seq msg__rw)
     -> content_eq msg__rw m__iw gks
-    -> action_matches cs gks (RealWorld.Output m__rw to from sents) (IdealWorld.Output m__iw ch_id chans ps)
+    -> action_matches cs gks (from, RealWorld.Output m__rw (Some from) (Some to) sents) (IdealWorld.Output m__iw from ch_id chans ps)
 .
-
-(* Inductive action_matches : forall {A B : type}, *)
-(*                            RealWorld.action -> RealWorld.universe A B -> *)
-(*                            IdealWorld.action -> IdealWorld.universe A -> Prop := *)
-(* | Inp : forall A B t (m__rw : RealWorld.crypto t) (m__iw m__expected : IdealWorld.message.message t) *)
-(*                ms (U__rw : RealWorld.universe A B) (U__iw : IdealWorld.universe A) rw iw ch_id cs ps p froms, *)
-(*       rw = (RealWorld.Input m__rw p froms) *)
-(*       -> iw = IdealWorld.Input m__iw ch_id cs ps *)
-(*       -> U__iw.(IdealWorld.channel_vector) #? ch_id = Some ((existT _ _ m__expected) :: ms) *)
-(*       -> MessageEq.message_eq m__rw U__rw m__iw U__iw ch_id *)
-(*       -> action_matches rw U__rw iw U__iw *)
-(* | Out : forall A B t (m__rw : RealWorld.crypto t) (m__iw : IdealWorld.message.message t) *)
-(*           (U__rw : RealWorld.universe A B) (U__iw : IdealWorld.universe A) rw iw ch_id cs ps suid_to suid_from sents, *)
-(*     rw = RealWorld.Output m__rw suid_to suid_from sents *)
-(*     -> iw = IdealWorld.Output m__iw ch_id cs ps *)
-(*     -> MessageEq.message_eq m__rw U__rw m__iw U__iw ch_id *)
-(*     -> action_matches rw U__rw iw U__iw *)
-(* . *)
 
 Section RealWorldUniverseProperties.
   Import RealWorld.
@@ -469,8 +451,8 @@ Section Simulation.
     -> universe_ok U__r
     -> adv_universe_ok U__r
     -> advP U__r.(RealWorld.adversary)
-    -> forall U__r',
-        RealWorld.step_universe U__r Silent U__r'
+    -> forall suid U__r',
+        RealWorld.step_universe suid U__r Silent U__r'
         -> exists U__i',
           istepSilent ^* U__i U__i'
         /\ R (RealWorld.peel_adv U__r') U__i'.
@@ -486,15 +468,8 @@ Section Simulation.
         -> exists ia U__i' U__i'',
             (indexedIdealStep uid Silent) ^* U__i U__i'
             /\ indexedIdealStep uid (Action ia) U__i' U__i''
-            /\ action_matches U__r.(RealWorld.all_ciphers) U__r.(RealWorld.all_keys) ra ia
+            /\ action_matches U__r.(RealWorld.all_ciphers) U__r.(RealWorld.all_keys) (uid,ra) ia
             /\ R (RealWorld.peel_adv U__r') U__i''.
-    (* -> forall ra U__r', *)
-    (*     RealWorld.step_universe U__r (Messages.Action ra) U__r' (* excludes adversary steps *) *)
-    (*     -> exists ia U__i' U__i'', *)
-    (*       istepSilent^* U__i U__i' *)
-    (*     /\ IdealWorld.lstep_universe U__i' (Messages.Action ia) U__i'' *)
-    (*     /\ action_matches U__r.(RealWorld.all_ciphers) U__r.(RealWorld.all_keys) ra ia *)
-    (*     /\ R (RealWorld.peel_adv U__r') U__i''. *)
 
   Definition honest_actions_safe :=
     forall (U__r : RealWorld.universe A B) U__i,

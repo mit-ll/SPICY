@@ -52,42 +52,42 @@ Definition quiet (lbl : RealWorld.rlabel) :=
   | _ => False
   end.
 
-Notation "~^*" := (trc3 RealWorld.step_universe quiet) (at level 0).
+(* Notation "~^*" := (trc3 RealWorld.step_universe quiet) (at level 0). *)
 
 Section RealWorldLemmas.
   Import RealWorld.
 
-  Lemma multiStepSilentInv :
-    forall {A B} (U__r U__r': universe A B) b,
-        ~^* U__r U__r'
-      -> U__r.(adversary).(protocol) = Return b
-      -> U__r = U__r'
-      \/ exists usrs adv cs u_id userData gks ks cmd qmsgs mycs froms tos cur_n,
-          ~^* (buildUniverse usrs adv cs gks u_id
-                                        {| key_heap := ks
-                                         ; protocol := cmd
-                                         ; msg_heap := qmsgs
-                                         ; c_heap := mycs
-                                         ; from_nons := froms
-                                         ; sent_nons := tos
-                                         ; cur_nonce := cur_n |}) U__r'
-          /\ users U__r $? u_id = Some userData
-          /\ step_user Silent
-                      (Some u_id)
-                      (RealWorld.build_data_step U__r userData)
-                      (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cur_n, cmd).
-  Proof.
-    intros * H ADV.
-    invert H; intuition idtac.
-    right.
-    invert H1; unfold quiet in H0.
-    - unfold quiet in H0; destruct b0; try contradiction.
-      repeat eexists; intuition; eauto.
-    - exfalso.
-      destruct U__r; destruct adversary; simpl in *; subst.
-      unfold build_data_step in H; simpl in *.
-      invert H.
-  Qed.
+  (* Lemma multiStepSilentInv : *)
+  (*   forall {A B} (U__r U__r': universe A B) b, *)
+  (*       ~^* U__r U__r' *)
+  (*     -> U__r.(adversary).(protocol) = Return b *)
+  (*     -> U__r = U__r' *)
+  (*     \/ exists usrs adv cs u_id userData gks ks cmd qmsgs mycs froms tos cur_n, *)
+  (*         ~^* (buildUniverse usrs adv cs gks u_id *)
+  (*                                       {| key_heap := ks *)
+  (*                                        ; protocol := cmd *)
+  (*                                        ; msg_heap := qmsgs *)
+  (*                                        ; c_heap := mycs *)
+  (*                                        ; from_nons := froms *)
+  (*                                        ; sent_nons := tos *)
+  (*                                        ; cur_nonce := cur_n |}) U__r' *)
+  (*         /\ users U__r $? u_id = Some userData *)
+  (*         /\ step_user Silent *)
+  (*                     (Some u_id) *)
+  (*                     (RealWorld.build_data_step U__r userData) *)
+  (*                     (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cur_n, cmd). *)
+  (* Proof. *)
+  (*   intros * H ADV. *)
+  (*   invert H; intuition idtac. *)
+  (*   right. *)
+  (*   invert H1; unfold quiet in H0. *)
+  (*   - unfold quiet in H0; destruct b0; try contradiction. *)
+  (*     repeat eexists; intuition; eauto. *)
+  (*   - exfalso. *)
+  (*     destruct U__r; destruct adversary; simpl in *; subst. *)
+  (*     unfold build_data_step in H; simpl in *. *)
+  (*     invert H. *)
+  (* Qed. *)
 
   Lemma invert_return :
     forall (t : user_cmd_type) (r1 r2 : denote t),
@@ -126,7 +126,7 @@ Ltac equality1 :=
 
   | [ H : _ = RealWorld.mkUserData _ _ _ |- _ ] => inversion H; clear H
   | [ H : Some _ = Some _ |- _ ] => inversion H; clear H
-  | [ H : (_ :: _) = (_ :: _) |- _ ] => inversion H; clear H
+  | [ H : (_ :: _) = (_ :: _) |- _ ] => invert H
   | [ H : (_ :: _) = ?x |- _ ] => is_var x; invert H
   | [ H : ?x = (_ :: _) |- _ ] => is_var x; invert H
   | [ H : (_,_) = (_,_) |- _ ] => invert H (* inversion H; clear H *)

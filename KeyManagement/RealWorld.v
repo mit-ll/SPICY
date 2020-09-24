@@ -445,27 +445,15 @@ Inductive action : Type :=
 .
 
 Definition rlabel := @label action.
+Definition uaction := (user_id * action)%type.
+Definition ulabel := @label uaction.
+Definition mkULbl (lbl : rlabel) (uid : user_id) : ulabel :=
+  match lbl with
+  | Silent => Silent
+  | Action a => Action (uid, a)
+  end.
 
 Definition data_step0 A B C : Type :=
-(* ======= *)
-(* Definition action_adversary_safe (honestk : key_perms) (cs : ciphers) (a : action) : Prop := *)
-(*   match a with *)
-(*   | Input  msg pat froms    => msg_pattern_safe honestk pat *)
-(*                             /\ exists c_id c, msg = SignedCiphertext c_id *)
-(*                                       /\ cs $? c_id = Some c *)
-(*                                       /\ ~ List.In (cipher_nonce c) froms *)
-(*   | Output msg msg_from msg_to sents => msg_contains_only_honest_public_keys honestk cs msg *)
-(*                                      /\ msg_honestly_signed honestk cs msg = true *)
-(*                                      /\ msg_to_this_user cs msg_to msg = true *)
-(*                                      /\ msgCiphersSignedOk honestk cs msg *)
-(*                                      /\ exists c_id c, msg = SignedCiphertext c_id *)
-(*                                                /\ cs $? c_id = Some c *)
-(*                                                /\ fst (cipher_nonce c) = msg_from  (* only send my messages *) *)
-(*                                                /\ ~ List.In (cipher_nonce c) sents *)
-(*   end. *)
-
-(* Definition data_step0 A B C : Type := *)
-(* >>>>>>> type-codes *)
   honest_users A * user_data B * ciphers * keys * key_perms * queued_messages * my_ciphers * recv_nonces * sent_nonces * nat * user_cmd C.
 
 Definition build_data_step {A B C} (U : universe A B) (u_data : user_data C) : data_step0 A B (Base C) :=
@@ -487,18 +475,6 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     step_user Silent u_id
               (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Bind (@Return r' v) cmd)
               (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd v)
-(* | StepBindRecur : forall {B r r'} (usrs usrs' : honest_users r') (adv adv' : user_data B) *)
-(*                     lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' sents sents' cur_n cur_n' *)
-(*                     (cmd1 cmd1' : user_cmd r) (cmd2 : <<r>> -> user_cmd (Base r')), *)
-(*     step_user lbl u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd1) *)
-(*                        (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd1') *)
-(*     -> step_user lbl u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Bind cmd1 cmd2) *)
-(*                          (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', Bind cmd1' cmd2) *)
-(* | StepBindProceed : forall {B r r'} (usrs : honest_users r) (adv : user_data B) cs u_id gks ks qmsgs mycs froms sents cur_n *)
-(*                       (v : <<r'>>) (cmd : <<r'>> -> user_cmd (Base r)), *)
-(*     step_user Silent u_id *)
-(*               (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Bind (@Return r' v) cmd) *)
-(*               (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd v) *)
 
 | StepGen : forall {A B} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks qmsgs mycs froms sents cur_n n,
     step_user Silent u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Gen)
@@ -577,13 +553,6 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> step_user Silent u_id
                 (usrs, adv, cs , gks, ks, qmsgs, mycs,  froms, sents, cur_n,  SignEncrypt k__signid k__encid msg_to msg)
                 (usrs, adv, cs', gks, ks, qmsgs, mycs', froms, sents, cur_n', @Return (Crypto t) (SignedCiphertext c_id))
-(* <<<<<<< HEAD *)
-(*                 (usrs, adv, cs , gks, ks, qmsgs, mycs,  froms, sents, cur_n,  SignEncrypt k__signid k__encid msg_to msg) *)
-(*                 (usrs, adv, cs', gks, ks, qmsgs, mycs', froms, sents, cur_n', Return (SignedCiphertext c_id)) *)
-(* ======= *)
-(*                 (usrs, adv, cs , gks, ks, qmsgs, mycs,  froms, sents, cur_n,  SignEncrypt k__signid k__encid msg) *)
-(*                 (usrs, adv, cs', gks, ks, qmsgs, mycs', froms, sents, cur_n', @Return (Crypto t) (SignedCiphertext c_id)) *)
-(* >>>>>>> type-codes *)
 
 | StepDecrypt : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks ks' qmsgs mycs mycs'
                   (msg : message t) k__signid kp__sign k__encid c_id nonce newkeys kt__sign kt__enc msg_to froms sents cur_n,
@@ -614,13 +583,6 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> step_user Silent u_id
                 (usrs, adv, cs , gks, ks, qmsgs, mycs,  froms, sents, cur_n,  Sign k_id msg_to msg)
                 (usrs, adv, cs', gks, ks, qmsgs, mycs', froms, sents, cur_n', @Return (Crypto t) (SignedCiphertext c_id))
-(* <<<<<<< HEAD *)
-(*                 (usrs, adv, cs , gks, ks, qmsgs, mycs,  froms, sents, cur_n,  Sign k_id msg_to msg) *)
-(*                 (usrs, adv, cs', gks, ks, qmsgs, mycs', froms, sents, cur_n', Return (SignedCiphertext c_id)) *)
-(* ======= *)
-(*                 (usrs, adv, cs , gks, ks, qmsgs, mycs,  froms, sents, cur_n,  Sign k_id msg) *)
-(*                 (usrs, adv, cs', gks, ks, qmsgs, mycs', froms, sents, cur_n', @Return (Crypto t) (SignedCiphertext c_id)) *)
-(* >>>>>>> type-codes *)
 
 | StepVerify : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks qmsgs mycs froms sents cur_n
                  (msg : message t) k_id kp kt c_id nonce msg_to,
@@ -653,8 +615,8 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
                 (usrs, adv, cs, gks', ks', qmsgs, mycs, froms, sents, cur_n, @Return (Base Access) (k_id, true))
 .
 
-Inductive step_universe {A B} : universe A B -> rlabel -> universe A B -> Prop :=
-| StepUser : forall U U' (u_id : user_id) userData usrs adv cs gks ks qmsgs mycs froms sents cur_n lbl (cmd : user_cmd (Base A)),
+Inductive step_universe {A B} : option user_id -> universe A B -> ulabel -> universe A B -> Prop :=
+| StepUser : forall U U' (u_id : user_id) userData usrs adv cs gks ks qmsgs mycs froms sents cur_n lbl lbl' (cmd : user_cmd (Base A)),
     U.(users) $? u_id = Some userData
     -> step_user lbl (Some u_id)
                 (build_data_step U userData)
@@ -666,7 +628,8 @@ Inductive step_universe {A B} : universe A B -> rlabel -> universe A B -> Prop :
                                                ; from_nons := froms
                                                ; sent_nons := sents
                                                ; cur_nonce := cur_n |}
-    -> step_universe U lbl U'
+    -> lbl' = mkULbl lbl u_id
+    -> step_universe (Some u_id) U lbl' U'
 | StepAdversary : forall U U' usrs adv cs gks ks qmsgs mycs froms sents cur_n lbl (cmd : user_cmd (Base B)),
     step_user lbl None
               (build_data_step U U.(adversary))
@@ -678,5 +641,5 @@ Inductive step_universe {A B} : universe A B -> rlabel -> universe A B -> Prop :
                                          ; from_nons := froms
                                          ; sent_nons := sents
                                          ; cur_nonce := cur_n |}
-    -> step_universe U Silent U'
+    -> step_universe None U Silent U'
 .

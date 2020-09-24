@@ -102,28 +102,35 @@ Module SimulationAutomation.
       | [ H : RealWorld.step_user _ _ (build_data_step _ _) _ |- _ ] =>
         unfold build_data_step in H; autounfold with user_build in H; simpl in H
 
-      | [ H : ~^* (RealWorld.buildUniverse _ _ _ _ _ _ ) _ |- _] =>
-        unfold RealWorld.buildUniverse in H; autorewrite with simpl_univ in H
+      (* | [ H : ~^* (RealWorld.buildUniverse _ _ _ _ _ _ ) _ |- _] => *)
+      (*   unfold RealWorld.buildUniverse in H; autorewrite with simpl_univ in H *)
       | [ |- context [RealWorld.buildUniverse _ _ _ _ _ _] ] =>
         unfold RealWorld.buildUniverse
 
-      | [ S: ~^* ?U _ |- _ ] => 
-        (* Don't actually multiStep unless we know the state of the starting universe
-         * meaning it is not some unknown hypothesis in the context...
-         *)
-        is_not_var U; eapply multiStepSilentInv in S; split_ors; split_ex; intuition idtac; subst
+      (* | [ S: ~^* ?U _ |- _ ] =>  *)
+      (*   (* Don't actually multiStep unless we know the state of the starting universe *)
+      (*    * meaning it is not some unknown hypothesis in the context... *)
+      (*    *) *)
+      (*   is_not_var U; eapply multiStepSilentInv in S; split_ors; split_ex; intuition idtac; subst *)
 
-      | [ H: step_universe ?U Silent _ |- _ ] => is_not_var U; invert H
-      | [ H: step_universe _ _ _ |- _ ] => invert H
+      | [ H: step_universe _ ?U Silent _ |- _ ] => is_not_var U; invert H
+      | [ H: step_universe _ _ _ _ |- _ ] => invert H
       end.
 
     Ltac prove_alignment1 :=
+      equality1 ||
       match goal with
       | [ |- labels_align _ ] => unfold labels_align; intros
+      (* | [ H : _ = Action _ |- _ ] => invert H *)
+      (* | [ H : Action _ = _ |- _ ] => invert H *)
       | [ H : _ = Output _ _ _ _ |- _ ] => invert H
       | [ H : Output _ _ _ _ = _ |- _ ] => invert H
       | [ H : _ = Input _ _ _ |- _ ] => invert H
       | [ H : Input _ _ _ = _ |- _ ] => invert H
+      | [ H : _ \/ False |- _ ] =>
+        destruct H; [|contradiction]
+      | [ H : _ \/ ?r |- _ ] =>
+        destruct H
       | [ H : indexedRealStep _ _ _ _ |- _ ] => invert H
       | [ H : users _ $? _ = Some _ |- _ ] =>
         progress (autounfold in H; simpl in H)
@@ -148,8 +155,8 @@ Module SimulationAutomation.
         | _ => idtac "***Missing inversion: " cmd; intuition idtac; subst; (progress (simpl in H) || invert H)
         end; split_ex; try discriminate; subst
       | [ |- exists _ _ _, _ ] => simpl; (do 3 eexists); repeat simple apply conj
-      end
-      || equality1.
+      end.
+      (* || equality1. *)
     
     Lemma label_align_step_split :
       forall t__hon t__adv st st',
@@ -166,12 +173,17 @@ Module SimulationAutomation.
                   indexedRealStep uid (Action ra) ru ru'
                   /\ (indexedIdealStep uid Silent) ^* iu iu0
                   /\ indexedIdealStep uid (Action ia) iu0 iu'
-                  /\ action_matches (all_ciphers ru) (all_keys ru) ra ia.
+                  /\ action_matches (all_ciphers ru) (all_keys ru) (uid,ra) ia.
     Proof.
       intros.
       subst; invert H; try contradiction.
 
-      - invert H2; split; eexists; left; eauto.
+      - invert H2;
+          try 
+            match goal with
+            | [ H : Silent = mkULbl ?lbl _ |- _ ] => unfold mkULbl in H; destruct lbl; try discriminate
+            end;
+          split; eexists; left; eauto.
         unfold build_data_step in *; unfold lameAdv in H3; rewrite H3 in *.
         invert H.
       - split; eexists; right; eauto 10.
@@ -194,7 +206,7 @@ Module SimulationAutomation.
                   indexedRealStep uid (Action ra) ru ru'
                   /\ (indexedIdealStep uid Silent) ^* iu iu0
                   /\ indexedIdealStep uid (Action ia) iu0 iu'
-                  /\ action_matches (all_ciphers ru) (all_keys ru) ra ia)).
+                  /\ action_matches (all_ciphers ru) (all_keys ru) (uid,ra) ia)).
     Proof.
       intros;
         subst; invert H; try contradiction; eauto 12.
@@ -517,14 +529,14 @@ Module SimulationAutomation.
 
   Ltac rss_clean uid := real_single_silent_multistep uid; [ solve [eauto 3] .. |].
 
-  Ltac real_silent_multistep :=
-    simpl_real_users_context;
-    match goal with
-    | [ |- ~^* ?U1 ?U2 ] =>
-      first [
-          solve_refl3
-        | figure_out_real_user_step rss_clean U1 U2 ]
-    end.
+  (* Ltac real_silent_multistep := *)
+  (*   simpl_real_users_context; *)
+  (*   match goal with *)
+  (*   | [ |- ~^* ?U1 ?U2 ] => *)
+  (*     first [ *)
+  (*         solve_refl3 *)
+  (*       | figure_out_real_user_step rss_clean U1 U2 ] *)
+  (*   end. *)
 
   Ltac ideal_silent_multistep :=
     simpl_ideal_users_context;
@@ -539,7 +551,7 @@ Module SimulationAutomation.
   Ltac single_step_ideal_universe :=
     simpl_ideal_users_context;
     match goal with
-    | [ |- IdealWorld.lstep_universe ?U1 _ ?U2] =>
+    | [ |- IdealWorld.lstep_universe _ ?U1 _ ?U2] =>
       match U1 with
       | IdealWorld.construct_universe _ ?usrs1 =>
         match U2 with
@@ -573,7 +585,7 @@ Module SimulationAutomation.
 
   Ltac step_ideal_user :=
     match goal with
-    | [ |- IdealWorld.lstep_universe _ (Action _) ?U' ] =>
+    | [ |- IdealWorld.lstep_universe _ _ (Action _) ?U' ] =>
       is_evar U'; simpl_ideal_users_context; (repeat blah1);
       match goal with
       | [ |- IdealWorld.lstep_universe
@@ -597,7 +609,7 @@ Module SimulationAutomation.
 
   Ltac unBindi :=
     match goal with
-    | [ |- IdealWorld.lstep_user (Action _) (_,IdealWorld.Bind _ _,_) _ ] =>
+    | [ |- IdealWorld.lstep_user _ (Action _) (_,IdealWorld.Bind _ _,_) _ ] =>
       eapply IdealWorld.LStepBindRecur
     end.
 
@@ -605,9 +617,9 @@ Module SimulationAutomation.
     simpl
     ; repeat unBindi
     ; match goal with
-      | [ |- IdealWorld.lstep_user (Action _) (_,IdealWorld.Recv _,_) _ ] =>
+      | [ |- IdealWorld.lstep_user _ (Action _) (_,IdealWorld.Recv _,_) _ ] =>
         eapply IdealWorld.LStepRecv'; solve_ideal_step_stuff
-      | [ |- IdealWorld.lstep_user (Action _) (_,IdealWorld.Send _ _,_) _ ] =>
+      | [ |- IdealWorld.lstep_user _ (Action _) (_,IdealWorld.Send _ _,_) _ ] =>
         eapply IdealWorld.LStepSend; solve_ideal_step_stuff
       end.
   
@@ -625,7 +637,7 @@ Module SimulationAutomation.
 
   Hint Extern 1 (indexedIdealStep _ (Action _) _ _) => indexedIdealStep : core.
 
-  Hint Extern 1 (~^* _ _) => solve [ repeat real_silent_multistep ] : core.
+  (* Hint Extern 1 (~^* _ _) => solve [ repeat real_silent_multistep ] : core. *)
   Hint Extern 1 (istepSilent ^* _ _) => ideal_silent_multistep : core.
 
   Hint Extern 1 ({| IdealWorld.channel_vector := _; IdealWorld.users := _ |} = _) => smash_universe; solve_concrete_maps : core.
@@ -665,19 +677,19 @@ Module SimulationAutomation.
     | [ |- action_matches _ _ _ _ ] => progress simpl_real_users_context
     | [ |- action_matches _ _ _ _ ] => progress simpl_ideal_users_context
     | [ H : ?cs $? ?cid = Some (SigCipher _ _ _ _ )
-        |- action_matches ?cs _ (RealWorld.Output (SignedCiphertext ?cid) _ _ _) _ ] => eapply OutSig
+        |- action_matches ?cs _ (_,RealWorld.Output (SignedCiphertext ?cid) _ _ _) _ ] => eapply OutSig
     | [ H : ?cs $? ?cid = Some (SigEncCipher _ _ _ _ _ )
-        |- action_matches ?cs _ (RealWorld.Output (SignedCiphertext ?cid) _ _ _) _ ] => eapply OutEnc
+        |- action_matches ?cs _ (_,RealWorld.Output (SignedCiphertext ?cid) _ _ _) _ ] => eapply OutEnc
     | [ H : ?cs $? ?cid = Some (SigCipher _ _ _ _ )
-        |- action_matches ?cs _ (RealWorld.Input (SignedCiphertext ?cid) _ _) _ ] => eapply InpSig
+        |- action_matches ?cs _ (_,RealWorld.Input (SignedCiphertext ?cid) _ _) _ ] => eapply InpSig
     | [ H : ?cs $? ?cid = Some (SigEncCipher _ _ _ _ _ )
-        |- action_matches ?cs _ (RealWorld.Input (SignedCiphertext ?cid) _ _) _ ] => eapply InpEnc
-    | [ |- action_matches ?cs _ (RealWorld.Output (SignedCiphertext ?cid) _ _ _) _ ] =>
+        |- action_matches ?cs _ (_,RealWorld.Input (SignedCiphertext ?cid) _ _) _ ] => eapply InpEnc
+    | [ |- action_matches ?cs _ (_,RealWorld.Output (SignedCiphertext ?cid) _ _ _) _ ] =>
       match cs with
       | context [ _ $+ (cid, SigCipher _ _ _ _)] => eapply OutSig
       | context [_ $+ (cid, SigEncCipher _ _ _ _ _)] => eapply OutEnc
       end
-    | [ |- action_matches ?cs _ (RealWorld.Input (SignedCiphertext ?cid) _ _) _ ] =>
+    | [ |- action_matches ?cs _ (_,RealWorld.Input (SignedCiphertext ?cid) _ _) _ ] =>
       match cs with
       | context[ _ $+ (cid, SigCipher _ _ _ _)] => eapply InpSig
       | context[ _ $+ (cid, SigEncCipher _ _ _ _ _)] => eapply InpEnc
@@ -1000,7 +1012,7 @@ Module SimulationAutomation.
     (do 3 eexists); repeat (simple apply conj);
     [ solve [ eauto ]
     | indexedIdealStep; simpl
-    | repeat solve_action_matches1; clean_map_lookups; ChMaps.ChMap.clean_map_lookups
+    | subst; repeat solve_action_matches1; clean_map_lookups; ChMaps.ChMap.clean_map_lookups
     ]; eauto; simpl; eauto.
 
 End SimulationAutomation.
@@ -1290,7 +1302,7 @@ Module Gen.
       concrete iuniv u; invert H
     | [H : IdealWorld.lstep_universe ?u _ _ |- _] =>
       concrete iuniv u; invert H
-    | [H : IdealWorld.lstep_user _ (_, ?p, _) _ |- _] =>
+    | [H : IdealWorld.lstep_user _ _ (_, ?p, _) _ |- _] =>
       concrete iproc p; invert H
     end.
 
@@ -1304,7 +1316,7 @@ Module Gen.
 
   Ltac infer_istep :=
     match goal with
-    | [H : IdealWorld.lstep_user _ (_, ?u.(IdealWorld.protocol), _) _,
+    | [H : IdealWorld.lstep_user _ _ (_, ?u.(IdealWorld.protocol), _) _,
            L : ?m $? ?u_id = Some ?u |- _] =>
       case_lookup L
     end.
@@ -1533,7 +1545,7 @@ Module Gen.
 
                 | [H : indexedRealStep _ _ _ _ |- _ ] =>
                   invert H
-                | [H : RealWorld.step_universe ?u _ _ |- _] =>
+                | [H : RealWorld.step_universe _ ?u _ _ |- _] =>
                   concrete u; churn
                 | [H : RealWorld.step_user _ None _ _ |- _] =>
                   (* churn *)

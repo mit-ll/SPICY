@@ -88,7 +88,8 @@ Module AdversarySafeProtocol ( Proto : SafeProtocol ).
   Hint Resolve
        R_silent_simulates
        R_loud_simulates
-       R_honest_actions_safe.
+       R_honest_actions_safe
+    : core.
 
   Lemma proto_lamely_refines :
     refines (lameAdv b) U__r U__i.
@@ -98,7 +99,7 @@ Module AdversarySafeProtocol ( Proto : SafeProtocol ).
     intuition eauto.
   Qed.
 
-  Hint Resolve proto_lamely_refines.
+  Hint Resolve proto_lamely_refines : core.
 
   Lemma proto_starts_ok : universe_starts_ok U__r.
   Proof.
@@ -109,7 +110,7 @@ Module AdversarySafeProtocol ( Proto : SafeProtocol ).
     intuition eauto.
   Qed.
 
-  Hint Resolve proto_starts_ok.
+  Hint Resolve proto_starts_ok : core.
 
   Theorem protocol_with_adversary_could_generate_spec :
     forall U__ra advcode acts__r,
@@ -178,20 +179,20 @@ Definition labels_align {t__hon t__adv} (st : @ModelState t__hon t__adv) : Prop 
       -> exists ia iu' iu'',
         (indexedIdealStep uid Silent) ^* iu iu'
         /\ indexedIdealStep uid (Action ia) iu' iu''
-        /\ action_matches ru.(RealWorld.all_ciphers) ru.(RealWorld.all_keys) ra ia.
+        /\ action_matches ru.(RealWorld.all_ciphers) ru.(RealWorld.all_keys) (uid,ra) ia.
 
 Inductive step {t__hon t__adv : type} :
     @ModelState t__hon t__adv 
   -> @ModelState t__hon t__adv
   -> Prop :=
-| RealSilent : forall ru ru' iu b,
-    RealWorld.step_universe ru Silent ru'
+| RealSilent : forall ru ru' suid iu b,
+    RealWorld.step_universe suid ru Silent ru'
     -> step (ru, iu, b) (ru', iu, b)
 | BothLoud : forall uid ru ru' iu iu' iu'' ra ia b,
     indexedRealStep uid (Action ra) ru ru'
     -> (indexedIdealStep uid Silent) ^* iu iu'
     -> indexedIdealStep uid (Action ia) iu' iu''
-    -> action_matches ru.(all_ciphers) ru.(all_keys) ra ia
+    -> action_matches ru.(all_ciphers) ru.(all_keys) (uid,ra) ia
     -> labels_align (ru, iu, b)
     -> step (ru, iu, b) (ru', iu'', b)
 | MisalignedCanStep : forall uid ru ru' iu iu' iu'' ra ia b,
@@ -219,7 +220,7 @@ Inductive indexedModelStep {t__hon t__adv : type} (uid : user_id) :
     indexedRealStep uid (Action ra) ru ru'
     -> (indexedIdealStep uid Silent) ^* iu iu'
     -> indexedIdealStep uid (Action ia) iu' iu''
-    -> action_matches ru.(all_ciphers) ru.(all_keys) ra ia
+    -> action_matches ru.(all_ciphers) ru.(all_keys) (uid,ra) ia
     -> labels_align (ru, iu, b)
     -> indexedModelStep uid (ru, iu, b) (ru', iu'', b)
 | MisalignedCanStepi : forall ru ru' iu iu' iu'' ra ia b,
@@ -287,24 +288,6 @@ Section RealWorldLemmas.
     RealWorld
     RealWorldNotations.
 
-  Lemma universe_predicates_preservation :
-    forall {A B} (U U' : universe A B) lbl,
-      universe_ok U
-      -> adv_universe_ok U
-      -> honest_cmds_safe U
-      -> step_universe U lbl U'
-      -> universe_ok U'
-      /\ adv_universe_ok U'.
-  Proof.
-    intros * UOK AUOK HCS STEP.
-    destruct lbl;
-      intuition eauto.
-
-    unfold adv_universe_ok in *; split_ands; 
-      eapply honest_labeled_step_univ_ok;
-      eauto using honest_cmds_implies_safe_actions.
-  Qed.
-
   Lemma user_step_preserves_lame_adv' :
     forall A B C lbl u_id bd bd',
       step_user lbl (Some u_id) bd bd'
@@ -340,9 +323,9 @@ Section RealWorldLemmas.
   Qed.
 
   Lemma universe_step_preserves_lame_adv :
-    forall {t__h t__a} (U U' : universe t__h t__a) lbl b,
+    forall {t__h t__a} (U U' : universe t__h t__a) suid lbl b,
       lameAdv b U.(adversary)
-      -> step_universe U lbl U'
+      -> step_universe suid U lbl U'
       -> lameAdv b U'.(adversary).
   Proof.
     intros * LAME STEP.
@@ -367,7 +350,7 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
   Lemma labels_align_inv : invariantFor SYS alignment.
   Proof. eapply invariant_weaken; [ apply safe_invariant | firstorder idtac]. Qed.
 
-  Hint Resolve safety_inv labels_align_inv.
+  Hint Resolve safety_inv labels_align_inv : core.
 
   Definition reachable_from := (fun ru iu ru' iu' b b' => SYS.(Step)^* (ru, iu, b) (ru', iu', b')).
   (* Definition reachable_froms := (fun st st' => reachable_from (fst st) (snd st) (fst st') (snd st')). *)
@@ -520,15 +503,15 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
   Qed.
 
   Lemma reachable_from_silent_step :
-    forall iu (ru U U' : RealWorld.universe t__hon t__adv) v v',
+    forall iu (ru U U' : RealWorld.universe t__hon t__adv) suid v v',
       SYS.(Step) ^* (ru0,iu0,v) (ru,iu,v')
-      -> step_universe U Silent U'
+      -> step_universe suid U Silent U'
       -> lameAdv b U.(adversary)
       -> ru.(users) = U.(users)
       -> ru.(all_ciphers) = U.(all_ciphers)
       -> ru.(all_keys) = U.(all_keys)
       -> exists U'',
-          step_universe ru Silent U''
+          step_universe suid ru Silent U''
           /\ peel_adv U' = peel_adv U''.
   Proof.
     intros.
@@ -538,7 +521,7 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
     destruct ru; destruct U; simpl in *; subst.
     invert H0.
     - destruct userData; unfold build_data_step in *; simpl in *.
-
+      unfold mkULbl; destruct lbl; invert H6.
       eapply lame_adv_no_impact_silent_step in H3; split_ex.
       eexists; split.
       eapply StepUser; unfold build_data_step; eauto; simpl in *.

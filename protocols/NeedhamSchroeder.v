@@ -143,9 +143,12 @@ Module MyProtocol.
     Notation KID__S := 2.
 
 
-    Notation KEYS := [ (MkCryptoKey KID__A Encryption AsymKey) ;
-                         (MkCryptoKey KID__B Encryption AsymKey) ;
-                         (MkCryptoKey KID__S Signing SymKey) ].
+    (* Notation KEYS := [ (MkCryptoKey KID__A Encryption AsymKey) ; *)
+    (*                      (MkCryptoKey KID__B Encryption AsymKey) ; *)
+    (*                      (MkCryptoKey KID__S Signing SymKey) ]. *)
+
+    Notation KEYS := [ ekey KID__A ; ekey KID__B ; skey_sym KID__S ].
+
 
     Notation KEYS__A := ($0 $+ (KID__A, true) $+ (KID__S, true)).
     Notation KEYS__B := ($0 $+ (KID__B, true) $+ (KID__S, true)).
@@ -257,7 +260,60 @@ Module MyProtocolSecure <: AutomatedSafeProtocol.
       gen1.
       gen1.
       gen1.
-      gen1. (* breaks here *)
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+
+      eapply msc_step_alt.
+      + unfold oneStepClosure_new; repeat gen1'.
+      + simplify
+        ; sets
+        ; split_ex
+        ; propositional.
+
+        Ltac xx1 :=
+          match goal with
+          | [H : (?x1, ?y1) = ?p |- _] =>
+            match p with
+            | (?x2, ?y2) =>
+              tryif (concrete x2; concrete y2)
+              then let H' := fresh H
+                   in assert (H' : (x1, y1) = (x2, y2) -> x1 = x2 /\ y1 = y2)
+                     by equality
+                      ; propositional
+                      ; discriminate
+              else idtac "inverting"; invert H
+            | _ => idtac "also inverting"; invert H
+            end
+          end.
+
+          match goal with
+          | [H : (?x1, ?y1, ?z1) = ?p |- _] =>
+            idtac p;
+            match p with
+            | (?x2, ?y2, ?z2) =>
+              tryif (concrete x2; concrete y2; concrete z2)
+              then let H' := fresh Z
+                   in idtac "asserting"; assert (H' : (x1, y1, z1) = (x2, y2, z2) -> x1 = x2 /\ y1 = y2 /\ z1 = z2)
+                     by (equality
+                      ; propositional
+                      ; discriminate)
+              else idtac "inverting"; invert H
+            | _ => idtac "also inverting"; invert H
+            end
+          end.
+        
+
+        xx1.
+        xx1.
+        
+
+        all : try solve [ xx ].
+        xx
+
+      
+      (* breaks here *)
       (* gen1. *)
       (* gen1. *)
       match goal with 
