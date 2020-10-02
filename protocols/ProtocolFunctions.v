@@ -96,6 +96,16 @@ Section RealWorldLemmas.
   
 End RealWorldLemmas.
 
+Lemma nil_not_app_cons :
+  forall A (l1 l2 : list A) e,
+    [] = l1 ++ e :: l2
+    -> False.
+Proof.
+  intros.
+  destruct l1.
+  rewrite app_nil_l in H; invert H.
+  rewrite <- app_comm_cons in H; invert H.
+Qed.
 
 Ltac equality1 :=
   match goal with
@@ -130,6 +140,7 @@ Ltac equality1 :=
   | [ H : (_ :: _) = ?x |- _ ] => is_var x; invert H
   | [ H : ?x = (_ :: _) |- _ ] => is_var x; invert H
   | [ H : (_,_) = (_,_) |- _ ] => invert H (* inversion H; clear H *)
+  | [ H : [] = _ ++ _ :: _ |- _ ] => apply nil_not_app_cons in H; contradiction
   (* | [ H : (_,_,_) = (_,_,_) |- _ ] => inversion H; clear H *)
   | [ H : Action _ = Action _ |- _ ] => inversion H; clear H
   | [ H : RealWorld.Return _ = RealWorld.Return _ |- _ ] => apply invert_return in H
@@ -343,24 +354,31 @@ Section InversionPrinciples.
         /\ tos = tos'
         /\ cur_n = cur_n'
         /\ gks = gks'
-        /\ exists msg msgs,
-            qmsgs = (existT crypto t msg) :: msgs
-            /\ qmsgs' = msgs
+        /\ exists msg msgs1 msgs2,
+            qmsgs = msgs1 ++ (existT crypto t msg) :: msgs2
+            /\ qmsgs' = msgs1 ++ msgs2
+            /\ Forall (fun '(existT _ _ msg')  =>
+                        ~ msg_accepted_by_pattern cs u_id froms pat msg'
+                        /\ forall cid c cid' c', msg = SignedCiphertext cid
+                                           -> cs $? cid = Some c
+                                           -> msg' = SignedCiphertext cid'
+                                           -> cs $? cid' = Some c'
+                                           -> cipher_nonce c <> cipher_nonce c' ) msgs1
             /\ ( ( msg_accepted_by_pattern cs u_id froms pat msg
                   /\ ks' = ks $k++ findKeysCrypto cs msg
                   /\ mycs' = findCiphers msg ++ mycs
                   /\ froms' = updateTrackedNonce u_id froms cs msg
                   /\ lbl = Action (Input msg pat froms)
                   /\ cmd = @Return (Crypto t) msg)
-                \/ ( ~ msg_accepted_by_pattern cs u_id froms pat msg
-                    /\ ks = ks'
-                    /\ mycs = mycs'
-                    /\froms' = (if msg_signed_addressed (findUserKeys usrs) cs u_id msg
-                               then updateTrackedNonce u_id froms cs msg
-                               else froms)
-                    /\ lbl = Silent
-                    /\ cmd = Recv pat
-              )).
+                (* \/ ( ~ msg_accepted_by_pattern cs u_id froms pat msg *)
+                (*     /\ ks = ks' *)
+                (*     /\ mycs = mycs' *)
+                (*     /\froms' = (if msg_signed_addressed (findUserKeys usrs) cs u_id msg *)
+                (*                then updateTrackedNonce u_id froms cs msg *)
+                (*                else froms) *)
+                (*     /\ lbl = Silent *)
+                (*     /\ cmd = Recv pat) *)
+              ).
   Proof.
     intros * H.
     invert H; intuition idtac; repeat eexists; intuition eauto.
@@ -410,7 +428,8 @@ Section InversionPrinciples.
   
   Lemma step_user_inv_enc :
     forall {A B t} (usrs usrs' : honest_users A) (adv adv' : user_data B) k__sign k__enc (msg : message t)
-      lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' tos tos' cur_n cur_n' msg_to cmd,
+      lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' tos tos' cur_n cur_n'
+      msg_to cmd,
       step_user lbl
                 u_id
                 (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cur_n, SignEncrypt k__sign k__enc msg_to msg)
@@ -430,9 +449,10 @@ Section InversionPrinciples.
               /\ ks $? k__enc   = Some kp__enc
               /\ ks $? k__sign  = Some true
               /\ lbl = Silent)
-        /\ (exists c_id : nat, 
+        /\ (exists c_id msg_nonce, 
               ~ In c_id cs
-              /\ cs' = cs $+ (c_id, SigEncCipher k__sign k__enc msg_to (u_id, cur_n) msg)
+              /\ cs' = cs $+ (c_id, SigEncCipher k__sign k__enc msg_to msg_nonce msg)
+              /\ (u_id <> None -> msg_nonce = (u_id, cur_n))
               /\ mycs' = c_id :: mycs
               /\ cmd = @Return (Crypto t) (SignedCiphertext c_id)).
   Proof.
@@ -473,7 +493,7 @@ Section InversionPrinciples.
   Qed.
 
   Lemma step_user_inv_sign :
-    forall {A B t} (usrs usrs' : honest_users A) (adv adv' : user_data B) k__sign (msg : message t) msg_to
+    forall {A B t} (usrs usrs' : honest_users A) (adv adv' : user_data B) k__sign (msg : message t) msg_to 
       lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' tos tos' cur_n cur_n' cmd,
       step_user lbl
                 u_id
@@ -492,9 +512,10 @@ Section InversionPrinciples.
         /\ (exists kt__sign,
               gks $? k__sign = Some (MkCryptoKey k__sign Signing kt__sign)
               /\ ks $? k__sign  = Some true)
-        /\ (exists c_id,
+        /\ (exists c_id msg_nonce,
               ~ In c_id cs
-              /\ cs' = cs $+ (c_id, SigCipher k__sign msg_to (u_id, cur_n) msg)
+              /\ cs' = cs $+ (c_id, SigCipher k__sign msg_to msg_nonce msg)
+              /\ (u_id <> None -> msg_nonce = (u_id, cur_n))
               /\ mycs' = c_id :: mycs
               /\ cmd = @Return (Crypto t) (SignedCiphertext c_id)).
   Proof.

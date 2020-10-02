@@ -460,6 +460,9 @@ Ltac process_ctx1 :=
   (* (forall kid, HonestKey ctx kid -> (findUserKeys usrs) $? kid = Some true) *)
   (* | [ HK : HonestKey ?ctx _, H : (forall _, HonestKey ?ctx _  -> _) |- _ ] => *)
   (*   generalize (H _ HK); intros; clear HK *)
+  | [ H : Some _ <> None -> ?non = (Some ?uid, ?curn) |- _ ] =>
+    assert (non = (Some uid,curn)) by (eapply H; congruence); subst; clear H
+                                                                
   | [ |- incl [?x] (?x :: _) ] =>
     let LIN := fresh "LIN"
     in  unfold incl; intros * LIN; simpl in LIN; split_ors; try contradiction; subst
@@ -807,14 +810,14 @@ Proof.
     unfold typingcontext_sound in *; repeat simple apply conj; intros; split_ands; eauto.
     autorewrite with find_user_keys; process_ctx; eauto.
     
-    assert (msg_pattern_safe (findUserKeys usrs') pat) by (invert H37; eauto).
+    assert (msg_pattern_safe (findUserKeys usrs') pat) by (invert H38; eauto).
     assert (msg_honestly_signed (findUserKeys usrs') cs' msg = true) by eauto.
-    unfold msg_honestly_signed in H12.
+    unfold msg_honestly_signed in H13.
     destruct (msg_signing_key cs' msg); try discriminate.
-    rewrite <- honest_key_honest_keyb in H12.
-    specialize (H1 _ eq_refl); split_ands.
-    specialize (H13 H12); split_ands.
-    eapply H5 in H2; split_ex; subst.
+    rewrite <- honest_key_honest_keyb in H13.
+    specialize (H2 _ eq_refl); split_ands.
+    specialize (H14 H13); split_ands.
+    eapply H5 in H3; split_ex; subst.
     destruct (u_id1 ==n cipher_to_user x0); subst; clean_map_lookups;
       process_ctx; eauto.
 
@@ -830,7 +833,7 @@ Proof.
 
   - unfold typingcontext_sound in *; split_ands; split; intros; eauto.
     autorewrite with find_user_keys; process_ctx; eauto.
-    eapply H6 in H11; split_ex; subst.
+    eapply H7 in H12; split_ex; subst.
     destruct (u_id1 ==n cipher_to_user x0); subst; clean_map_lookups; eauto;
       process_ctx; eauto.
 
@@ -846,7 +849,7 @@ Proof.
 
   - unfold typingcontext_sound in *; split_ands; split; intros; eauto.
     autorewrite with find_user_keys; process_ctx; eauto.
-    apply H4 in H9; eauto; split_ex; subst.
+    apply H5 in H10; eauto; split_ex; subst.
     destruct (u_id1 ==n cipher_to_user x0); subst; clean_map_lookups; eauto;
       process_ctx; eauto.
     
@@ -919,7 +922,7 @@ Section PredicatePreservation.
       econstructor; eauto.
       econstructor; eauto.
       intros * FKM.
-      eapply H32 in FKM; split_ex; eauto.
+      eapply H33 in FKM; split_ex; eauto.
       unfold encrypted_ciphers_ok in *; rewrite Forall_natmap_forall in *; intros; eauto.
 
     - eapply encrypted_ciphers_ok_new_honest_key_adv_univ with (honestk := (findUserKeys usrs'));
@@ -981,10 +984,10 @@ Section PredicatePreservation.
         simpl in *;
         rewrite findUserKeys_readd_user_addnl_keys; eauto.
 
-      specialize (H11 _ _ H28); simpl in *.
+      specialize (H12 _ _ H29); simpl in *.
 
       assert (msg_pattern_safe (findUserKeys usrs') pat) by
-          (unfold typingcontext_sound in *; split_ex; invert H23; eauto).
+          (unfold typingcontext_sound in *; split_ex; invert H24; eauto).
       
       solve_perm_merges;
         try
@@ -1001,7 +1004,7 @@ Section PredicatePreservation.
         clean_context; invert MHS.
         destruct c; simpl in *; clean_map_lookups; eauto.
         encrypted_ciphers_prop; eauto.
-        specialize (H13 _ _ H1); split_ands; subst; clean_map_lookups; eauto.
+        specialize (H14 _ _ H1); split_ands; subst; clean_map_lookups; eauto.
 
       + generalize (msg_honestly_signed_has_signing_key_cipher_id _ _ _ MHS); intros; split_ands; split_ex.
         eapply msg_honestly_signed_signing_key_honest in MHS; eauto.
@@ -1011,9 +1014,9 @@ Section PredicatePreservation.
         clean_context; invert MHS.
         destruct c; simpl in *; clean_map_lookups; eauto.
         encrypted_ciphers_prop; eauto.
-        specialize (H13 _ _ H1); split_ands; subst; clean_map_lookups; eauto.
+        specialize (H14 _ _ H1); split_ands; subst; clean_map_lookups; eauto.
 
-      + eapply H11 in H0; eauto.
+      + eapply H12 in H0; eauto.
         solve_perm_merges; eauto.
 
     - unfold honest_users_only_honest_keys in *; intros.
@@ -1086,7 +1089,7 @@ Section PredicatePreservation.
 
     unfold typingcontext_sound in *; split_ex.
     assert (msg_pattern_safe (findUserKeys usrs') pat) by
-        (unfold typingcontext_sound in *; split_ex; invert H11; eauto).
+        (unfold typingcontext_sound in *; split_ex; invert H12; eauto).
     msg_queue_prop; eapply encrypted_ciphers_ok_addnl_pubk; auto.
     specialize_msg_ok; eauto.
   Qed.
@@ -1120,7 +1123,7 @@ Section PredicatePreservation.
       eapply IHstep_user in H6; eauto.
 
     - assert (msg_pattern_safe (findUserKeys usrs') pat) by
-          (unfold typingcontext_sound in *; split_ex; invert H36; eauto).
+          (unfold typingcontext_sound in *; split_ex; invert H37; eauto).
 
       msg_queue_prop; eauto.
       specialize_msg_ok.
@@ -1176,7 +1179,7 @@ Section PredicatePreservation.
       eapply IHstep_user in H7; eauto.
 
     - assert (msg_pattern_safe (findUserKeys usrs') pat) by
-          (unfold typingcontext_sound in *; split_ex; invert H38; eauto).
+          (unfold typingcontext_sound in *; split_ex; invert H39; eauto).
 
       unfold message_queues_ok in *; rewrite Forall_natmap_forall in *; intros;
         autorewrite with find_user_keys in *.
@@ -1284,13 +1287,13 @@ Section PredicatePreservation.
           | [ H : keys_and_permissions_good _ _ _ |- _ ] => unfold keys_and_permissions_good in H; split_ands
           end.
 
-    - invert H25; split_ex.
-      invert H2; split_ex.
+    - invert H26; split_ex.
+      eapply break_msg_queue_prop in H2; split_ex.
       unfold adv_no_honest_keys in *; intros.
-      specialize (H23 k_id); intuition idtac.
+      specialize (H24 k_id); intuition idtac.
       right; right; intuition eauto.
-      eapply merge_perms_split in H7; split_ors; auto.
-      eapply H2 in H7; split_ex; eauto.
+      eapply merge_perms_split in H9; split_ors; auto.
+      eapply H2 in H9; split_ex; eauto.
       
     - assert (adv_no_honest_keys (findUserKeys usrs') (key_heap adv')) as ADV by assumption.
       specialize (ADV k__encid); split_ors; split_ands; try contradiction;
@@ -1339,7 +1342,7 @@ Section PredicatePreservation.
     - invert H31.
       eapply IHstep_user in H6; eauto.
 
-    - assert (msg_pattern_safe (findUserKeys usrs') pat) by (unfold typingcontext_sound in *; split_ex; invert H38; eauto).
+    - assert (msg_pattern_safe (findUserKeys usrs') pat) by (unfold typingcontext_sound in *; split_ex; invert H39; eauto).
       msg_queue_prop; specialize_msg_ok;
         unfold adv_no_honest_keys, message_no_adv_private in *;
         simpl in *;
@@ -1396,10 +1399,10 @@ Section PredicatePreservation.
     - unfold keys_and_permissions_good in *; intuition eauto.
       unfold permission_heap_good in *; intros.
       cases (key_heap adv' $? k_id); eauto.
-      invert H21; split_ex.
-      invert H3; split_ex.
+      hnf in H22; split_ex.
+      eapply break_msg_queue_prop in H3; split_ex.
       cases (findKeysCrypto cs' msg $? k_id); solve_perm_merges.
-      specialize (H3 _ _ H7); split_ex; subst.
+      specialize (H3 _ _ H9); split_ex; subst.
       cases (gks' $? k_id); try contradiction; eauto.
     - destruct rec_u; simpl in *.
       eapply keys_and_permissions_good_readd_user_same_perms; eauto.
@@ -1522,7 +1525,7 @@ Section PredicatePreservation.
       eapply IHstep_user in H6; eauto.
 
     - assert (msg_pattern_safe (findUserKeys usrs') pat)
-        by (unfold typingcontext_sound in *; invert H37; split_ex; eauto).
+        by (unfold typingcontext_sound in *; invert H38; split_ex; eauto).
       assert (msg_honestly_signed (findUserKeys usrs') cs' msg = true) by eauto.
       split_ex; split; eauto.
       generalize H0; intros; eapply msg_honestly_signed_has_signing_key_cipher_id in H0; split_ex.
@@ -1549,8 +1552,8 @@ Section PredicatePreservation.
     - rewrite !Forall_forall in *; split_ex; split; intros; eauto.
 
       + destruct x; intros; eauto.
-        eapply H5 in H7; eauto.
-        unfold typingcontext_sound in *; invert H39; process_ctx; eauto.
+        eapply H5 in H8; eauto.
+        unfold typingcontext_sound in *; invert H40; process_ctx; eauto.
         split_ex; split; intros; eauto.
         * unfold findKeysCrypto in *; context_map_rewrites; destruct c; eauto.
           destruct (c_id ==n c_id0); subst; clean_map_lookups; eauto.
@@ -1567,15 +1570,15 @@ Section PredicatePreservation.
     - rewrite !Forall_forall in *; split_ex; split; intros; eauto.
 
       + destruct x; intros; eauto; simpl in *.
-        eapply H3 in H5; eauto; split_ex.
-        unfold typingcontext_sound in *; invert H37; process_ctx; eauto.
+        eapply H3 in H6; eauto; split_ex.
+        unfold typingcontext_sound in *; invert H38; process_ctx; eauto.
         split_ex; split; intros; eauto.
         * unfold findKeysCrypto in *; context_map_rewrites; destruct c; eauto.
           destruct (c_id ==n c_id0); subst; clean_map_lookups; eauto.
-          eapply H13 in H11; split_ex; subst.
-          eapply H8 in H11.
+          eapply H14 in H4; split_ex; subst.
+          eapply H9 in H4.
           keys_and_permissions_prop.
-          eapply H18 in H11; split_ex; split; intros; clean_map_lookups.
+          eapply H18 in H4; split_ex; split; intros; clean_map_lookups.
           
         * destruct (c_id ==n c_id0); subst; clean_map_lookups; eauto.
 
@@ -1625,58 +1628,59 @@ Section PredicatePreservation.
       autorewrite with find_user_keys;
       simpl;
       eauto;
-      clean_context.
+      clean_context. 
 
     - split_ex.
-      invert H; split; eauto.
-      clear H4; rewrite Forall_forall in *; intros.
-      rewrite in_app_iff in H; split_ors; eauto.
+      eapply break_msg_queue_prop in H; split_ex; split; eauto.
+      clear H1; rewrite Forall_forall in *; intros.
+      rewrite in_app_iff in H1; split_ors; eauto.
 
-    - split_ex.
-      invert H; split; eauto.
+    (* Recv Drop rule *)
+    (* - split_ex. *)
+    (*   invert H; split; eauto. *)
 
     - split_ex; split;
         rewrite Forall_forall in *; intros.
 
       + destruct x; intros; eauto.
-        eapply H5 in H7; split_ex; split; intros; eauto.
+        eapply H5 in H8; split_ex; split; intros; eauto.
 
         * destruct c; simpl in *; eauto.
           destruct (c_id ==n c_id0); subst; clean_map_lookups; eauto.
         * destruct c; simpl in *; try contradiction.
-          specialize (H8 _ H9); split_ex.
+          specialize (H9 _ H10); split_ex.
           split_ors; subst; try contradiction.
           destruct (c_id ==n c_id0); subst; clean_map_lookups; eauto.
         
       + simpl in *; split_ors; subst; eauto.
-        eapply H6 in H7; split_ex.
+        eapply H7 in H8; split_ex.
         destruct (c_id ==n x); subst; clean_map_lookups; eauto.
 
     - split_ex; split;
         rewrite Forall_forall in *; intros.
 
       + destruct x; intros; eauto.
-        eapply H3 in H5; split_ex; split; intros; eauto.
+        eapply H3 in H6; split_ex; split; intros; eauto.
 
         * destruct c; simpl in *; eauto.
           destruct (c_id ==n c_id0); subst; clean_map_lookups; eauto.
           split.
-          ** unfold keys_and_permissions_good in H33; split_ex.
-             specialize (H2 _ _ H7).
-             unfold permission_heap_good in H10; split_ors; eauto; unfold not; intros;
-               eapply H10 in H2; split_ex; clean_map_lookups.
+          ** unfold keys_and_permissions_good in H34; split_ex.
+             specialize (H2 _ _ H8).
+             unfold permission_heap_good in H11; split_ors; eauto; unfold not; intros;
+               eapply H11 in H2; split_ex; clean_map_lookups.
 
-          ** specialize (H34 k); intros; subst; unfold not; intros.
-             specialize (H2 _ _ H7).
+          ** specialize (H35 k); intros; subst; unfold not; intros.
+             specialize (H2 _ _ H8).
              split_ors; clean_map_lookups; eauto.
           
         * destruct c; simpl in *; try contradiction.
-          specialize (H6 _ H7); split_ex.
+          specialize (H7 _ H8); split_ex.
           split_ors; subst; try contradiction.
           destruct (c_id ==n c_id0); subst; clean_map_lookups; eauto.
         
       + simpl in *; split_ors; subst; eauto.
-        eapply H4 in H5; split_ex.
+        eapply H5 in H6; split_ex.
         destruct (c_id ==n x); subst; clean_map_lookups; eauto.
         
     - split_ex; split; eauto.

@@ -181,6 +181,15 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
 
   (* Set Ltac Profiling. *)
 
+  Definition msg_split_predicate {t} (msg : crypto t) : Prop :=
+    ~ msg_accepted_by_pattern cs u_id froms pat msg'
+    /\ forall cid c cid' c', msg = SignedCiphertext cid
+                       -> cs $? cid = Some c
+                       -> msg' = SignedCiphertext cid'
+                       -> cs $? cid' = Some c'
+                       -> cipher_nonce c <> cipher_nonce c'
+
+
   Lemma safe_invariant :
     invariantFor
       {| Initial := {(ru0, iu0, true)}; Step := @step t__hon t__adv  |}
@@ -195,6 +204,60 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
       gen1.
       gen1.
       gen1.
+
+      eapply msc_step_alt.
+      + unfold oneStepClosure_new; repeat gen1'.
+
+        match goal with
+        | [ S : step ?st _ |- _ ] =>
+          concrete st;
+            match goal with
+            | [ LA : labels_align ?st |- _ ] =>
+              eapply label_align_step_split in S; (reflexivity || eauto 2)
+            | _ =>
+              idtac "proving alignment 1"; assert (labels_align st) (* by ((repeat prove_alignment1); eauto) *)
+            end
+        end.
+
+        repeat prove_alignment1.
+        
+        Ltac process_message cs uid froms pat msg targM :=
+          assert (RealWorld.msg_accepted_by_pattern cs uid froms pat msg) by (econstructor; eauto)
+        (* Add failing case *) 
+        .
+
+        Ltac process_messages cs uid froms pat msgs msgsacc targT targM :=
+          match msgs with
+          | existT _ ?curt ?curm :: ?curms =>
+            process_message cs uid froms pat curm targM
+            ; match goal with
+              | [ H : RealWorld.msg_accepted_by_pattern cs uid froms pat curm |- _ ] => (* success! *)
+                idtac "success"
+              | [ H : ~ RealWorld.msg_accepted_by_pattern cs uid froms pat curm |- _ ] => (* failure! *)
+                process_messages cs uid froms pat curms (existT _ curt curm :: msgsacc) targT targM
+                ; idtac "failure"
+              end
+          | _ => idtac "fail"
+          end.
+
+        match goal with
+        | [ MABP : RealWorld.msg_accepted_by_pattern ?cs ?uid ?froms ?pat ?m
+          , MS : ?ms = ?msfront ++ (existT _ ?t ?m) :: ?msback 
+            |- _ ] =>
+          idtac MABP MS
+          ; process_messages cs uid froms pat ms ([] : RealWorld.queued_messages) t m
+        end.
+
+        Definition msg_
+
+
+        Lemma split_queue :
+          forall m (ms : RealWorld.queued_messages) msgs1 msgs2 m1 P,
+            m :: ms = msgs1 ++ m1 :: msgs2
+            -> Forall P msgs1
+            -> 
+                
+      
       gen1.
       gen1.
       gen1.

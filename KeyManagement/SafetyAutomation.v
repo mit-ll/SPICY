@@ -212,6 +212,20 @@ Module SafetyAutomation.
         specialize (H _ MC); split_ands
       end.
 
+  Lemma break_msg_queue_prop :
+    forall elt e (l1 l2 : list elt) P,
+      Forall (fun x => P x) (l1 ++ e :: l2)
+      -> P e
+        /\ Forall (fun x => P x) (l1 ++ l2)
+  .
+  Proof.
+    intros * H
+    ; rewrite List.Forall_app in *
+    ; destruct H as [H H']
+    ; invert H'
+    ; eauto.
+  Qed.
+
   Ltac msg_queue_prop :=
     match goal with
     | [ OK : message_queues_ok ?cs ?us ?gks |- _ ] =>
@@ -228,6 +242,10 @@ Module SafetyAutomation.
     repeat
       match goal with
       | [ H : message_queue_ok _ _ (_ :: _) _ |- _ ] => invert H; split_ands
+      | [ H : message_queue_ok _ _ (?msgs1 ++ ?msg :: ?msgs2) _ |- _ ] =>
+        unfold message_queue_ok in H
+        ; eapply break_msg_queue_prop in H
+        ; split_ex
       | [ H : (forall k, msg_signing_key ?msg = Some k -> _) |- _] =>
         specialize_msg_queue_ok
       | [ MHS : msg_honestly_signed _ _ ?msg = _ , MTCH : match ?msg with _ => _ end |- _ ] =>
