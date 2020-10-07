@@ -212,6 +212,106 @@ Module SimulationAutomation.
         subst; invert H; try contradiction; eauto 12.
     Qed.
 
+    Lemma message_match_not_match_pattern_different :
+      forall t1 t2 (msg1 : crypto t1) (msg2 : crypto t2) cs suid froms pat,
+        ~ msg_accepted_by_pattern cs suid froms pat msg1
+        -> msg_accepted_by_pattern cs suid froms pat msg2
+        -> existT _ _ msg1 <> existT _ _ msg2.
+    Proof.
+      intros.
+      unfold not; intros.
+      generalize (projT1_eq H1); intros EQ; simpl in EQ; subst.
+      eapply inj_pair2 in H1; subst.
+      contradiction.
+    Qed.
+
+    Lemma message_queue_split_head :
+      forall t1 t2 (msg1 : crypto t1) (msg2 : crypto t2) qmsgs qmsgs1 qmsgs2
+        cs suid froms pat,
+
+        existT _ _ msg2 :: qmsgs = qmsgs1 ++ existT _ _ msg1 :: qmsgs2
+        -> msg_accepted_by_pattern cs suid froms pat msg1
+        -> ~ msg_accepted_by_pattern cs suid froms pat msg2
+        -> Forall (fun '(existT _ _ msg') => ~ msg_accepted_by_pattern cs suid froms pat msg') qmsgs1
+        -> exists qmsgs1',
+            qmsgs1 = (existT _ _ msg2) :: qmsgs1'.
+    Proof.
+      intros.
+      destruct qmsgs1.
+      - rewrite app_nil_l in H.
+        eapply message_match_not_match_pattern_different in H0; eauto.
+        invert H; contradiction.
+
+      - rewrite <- app_comm_cons in H.
+        invert H; eauto.
+    Qed.
+
+    Lemma message_queue_solve_head :
+      forall t1 t2 (msg1 : crypto t1) (msg2 : crypto t2) qmsgs qmsgs1 qmsgs2
+        cs suid froms pat,
+
+        existT _ _ msg2 :: qmsgs = qmsgs1 ++ existT _ _ msg1 :: qmsgs2
+        -> msg_accepted_by_pattern cs suid froms pat msg1
+        -> msg_accepted_by_pattern cs suid froms pat msg2
+        -> Forall (fun '(existT _ _ msg') => ~ msg_accepted_by_pattern cs suid froms pat msg') qmsgs1
+        -> qmsgs1 = []
+          /\ qmsgs2 = qmsgs
+          /\ existT _ _ msg1 = existT _ _ msg2.
+    Proof.
+      intros.
+      subst.
+      destruct qmsgs1.
+
+      rewrite app_nil_l in H
+      ; invert H
+      ; eauto.
+
+      exfalso.
+      rewrite <- app_comm_cons in H.
+      invert H; eauto.
+      invert H2; contradiction.
+    Qed.
+
+    Ltac pr_message cs uid froms pat msg :=
+      assert (msg_accepted_by_pattern cs uid froms pat msg) by (econstructor; eauto).
+
+    Ltac cleanup_msg_queue :=
+      repeat 
+        match goal with
+        | [ H : context [ (_ :: _) ++ _ ] |- _ ] =>
+          rewrite <- app_comm_cons in H
+        | [ H : _ :: _ = _ :: _ |- _ ] =>
+          invert H
+        | [ H : [] = _ ++ _ :: _ |- _ ] =>
+          apply nil_not_app_cons in H; contradiction
+        | [ H : existT _ _ _ = existT _ _ _ |- _ ] =>
+          eapply inj_pair2 in H; subst
+        end.
+
+
+    Ltac process_message_queue :=
+      cleanup_msg_queue;
+      try
+        match goal with
+        | [ H : (existT _ _ ?m) :: ?msgs = ?msgs1 ++ (existT _ _ ?msg) :: ?msgs2,
+            M : msg_accepted_by_pattern ?cs ?suid ?froms ?pat ?msg
+            |- _ ] =>
+
+          pr_message cs suid froms pat m
+          ; match goal with
+            | [ MSA : msg_accepted_by_pattern cs suid froms pat m
+                      , HD : Forall _ msgs1
+                |- _ ] =>
+              idtac "solving " H M MSA HD
+              ; pose proof (message_queue_solve_head _ H M MSA HD)
+              ; split_ex; subst
+              ; cleanup_msg_queue; subst
+            | [ MSA : ~ msg_accepted_by_pattern cs suid froms pat msg |- _ ] =>
+              idtac "splitting"
+              ; eapply message_queue_split_head in H; eauto
+            end
+        end.
+
   End T.
 
   Import T.
@@ -627,6 +727,7 @@ Module SimulationAutomation.
     match goal with
     | [ |- indexedIdealStep _ (Action _) _ ?U' ] =>
       is_evar U'; simpl_ideal_users_context; (repeat blah1);
+      process_message_queue;
       econstructor; simpl; [ solve [ clean_map_lookups; trivial ]
                            | ideal_user_labeled_step
                            | reflexivity ]
@@ -721,7 +822,10 @@ Module SimulationAutomation.
     end; split_ex; simpl in *.
 
   Hint Extern 1 (action_matches _ _ _ _) =>
-    repeat (solve_action_matches1); NatMap.clean_map_lookups ; ChMaps.ChMap.clean_map_lookups : core.
+    process_message_queue
+  ; repeat (solve_action_matches1)
+  ; NatMap.clean_map_lookups
+  ; ChMaps.ChMap.clean_map_lookups : core.
 
   Hint Resolve
        findUserKeys_foldfn_proper
