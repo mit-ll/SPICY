@@ -115,7 +115,7 @@ Proof.
     destruct x.
     assert (List.In (existT _ x c) (msgs__front ++ existT _ t0 msg :: msgs__back))
       as LINMSGS by eauto using in_or_app.
-    eapply H7 in LIN; split_ex.
+    eapply H7 in LIN.
 
     unfold message_queues_ok in H37
     ; rewrite Forall_natmap_forall in H37
@@ -123,29 +123,18 @@ Proof.
     ; simpl in H37
     ; unfold message_queue_ok in H37
     ; rewrite Forall_forall in H37
-    ; assert (List.In (existT _ t0 msg) (msgs__front ++ existT _ t0 msg :: msgs__back)) as LIN by eauto using in_elt
+    ; assert (List.In (existT _ t0 msg) (msgs__front ++ existT _ t0 msg :: msgs__back)) as LIN2 by eauto using in_elt
     ; apply H37 in LINMSGS
-    ; apply H37 in LIN
+    ; apply H37 in LIN2
     ; split_ex.
     
-    split.
-
     unfold not; intros.
-    eapply H1; clear H1.
-    invert H11; econstructor; eauto.
-    eapply H0 in H12; split_ors; eauto.
-    specialize (H9 _ eq_refl); contradiction.
-    eapply H0 in H12; split_ors; eauto.
-    specialize (H9 _ eq_refl); contradiction.
-
-    intros; subst; eauto.
-    specialize (H4 _ eq_refl).
-    specialize (H9 _ eq_refl).
-    generalize (H0 _ _ H12)
-    ; generalize (H0 _ _ H14)
-    ; intros
-    ; split_ors
-    ; eauto.
+    eapply LIN; clear LIN.
+    invert H9; econstructor; eauto.
+    eapply H0 in H11; split_ors; eauto.
+    specialize (H5 _ eq_refl); contradiction.
+    eapply H0 in H11; split_ors; eauto.
+    specialize (H5 _ eq_refl); contradiction.
 
   - generalize H37; intros STEP; eapply silent_step_nochange_other_user with (u_id2 := uid1) in H37; eauto.
     (* eapply step_limited_change_other_user in STEP; eauto; split_ex. *)

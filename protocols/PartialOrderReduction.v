@@ -417,38 +417,15 @@ Section CommutationLemmas.
       destruct x7.
       assert (List.In (existT _ x7 c) (x0 ++ existT _ t0 x :: x1)) as LINQ by eauto using in_or_app.
       eapply H21 in LIN; split_ex.
-      eapply H0 in LINQ; split_ex.
-      split; eauto.
+      eapply H0 in LINQ; split_ex; eauto.
 
-      intros; subst.
-      destruct (x2 ==n cid)
-      ; destruct (x2 ==n cid')
-      ; subst
-      ; clean_map_lookups
-      ; simpl; eauto.
-      specialize (H25 _ eq_refl); contradiction.
-      specialize (H2 _ eq_refl); contradiction.
-      specialize (H25 _ eq_refl); contradiction.
-      
     - (do 10 eexists); (repeat simple apply conj); repeat solver1; eauto; repeat solver1; eauto.
 
       rewrite Forall_forall in H21 |- *; intros * LIN.
       destruct x5.
       assert (List.In (existT _ x5 c) (x0 ++ existT _ t0 x :: x1)) as LINQ by eauto using in_or_app.
       eapply H21 in LIN; split_ex.
-      eapply H0 in LINQ; split_ex.
-      split; eauto.
-
-      intros; subst.
-      destruct (x2 ==n cid)
-      ; destruct (x2 ==n cid')
-      ; subst
-      ; clean_map_lookups
-      ; simpl; eauto.
-      specialize (H23 _ eq_refl); contradiction.
-      specialize (H2 _ eq_refl); contradiction.
-      specialize (H23 _ eq_refl); contradiction.
-
+      eapply H0 in LINQ; split_ex; eauto.
   Qed.
 
   Lemma commutes_sound_send :

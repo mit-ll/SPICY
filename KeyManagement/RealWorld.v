@@ -87,16 +87,16 @@ Inductive msg_accepted_by_pattern (cs : ciphers) (opt_uid_to : option user_id) (
   : forall {t : type}, msg_pat -> crypto t -> Prop :=
 | MsgAccept : forall {t} (m : crypto t),
     msg_accepted_by_pattern cs opt_uid_to froms Accept m
-| ProperlySigned : forall {t} c_id k (m : message t) msg_to nonce (chk : bool),
-    cs $? c_id = Some (@SigCipher t k msg_to nonce m)
+| ProperlySigned : forall {t t'} c_id k (m : message t) msg_to nonce (chk : bool),
+    cs $? c_id = Some (SigCipher k msg_to nonce m)
     -> (if chk then (count_occ msg_seq_eq froms nonce = 0) else True)
     -> opt_uid_to = Some msg_to
-    -> msg_accepted_by_pattern cs opt_uid_to froms (Signed k chk) (@SignedCiphertext t c_id)
-| ProperlyEncrypted : forall {t} c_id k__sign k__enc (m : message t) msg_to nonce (chk : bool),
+    -> msg_accepted_by_pattern cs opt_uid_to froms (Signed k chk) (@SignedCiphertext t' c_id)
+| ProperlyEncrypted : forall {t t'} c_id k__sign k__enc (m : message t) msg_to nonce (chk : bool),
     cs $? c_id = Some (SigEncCipher k__sign k__enc msg_to nonce m)
     -> (if chk then (count_occ msg_seq_eq froms nonce = 0) else True)
     -> opt_uid_to = Some msg_to
-    -> msg_accepted_by_pattern cs opt_uid_to froms (SignedEncrypted k__sign k__enc chk) (@SignedCiphertext t c_id).
+    -> msg_accepted_by_pattern cs opt_uid_to froms (SignedEncrypted k__sign k__enc chk) (@SignedCiphertext t' c_id).
 
 Hint Extern 1 (~ In _ _) => rewrite not_find_in_iff.
 
@@ -220,19 +220,6 @@ Inductive user_cmd : user_cmd_type -> Type :=
 
 | Sign    {t} (k : key_identifier) (msg_to : user_id) (msg : message t) : user_cmd (Crypto t)
 | Verify  {t} (k : key_identifier) (c : crypto t) : user_cmd (UPair (Base Bool) (Message t))
-(* <<<<<<< HEAD *)
-(* | SignEncrypt {t} (k__sign k__enc : key_identifier) (msg_to : user_id) (msg : message t) : user_cmd (crypto t) *)
-(* | Decrypt {t} (c : crypto t) : user_cmd (message t) *)
-
-(* | Sign    {t} (k : key_identifier) (msg_to : user_id) (msg : message t) : user_cmd (crypto t) *)
-(* | Verify  {t} (k : key_identifier) (c : crypto t) : user_cmd (bool * message t) *)
-(* ======= *)
-(* | SignEncrypt {t} (k__sign k__enc : key_identifier) (msg : message t) : user_cmd (Crypto t) *)
-(* | Decrypt {t} (c : crypto t) : user_cmd (Message t) *)
-
-(* | Sign    {t} (k : key_identifier) (msg : message t) : user_cmd (Crypto t) *)
-(* | Verify  {t} (k : key_identifier) (c : crypto t) : user_cmd (UPair (Base Bool) (Message t)) *)
-(* >>>>>>> type-codes *)
 
 | GenerateSymKey  (usage : key_usage) : user_cmd (Base Access)
 | GenerateAsymKey (usage : key_usage) : user_cmd (Base Access)
@@ -491,12 +478,12 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> mycs' = newcs ++ mycs
     -> froms' = updateTrackedNonce u_id froms cs msg
     -> msg_accepted_by_pattern cs u_id froms pat msg
-    -> Forall (fun '(existT _ _ msg')  => ~ msg_accepted_by_pattern cs u_id froms pat msg'
-                                      /\ forall cid c cid' c', msg = SignedCiphertext cid
-                                                         -> cs $? cid = Some c
-                                                         -> msg' = SignedCiphertext cid'
-                                                         -> cs $? cid' = Some c'
-                                                         -> cipher_nonce c <> cipher_nonce c' ) msgs__front
+    -> Forall (fun '(existT _ _ msg')  => ~ msg_accepted_by_pattern cs u_id froms pat msg') msgs__front
+                                      (* /\ forall cid c cid' c', msg = SignedCiphertext cid *)
+                                      (*                    -> cs $? cid = Some c *)
+                                      (*                    -> msg' = SignedCiphertext cid' *)
+                                      (*                    -> cs $? cid' = Some c' *)
+                                      (*                    -> cipher_nonce c <> cipher_nonce c' *)
     -> step_user (Action (Input msg pat froms)) u_id
                 (usrs, adv, cs, gks, ks , qmsgs , mycs, froms, sents, cur_n,  Recv pat)
                 (usrs, adv, cs, gks, ks', qmsgs', mycs', froms', sents, cur_n, @Return (Crypto t) msg)

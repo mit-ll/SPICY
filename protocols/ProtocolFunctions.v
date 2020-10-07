@@ -357,13 +357,7 @@ Section InversionPrinciples.
         /\ exists msg msgs1 msgs2,
             qmsgs = msgs1 ++ (existT crypto t msg) :: msgs2
             /\ qmsgs' = msgs1 ++ msgs2
-            /\ Forall (fun '(existT _ _ msg')  =>
-                        ~ msg_accepted_by_pattern cs u_id froms pat msg'
-                        /\ forall cid c cid' c', msg = SignedCiphertext cid
-                                           -> cs $? cid = Some c
-                                           -> msg' = SignedCiphertext cid'
-                                           -> cs $? cid' = Some c'
-                                           -> cipher_nonce c <> cipher_nonce c' ) msgs1
+            /\ Forall (fun '(existT _ _ msg') => ~ msg_accepted_by_pattern cs u_id froms pat msg' ) msgs1
             /\ ( ( msg_accepted_by_pattern cs u_id froms pat msg
                   /\ ks' = ks $k++ findKeysCrypto cs msg
                   /\ mycs' = findCiphers msg ++ mycs

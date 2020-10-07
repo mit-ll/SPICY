@@ -109,20 +109,8 @@ Section ModelCheckStepLemmas.
       -> forall cs uid froms pat,
           msg_accepted_by_pattern cs uid froms pat msg1
           -> msg_accepted_by_pattern cs uid froms pat msg1'
-          -> Forall (fun '(existT _ t' msg')  =>
-                      ~ msg_accepted_by_pattern cs uid froms pat msg'
-                      /\ forall cid c cid' c', msg1 = SignedCiphertext cid
-                                         -> cs $? cid = Some c
-                                         -> msg' = SignedCiphertext cid'
-                                         -> cs $? cid' = Some c'
-                                         -> cipher_nonce c <> cipher_nonce c' ) msgs1
-          -> Forall (fun '(existT _ t' msg')  =>
-                      ~ msg_accepted_by_pattern cs uid froms pat msg'
-                      /\ forall cid c cid' c', msg1' = SignedCiphertext cid
-                                         -> cs $? cid = Some c
-                                         -> msg' = SignedCiphertext cid'
-                                         -> cs $? cid' = Some c'
-                                         -> cipher_nonce c <> cipher_nonce c' ) msgs1'
+          -> Forall (fun '(existT _ t' msg') => ~ msg_accepted_by_pattern cs uid froms pat msg' ) msgs1
+          -> Forall (fun '(existT _ t' msg') => ~ msg_accepted_by_pattern cs uid froms pat msg' ) msgs1'
           -> msgs1 = msgs1'.
   Proof.
     induction msgs1; intros; eauto.
@@ -135,13 +123,13 @@ Section ModelCheckStepLemmas.
 
        invert H0; eauto; invert H1.
 
-       invert H12.
-       eapply H3.
+       invert H11.
+       eapply H6.
        invert H.
        econstructor; eauto.
 
-       invert H13.
-       eapply H3.
+       invert H12.
+       eapply H6.
        invert H.
        econstructor; eauto.
 
