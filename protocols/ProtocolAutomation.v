@@ -126,8 +126,13 @@ Module SimulationAutomation.
       invert H2; contradiction.
     Qed.
 
+    (* Ltac pr_message cs uid froms pat msg := *)
+    (*   assert (msg_accepted_by_pattern cs uid froms pat msg) by (econstructor; eauto). *)
     Ltac pr_message cs uid froms pat msg :=
-      assert (msg_accepted_by_pattern cs uid froms pat msg) by (econstructor; eauto).
+      (assert (msg_accepted_by_pattern cs uid froms pat msg)
+        by (econstructor; eauto))
+      || (assert (~ msg_accepted_by_pattern cs uid froms pat msg)
+          by (let MA := fresh "MA" in  unfold not; intros MA; invert MA; clean_map_lookups)).
 
     Ltac cleanup_msg_queue :=
       repeat 
@@ -146,21 +151,27 @@ Module SimulationAutomation.
       cleanup_msg_queue;
       match goal with
       | [ H : (existT _ _ ?m) :: ?msgs = ?msgs1 ++ (existT _ _ ?msg) :: ?msgs2,
-          M : msg_accepted_by_pattern ?cs ?suid ?froms ?pat ?msg
+              M : msg_accepted_by_pattern ?cs ?suid ?froms ?pat ?msg
           |- _ ] =>
 
         pr_message cs suid froms pat m
         ; match goal with
           | [ MSA : msg_accepted_by_pattern cs suid froms pat m
-            , HD : Forall _ msgs1
+                    , HD : Forall _ msgs1
               |- _ ] =>
             idtac "solving " H M MSA HD
             ; pose proof (message_queue_solve_head _ H M MSA HD)
             ; split_ex; subst
             ; cleanup_msg_queue; subst
-          | [ MSA : ~ msg_accepted_by_pattern cs suid froms pat msg |- _ ] =>
+          | [ MSA : ~ msg_accepted_by_pattern cs suid froms pat m
+                    , HD : Forall _ msgs1
+              |- _ ] =>
             idtac "splitting"
-            ; eapply message_queue_split_head in H; eauto
+            ; pose proof (message_queue_split_head _ H M MSA HD)
+            ; split_ex; subst
+            ; invert HD
+            ; cleanup_msg_queue; subst
+            ; process_message_queue (* recurse *)
           end
       end.
 
