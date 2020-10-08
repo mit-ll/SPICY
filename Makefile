@@ -17,7 +17,7 @@
 #  as specifically authorized by the U.S. Government may violate any copyrights that exist in this work.
 
 # KNOWNTARGETS will not be passed along to CoqMakefile
-KNOWNTARGETS := CoqMakefile lib por exampleprotos sharesecret protocols
+KNOWNTARGETS := CoqMakefile all lib por test-protos share-secret pgp secdns nsproto timings
 
 # KNOWNFILES will not get implicit targets from the final rule, and so
 # depending on them won't invoke the submake
@@ -27,10 +27,11 @@ KNOWNFILES   := Makefile _CoqProject
 
 .DEFAULT_GOAL := invoke-coqmakefile
 
-CoqMakefile: Makefile _CoqProject
+CoqMakefile: _CoqProject
 	$(COQBIN)coq_makefile -f _CoqProject -o CoqMakefile
 
 invoke-coqmakefile: CoqMakefile
+	echo "Invoke makefile: " $(MAKECMDGOALS)
 	$(MAKE) --no-print-directory -f CoqMakefile $(filter-out $(KNOWNTARGETS),$(MAKECMDGOALS))
 
 .PHONY: invoke-coqmakefile $(KNOWNFILES)
@@ -42,29 +43,41 @@ invoke-coqmakefile: CoqMakefile
 # # frap:
 # # 	$(MAKE) -C frap lib
 
+# protocols/*.vo: CoqMakefile
+# 	echo "Building " $@
+# 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$@
+
 lib: CoqMakefile
 	$(MAKE) -f CoqMakefile KeyManagement/AdversarySafety.vo
 
 por: CoqMakefile
-	$(MAKE) -f CoqMakefile protocols/PartialOrderReduction.vo
+	$(eval TS := protocols/PartialOrderReduction.vo)
+	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
-exampleprotos: CoqMakefile
-	$(MAKE) -f CoqMakefile protocols/ExampleProtocolsAutomated.vo
+test-protos: CoqMakefile
+	$(eval TS := protocols/ExampleProtocolsAutomated.vo)
+	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
 sharesecret: CoqMakefile
-	$(MAKE) -f CoqMakefile protocols/ShareSecretProtocol.vo
+	$(eval TS := protocols/ShareSecreteProtocol.vo)
+	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
+
+pgp: CoqMakefile
+	$(eval TS := protocols/PGP.vo)
+	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
 secdns: CoqMakefile
-	$(MAKE) -f CoqMakefile pretty-timed TGTS="protocols/SecureDNS.vo"
+	$(eval TS := protocols/SecureDNS.vo)
+	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
 nsproto: CoqMakefile
-	$(MAKE) -f CoqMakefile protocols/NeedhamSchroeder.vo
-
-protocols: exampleprotos sharesecret
+	$(eval TS := protocols/NeedhamSchroeder.vo)
+	$(MAKE) -f CoqMakefile $(TS)
 
 timings: CoqMakefile
-	$(MAKE) -f CoqMakefile pretty-timed TGTS="protocols/ShareSecretProtocol.vo protocols/ShareSecretProtocol2.vo"
-
+	echo "Timings" $@
+	$(eval TS := protocols/ShareSecretProtocol.vo protocols/ShareSecretProtocol2.vo)
+	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
 # This should be the last rule, to handle any targets not declared above
 %: invoke-coqmakefile
