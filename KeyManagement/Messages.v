@@ -5,7 +5,7 @@
  * in this material are those of the author(s) and do not necessarily reflect the views of the 
  * Department of the Air Force.
  * 
- * © 2019 Massachusetts Institute of Technology.
+ * © 2019-2020 Massachusetts Institute of Technology.
  * 
  * MIT Proprietary, Subject to FAR52.227-11 Patent Rights - Ownership by the contractor (May 2014)
  * 
@@ -18,6 +18,7 @@
 
 (* module that takes access type, either KeyId or Permission *)
 (* Labels for the labeled transition system, a wrapper for messages *)
+
 Inductive label {A} : Type :=
   Silent : label
 | Action : A -> label

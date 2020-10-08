@@ -31,7 +31,8 @@ Require Import
         Tactics
         RealWorld
         AdversaryUniverse
-        CipherTheory.
+        CipherTheory
+        Simulation.
 
 Set Implicit Arguments.
 
@@ -99,8 +100,9 @@ Hint Resolve
 Section CleanMessages.
 
   Lemma msg_honestly_signed_after_without_cleaning :
-    forall {t} (msg : crypto t) honestk cs,
-      msg_honestly_signed honestk (clean_ciphers honestk cs) msg = true
+    forall {t} (msg : crypto t) honestk honestk' cs,
+      msg_honestly_signed honestk' (clean_ciphers honestk cs) msg = true
+      -> (forall kid, honestk' $? kid = Some true -> honestk $? kid = Some true)
       -> msg_honestly_signed honestk cs msg = true.
   Proof.
     intros.
@@ -108,8 +110,15 @@ Section CleanMessages.
     cases (msg_signing_key (clean_ciphers honestk cs) msg); try discriminate.
     unfold msg_signing_key in *; destruct msg; try discriminate.
     - cases (clean_ciphers honestk cs $? c_id); try discriminate.
-      rewrite <- find_mapsto_iff in Heq0; rewrite clean_ciphers_mapsto_iff in Heq0; rewrite find_mapsto_iff in Heq0; split_ands.
-      rewrite H0; destruct c; try discriminate; eauto.
+      rewrite <- find_mapsto_iff in Heq0;
+        rewrite clean_ciphers_mapsto_iff in Heq0;
+        rewrite find_mapsto_iff in Heq0; split_ex.
+      context_map_rewrites.
+      invert Heq.
+      unfold honest_keyb in *.
+      cases (honestk' $? cipher_signing_key c); try discriminate.
+      destruct b; try discriminate.
+      eapply H0 in Heq; context_map_rewrites; eauto.
   Qed.
 
   Lemma honest_cipher_filter_fn_true_honest_signing_key :
@@ -674,3 +683,136 @@ Section CleanMessages.
 
   
 End CleanMessages.
+
+
+
+  Lemma msg_honestly_signed_new_msg_keys :
+    forall {t} (msg : crypto t) {t1} (c : crypto t1) honestk cs,
+      message_no_adv_private honestk cs msg
+      -> msg_honestly_signed honestk cs c = true
+      -> msg_honestly_signed (honestk $k++ findKeysCrypto cs msg) cs c = true.
+  Proof.
+    unfold message_no_adv_private, msg_honestly_signed, msg_signing_key, honest_keyb; intros;
+      destruct c; try discriminate;
+        cases (cs $? c_id); try discriminate.
+    cases (honestk $? cipher_signing_key c);
+      cases (findKeysCrypto cs msg $? cipher_signing_key c);
+      try discriminate; solve_perm_merges; eauto.
+  Qed.
+
+  Hint Resolve msg_honestly_signed_new_msg_keys.
+
+  Lemma msg_signed_addressed_new_msg_keys :
+    forall {t} (msg : crypto t) {t1} (c : crypto t1) honestk cs suid,
+      message_no_adv_private honestk cs msg
+      -> msg_signed_addressed honestk cs suid c = true
+      -> msg_signed_addressed (honestk $k++ findKeysCrypto cs msg) cs suid c = true.
+  Proof.
+    unfold msg_signed_addressed; intros;
+      rewrite andb_true_iff in *; split_ands; split; eauto.
+  Qed.
+
+  Hint Resolve msg_signed_addressed_new_msg_keys.
+
+  Lemma msg_signed_addressed_new_msg_keys' :
+    forall {t} (msg : message t) {t1} (c : crypto t1) honestk cs suid,
+      msg_signed_addressed honestk cs suid c = true
+      -> msg_signed_addressed (honestk $k++ findKeysMessage msg) cs suid c = true.
+  Proof.
+    unfold msg_signed_addressed; intros.
+    rewrite andb_true_iff in *; split_ands; split; eauto.
+    unfold msg_honestly_signed, msg_signing_key in *;
+      destruct c; try discriminate.
+    cases (cs $? c_id);
+      try discriminate.
+    unfold honest_keyb in *.
+    cases (honestk $? cipher_signing_key c); try discriminate.
+    destruct b; try discriminate.
+    cases (findKeysMessage msg $? cipher_signing_key c);
+      solve_perm_merges; eauto.
+  Qed.
+
+  Lemma msg_signed_addressed_new_msg_keys'' :
+    forall {t} (msg : message t) {t1} (c : crypto t1) honestk cs suid,
+      msg_signed_addressed honestk cs suid c = true
+      -> (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true /\ kp = false)
+      -> msg_signed_addressed (honestk $k++ findKeysMessage msg) cs suid c = true.
+  Proof.
+    intros; apply msg_signed_addressed_new_msg_keys'; eauto.
+  Qed.
+
+  Lemma msg_signed_addressed_new_msg_keys''' :
+    forall {t} (msg : message t) {t1} (c : crypto t1) honestk cs suid,
+      msg_signed_addressed honestk cs suid c = true
+      -> (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true)
+      -> msg_signed_addressed (honestk $k++ findKeysMessage msg) cs suid c = true.
+  Proof.
+    unfold msg_signed_addressed; intros.
+    rewrite andb_true_iff in *; split_ands; split; eauto.
+    unfold msg_honestly_signed, msg_signing_key in *;
+      destruct c; try discriminate.
+    cases (cs $? c_id);
+      try discriminate.
+    unfold honest_keyb in *.
+    cases (honestk $? cipher_signing_key c); try discriminate.
+    destruct b; try discriminate.
+    cases (findKeysMessage msg $? cipher_signing_key c);
+      solve_perm_merges; eauto.
+  Qed.
+
+  Hint Resolve msg_signed_addressed_new_msg_keys' msg_signed_addressed_new_msg_keys'' msg_signed_addressed_new_msg_keys'''.
+  
+  Lemma msg_honestly_signed_addnl_cipher :
+    forall {t} (msg : crypto t) honestk cs c_id c,
+      ~ In c_id cs
+      -> msg_honestly_signed honestk cs msg = true
+      -> msg_honestly_signed honestk (cs $+ (c_id,c)) msg = true.
+  Proof.
+    destruct msg; intros; eauto;
+      unfold msg_honestly_signed, msg_signing_key in *;
+      repeat
+        match goal with
+        | [ |- context [ ?cs $+ (?cid1,_) $? ?cid2 ] ] => destruct (cid1 ==n cid2); subst; clean_map_lookups
+        | [ H1 : ?cs $? ?cid = _ |- _ ] =>
+          match goal with
+          | [ H2 : ?P |- _] =>
+            match P with
+            | context [ match cs $? cid with _ => _ end ] => rewrite H1 in H2
+            end
+          end
+        end; clean_map_lookups; eauto.
+  Qed.
+
+
+  Lemma msg_honestly_signed_addnl_honest_key :
+    forall {t} (msg : crypto t) honestk cs k_id,
+      ~ In k_id honestk
+      -> msg_honestly_signed honestk cs msg = true
+      -> msg_honestly_signed (honestk $+ (k_id,true)) cs msg = true.
+  Proof.
+    destruct msg; intros; eauto;
+      unfold msg_honestly_signed, msg_signing_key in *;
+      repeat
+        match goal with
+        | [ |- context [ ?cs $? ?cid ] ] => cases (cs $? cid)
+        | [ |- context [ match ?c with _ => _ end ]] => is_var c; destruct c
+        | [ |- context [ honest_keyb _ _ = _ ] ] => unfold honest_keyb in *
+        | [ H : ?honk $+ (?kid1,_) $? ?kid2 = _ |- _ ] => destruct (kid1 ==n kid2); subst; clean_map_lookups
+        | [ H : ?honk $? ?kid = _, M : match ?honk $? ?kid with _ => _ end = _ |- _ ] => rewrite H in M
+        end; eauto.
+  Qed.
+
+  Hint Resolve msg_honestly_signed_addnl_cipher.
+  Hint Resolve msg_honestly_signed_addnl_honest_key.
+
+  Lemma msg_signed_addressed_addnl_honest_key :
+    forall {t} (msg : crypto t) honestk cs suid k_id,
+      ~ In k_id honestk
+      -> msg_signed_addressed honestk cs suid msg = true
+      -> msg_signed_addressed (honestk $+ (k_id,true)) cs suid msg = true.
+  Proof.
+    unfold msg_signed_addressed; intros.
+    rewrite andb_true_iff in *; split_ands; eauto using msg_honestly_signed_addnl_honest_key.
+  Qed.
+
+  Hint Resolve msg_signed_addressed_addnl_honest_key.

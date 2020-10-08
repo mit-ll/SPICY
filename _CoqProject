@@ -21,16 +21,19 @@
 -R ./protocols protocols
 
 KeyManagement/StepRelations.v
+KeyManagement/Messages.v
+KeyManagement/MyPrelude.v
+KeyManagement/Automation.v
 KeyManagement/CipherTheory.v
 KeyManagement/MessagesTheory.v
 KeyManagement/KeysTheory.v
 KeyManagement/UsersTheory.v
 KeyManagement/InvariantsTheory.v
 KeyManagement/Common.v
-KeyManagement/MyPrelude.v
+KeyManagement/ChMaps.v
 KeyManagement/Maps.v
 KeyManagement/MessageEq.v
-KeyManagement/Automation.v
+KeyManagement/MessageEqTheory.v
 KeyManagement/Keys.v
 KeyManagement/IdealWorld.v
 KeyManagement/RealWorld.v
@@ -38,18 +41,30 @@ KeyManagement/Simulation.v
 KeyManagement/AdversaryUniverse.v
 KeyManagement/AdversarySafety.v
 KeyManagement/Tactics.v
-KeyManagement/Messages.v
+KeyManagement/SafetyAutomation.v
+KeyManagement/SyntacticallySafe.v
 
 protocols/ProtocolAutomation.v
 protocols/UniverseEqAutomation.v
-protocols/SafeProtocol.v
 protocols/Sets.v
 protocols/ModelCheck.v
-
 protocols/ExampleProtocols.v
 protocols/ExampleProtocolsAutomated.v
 
-protocols/SimplePingProtocol.v
-protocols/SimpleEncProtocol.v
-#protocols/ShareKeyProtocol.v
-#protocols/ShareSecretNewKeyProtocol.v
+protocols/SafeProtocol.v
+protocols/RealWorldStepLemmas.v
+protocols/PartialOrderReduction.v
+protocols/LabelsAlign.v
+protocols/NoResends.v
+
+protocols/ProtocolFunctions.v
+protocols/ShareSecretProtocol.v
+protocols/ShareSecretProtocol2.v
+protocols/NeedhamSchroeder.v
+protocols/PGP.v
+protocols/SecureDNS.v
+
+# protocols/SimplePingProtocol.v
+# protocols/SimpleEncProtocol.v
+# protocols/ShareKeyProtocol.v
+# protocols/ShareSecretNewKeyProtocol.v

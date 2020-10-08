@@ -79,7 +79,7 @@ Ltac specialize_simply1 :=
     | user_id => fail 1
     | key_identifier => fail 1
     | nat => fail 1
-    | NatMap.key => fail 1
+    | NatMap.Map.key => fail 1
     | _ => specialize (H ARG)
     end
 
@@ -114,7 +114,7 @@ Ltac solve_simply1 :=
     | user_id => fail 1
     | key_identifier => fail 1
     | nat => fail 1
-    | NatMap.key => fail 1
+    | NatMap.Map.key => fail 1
     | _ => specialize (H ARG)
     end
   | [ H : ?arg = ?arg -> _ |- _ ] => assert (arg = arg) by trivial

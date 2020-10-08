@@ -1,0 +1,127 @@
+name: protocol-runner
+
+version: 0.0.1
+ghc-options:
+  # Recommended settings for polysemy
+  - -O2
+  - -flate-specialise
+  - -fspecialise-aggressively
+  # - -fplugin=Polysemy.Plugin
+  # Useful warnings
+  - -Wall
+  - -Wcompat
+  - -Wredundant-constraints
+  - -Wincomplete-record-updates
+  - -Wincomplete-uni-patterns
+
+default-extensions:
+  # Recommended extensions for polysemy
+  - DataKinds
+  - FlexibleContexts
+  - GADTs
+  - LambdaCase
+  - PolyKinds
+  - RankNTypes
+  - ScopedTypeVariables
+  - TypeApplications
+  - TypeOperators
+  - TypeFamilies
+  # - TemplateHaskell
+
+  # Deriving extensions
+  - DeriveGeneric
+  - GeneralizedNewtypeDeriving
+  - StandaloneDeriving
+
+  # Misc extensions
+  - BangPatterns
+  - OverloadedStrings
+  - RecordWildCards
+  - TupleSections
+
+dependencies:
+  - base
+  # - aeson
+  - ansi-terminal
+  - async
+  - bytestring
+  - cereal
+  - containers
+  - cryptonite
+  - directory
+  - memory
+  - network-simple
+  - polysemy
+  # - polysemy-plugin
+  - optparse-generic
+  - stm
+  - text
+
+library:
+ source-dirs:
+   - src
+ exposed-modules:
+   - Effects
+   - Effects.ColorizedOutput
+   - Effects.Cryptography
+   - Effects.CryptoniteEffects
+   - Effects.Messaging
+   - Effects.PrintingEffects
+   - Effects.SocketTChanMessaging
+   - Effects.TChanMessaging
+   - Effects.Types
+   - Interpreter
+   # Generated Code
+   - Common
+   - Datatypes
+   - ExampleProtocols
+   - ProtocolExtraction
+   - Keys
+   - List
+   - Logic
+   - Maps
+   - Messages
+   - OrderedType
+   - OrderedTypeEx
+   - PeanoNat
+   - RealWorld
+   - Specif
+
+ other-modules: []
+
+executables:
+
+  printProto:
+    main: PrintProto.main
+    source-dirs: [app]
+    dependencies:
+      - protocol-runner
+
+  runProto:
+    main: RunProto.main
+    source-dirs: [app]
+    dependencies:
+      - protocol-runner
+      - base
+      - async
+      - stm
+
+  runProtoSplit:
+    main: RunProtoSplit.main
+    source-dirs: [app]
+    dependencies:
+      - protocol-runner
+      - base
+      - async
+      - optparse-generic
+      - stm
+
+  adversary:
+    main: Adversary.main
+    source-dirs: [app]
+    dependencies:
+      - protocol-runner
+      - base
+      - async
+      - optparse-generic
+      - stm

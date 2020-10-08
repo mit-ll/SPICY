@@ -15,35 +15,70 @@
 # or 7014 (Feb 2014). Notwithstanding any copyright notice, U.S. Government rights in this work are
 # defined by DFARS 252.227-7013 or DFARS 252.227-7014 as detailed above. Use of this work other than
 #  as specifically authorized by the U.S. Government may violate any copyrights that exist in this work.
-.PHONY: all coq
 
-all: coq
+# KNOWNTARGETS will not be passed along to CoqMakefile
+KNOWNTARGETS := CoqMakefile all lib por test-protos share-secret pgp secdns nsproto timings
 
-include Makefile.coq.conf
+# KNOWNFILES will not get implicit targets from the final rule, and so
+# depending on them won't invoke the submake
+# Warning: These files get declared as PHONY, so any targets depending
+# on them always get rebuilt
+KNOWNFILES   := Makefile _CoqProject
 
-VOFILES = $(COQMF_VFILES:.v=.vo)
+.DEFAULT_GOAL := invoke-coqmakefile
 
-# frap:
-# 	$(MAKE) -C frap lib
+CoqMakefile: _CoqProject
+	$(COQBIN)coq_makefile -f _CoqProject -o CoqMakefile
 
-coq: Makefile.coq
-	$(MAKE) -f Makefile.coq $(filter-out protocols%,$(VOFILES))
+invoke-coqmakefile: CoqMakefile
+	echo "Invoke makefile: " $(MAKECMDGOALS)
+	$(MAKE) --no-print-directory -f CoqMakefile $(filter-out $(KNOWNTARGETS),$(MAKECMDGOALS))
 
-protocols: coq
-	$(MAKE) -f Makefile.coq $(filter protocols%,$(VOFILES))
+.PHONY: invoke-coqmakefile $(KNOWNFILES)
 
-simpleping: coq
-	$(MAKE) -f Makefile.coq protocols/SimplePingProtocol.vo
+####################################################################
+##                      Your targets here                         ##
+####################################################################
 
-sharepublickey: coq
-	$(MAKE) -f Makefile.coq protocols/ShareKeyProtocol.vo
+# # frap:
+# # 	$(MAKE) -C frap lib
 
-Makefile.coq.conf: _CoqProject
-	coq_makefile -f _CoqProject -o Makefile.coq
+# protocols/*.vo: CoqMakefile
+# 	echo "Building " $@
+# 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$@
 
-Makefile.coq: Makefile _CoqProject
-	coq_makefile -f _CoqProject -o Makefile.coq
+lib: CoqMakefile
+	$(MAKE) -f CoqMakefile KeyManagement/AdversarySafety.vo
 
-clean: Makefile.coq
-	$(MAKE) -f Makefile.coq clean
-	rm -f Makefile.coq
+por: CoqMakefile
+	$(eval TS := protocols/PartialOrderReduction.vo)
+	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
+
+test-protos: CoqMakefile
+	$(eval TS := protocols/ExampleProtocolsAutomated.vo)
+	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
+
+sharesecret: CoqMakefile
+	$(eval TS := protocols/ShareSecreteProtocol.vo)
+	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
+
+pgp: CoqMakefile
+	$(eval TS := protocols/PGP.vo)
+	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
+
+secdns: CoqMakefile
+	$(eval TS := protocols/SecureDNS.vo)
+	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
+
+nsproto: CoqMakefile
+	$(eval TS := protocols/NeedhamSchroeder.vo)
+	$(MAKE) -f CoqMakefile $(TS)
+
+timings: CoqMakefile
+	echo "Timings" $@
+	$(eval TS := protocols/ShareSecretProtocol.vo protocols/ShareSecretProtocol2.vo)
+	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
+
+# This should be the last rule, to handle any targets not declared above
+%: invoke-coqmakefile
+	@true

@@ -20,7 +20,7 @@ From Coq Require Import
      Logic.ProofIrrelevance
      Program.Equality.
 
-Require Import MyPrelude Maps Common.
+Require Import MyPrelude Maps ChMaps Common.
 Require IdealWorld RealWorld.
 
 Import IdealWorld.IdealNotations
@@ -86,7 +86,7 @@ Section IdealLemmas.
 
 End IdealLemmas.
 
-Hint Rewrite add_empty_idempotent empty_add_idempotent : maps.
+(* Hint Rewrite add_empty_idempotent empty_add_idempotent : maps. *)
 
 Ltac smash_universe :=
   unfold RealWorld.buildUniverse;
@@ -109,22 +109,25 @@ Section ExamplarProofs.
 
   Section Ideal.
     Import IdealWorld.
+    (* Import ChNotation. *)
+    Import ChannelType.
 
-    Definition ch1 := 10.
-    Definition ch2 := 11.
-    
+    Definition ch1 := (Single 10).
+    Definition ch2 := (Single 11).
+
+    (* This needs more of the lemmas in ChMaps *)
     Lemma ideal_test1 :
       forall {A} msgs1 msgs2 msgs3 perms1 perms2 (proto1 proto2 : cmd (Base A)),
       exists perms1' perms2',
-        {| channel_vector := $0 $+ (ch1, msgs1) $+ (ch2, msgs2) $+ (ch1, msgs3);
+        {| channel_vector := #0 #+ (ch1, msgs1) #+ (ch2, msgs2) #+ (ch1, msgs3);
            users := $0 $+ (uid2, {| protocol := proto2; perms := perms2 |})
                      $+ (uid1, {| protocol := proto1; perms := perms1 |}) |}
         =
-        {| channel_vector := $0 $+ (ch1, msgs3) $+ (ch2, msgs2);
+        {| channel_vector := #0 #+ (ch1, msgs3) #+ (ch2, msgs2) ;
            users := $0 $+ (uid1, {| protocol := proto1; perms := perms1' |})
                      $+ (uid2, {| protocol := proto2; perms := perms2' |}) |}.
     Proof.
-      intros; do 2 eexists; smash_universe; m_equal; eauto.
+      intros. do 2 eexists; smash_universe; Maps.m_equal; ChMaps.m_equal; eauto.
     Qed.
 
   End Ideal.

@@ -30,12 +30,21 @@ Require Import
         Tactics
         Automation
         AdversaryUniverse
-        KeysTheory.
-
-Require IdealWorld
+        KeysTheory
         RealWorld.
 
+(* Require IdealWorld *)
+(*         RealWorld. *)
+
 Set Implicit Arguments.
+
+Lemma cipher_honestly_signed_honest_keyb_iff :
+  forall honestk c tf,
+    cipher_honestly_signed honestk c = tf <-> honest_keyb honestk (cipher_signing_key c) = tf.
+Proof.
+  intros.
+  unfold cipher_honestly_signed, cipher_signing_key; split; destruct c; trivial.
+Qed.
 
 (******************** CIPHER CLEANING *********************
  **********************************************************
@@ -57,7 +66,7 @@ Section CleanCiphers.
   Lemma honest_cipher_filter_fn_filter_proper :
     Proper
       ( eq  ==>  eq  ==>  Equal  ==>  Equal)
-      (fun (k : NatMap.key) (e : cipher) (m : t cipher) => if honest_cipher_filter_fn honestk k e then m $+ (k, e) else m).
+      (fun (k : NatMap.Map.key) (e : cipher) (m : t cipher) => if honest_cipher_filter_fn honestk k e then m $+ (k, e) else m).
   Proof.
     unfold Proper, respectful;
       unfold Equal; intros; apply map_eq_Equal in H1; subst; auto.
@@ -65,7 +74,7 @@ Section CleanCiphers.
 
   Lemma honest_cipher_filter_fn_filter_transpose :
     transpose_neqkey Equal
-       (fun (k : NatMap.key) (e : cipher) (m : t cipher) => if honest_cipher_filter_fn honestk k e then m $+ (k, e) else m).
+       (fun (k : NatMap.Map.key) (e : cipher) (m : t cipher) => if honest_cipher_filter_fn honestk k e then m $+ (k, e) else m).
   Proof.
     unfold transpose_neqkey, Equal, honest_cipher_filter_fn, cipher_honestly_signed; intros.
     cases e; cases e'; simpl;
@@ -78,14 +87,14 @@ Section CleanCiphers.
   Lemma honest_cipher_filter_fn_filter_proper_eq :
     Proper
       ( eq  ==>  eq  ==>  eq  ==>  eq)
-      (fun (k : NatMap.key) (e : cipher) (m : t cipher) => if honest_cipher_filter_fn honestk k e then m $+ (k, e) else m).
+      (fun (k : NatMap.Map.key) (e : cipher) (m : t cipher) => if honest_cipher_filter_fn honestk k e then m $+ (k, e) else m).
   Proof.
     solve_proper.
   Qed.
 
   Lemma honest_cipher_filter_fn_filter_transpose_eq :
     transpose_neqkey eq
-       (fun (k : NatMap.key) (e : cipher) (m : t cipher) => if honest_cipher_filter_fn honestk k e then m $+ (k, e) else m).
+       (fun (k : NatMap.Map.key) (e : cipher) (m : t cipher) => if honest_cipher_filter_fn honestk k e then m $+ (k, e) else m).
   Proof.
     unfold transpose_neqkey, honest_cipher_filter_fn, cipher_honestly_signed; intros.
     cases e; cases e'; subst; simpl;
@@ -149,8 +158,10 @@ Section CleanCiphers.
   Hint Constructors
        msg_accepted_by_pattern.
 
-  Hint Extern 1 (_ $+ (?k, _) $? ?k = Some _) => rewrite add_eq_o.
-  Hint Extern 1 (_ $+ (?k, _) $? ?v = _) => rewrite add_neq_o.
+  (* Hint Extern 1 (_ $+ (?k, _) $? ?k = Some _) => rewrite add_eq_o. *)
+  (* Hint Extern 1 (_ $+ (?k, _) $? ?v = _) => rewrite add_neq_o. *)
+
+  Hint Extern 1 (_ $+ (_,_) $? _ = _) => progress clean_map_lookups.
 
   Lemma clean_ciphers_eliminates_dishonest_cipher :
     forall c_id c cs k,
@@ -166,7 +177,7 @@ Section CleanCiphers.
     exfalso.
     rewrite find_mapsto_iff in H2; rewrite H2 in H; invert H.
     unfold honest_cipher_filter_fn, cipher_honestly_signed, cipher_signing_key in *.
-    cases c; rewrite H0 in Heq; invert Heq. 
+    cases c; rewrite H0 in Heq; invert Heq.
   Qed.
 
   Hint Resolve clean_ciphers_eliminates_dishonest_cipher clean_ciphers_keeps_honest_cipher.

@@ -21,6 +21,7 @@ From Coq Require Import
 Require Import
         MyPrelude
         Maps
+        ChMaps
         Messages
         Common
         Keys
@@ -29,8 +30,9 @@ Require Import
         Simulation
         AdversaryUniverse
         UniverseEqAutomation
-        ProtocolAutomation
-        SafeProtocol.
+        SafeProtocol
+        ProtocolFunctions
+        ProtocolAutomation.
 
 Require IdealWorld RealWorld.
 
@@ -40,8 +42,12 @@ Import RealWorld.RealWorldNotations.
 Set Implicit Arguments.
 
 (* User ids *)
-Definition A : user_id   := 0.
-Definition B : user_id   := 1.
+Definition A   := 0.
+Definition B   := 1.
+
+Notation owner  := {| IdealWorld.read := true; IdealWorld.write := true |}.
+Notation reader := {| IdealWorld.read := true; IdealWorld.write := false |}.
+Notation writer := {| IdealWorld.read := false; IdealWorld.write := true |}.
 
 Section IdealWorldDefs.
   Import IdealWorld.
@@ -91,13 +97,14 @@ Module SignPingSendProtocol.
   Section IW.
     Import IdealWorld.
 
-    Definition CH__A2B : channel_id := 0.
+    Notation CH__A2B := (Single 0).
+    Notation perms_CH__A2B := 0.
 
-    Definition PERMS__a := $0 $+ (CH__A2B, {| read := true; write := true |}). (* writer *)
-    Definition PERMS__b := $0 $+ (CH__A2B, {| read := true; write := false |}). (* reader *)
+    Definition PERMS__a := $0 $+ (perms_CH__A2B, {| read := true; write := true |}). (* writer *)
+    Definition PERMS__b := $0 $+ (perms_CH__A2B, {| read := true; write := false |}). (* reader *)
 
     Definition ideal_univ_start :=
-      mkiU ($0 $+ (CH__A2B, [])) PERMS__a PERMS__b
+      mkiU (#0 #+ (CH__A2B, [])) PERMS__a PERMS__b
            (* user A *)
            ( n <- Gen
            ; _ <- Send (Content n) CH__A2B
@@ -141,15 +148,14 @@ Module SignPingSendProtocol.
   End RW.
 
   Hint Unfold
-       A B 
        PERMS__a PERMS__b
        real_univ_start mkrU mkrUsr
        ideal_univ_start mkiU : constants.
   
   Import SimulationAutomation.
 
-  Hint Extern 0 (~^* _ _) =>
-    progress(autounfold with constants; simpl).
+  (* Hint Extern 0 (~^* _ _) => *)
+  (*   progress(autounfold with constants; simpl). *)
 
   Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
     progress(autounfold with constants; simpl).
@@ -169,13 +175,14 @@ Module EncPingSendProtocol.
   Section IW.
     Import IdealWorld.
 
-    Definition CH__A2B : channel_id := 0.
+    Definition CH__A2B : channel_id := Single 0.
+    Definition perms_CH__A2B := 0.
 
-    Definition PERMS__a := $0 $+ (CH__A2B, {| read := false; write := true |}). (* writer *)
-    Definition PERMS__b := $0 $+ (CH__A2B, {| read := true; write := false |}). (* reader *)
+    Definition PERMS__a := $0 $+ (perms_CH__A2B, {| read := false; write := true |}). (* writer *)
+    Definition PERMS__b := $0 $+ (perms_CH__A2B, {| read := true; write := false |}). (* reader *)
 
     Definition ideal_univ_start :=
-      mkiU ($0 $+ (CH__A2B, [])) PERMS__a PERMS__b
+      mkiU (#0 #+ (CH__A2B, [])) PERMS__a PERMS__b
            (* user A *)
            ( n <- Gen
            ; _ <- Send (Content n) CH__A2B
@@ -223,8 +230,8 @@ Module EncPingSendProtocol.
   
   Import SimulationAutomation.
 
-  Hint Extern 0 (~^* _ _) =>
-    progress(autounfold with constants; simpl).
+  (* Hint Extern 0 (~^* _ _) => *)
+  (*   progress(autounfold with constants; simpl). *)
 
   Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
     progress(autounfold with constants; simpl).
