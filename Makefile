@@ -70,6 +70,10 @@ secdns: CoqMakefile
 	$(eval TS := protocols/SecureDNS.vo)
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
+secvote: CoqMakefile
+	$(eval TS := protocols/SecureVoting.vo)
+	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
+
 nsproto: CoqMakefile
 	$(eval TS := protocols/NeedhamSchroeder.vo)
 	$(MAKE) -f CoqMakefile $(TS)
