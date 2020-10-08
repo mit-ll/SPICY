@@ -347,35 +347,6 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
       gen1.
       gen1.
       gen1.
-
-      eapply msc_step_alt.
-      + unfold oneStepClosure_new; repeat gen1'.
-
-
-
-        | solve[ simplify
-                 ; sets
-                 ; split_ex
-                 ; propositional
-                 ; repeat match goal with
-                          | [H : (?x1, ?y1) = ?p |- _] =>
-                            match p with
-                            | (?x2, ?y2) =>
-                              tryif (concrete x2; concrete y2)
-                              then let H' := fresh H
-                                   in assert (H' : (x1, y1) = (x2, y2) -> x1 = x2 /\ y1 = y2)
-                                     by equality
-                                      ; propositional
-                                      ; discriminate
-                              else invert H
-                            | _ => invert H
-                            end
-                          end
-               | eapply intersect_empty_l]
-        | rewrite ?union_empty_r ]
-
-
-      
       gen1.
       gen1.
       gen1.
