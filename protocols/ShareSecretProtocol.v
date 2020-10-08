@@ -179,17 +179,6 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
 
   Ltac step3 := rewrite ?union_empty_r.
 
-  (* Set Ltac Profiling. *)
-
-  (* Definition msg_split_predicate {t} (msg : RealWorld.crypto t) : Prop := *)
-  (*   ~ msg_accepted_by_pattern cs u_id froms pat msg' *)
-  (*   /\ forall cid c cid' c', msg = SignedCiphertext cid *)
-  (*                      -> cs $? cid = Some c *)
-  (*                      -> msg' = SignedCiphertext cid' *)
-  (*                      -> cs $? cid' = Some c' *)
-  (*                      -> cipher_nonce c <> cipher_nonce c' *)
-  (* . *)
-
   Lemma safe_invariant :
     invariantFor
       {| Initial := {(ru0, iu0, true)}; Step := @step t__hon t__adv  |}
@@ -278,20 +267,20 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
 
     - unfold user_cipher_queues_ok.
       rewrite Forall_natmap_forall; intros.
-      cases (A ==n k); cases (B ==n k);
-        subst; clean_map_lookups; simpl in *; econstructor; eauto.
+      focus_user
+      ; simpl in *; econstructor; eauto.
 
-    - unfold honest_nonces_ok; intros.
-      unfold honest_nonce_tracking_ok.
-
-      destruct (u_id ==n A); destruct (u_id ==n B);
-        destruct (rec_u_id ==n A); destruct (rec_u_id ==n B);
-          subst; try contradiction; try discriminate; clean_map_lookups; simpl;
-            repeat (apply conj); intros; clean_map_lookups; eauto.
+    - unfold honest_nonces_ok, honest_user_nonces_ok, honest_nonces_ok
+      ; repeat simple apply conj
+      ; intros
+      ; clean_map_lookups
+      ; intros
+      ; focus_user
+      ; try contradiction; try discriminate; simpl;
+        repeat (apply conj); intros; clean_map_lookups; eauto.
 
     - unfold honest_users_only_honest_keys; intros.
-      destruct (u_id ==n A);
-        destruct (u_id ==n B);
+      focus_user;
         subst;
         simpl in *;
         clean_map_lookups;
@@ -303,6 +292,7 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
         solve_concrete_maps;
         solve_simple_maps;
         eauto.
+
   Qed.
   
   Lemma universe_starts_safe : universe_ok ru0 /\ adv_universe_ok ru0.

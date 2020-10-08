@@ -1805,3 +1805,13 @@ Module Gen.
 
 End Gen.
                      
+(* Helps with initial universe state proofs *)
+Ltac focus_user :=
+  repeat
+    match goal with
+    | [ H : _ $+ (?k1,_) $? ?k2 = Some ?v |- _ ] =>
+      is_var v;
+      match type of v with
+      | RealWorld.user_data _ => idtac
+      end; destruct (k1 ==n k2); subst; clean_map_lookups
+    end.
