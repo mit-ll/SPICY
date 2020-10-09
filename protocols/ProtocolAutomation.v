@@ -1757,15 +1757,14 @@ Module Gen.
       is_evar inv
       ; concrete ru
       ; concrete iuniv iu
-      (* ; repeat equality1 *)
-      (* ; solve_concrete_maps *)
+      ; repeat equality1
+      ; solve_concrete_maps
       ; canonicalize users
       ; clean_context
-      ; subst
       ; repeat( progress (subst; cleanup) )
       (* ; cleanup *)
-      (* ; NatMap.clean_map_lookups *)
-      (* ; ChMaps.ChMap.clean_map_lookups *)
+      ; NatMap.clean_map_lookups
+      ; ChMaps.ChMap.clean_map_lookups
       ; incorp
       ; solve[ close ]
     end.
