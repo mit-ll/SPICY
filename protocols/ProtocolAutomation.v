@@ -1701,12 +1701,13 @@ Module Gen.
             ; is_not_evar k2
             ; rewrite ChMaps.ChMap.F.add_neq_o in H by congruence
           | [ H : mkKeys _ $? _ = _ |- _ ] => unfold mkKeys in H; simpl in H
-          | [ H : ?m $? _ = _ |- _ ] => progress (unfold m in H)
+          (* | [ H : ?m $? _ = _ |- _ ] => progress (unfold m in H) *)
           | [ H : RealWorld.msg_accepted_by_pattern _ _ _ _ _ |- _ ] => clear H
           | [ H : ~ RealWorld.msg_accepted_by_pattern _ _ _ _ _ |- _ ] => clear H
           | [ H : RealWorld.msg_accepted_by_pattern _ _ _ _ _ -> False |- _ ] => clear H
           | [ H : IdealWorld.screen_msg _ _ |- _ ] => invert H
           | [ H : IdealWorld.permission_subset _ _ |- _ ] => invert H
+          | [ H : IdealWorld.check_perm _ _ _ |- _ ] => unfold IdealWorld.check_perm in H
           | [ H : context [ IdealWorld.addMsg _ _ _ ] |- _ ] => unfold IdealWorld.addMsg in H; simpl in H
           | [ H : Forall _ [] |- _ ] => clear H
           | [ H : context [true || _]  |- _] => rewrite orb_true_l in H
@@ -1719,10 +1720,16 @@ Module Gen.
             erewrite reduce_merge_perms in H by (clean_map_lookups; eauto)
           | [ H : context [_ $k++ _]  |- _] =>
             unfold merge_perms, add_key_perm, fold in H; simpl in H; clean_map_lookups
-          | [ H : context [match ?m $? _ with _ => _ end] |- _] => progress (unfold m in H)
-          | [ H : match _ $+ (?k1,_) $? ?k2 with _ => _ end = _ |- _ ] =>
-            (rewrite add_neq_o in H by solve_simple_ineq)
+
+          | [ H : context [ _ $+ (?k1,_) $? ?k2] |- _ ] =>
+              (rewrite add_neq_o in H by solve_simple_ineq)
             || (rewrite add_eq_o in H by trivial)
+          | [ H : context [ ?m $? _ ] |- _ ] =>
+            progress (unfold m in H)
+          (* | [ H : context [match ?m $? _ with _ => _ end] |- _] => progress (unfold m in H) *)
+          (* | [ H : match _ $+ (?k1,_) $? ?k2 with _ => _ end = _ |- _ ] => *)
+          (*   (rewrite add_neq_o in H by solve_simple_ineq) *)
+          (*   || (rewrite add_eq_o in H by trivial) *)
           end
       ).
 
@@ -1732,6 +1739,7 @@ Module Gen.
       concrete ru
       ; concrete iuniv iu
       ; tidy
+      ; repeat( progress (subst; cleanup) )
       ; repeat eexists
       ; propositional
       ; solve[ eauto
@@ -1749,14 +1757,15 @@ Module Gen.
       is_evar inv
       ; concrete ru
       ; concrete iuniv iu
-      ; repeat equality1
-      ; solve_concrete_maps
+      (* ; repeat equality1 *)
+      (* ; solve_concrete_maps *)
       ; canonicalize users
       ; clean_context
       ; subst
-      ; cleanup
-      ; NatMap.clean_map_lookups
-      ; ChMaps.ChMap.clean_map_lookups
+      ; repeat( progress (subst; cleanup) )
+      (* ; cleanup *)
+      (* ; NatMap.clean_map_lookups *)
+      (* ; ChMaps.ChMap.clean_map_lookups *)
       ; incorp
       ; solve[ close ]
     end.
