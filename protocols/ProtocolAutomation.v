@@ -1702,7 +1702,9 @@ Module Gen.
             ; rewrite ChMaps.ChMap.F.add_neq_o in H by congruence
           | [ H : mkKeys _ $? _ = _ |- _ ] => unfold mkKeys in H; simpl in H
           | [ H : ?m $? _ = _ |- _ ] => progress (unfold m in H)
-          | [ H : RealWorld.msg_accepted_by_pattern _ _ _ _ _ |- _ ] => invert H
+          | [ H : RealWorld.msg_accepted_by_pattern _ _ _ _ _ |- _ ] => clear H
+          | [ H : ~ RealWorld.msg_accepted_by_pattern _ _ _ _ _ |- _ ] => clear H
+          | [ H : RealWorld.msg_accepted_by_pattern _ _ _ _ _ -> False |- _ ] => clear H
           | [ H : IdealWorld.screen_msg _ _ |- _ ] => invert H
           | [ H : IdealWorld.permission_subset _ _ |- _ ] => invert H
           | [ H : context [ IdealWorld.addMsg _ _ _ ] |- _ ] => unfold IdealWorld.addMsg in H; simpl in H
@@ -1751,6 +1753,7 @@ Module Gen.
       ; solve_concrete_maps
       ; canonicalize users
       ; clean_context
+      ; subst
       ; cleanup
       ; NatMap.clean_map_lookups
       ; ChMaps.ChMap.clean_map_lookups
