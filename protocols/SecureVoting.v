@@ -226,6 +226,170 @@ Module VotingProtocolSecure <: AutomatedSafeProtocol.
       gen1.
       gen1.
       gen1.
+
+      gen1.
+
+      gen1.
+
+
+
+
+
+
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+
+
+      simpl.
+      
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+
+      eapply msc_step_alt.
+      + unfold oneStepClosure_new.
+
+        simplify
+        ; tidy
+        ; idtac "rstep start"
+        ; rstep
+        ; idtac "istep start"
+        ; istep
+        ; idtac "istep done"
+        ; subst
+        ; canonicalize users
+        ; idtac "close start".
+
+        close.
+        close.
+        close.
+        close.
+        close.
+        close.
+        close.
+        close.
+
+      + 
+
+
+      
+      gen1. 
+      gen1. 
+
+
+      eapply msc_step_alt.
+      + unfold oneStepClosure_new.
+
+        simplify
+        ; tidy
+        ; idtac "rstep start"
+        ; rstep
+        ; idtac "istep start"
+        ; istep
+        ; idtac "istep done"
+        ; subst
+        ; canonicalize users
+        ; idtac "close start".
+
+        Ltac close :=
+          match goal with
+          | [|- [_ | _] (?ru, ?iu, _)] =>
+            concrete ru
+            ; concrete iuniv iu
+            ; idtac "one"
+            ; tidy
+            ; repeat( progress (subst; cleanup) )
+            ; repeat eexists
+            ; propositional
+            (* ; match goal with *)
+            (*   | [ H : context [ _ $? _ ] |- _ ] => idtac H; fail 4 *)
+            (*   | _ => idtac *)
+            (*   end *)
+            ; solve[ eauto
+                   | canonicalize users
+                     ; equality ]
+          | [|- (?inv1 \cup ?inv2) (?ru, ?iu, _)] =>
+            concrete inv1
+            ; concrete ru
+            ; concrete iuniv iu
+            ; idtac "two"
+            ; solve[ idtac "trying left"; left; close
+                   | idtac "left fails; trying right"; right; close
+                   | idtac "something is horribly wrong" (* prevent an infinite loop *)
+                   ]
+          | [|- ?inv (?ru, ?iu, _)] =>
+            is_evar inv
+            ; idtac "three"
+            ; concrete ru
+            ; concrete iuniv iu
+            ; repeat equality1
+            (* ; solve_concrete_maps *)
+            ; canonicalize users
+            ; clean_context
+            ; repeat( progress (subst; cleanup) )
+            ; NatMap.clean_map_lookups
+            ; ChMaps.ChMap.clean_map_lookups
+            (* ; match goal with *)
+            (*   | [ H : context [ _ $? _ ] |- _ ] => idtac H; fail 4 *)
+            (*   | _ => idtac *)
+            (*   end *)
+            ; incorp
+            ; solve[ close ]
+          end.
+
+        close.
+        close.
+        close.
+        close.
+        close.
+        close.
+        close.
+        cleanup.
+        solve [ close ].
+
+        cleanup.
+
+        admit
+        admit
+        close.
+
+        all: try solve [ close ].
+
+
+
+
+      gen1.
+      gen1. 
+      gen1.
+
+
+      + 
+
+
+
+
+        ; repeat close
+        ; idtac "close done".
+
+
+        
+        repeat gen1'.
+
+
+
+
+      
+      
+      gen1.
+      gen1.
       gen1.
       gen1.
       gen1.

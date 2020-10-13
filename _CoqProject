@@ -60,6 +60,7 @@ protocols/NoResends.v
 protocols/ProtocolFunctions.v
 protocols/ShareSecretProtocol.v
 protocols/ShareSecretProtocol2.v
+protocols/ShareSecretSymmetricEncProtocol.v
 protocols/NeedhamSchroeder.v
 protocols/PGP.v
 protocols/SecureDNS.v

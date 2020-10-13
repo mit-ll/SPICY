@@ -66,6 +66,10 @@ pgp: CoqMakefile
 	$(eval TS := protocols/PGP.vo)
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
+sharesecretsym: CoqMakefile
+	$(eval TS := protocols/ShareSecretSymmetricEncProtocol.vo)
+	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
+
 secdns: CoqMakefile
 	$(eval TS := protocols/SecureDNS.vo)
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)

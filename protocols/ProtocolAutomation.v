@@ -1739,7 +1739,7 @@ Module Gen.
       concrete ru
       ; concrete iuniv iu
       ; tidy
-      ; repeat( progress (subst; cleanup) )
+      (* ; repeat( progress (subst; cleanup) ) *)
       ; repeat eexists
       ; propositional
       ; solve[ eauto
