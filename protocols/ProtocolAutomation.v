@@ -1585,6 +1585,30 @@ Module Gen.
       ; discharge_nextStep2 (* clear this goal since the preconditions weren't satisfied *)
     end.
 
+  Ltac univ_equality_discr :=
+    discriminate
+    || match goal with
+      | [ H1 : ?x = ?y1, H2 : ?x = ?y2 |- _ ] =>
+        rewrite H1 in H2
+        ; clear H1
+      | [ H1 : ?x = ?y1, H2 : ?y2 = ?x |- _ ] =>
+        rewrite H1 in H2
+        ; clear H1
+      | [ H : (?x1,?y1) = (?x2,?y2) |- _ ] =>
+        apply inv_tuple in H; split_ex
+      | [ H : {| users := _ |} = {| users := _ |} |- _ ] =>
+        apply split_real_univ_fields in H; split_ex
+      | [ H : Some _ = Some _ |- _ ] =>
+        apply inv_some in H
+      | [ H : {| key_heap := _ |} = {| key_heap := _ |} |- _ ] =>
+        apply split_real_user_data_fields in H; split_ex
+      (* | [ H : Some _ = Some _ <-> _ |- _ ] => *)
+      (*   destruct H as [ H ?H ] *)
+      (*   ; specialize (H eq_refl) *)
+      | [ H : _ $+ (_,_) = _ |- _ ] =>
+        apply map_eq_fields_eq in H; clean_map_lookups
+      end.
+
   Ltac tidy :=
     autounfold
     ; intros
@@ -1593,44 +1617,47 @@ Module Gen.
     ; subst
     ; clean_map_lookups
     ; subst
-    ; repeat match goal with
-             | [H : (?x1, ?y1) = ?p |- _] =>
-               match p with
-               | (?x2, ?y2) =>
-                 tryif (concrete x2; concrete y2)
-                 then let H' := fresh H
-                      in assert (H' : (x1, y1) = (x2, y2) -> x1 = x2 /\ y1 = y2)
-                        by equality
-                         ; propositional
-                         ; discriminate
-                 else invert H
-               | _ => invert H
-               end
-             | [H : Step _ _ _ |- _] =>
-               simpl in H
-             | [H : exists _, _ |- _] =>
-               invert H; propositional; subst
-             | [ H : nextAction _ _ |- _ ] =>
-               progress (simpl in H)
-             | [ H : nextAction ?cmd1 ?cmd2 |- _ ] =>
-               is_var cmd2;
-               match cmd1 with (* doubt this is general enough *)
-               | (RealWorld.protocol ?ud) => concrete ud || fail 1
-               | _ => concrete cmd1
-               end; invert H
-             | [ H : step ?st _ |- _] =>
-               progress ((repeat step_model1); split_ex; split_ors; subst)
-             | [ H : stepC ?st _ |- _ ] =>
-               progress ((repeat step_model1); split_ex; subst)
-             | [ H : O.max_elt _ = Some _ |- _ ] => 
-               unfold O.max_elt in H; simpl in H; invert H
-             | [H : In _ $0 |- _] =>
-               invert H
-             | [H : Raw.PX.MapsTo _ _ $0 |- _] =>
-               invert H
-             | [H : (existT _ _ _) = (existT _ _ _) |- _] =>
-               invert H
-             end.
+    ; repeat
+        univ_equality_discr
+      || match goal with
+        (* replaced this case with univ_equality_discr tactic call *)
+        (* | [H : (?x1, ?y1) = ?p |- _] => *)
+        (*   match p with *)
+        (*   | (?x2, ?y2) => *)
+        (*     tryif (concrete x2; concrete y2) *)
+        (*     then let H' := fresh H *)
+        (*          in assert (H' : (x1, y1) = (x2, y2) -> x1 = x2 /\ y1 = y2) *)
+        (*            by equality *)
+        (*             ; propositional *)
+        (*             ; discriminate *)
+        (*     else invert H *)
+        (*   | _ => invert H *)
+        (*   end *)
+        | [H : Step _ _ _ |- _] =>
+          simpl in H
+        | [H : exists _, _ |- _] =>
+          invert H; propositional; subst
+        | [ H : nextAction _ _ |- _ ] =>
+          progress (simpl in H)
+        | [ H : nextAction ?cmd1 ?cmd2 |- _ ] =>
+          is_var cmd2;
+          match cmd1 with (* doubt this is general enough *)
+          | (RealWorld.protocol ?ud) => concrete ud || fail 1
+          | _ => concrete cmd1
+          end; invert H
+        | [ H : step ?st _ |- _] =>
+          progress ((repeat step_model1); split_ex; split_ors; subst)
+        | [ H : stepC ?st _ |- _ ] =>
+          progress ((repeat step_model1); split_ex; subst)
+        | [ H : O.max_elt _ = Some _ |- _ ] => 
+          unfold O.max_elt in H; simpl in H; invert H
+        | [H : In _ $0 |- _] =>
+          invert H
+        | [H : Raw.PX.MapsTo _ _ $0 |- _] =>
+          invert H
+        | [H : (existT _ _ _) = (existT _ _ _) |- _] =>
+          invert H
+        end.
 
   Ltac s := simpl in *.
 
@@ -1782,30 +1809,6 @@ Module Gen.
     ; idtac "close start"
     ; repeat close
     ; idtac "close done".
-
-  Ltac univ_equality_discr :=
-    discriminate
-    || match goal with
-      | [ H1 : ?x = ?y1, H2 : ?x = ?y2 |- _ ] =>
-        rewrite H1 in H2
-        ; clear H1
-      | [ H1 : ?x = ?y1, H2 : ?y2 = ?x |- _ ] =>
-        rewrite H1 in H2
-        ; clear H1
-      | [ H : (?x1,?y1) = (?x2,?y2) |- _ ] =>
-        apply inv_tuple in H; split_ex
-      | [ H : {| users := _ |} = {| users := _ |} |- _ ] =>
-        apply split_real_univ_fields in H; split_ex
-      | [ H : Some _ = Some _ |- _ ] =>
-        apply inv_some in H
-      | [ H : {| key_heap := _ |} = {| key_heap := _ |} |- _ ] =>
-        apply split_real_user_data_fields in H; split_ex
-      (* | [ H : Some _ = Some _ <-> _ |- _ ] => *)
-      (*   destruct H as [ H ?H ] *)
-      (*   ; specialize (H eq_refl) *)
-      | [ H : _ $+ (_,_) = _ |- _ ] =>
-        apply map_eq_fields_eq in H; clean_map_lookups
-      end.
 
   Ltac gen1 :=
     match goal with
