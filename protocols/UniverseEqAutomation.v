@@ -64,6 +64,83 @@ Section RealLemmas.
     intros; destruct U; subst; trivial.
   Qed.
 
+  Lemma split_real_univ_fields :
+    forall {A B} (us us' : honest_users A) (a a' : user_data B) cs cs' ks ks',
+      {| users       := us
+         ; adversary   := a
+         ; all_ciphers := cs
+         ; all_keys    := ks
+      |} =
+      {| users       := us'
+         ; adversary   := a'
+         ; all_ciphers := cs'
+         ; all_keys    := ks'
+      |}
+      -> us = us'
+        /\  a =  a'
+        /\ cs = cs'
+        /\ ks = ks'.
+  Proof.
+    intros * H; invert H; eauto.
+  Qed.
+
+  Lemma split_real_user_data_fields :
+    forall t ks ks' (p p' : user_cmd (Base t)) msgs msgs' cheap cheap' froms froms' sents sents' n n',
+      {| key_heap := ks;
+         protocol := p;
+         msg_heap := msgs;
+         c_heap := cheap;
+         from_nons := froms;
+         sent_nons := sents;
+         cur_nonce := n
+      |} =
+      {| key_heap := ks';
+         protocol := p';
+         msg_heap := msgs';
+         c_heap := cheap';
+         from_nons := froms';
+         sent_nons := sents';
+         cur_nonce := n' |}
+      -> ks = ks'
+        /\ p = p'
+        /\ msgs = msgs'
+        /\ cheap = cheap'
+        /\ froms = froms'
+        /\ sents = sents'
+        /\ n = n'.
+  Proof.
+    intros * H; invert H; eauto 8.
+  Qed.
+
+  Lemma inv_some :
+    forall A (x y : A),
+      Some x = Some y
+      -> x = y.
+  Proof.
+    intros * H; invert H; eauto.
+  Qed.
+
+  Lemma inv_tuple :
+    forall A B (a a' : A) (b b' : B),
+      (a,b) = (a',b')
+      -> a = a'
+        /\ b = b'.
+  Proof.
+    intros * H; invert H; eauto.
+  Qed.
+  
+  Lemma map_eq_fields_eq :
+    forall V (m m' : NatMap.t V) k v,
+      m $+ (k,v) = m'
+      -> m' $? k = Some v
+        /\ m $- k = m' $- k.
+  Proof.
+    intros; subst.
+    clean_map_lookups; eauto.
+    rewrite map_add_remove_eq; eauto.
+  Qed.
+
+
 End RealLemmas.
 
 Section IdealLemmas.

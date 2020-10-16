@@ -1783,6 +1783,30 @@ Module Gen.
     ; repeat close
     ; idtac "close done".
 
+  Ltac univ_equality_discr :=
+    discriminate
+    || match goal with
+      | [ H1 : ?x = ?y1, H2 : ?x = ?y2 |- _ ] =>
+        rewrite H1 in H2
+        ; clear H1
+      | [ H1 : ?x = ?y1, H2 : ?y2 = ?x |- _ ] =>
+        rewrite H1 in H2
+        ; clear H1
+      | [ H : (?x1,?y1) = (?x2,?y2) |- _ ] =>
+        apply inv_tuple in H; split_ex
+      | [ H : {| users := _ |} = {| users := _ |} |- _ ] =>
+        apply split_real_univ_fields in H; split_ex
+      | [ H : Some _ = Some _ |- _ ] =>
+        apply inv_some in H
+      | [ H : {| key_heap := _ |} = {| key_heap := _ |} |- _ ] =>
+        apply split_real_user_data_fields in H; split_ex
+      (* | [ H : Some _ = Some _ <-> _ |- _ ] => *)
+      (*   destruct H as [ H ?H ] *)
+      (*   ; specialize (H eq_refl) *)
+      | [ H : _ $+ (_,_) = _ |- _ ] =>
+        apply map_eq_fields_eq in H; clean_map_lookups
+      end.
+
   Ltac gen1 :=
     match goal with
     | [|- multiStepClosure _ _ { } _] =>
@@ -1801,20 +1825,21 @@ Module Gen.
                  ; sets
                  ; split_ex
                  ; propositional
-                 ; repeat match goal with
-                          | [H : (?x1, ?y1) = ?p |- _] =>
-                            match p with
-                            | (?x2, ?y2) =>
-                              tryif (concrete x2; concrete y2)
-                              then let H' := fresh H
-                                   in assert (H' : (x1, y1) = (x2, y2) -> x1 = x2 /\ y1 = y2)
-                                     by equality
-                                      ; propositional
-                                      ; discriminate
-                              else invert H
-                            | _ => invert H
-                            end
-                          end
+                 ; repeat univ_equality_discr
+                 (* ; repeat match goal with *)
+                 (*          | [H : (?x1, ?y1) = ?p |- _] => *)
+                 (*            match p with *)
+                 (*            | (?x2, ?y2) => *)
+                 (*              tryif (concrete x2; concrete y2) *)
+                 (*              then let H' := fresh H *)
+                 (*                   in assert (H' : (x1, y1) = (x2, y2) -> x1 = x2 /\ y1 = y2) *)
+                 (*                     by equality *)
+                 (*                      ; propositional *)
+                 (*                      ; discriminate *)
+                 (*              else invert H *)
+                 (*            | _ => invert H *)
+                 (*            end *)
+                 (*          end *)
                | eapply intersect_empty_l]
         | rewrite ?union_empty_r ]
     end.
