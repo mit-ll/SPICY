@@ -93,19 +93,72 @@ Section RealWorldLemmas.
     forall (t : user_cmd_type) (r1 r2 : denote t),
       Return r1 = Return r2 -> r1 = r2.
   Proof. intros * H; invert H; trivial. Qed.
+
+  Lemma input_act_eq_inv :
+    forall t m m' p p' f f', @Input t m p f = Input m' p' f' -> m = m' /\ p = p' /\ f = f'.
+  Proof. intros * H; invert H; auto. Qed.
+
+  Lemma output_act_eq_inv :
+    forall t m m' su1 su1' su2 su2' s s',
+      @Output t m su1 su2 s = Output m' su1' su2' s'
+      -> m = m' /\ su1 = su1' /\ su2 = su2' /\ s = s'.
+  Proof. intros * H; invert H; auto. Qed.
+
+  Lemma ct_eq_inv :
+    forall t cid cid', @SignedCiphertext t cid = SignedCiphertext cid' -> cid = cid'.
+  Proof. intros * H; invert H; auto. Qed.
+
+  Import JMeq.
+      
+  Lemma sigcphr_eq_inv :
+    forall t t' m m' kid kid' uid uid' seq seq',
+      @SigCipher t kid uid seq m = @SigCipher t' kid' uid' seq' m'
+      -> t = t' /\ kid = kid' /\ uid = uid' /\ seq = seq' /\ JMeq m m'.
+  Proof. intros * H; invert H; auto. Qed.
+
+  Lemma enccphr_eq_inv :
+    forall t t' m m' kid kid' kid2 kid2' uid uid' seq seq',
+      @SigEncCipher t kid kid2 uid seq m = @SigEncCipher t' kid' kid2' uid' seq' m'
+      -> t = t' /\ kid = kid' /\ kid2 = kid2' /\ uid = uid' /\ seq = seq' /\ JMeq m m'.
+  Proof. intros * H; invert H; auto 6. Qed.
   
 End RealWorldLemmas.
 
-Lemma nil_not_app_cons :
-  forall A (l1 l2 : list A) e,
-    [] = l1 ++ e :: l2
-    -> False.
-Proof.
-  intros.
-  destruct l1.
-  rewrite app_nil_l in H; invert H.
-  rewrite <- app_comm_cons in H; invert H.
-Qed.
+Section OtherInvLemmas.
+
+  Lemma nil_not_app_cons :
+    forall A (l1 l2 : list A) e,
+      [] = l1 ++ e :: l2
+      -> False.
+  Proof.
+    intros.
+    destruct l1.
+    rewrite app_nil_l in H; invert H.
+    rewrite <- app_comm_cons in H; invert H.
+  Qed.
+
+  Lemma action_eq_inv :
+    forall t a1 a2, @Action t a1 = Action a2 -> a1 = a2.
+  Proof. intros * H; invert H; auto.  Qed.
+
+  Lemma key_eq_inv :
+    forall kid kid' ku ku' kt kt', MkCryptoKey kid ku kt = MkCryptoKey kid' ku' kt' -> kid = kid' /\ ku = ku' /\ kt = kt'.
+  Proof. intros * H; invert H; auto.  Qed.
+
+  Lemma some_eq_inv :
+    forall A (a a' : A), Some a = Some a' -> a = a'.
+  Proof. intros * H; invert H; auto.  Qed.
+    
+  Lemma tuple_eq_inv :
+    forall A B (a a' : A) (b b' : B), (a,b) = (a',b') -> a = a' /\ b = b'.
+  Proof. intros * H; invert H; eauto. Qed.
+
+  Lemma list_eq_inv :
+    forall A (x x' : A) xs xs', x :: xs = x' :: xs' -> x = x' /\ xs = xs'.
+  Proof. intros * H; invert H; eauto. Qed.
+      
+
+End OtherInvLemmas.
 
 Ltac equality1 :=
   match goal with
@@ -128,28 +181,37 @@ Ltac equality1 :=
     apply ChMaps.ChMap.lookup_split in H; intuition idtac
 
   | [ H : _ = {| RealWorld.users := _ ; RealWorld.adversary := _ ; RealWorld.all_ciphers := _ ; RealWorld.all_keys := _ |} |- _ ]
-    => inversion H; clear H; subst
+    => apply split_real_univ_fields in H; split_ex; subst
   | [ |- RealWorld.protocol (RealWorld.adversary _) = RealWorld.Return _ ] => simpl
   | [ H : lameAdv _ ?adv |- RealWorld.protocol ?adv = _ ] => unfold lameAdv in H; eassumption
 
   | [ H : RealWorld.users _ $? _ = Some _ |- _ ] => progress (simpl in H)
 
   | [ H : _ = RealWorld.mkUserData _ _ _ |- _ ] => inversion H; clear H
-  | [ H : Some _ = Some _ |- _ ] => inversion H; clear H
-  | [ H : (_ :: _) = (_ :: _) |- _ ] => invert H
+  | [ H : Some _ = Some _ |- _ ] => apply some_eq_inv in H; subst
+  | [ H : (_ :: _) = (_ :: _) |- _ ] => apply list_eq_inv in H; split_ex; subst
   | [ H : (_ :: _) = ?x |- _ ] => is_var x; invert H
   | [ H : ?x = (_ :: _) |- _ ] => is_var x; invert H
-  | [ H : (_,_) = (_,_) |- _ ] => invert H (* inversion H; clear H *)
+  | [ H : (_,_) = (_,_) |- _ ] => apply tuple_eq_inv in H; split_ex; subst
   | [ H : [] = _ ++ _ :: _ |- _ ] => apply nil_not_app_cons in H; contradiction
   (* | [ H : (_,_,_) = (_,_,_) |- _ ] => inversion H; clear H *)
-  | [ H : Action _ = Action _ |- _ ] => inversion H; clear H
+  | [ H : Action _ = Action _ |- _ ] => apply action_eq_inv in H; subst
+  | [ H : Silent = Action _ |- _ ] => discriminate H
+  | [ H : Action _ = Silent |- _ ] => discriminate H
   | [ H : RealWorld.Return _ = RealWorld.Return _ |- _ ] => apply invert_return in H
   | [ H : existT _ _ _ = existT _ _ _ |- _ ] => apply inj_pair2 in H
 
-  | [ H: RealWorld.SignedCiphertext _ = RealWorld.SignedCiphertext _ |- _ ] => invert H
-  | [ H: RealWorld.SigCipher _ _ _ _ = RealWorld.SigCipher _ _ _ _ |- _ ] => invert H
-  | [ H: RealWorld.SigEncCipher _ _ _ _ _ = RealWorld.SigEncCipher _ _ _ _ _ |- _ ] => invert H
-  | [ H: MkCryptoKey _ _ _ = _ |- _ ] => invert H
+  | [ H: RealWorld.SignedCiphertext _ = RealWorld.SignedCiphertext _ |- _ ] =>
+    apply ct_eq_inv in H; split_ex; subst
+  | [ H: RealWorld.SigCipher _ _ _ _ = RealWorld.SigCipher _ _ _ _ |- _ ] =>
+    apply sigcphr_eq_inv in H; split_ex; subst
+  | [ H: RealWorld.SigEncCipher _ _ _ _ _ = RealWorld.SigEncCipher _ _ _ _ _ |- _ ] =>
+    apply enccphr_eq_inv in H; split_ex; subst
+  | [ H : _ = RealWorld.Output _ _ _ _ |- _ ] => apply output_act_eq_inv in H; split_ex; subst
+  | [ H : RealWorld.Output _ _ _ _ = _ |- _ ] => apply output_act_eq_inv in H; split_ex; subst
+  | [ H : _ = RealWorld.Input _ _ _ |- _ ] => apply input_act_eq_inv in H; split_ex; subst
+  | [ H : RealWorld.Input _ _ _ = _ |- _ ] => apply input_act_eq_inv in H; split_ex; subst
+  | [ H : MkCryptoKey _ _ _ = _ |- _ ] => apply key_eq_inv in H; split_ex; subst
 
   | [ H: _ = {| IdealWorld.read := _ |} |- _ ] => invert H
   | [ H: {| IdealWorld.read := _ |} = _ |- _ ] => invert H
@@ -629,7 +691,7 @@ End InversionPrinciples.
 
 Import RealWorld.
 
-Ltac step_usr uid :=
+Ltac step_usr_id uid :=
   match goal with
   | [ H : RealWorld.step_user _ (Some uid) (_,_,_,_,_,_,_,_,_,_,?cmd) _ |- _ ] =>
     match cmd with

@@ -112,23 +112,6 @@ Section RealLemmas.
     intros * H; invert H; eauto 8.
   Qed.
 
-  Lemma inv_some :
-    forall A (x y : A),
-      Some x = Some y
-      -> x = y.
-  Proof.
-    intros * H; invert H; eauto.
-  Qed.
-
-  Lemma inv_tuple :
-    forall A B (a a' : A) (b b' : B),
-      (a,b) = (a',b')
-      -> a = a'
-        /\ b = b'.
-  Proof.
-    intros * H; invert H; eauto.
-  Qed.
-  
   Lemma map_eq_fields_eq :
     forall V (m m' : NatMap.t V) k v,
       m $+ (k,v) = m'
@@ -139,7 +122,6 @@ Section RealLemmas.
     clean_map_lookups; eauto.
     rewrite map_add_remove_eq; eauto.
   Qed.
-
 
 End RealLemmas.
 

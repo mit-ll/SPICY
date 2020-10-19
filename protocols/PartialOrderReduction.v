@@ -321,7 +321,7 @@ Section CommutationLemmas.
         | [ H : ?uid1 <> ?uid2 , USRS : _ $+ (?uid1,_) $? ?uid2 = _ |- _ ] => rewrite add_neq_o in USRS by congruence
         | [ H : nextAction ?c1 ?c2 |- _ ] => apply nextAction_couldBe in H; contradiction
         end
-    ; step_usr u_id1; step_usr u_id2
+    ; step_usr_id u_id1; step_usr_id u_id2
     ; try match goal with
       | [ NA : nextAction (Recv _) _ ,
           OK : message_queues_ok ?cs ?us ?gks ,
@@ -497,7 +497,7 @@ Section CommutationLemmas.
         end
     ; subst
     ; destruct (u ==n u_id2); subst
-    ; step_usr u_id1; step_usr u_id2.
+    ; step_usr_id u_id1; step_usr_id u_id2.
 
     all: clean_map_lookups; subst.
 
@@ -619,7 +619,7 @@ Section CommutationLemmas.
         | [ H : nextAction ?c1 ?c2 |- _ ] => apply nextAction_couldBe in H; try contradiction
         | [ H : commutes (Send _ _) _ |- _ ] => unfold commutes in H; contradiction
         | [ H : commutes (Recv _) _ |- _ ] => unfold commutes in H; contradiction
-        end; step_usr u_id2
+        end; step_usr_id u_id2
         ; (do 10 eexists); (repeat simple apply conj); repeat solver1; eauto; repeat solver1; eauto.
 
     - simpl.
@@ -1712,35 +1712,35 @@ Proof.
     induct 1;
     intros;
     discharge_no_commutes;
-    step_usr uid1;
+    step_usr_id uid1;
     (do 11 eexists); econstructor; eauto.
 
   - induct 1;
       intros;
       discharge_no_commutes;
-      try solve [ step_usr uid1;
+      try solve [ step_usr_id uid1;
                   clean_map_lookups;
                   (do 11 eexists); econstructor; eauto ].
 
-     step_usr uid1; destruct (uid ==n uid2); clean_map_lookups; (do 11 eexists); econstructor; eauto.
+     step_usr_id uid1; destruct (uid ==n uid2); clean_map_lookups; (do 11 eexists); econstructor; eauto.
      
      (* both users creating ciphers *)
-     step_usr uid1; clean_map_lookups; (do 11 eexists);
+     step_usr_id uid1; clean_map_lookups; (do 11 eexists);
        match goal with
        | [ |- context [ cs $+ (?cid,?c) ]] => eapply StepEncrypt with (c_id0 := next_key (cs $+ (cid,c)))
        end; clean_map_lookups; eauto using next_key_not_in.
-     step_usr uid1; clean_map_lookups; (do 11 eexists);
+     step_usr_id uid1; clean_map_lookups; (do 11 eexists);
        match goal with
        | [ |- context [ cs $+ (?cid,?c) ]] => eapply StepEncrypt with (c_id0 := next_key (cs $+ (cid,c)))
        end; clean_map_lookups; eauto using next_key_not_in.
 
-    step_usr uid1; clean_map_lookups.
+    step_usr_id uid1; clean_map_lookups.
     eapply IHsummarize in H7; eauto.
     (do 11 eexists); econstructor; eauto.
 
   - induct 1;
       intros;
-      step_usr uid1;
+      step_usr_id uid1;
       discharge_no_commutes;
       clean_map_lookups;
       try solve [ (do 11 eexists); econstructor; eauto ].
@@ -1751,7 +1751,7 @@ Proof.
 
   - induct 1;
       intros;
-      step_usr uid1;
+      step_usr_id uid1;
       discharge_no_commutes;
       try solve [ (do 11 eexists); econstructor; clean_map_lookups; eauto ].
 
@@ -1770,7 +1770,7 @@ Proof.
 
   - induct 1;
       intros;
-      step_usr uid1;
+      step_usr_id uid1;
       discharge_no_commutes;
       clean_map_lookups;
       try solve [ (do 11 eexists); econstructor; eauto ].
@@ -1781,7 +1781,7 @@ Proof.
 
   - induct 1;
       intros;
-      step_usr uid1;
+      step_usr_id uid1;
       discharge_no_commutes;
       try solve [ (do 11 eexists); econstructor; eauto ].
 
@@ -1798,7 +1798,7 @@ Proof.
 
   - induct 1;
       intros;
-      step_usr uid1;
+      step_usr_id uid1;
       discharge_no_commutes;
       clean_map_lookups;
       try solve [ (do 11 eexists); econstructor; eauto ].
@@ -1821,7 +1821,7 @@ Proof.
 
   - induct 1;
       intros;
-      step_usr uid1;
+      step_usr_id uid1;
       discharge_no_commutes;
       try solve [ (do 11 eexists); econstructor; eauto ].
 
