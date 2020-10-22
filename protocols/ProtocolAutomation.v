@@ -1608,8 +1608,8 @@ Module Gen.
       end
     | [ S : stepC ?st _ |- _ ] =>
       concrete st; invert S
-    | [ H : (_,_) = (_,_) |- _ ] => apply tuple_eq_inv in H; split_ex; subst
-    | [ H : Some _ = Some _ |- _ ] => apply some_eq_inv in H; subst
+    (* | [ H : (_,_) = (_,_) |- _ ] => apply tuple_eq_inv in H; split_ex; subst *)
+    (* | [ H : Some _ = Some _ |- _ ] => apply some_eq_inv in H; subst *)
     | [ H : nextStep _ _ _ |- _ ] => invert H
     | [ S : indexedModelStep ?uid ?st _ |- _ ] =>
       concrete st;
@@ -1630,9 +1630,48 @@ Module Gen.
       ; discharge_nextStep2 (* clear this goal since the preconditions weren't satisfied *)
     end.
 
+  Ltac gen_val_typ t :=
+    match t with
+    | Nat    => constr:(0)
+    | Bool   => constr:(true)
+    | Unit   => constr:(tt)
+    | Access => constr:((0,false))
+    | (TPair ?t1 ?t2) =>
+      let v1 := gen_val_typ t1 in
+      let v2 := gen_val_typ t2
+      in constr:((v1,v2))
+                  
+    end.
+
+  Ltac gen_msg t :=
+    match t with
+    | Access => let v := gen_val_typ Access in constr:(message.Permission v)
+    | Nat    => let v := gen_val_typ Nat in constr:(message.Content v)
+    | (TPair ?t1 ?t2) =>
+      let m1 := gen_msg t1 in
+      let m2 := gen_msg t2 in
+      constr:(message.MsgPair m1 m2)
+    end.
+
+  Ltac gen_crypto t :=
+    let m := gen_msg t in constr:(Content m).
+
+  Ltac gen_val_cmd_typ ct :=
+    match ct with
+    | Base ?t    => gen_val_typ t
+    | Message ?t => gen_msg t
+    | Crypto ?t  => gen_crypto t
+    | UPair ?t1 ?t2 =>
+      let v1 := gen_val_cmd_typ t1 in
+      let v2 := gen_val_cmd_typ t2 in constr:((v1,v2))
+    end.
+
   Ltac univ_equality_discr :=
     discriminate
     || match goal with
+      | [ H : ?x = ?x |- _ ] => clear H
+      | [ H : RealWorld.Bind _ _ = RealWorld.Bind _ _ |- _ ] =>
+        apply invert_bind_eq in H; split_ex
       | [ H1 : ?x = ?y1, H2 : ?x = ?y2 |- _ ] =>
         rewrite H1 in H2
         ; clear H1
@@ -1649,7 +1688,37 @@ Module Gen.
         apply split_real_user_data_fields in H; split_ex; subst
       | [ H : _ $+ (_,_) = _ |- _ ] =>
         apply map_eq_fields_eq in H; clean_map_lookups
+      | [ H : context [ _ $+ (_,_) $- _ ] |- _ ] =>
+        repeat (
+            (rewrite map_add_remove_neq in H by congruence)
+            || (rewrite map_add_remove_eq in H by trivial)
+            || (rewrite remove_empty in H)
+          )
+      | [ H : << ?t >> -> _ = _ |- _ ] =>
+        let vt := gen_val_cmd_typ t
+        in specialize (H vt)
       end.
+
+  (* Ltac univ_equality_discr := *)
+  (*   discriminate *)
+  (*   || match goal with *)
+  (*     | [ H1 : ?x = ?y1, H2 : ?x = ?y2 |- _ ] => *)
+  (*       rewrite H1 in H2 *)
+  (*       ; clear H1 *)
+  (*     | [ H1 : ?x = ?y1, H2 : ?y2 = ?x |- _ ] => *)
+  (*       rewrite H1 in H2 *)
+  (*       ; clear H1 *)
+  (*     | [ H : (?x1,?y1) = (?x2,?y2) |- _ ] => *)
+  (*       apply tuple_eq_inv in H; split_ex; subst *)
+  (*     | [ H : {| users := _ |} = {| users := _ |} |- _ ] => *)
+  (*       apply split_real_univ_fields in H; split_ex *)
+  (*     | [ H : Some _ = Some _ |- _ ] => *)
+  (*       apply some_eq_inv in H; subst *)
+  (*     | [ H : {| key_heap := _ |} = {| key_heap := _ |} |- _ ] => *)
+  (*       apply split_real_user_data_fields in H; split_ex; subst *)
+  (*     | [ H : _ $+ (_,_) = _ |- _ ] => *)
+  (*       apply map_eq_fields_eq in H; clean_map_lookups *)
+  (*     end. *)
 
   Ltac tidy :=
     autounfold
@@ -1849,6 +1918,17 @@ Module Gen.
     ; repeat close
     ; idtac "close done".
 
+  Locate intersect_empty_l.
+
+  Ltac normalize_set_arg s :=
+    match s with
+    | context[@union ?A ?X ?Y] =>
+      quote (@union A X Y) (@nil A)
+            ltac:(fun e env =>
+                    change (@union A X Y) with (interp_setexpr env e));
+      rewrite <- normalize_setexpr_ok; sets_cbv
+    end.
+
   Ltac gen1 :=
     match goal with
     | [|- multiStepClosure _ _ { } _] =>
@@ -1860,14 +1940,19 @@ Module Gen.
       eapply MscStep
       ; [ solve[ apply oneStepClosure_grow; repeat gen1' ]
         | simplify; simpl_sets (sets; tidy)]
+    | [|- multiStepClosure _ (?pr \cup ?wl) ?wl _] =>
+      progress ( normalize_set_arg pr ; normalize_set_arg wl )
     | [|- multiStepClosure _ (_ \cup ?wl) ?wl _] =>
       eapply msc_step_alt
       ; [ solve[ unfold oneStepClosure_new; repeat gen1' ]
-        | solve[ simplify
+        | solve[ idtac "proving empty intersection"
+                 ; simplify
                  ; sets
                  ; split_ex
                  ; propositional
+                 ; idtac "preparing to discriminate universes"
                  ; repeat univ_equality_discr
+                 ; idtac "universes discriminated"
                  (* ; repeat match goal with *)
                  (*          | [H : (?x1, ?y1) = ?p |- _] => *)
                  (*            match p with *)

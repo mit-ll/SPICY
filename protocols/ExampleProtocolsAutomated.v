@@ -140,6 +140,10 @@ Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
       gen1.
       gen1.
       gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
       (* time(gen). *)
       
     - intros.
@@ -250,6 +254,10 @@ Module SimpleEncProtocolSecure <: AutomatedSafeProtocol.
     eapply invariant_weaken.
 
     - apply multiStepClosure_ok; simpl.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
       gen1.
       gen1.
       gen1.

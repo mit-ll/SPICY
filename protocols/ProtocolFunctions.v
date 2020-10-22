@@ -94,6 +94,17 @@ Section RealWorldLemmas.
       Return r1 = Return r2 -> r1 = r2.
   Proof. intros * H; invert H; trivial. Qed.
 
+  Lemma invert_bind_eq :
+    forall t1  t3 (cmd1 : user_cmd t1) (cmd2 : << t1 >> -> user_cmd t3)
+      (cmd1' : user_cmd t1) (cmd2' : << t1 >> -> user_cmd t3),
+      Bind cmd1 cmd2 = Bind cmd1' cmd2'
+      -> cmd1 = cmd1'
+      /\ forall (tv1 : << t1 >>), cmd2 tv1 = cmd2' tv1.
+  Proof.
+    intros.
+    induction cmd1; invert H; eauto.
+  Qed.
+
   Lemma input_act_eq_inv :
     forall t m m' p p' f f', @Input t m p f = Input m' p' f' -> m = m' /\ p = p' /\ f = f'.
   Proof. intros * H; invert H; auto. Qed.
