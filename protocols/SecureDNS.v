@@ -386,8 +386,6 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
             | simpl; split; trivial; intros; rstep; subst; solve_labels_align
             ]).
 
-      all: simpl; solve_honest_actions_safe.
-
       Unshelve.
       all: auto.
 
