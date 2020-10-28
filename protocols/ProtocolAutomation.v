@@ -41,6 +41,7 @@ From protocols Require Import
      UniverseEqAutomation
      ProtocolFunctions
      PartialOrderReduction
+     SilentStepElimination
 .
 
 From KeyManagement Require

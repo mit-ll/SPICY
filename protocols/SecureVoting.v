@@ -224,10 +224,45 @@ Module VotingProtocolSecure <: AutomatedSafeProtocol.
       gen1.
       gen1.
 
-      match goal with
-      | [|- multiStepClosure _ (_ \cup ?wl) ?wl _] =>
-        idtac wl
-      end.
+      Ltac quote E env k :=
+        let T := type of E in
+        match eval hnf in T with
+        | ?A -> Prop => 
+          let rec lookup E env k :=
+              match env with
+              | [] => k 0 [E]
+              | E :: _ => k 0 env
+              | ?E' :: ?env' =>
+                lookup E env' ltac:(fun pos env'' => k (S pos) (E' :: env''))
+              | _ => idtac "match failed"; fail 1
+              end in
+
+          let rec lookups Es env k :=
+              match Es with
+              | [] => k (@nil nat) env
+              | ?E :: ?Es' =>
+                lookup E env ltac:(fun pos env' =>
+                                     lookups Es' env' ltac:(fun poss env'' =>
+                                                              k (pos :: poss) env''))
+              end in
+
+          let rec quote' E env k :=
+              match E with
+              | constant ?Es =>
+                lookups Es env ltac:(fun poss env' => k (Literal A poss) env')
+              | ?E1 \cup ?E2 =>
+                quote' E1 env ltac:(fun e1 env' =>
+                                      quote' E2 env' ltac:(fun e2 env'' =>
+                                                             k (Union e1 e2) env''))
+              | _ =>
+                (let pf := constr:(eq_refl : E = constant []) in
+                 k (Literal A []) env)
+                || k (Constant E) env
+              end in
+
+          quote' E env k
+        end.
+
 
       Ltac normalize_set_arg s :=
         match s with
@@ -237,6 +272,25 @@ Module VotingProtocolSecure <: AutomatedSafeProtocol.
                         change (@union A X Y) with (interp_setexpr env e));
           rewrite <- normalize_setexpr_ok; sets_cbv
         end.
+
+
+      match goal with
+      | [|- multiStepClosure _ (_ \cup ?wl) ?wl _] =>
+        idtac wl
+      end.
+
+      match goal with
+      | [|- multiStepClosure _ (_ \cup ?wl) ?wl _] =>
+        progress (normalize_set_arg wl)
+      end.
+      match goal with
+      | [|- multiStepClosure _ (_ \cup ?wl) ?wl _] =>
+        idtac wl
+      end.
+
+
+      remember ({ "foo", "bar", "baz" } \cup { "foo" }) as s.
+      normalize_set_arg ({ "foo", "bar", "baz" } \cup { "foo" }) Heqs.
 
       match goal with
       | [|- multiStepClosure _ (_ \cup ?wl) ?wl _] =>
