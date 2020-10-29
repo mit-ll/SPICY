@@ -55,7 +55,7 @@ por: CoqMakefile
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
 test-protos: CoqMakefile
-	$(eval TS := protocols/ExampleProtocolsAutomated.vo)
+	$(eval TS := "protocols/ExampleProtocolsAutomated.vo protocols/GenProto.vo protocols/GenProtoSS.vo")
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
 sharesecret: CoqMakefile

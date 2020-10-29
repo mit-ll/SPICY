@@ -58,6 +58,9 @@ protocols/LabelsAlign.v
 protocols/NoResends.v
 protocols/SilentStepElimination.v
 
+protocols/GenProto.v
+protocols/GenProtoSS.v
+
 protocols/ProtocolFunctions.v
 protocols/ShareSecretProtocol.v
 protocols/ShareSecretProtocol2.v

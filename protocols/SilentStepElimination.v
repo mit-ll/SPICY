@@ -71,18 +71,18 @@ Set Implicit Arguments.
 Section NextSteps.
 
   Inductive nextStepSS {A B} (u_id : user_id) (userData : user_data A)
-    : universe A B (* -> rlabel -> universe A B *)  -> Prop :=
+    : universe A B (* -> universe A B *) -> Prop :=
 
   | NextSilent : forall U U',
       U.(users) $? u_id = Some userData
       -> indexedRealStep u_id Silent U U'
       -> (forall uid' U', uid' > u_id -> ~ indexedRealStep uid' Silent U U')
-      -> nextStepSS u_id userData U (* lbl U' *)
+      -> nextStepSS u_id userData U
 
   | NoSilents : forall U U' a,
       U.(users) $? u_id = Some userData
 
-      (* No one can silently step*)
+      (* No one can silently step *)
       -> (forall uid' U', ~ indexedRealStep uid' Silent U U')
 
       -> indexedRealStep u_id (Action a) U U'
@@ -110,202 +110,7 @@ Definition TrSS {t__hon t__adv} (ru0 : RealWorld.universe t__hon t__adv) (iu0 : 
      Step    := @stepSS t__hon t__adv |}.
 
 Hint Resolve adversary_remains_lame_step : core.
-Hint Constructors stepSS nextStep : core.
-
-(* Lemma commutes_noblock' : *)
-(*   forall t t__n2 (cmdc2 : user_cmd t) (cmd__n2 : user_cmd t__n2), *)
-(*     nextAction cmdc2 cmd__n2 *)
-(*   -> forall t__hon t__adv (usrs usrs' : honest_users t__hon) (adv adv' : user_data t__adv) cs cs' gks gks' *)
-(*       ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' froms2 froms2' sents2 sents2' cur_n2 cur_n2' cmd2 cmdc2' uid2 lbl2, *)
-
-(*       usrs $? uid2 = Some (mkUserData ks2 cmd2 qmsgs2 mycs2 froms2 sents2 cur_n2) *)
-(*     -> step_user lbl2 (Some uid2) *)
-(*               (usrs, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmdc2) *)
-(*               (usrs', adv', cs', gks', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmdc2') *)
-(*     -> forall t1 (cmdc1 : user_cmd t1) s1, summarize cmdc1 s1 *)
-(*     -> forall uid1 summaries, summaries $? uid1 = Some s1 *)
-(*     -> commutes cmd__n2 s1 *)
-(*     -> uid1 <> uid2 *)
-(*     -> forall (usrs1' : honest_users t__hon) (adv1' : user_data t__adv) cs1' gks1' *)
-(*         ks1 ks1' qmsgs1 qmsgs1' mycs1 mycs1' froms1 froms1' sents1 sents1' cur_n1 cur_n1' cmd1 cmdc1' lbl1, *)
-
-(*         usrs $? uid1 = Some (mkUserData ks1 cmd1 qmsgs1 mycs1 froms1 sents1 cur_n1) *)
-(*         -> step_user lbl1 (Some uid1) *)
-(*                   (usrs, adv, cs, gks, ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmdc1) *)
-(*                   (usrs1', adv1', cs1', gks1', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmdc1') *)
-(*         -> forall ks2'' qmsgs2'' mycs2'' froms2'' sents2'' cur_n2'' cmd1', *)
-(*           usrs1' $? uid2 = Some (mkUserData ks2'' cmd2 qmsgs2'' mycs2'' froms2'' sents2'' cur_n2'') *)
-(*         -> exists usrs2' adv2' cs2' gks2' ks2''' qmsgs2''' mycs2''' froms2''' sents2''' cur_n2''' cmdc2'', *)
-(*           step_user lbl2 (Some uid2) *)
-(*                     (usrs1' $+ (uid1, mkUserData ks1' cmd1' qmsgs1' mycs1' froms1' sents1' cur_n1'), *)
-(*                      adv1', cs1', gks1', ks2'', qmsgs2'', mycs2'', froms2'', sents2'', cur_n2'', cmdc2) *)
-(*                     (usrs2', adv2', cs2', gks2', ks2''', qmsgs2''', mycs2''', froms2''', sents2''', cur_n2''', cmdc2'') *)
-(* . *)
-(* Proof. *)
-(*   induction 1; invert 2. *)
-
-(*   Ltac discharge_no_commutes := *)
-(*     try match goal with *)
-(*         | [ H : commutes (Send _ _) _ |- _ ] => invert H *)
-(*         | [ H : commutes (Recv _) _ |- _ ] => invert H *)
-(*         end. *)
-
-(*   1-3: *)
-(*     induct 1; *)
-(*     intros; *)
-(*     discharge_no_commutes; *)
-(*     step_usr_id uid1; *)
-(*     (do 11 eexists); econstructor; eauto. *)
-
-(*   - induct 1; *)
-(*       intros; *)
-(*       discharge_no_commutes; *)
-(*       try solve [ step_usr_id uid1; *)
-(*                   clean_map_lookups; *)
-(*                   (do 11 eexists); econstructor; eauto ]. *)
-
-(*      step_usr_id uid1; destruct (uid ==n uid2); clean_map_lookups; (do 11 eexists); econstructor; eauto. *)
-     
-(*      (* both users creating ciphers *) *)
-(*      step_usr_id uid1; clean_map_lookups; (do 11 eexists); *)
-(*        match goal with *)
-(*        | [ |- context [ cs $+ (?cid,?c) ]] => eapply StepEncrypt with (c_id0 := next_key (cs $+ (cid,c))) *)
-(*        end; clean_map_lookups; eauto using next_key_not_in. *)
-(*      step_usr_id uid1; clean_map_lookups; (do 11 eexists); *)
-(*        match goal with *)
-(*        | [ |- context [ cs $+ (?cid,?c) ]] => eapply StepEncrypt with (c_id0 := next_key (cs $+ (cid,c))) *)
-(*        end; clean_map_lookups; eauto using next_key_not_in. *)
-
-(*     step_usr_id uid1; clean_map_lookups. *)
-(*     eapply IHsummarize in H7; eauto. *)
-(*     (do 11 eexists); econstructor; eauto. *)
-
-(*   - induct 1; *)
-(*       intros; *)
-(*       step_usr_id uid1; *)
-(*       discharge_no_commutes; *)
-(*       clean_map_lookups; *)
-(*       try solve [ (do 11 eexists); econstructor; eauto ]. *)
-
-(*     destruct (uid ==n uid2); subst; clean_map_lookups; (do 11 eexists); econstructor; eauto. *)
-
-(*     eapply IHsummarize in H7; eauto. *)
-
-(*   - induct 1; *)
-(*       intros; *)
-(*       step_usr_id uid1; *)
-(*       discharge_no_commutes; *)
-(*       try solve [ (do 11 eexists); econstructor; clean_map_lookups; eauto ]. *)
-
-(*     destruct (uid ==n uid2); subst; clean_map_lookups; (do 11 eexists); econstructor; eauto. *)
-
-(*     (do 11 eexists). *)
-(*       match goal with *)
-(*       | [ |- context [ cs $+ (?cid,?c) ]] => eapply StepSign with (c_id0 := next_key (cs $+ (cid,c))) *)
-(*       end; clean_map_lookups; eauto using next_key_not_in. *)
-(*     (do 11 eexists). *)
-(*       match goal with *)
-(*       | [ |- context [ cs $+ (?cid,?c) ]] => eapply StepSign with (c_id0 := next_key (cs $+ (cid,c))) *)
-(*       end; clean_map_lookups; eauto using next_key_not_in. *)
-
-(*     eapply IHsummarize in H7; eauto. *)
-
-(*   - induct 1; *)
-(*       intros; *)
-(*       step_usr_id uid1; *)
-(*       discharge_no_commutes; *)
-(*       clean_map_lookups; *)
-(*       try solve [ (do 11 eexists); econstructor; eauto ]. *)
-
-(*     destruct (uid ==n uid2); subst; clean_map_lookups; (do 11 eexists); econstructor; eauto. *)
-
-(*     eapply IHsummarize in H7; eauto. *)
-
-(*   - induct 1; *)
-(*       intros; *)
-(*       step_usr_id uid1; *)
-(*       discharge_no_commutes; *)
-(*       try solve [ (do 11 eexists); econstructor; eauto ]. *)
-
-(*     (do 11 eexists). *)
-(*       match goal with *)
-(*       | [ |- context [ gks $+ (?kid,?k) ]] => eapply StepGenerateSymKey with (k_id0 := next_key (gks $+ (kid,k))) *)
-(*       end; clean_map_lookups; eauto using next_key_not_in. *)
-(*     (do 11 eexists). *)
-(*       match goal with *)
-(*       | [ |- context [ gks $+ (?kid,?k) ]] => eapply StepGenerateSymKey with (k_id0 := next_key (gks $+ (kid,k))) *)
-(*       end; clean_map_lookups; eauto using next_key_not_in. *)
-
-(*     eapply IHsummarize in H7; eauto. *)
-
-(*   - induct 1; *)
-(*       intros; *)
-(*       step_usr_id uid1; *)
-(*       discharge_no_commutes; *)
-(*       clean_map_lookups; *)
-(*       try solve [ (do 11 eexists); econstructor; eauto ]. *)
-
-(*     (do 11 eexists). *)
-(*       match goal with *)
-(*       | [ |- context [ gks $+ (?kid,?k) ]] => eapply StepGenerateAsymKey with (k_id0 := next_key (gks $+ (kid,k))) *)
-(*       end; clean_map_lookups; eauto using next_key_not_in. *)
-(*     (do 11 eexists). *)
-(*       match goal with *)
-(*       | [ |- context [ gks $+ (?kid,?k) ]] => eapply StepGenerateAsymKey with (k_id0 := next_key (gks $+ (kid,k))) *)
-(*       end; clean_map_lookups; eauto using next_key_not_in. *)
-
-(*     eapply IHsummarize in H7; eauto. *)
-
-(*   - intros. *)
-(*     eapply IHnextAction with (uid1 := uid1) in H8; eauto. *)
-(*     split_ex. *)
-(*     (do 11 eexists); econstructor; eauto. *)
-
-(*   - induct 1; *)
-(*       intros; *)
-(*       step_usr_id uid1; *)
-(*       discharge_no_commutes; *)
-(*       try solve [ (do 11 eexists); econstructor; eauto ]. *)
-
-(*     Unshelve. *)
-(*     all: auto. *)
-(* Qed. *)
-
-(* Lemma commutes_noblock : *)
-(*   forall t__hon t__n2 (cmd2 : user_cmd (Base t__hon)) (cmd__n2 : user_cmd t__n2), *)
-(*     nextAction cmd2 cmd__n2 *)
-(*   -> forall t__adv (usrs usrs' : honest_users t__hon) (adv adv' : user_data t__adv) cs cs' gks gks' *)
-(*       ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2' froms2 froms2' sents2 sents2' cur_n2 cur_n2' cmd2' uid2 lbl2, *)
-
-(*       usrs $? uid2 = Some (mkUserData ks2 cmd2 qmsgs2 mycs2 froms2 sents2 cur_n2) *)
-(*     -> step_user lbl2 (Some uid2) *)
-(*               (usrs, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2) *)
-(*               (usrs', adv', cs', gks', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2') *)
-(*     -> forall (cmd1 : user_cmd (Base t__hon)) s1, summarize cmd1 s1 *)
-(*     -> forall uid1 summaries, summaries $? uid1 = Some s1 *)
-(*     -> commutes cmd__n2 s1 *)
-(*     -> uid1 <> uid2 *)
-(*     -> forall (usrs1' : honest_users t__hon) (adv1' : user_data t__adv) cs1' gks1' *)
-(*         ks1 ks1' qmsgs1 qmsgs1' mycs1 mycs1' froms1 froms1' sents1 sents1' cur_n1 cur_n1' cmd1' lbl1, *)
-
-(*         usrs $? uid1 = Some (mkUserData ks1 cmd1 qmsgs1 mycs1 froms1 sents1 cur_n1) *)
-(*         -> step_user lbl1 (Some uid1) *)
-(*                   (usrs, adv, cs, gks, ks1, qmsgs1, mycs1, froms1, sents1, cur_n1, cmd1) *)
-(*                   (usrs1', adv1', cs1', gks1', ks1', qmsgs1', mycs1', froms1', sents1', cur_n1', cmd1') *)
-(*         -> forall ks2'' qmsgs2'' mycs2'' froms2'' sents2'' cur_n2'', *)
-(*           usrs1' $? uid2 = Some (mkUserData ks2'' cmd2 qmsgs2'' mycs2'' froms2'' sents2'' cur_n2'') *)
-(*         -> exists usrs2' adv2' cs2' gks2' (* lbl2' *) ks2''' qmsgs2''' mycs2''' froms2''' sents2''' cur_n2''' cmd2'', *)
-(*           step_user lbl2 (Some uid2) *)
-(*                     (usrs1' $+ (uid1, mkUserData ks1' cmd1' qmsgs1' mycs1' froms1' sents1' cur_n1'), *)
-(*                      adv1', cs1', gks1', ks2'', qmsgs2'', mycs2'', froms2'', sents2'', cur_n2'', cmd2) *)
-(*                     (usrs2', adv2', cs2', gks2', ks2''', qmsgs2''', mycs2''', froms2''', sents2''', cur_n2''', cmd2'') *)
-(* . *)
-(* Proof. *)
-(*   intros. *)
-(*   eapply commutes_noblock' with (cmdc2 := cmd2) (cmdc2' := cmd2') in H7; eauto. *)
-(* Qed. *)
-
-(* COMMUTING COMMAND RUNS FIRST!! *)
+Hint Constructors stepSS nextStepSS : core.
 
 Hint Resolve indexedIdealSteps_ideal_steps : core.
 Hint Constructors indexedModelStep indexedIdealStep indexedRealStep : core.
@@ -1534,7 +1339,7 @@ Proof.
 
   - split_ex.
     
-    pose proof (must_be_max_silent_step H6); split_ex.
+    pose proof (must_be_max_silent_step H6); split_ex; clear x x0 H6.
     invert H7.
     eapply translate_trace_commute in H; eauto.
 
@@ -1546,10 +1351,10 @@ Proof.
                   violated_predicates_remain_violated;
       split_ex.
 
-    exists x4; split; eauto.
+    exists x2; split; eauto.
     eapply TrcFront; eauto.
     destruct st as [[ru iu] v].
-    destruct x2 as [[ru' iu'] v'].
+    destruct x  as [[ru' iu'] v'].
     simpl in *.
 
     econstructor.
@@ -1976,5 +1781,25 @@ Proof.
       eapply ss_implies_next_safe_no_model_step; eauto.
 
 Qed.
+
+Module Type AutomatedSafeProtocolSS.
+
+  Parameter t__hon : type.
+  Parameter t__adv : type.
+  Parameter b : << Base t__adv >>.
+  Parameter iu0 : IdealWorld.universe t__hon.
+  Parameter ru0 : RealWorld.universe t__hon t__adv.
+
+  Notation SYS := (TrSS ru0 iu0).
+
+  Axiom U_good : universe_starts_sane b ru0.
+  Axiom universe_starts_safe : universe_ok ru0 /\ adv_universe_ok ru0.
+
+  Axiom safe_invariant : invariantFor
+                           SYS
+                           (fun st => safety st /\ alignment st ).
+
+End AutomatedSafeProtocolSS.
+
 
 Print Assumptions step_stepSS'.
