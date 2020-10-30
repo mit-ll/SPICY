@@ -63,10 +63,14 @@ protocols/GenProtoSS.v
 
 protocols/ProtocolFunctions.v
 protocols/ShareSecretProtocol.v
+
 protocols/ShareSecretProtocol2.v
+protocols/ShareSecretProtocol2SS.v
+protocols/PGP.v
+protocols/PGPSS.v
+
 protocols/ShareSecretSymmetricEncProtocol.v
 protocols/NeedhamSchroeder.v
-protocols/PGP.v
 protocols/SecureDNS.v
 protocols/SecureVoting.v
 

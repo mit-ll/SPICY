@@ -5,7 +5,7 @@
  * in this material are those of the author(s) and do not necessarily reflect the views of the 
  * Department of the Air Force.
  * 
- * © 2019-2020 Massachusetts Institute of Technology.
+ * © 2020 Massachusetts Institute of Technology.
  * 
  * MIT Proprietary, Subject to FAR52.227-11 Patent Rights - Ownership by the contractor (May 2014)
  * 
@@ -18,22 +18,26 @@
 From Coq Require Import
      List.
 
-Require Import
+From KeyManagement Require Import
         MyPrelude
         Maps
         ChMaps
         Messages
-        ModelCheck
         Common
         Keys
         Automation
         Tactics
         Simulation
-        AdversaryUniverse
+        AdversaryUniverse.
+
+From protocols Require Import
+        ModelCheck
         UniverseEqAutomation
         ProtocolAutomation
         SafeProtocol
-        ProtocolFunctions.
+        ProtocolFunctions
+        SilentStepElimination
+        PGP.
 
 Require IdealWorld RealWorld.
 
@@ -50,94 +54,9 @@ Set Implicit Arguments.
 
 Open Scope protocol_scope.
 
-Module ShareSecretProtocol.
+Module PGPProtocolSecure <: AutomatedSafeProtocolSS.
 
-  (* User ids *)
-  Notation USR1 := 0.
-  Notation USR2 := 1.
-
-  Section IW.
-    Import IdealWorld.
-
-    Notation pCH12 := 0.
-    Notation pCH21 := 1.
-    Notation CH12  := (# pCH12).
-    Notation CH21  := (# pCH21).
-
-    Notation empty_chs := (#0 #+ (CH12, []) #+ (CH21, [])).
-
-    Notation PERMS1 := ($0 $+ (pCH12, owner) $+ (pCH21, reader)).
-    Notation PERMS2 := ($0 $+ (pCH12, reader) $+ (pCH21, owner)).
-
-    Notation ideal_users :=
-      [
-        (mkiUsr USR1 PERMS1 
-                ( chid <- CreateChannel
-                  ; _ <- Send (Permission {| ch_perm := writer ; ch_id := chid |}) CH12
-                  ; m <- @Recv Nat (chid #& pCH21)
-                  ; @Return (Base Nat) (extractContent m)
-        )) ;
-      (mkiUsr USR2 PERMS2
-              ( m <- @Recv Access CH12
-                ; n <- Gen
-                ; _ <- let chid := ch_id (extractPermission m)
-                      in  Send (Content n) (chid #& pCH21)
-                ; @Return (Base Nat) n
-      ))
-      ].
-
-    Definition ideal_univ_start :=
-      mkiU empty_chs ideal_users.
-
-  End IW.
-
-  Section RW.
-    Import RealWorld.
-
-    Notation KID1 := 0.
-    Notation KID2 := 1.
-
-    Notation KEYS := [ skey KID1 ; skey KID2 ].
-
-    Notation KEYS1 := ($0 $+ (KID1, true) $+ (KID2, false)).
-    Notation KEYS2 := ($0 $+ (KID1, false) $+ (KID2, true)).
-
-    Notation real_users :=
-      [
-        MkRUserSpec USR1 KEYS1
-                    ( kp <- GenerateAsymKey Encryption
-                      ; c1 <- Sign KID1 USR2 (Permission (fst kp, false))
-                      ; _  <- Send USR2 c1
-                      ; c2 <- @Recv Nat (SignedEncrypted KID2 (fst kp) true)
-                      ; m  <- Decrypt c2
-                      ; @Return (Base Nat) (extractContent m) ) ;
-
-      MkRUserSpec USR2 KEYS2
-                  ( c1 <- @Recv Access (Signed KID1 true)
-                    ; v  <- Verify KID1 c1
-                    ; n  <- Gen
-                    ; c2 <- SignEncrypt KID2 (fst (extractPermission (snd v))) USR1 (message.Content n)
-                    ; _  <- Send USR1 c2
-                    ; @Return (Base Nat) n)
-      ].
-
-    Definition real_univ_start :=
-      mkrU (mkKeys KEYS) real_users.
-  End RW.
-
-  Hint Unfold
-       real_univ_start
-       ideal_univ_start
-    : user_build.
-
-  Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
-    progress(autounfold with user_build; simpl).
-  
-End ShareSecretProtocol.
-
-Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
-
-  Import ShareSecretProtocol.
+  Import PGPProtocol.
 
   Definition t__hon := Nat.
   Definition t__adv := Unit.
@@ -148,28 +67,32 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
   Import Gen Tacs SetLemmas.
 
   Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start real_univ_start : core.
-  Hint Unfold
-       mkiU mkiUsr mkrU mkrUsr
-       mkKeys
-    : core.
+
+  Lemma next_key_natmap_exists :
+    forall {V} (m : NatMap.t V),
+    exists k, m $? k = None.
+  Proof.
+    intros.
+    exists (next_key m); eauto using Maps.next_key_not_in.
+  Qed.
+
+  Lemma next_key_chmap_exists :
+    forall {V} (m : ChMap.t V),
+    exists k, m #? (# k) = None.
+  Proof.
+    intros.
+    exists (next_key_nat m); eauto using next_key_not_in.
+  Qed.
 
   Lemma safe_invariant :
     invariantFor
-      {| Initial := {(ru0, iu0, true)}; Step := @step t__hon t__adv  |}
+      {| Initial := {(ru0, iu0, true)}; Step := @stepSS t__hon t__adv  |}
       (fun st => safety st /\ alignment st ).
   Proof.
     eapply invariant_weaken.
 
     - eapply multiStepClosure_ok; simpl.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
+      autounfold in *.
       gen1.
       gen1.
       gen1.
@@ -206,8 +129,8 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
           subst; simpl;
             unfold safety, alignment;
             ( split;
-            [ solve_honest_actions_safe; clean_map_lookups; eauto 8
-            | simpl; split; trivial; intros; rstep; subst; solve_labels_align
+            [ try solve [ solve_honest_actions_safe; clean_map_lookups; eauto 8 ]
+            | try solve [ simpl; split; trivial; intros; rstep; subst; solve_labels_align ]
             ]).
       
       Unshelve.
@@ -288,7 +211,7 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
   Qed.
   
 
-End ShareSecretProtocolSecure.
+End PGPProtocolSecure.
 
 (*
  * 1) make protocols  518.64s user 0.45s system 99% cpu 8:39.13 total  ~ 6.2GB

@@ -59,11 +59,11 @@ test-protos: CoqMakefile
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
 sharesecret: CoqMakefile
-	$(eval TS := protocols/ShareSecretProtocol2.vo)
+	$(eval TS := "protocols/ShareSecretProtocol2.vo protocols/ShareSecretProtocol2SS.vo")
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
 pgp: CoqMakefile
-	$(eval TS := protocols/PGP.vo)
+	$(eval TS := "protocols/PGP.vo protocols/PGPSS.vo")
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
 sharesecretsym: CoqMakefile

@@ -18,22 +18,28 @@
 From Coq Require Import
      List.
 
-Require Import
+From KeyManagement Require Import
         MyPrelude
         Maps
         ChMaps
         Messages
-        ModelCheck
         Common
         Keys
         Automation
         Tactics
         Simulation
         AdversaryUniverse
+.
+
+From protocols Require Import
+        ModelCheck
         UniverseEqAutomation
         ProtocolAutomation
         SafeProtocol
-        ProtocolFunctions.
+        ProtocolFunctions
+        SilentStepElimination
+        (* ShareSecretProtocol2 *)
+.
 
 Require IdealWorld RealWorld.
 
@@ -49,7 +55,6 @@ Module Import SN := SetNotations(Foo).
 Set Implicit Arguments.
 
 Open Scope protocol_scope.
-
 Module ShareSecretProtocol.
 
   (* User ids *)
@@ -135,7 +140,7 @@ Module ShareSecretProtocol.
   
 End ShareSecretProtocol.
 
-Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
+Module ShareSecretProtocolSecure <: AutomatedSafeProtocolSS.
 
   Import ShareSecretProtocol.
 
@@ -155,26 +160,13 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
 
   Lemma safe_invariant :
     invariantFor
-      {| Initial := {(ru0, iu0, true)}; Step := @step t__hon t__adv  |}
+      {| Initial := {(ru0, iu0, true)}; Step := @stepSS t__hon t__adv  |}
       (fun st => safety st /\ alignment st ).
   Proof.
     eapply invariant_weaken.
 
     - eapply multiStepClosure_ok; simpl.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
+      autounfold in *.
       gen1.
       gen1.
       gen1.

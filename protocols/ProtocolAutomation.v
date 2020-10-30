@@ -1513,6 +1513,15 @@ Module Gen.
                         end
           end.
 
+  Ltac solve_real_step_stuff1 :=
+    equality1
+    || simplify
+    || match goal with
+      | [ |- RealWorld.keys_mine _ _ ] =>
+        simpl in *; hnf
+      | [ |- _ $k++ _ $? _ = _ ] => solve_concrete_perm_merges
+      end.
+
   Ltac solve_indexedRealStep :=
     solve [
         repeat (match goal with [ |- exists _ , _ ] => eexists end)
@@ -1522,7 +1531,9 @@ Module Gen.
           repeat match goal with
                  | [ |- RealWorld.step_user _ _ _ _ ] => solve [ eapply RealWorld.StepBindProceed; eauto ]
                  | [ |- RealWorld.step_user _ _ _ _ ] => eapply RealWorld.StepBindRecur; eauto
-                 | [ |- RealWorld.step_user _ _ _ _ ] => econstructor; eauto
+                 | [ |- RealWorld.step_user _ _ _ _ ] =>
+                   econstructor
+                   ; repeat (progress (repeat solve_real_step_stuff1; eauto))
                  end
         | reflexivity ]].
 
