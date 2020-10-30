@@ -5,7 +5,7 @@
  * in this material are those of the author(s) and do not necessarily reflect the views of the 
  * Department of the Air Force.
  * 
- * © 2019-2020 Massachusetts Institute of Technology.
+ * © 2020 Massachusetts Institute of Technology.
  * 
  * MIT Proprietary, Subject to FAR52.227-11 Patent Rights - Ownership by the contractor (May 2014)
  * 
@@ -28,8 +28,7 @@ From KeyManagement Require Import
         Automation
         Tactics
         Simulation
-        AdversaryUniverse
-.
+        AdversaryUniverse.
 
 From protocols Require Import
         ModelCheck
@@ -38,8 +37,7 @@ From protocols Require Import
         SafeProtocol
         ProtocolFunctions
         SilentStepElimination
-        ShareSecretProtocol2
-.
+        SecureDNS.
 
 Require IdealWorld RealWorld.
 
@@ -56,18 +54,26 @@ Set Implicit Arguments.
 
 Open Scope protocol_scope.
 
-Module ShareSecretProtocolSecure <: AutomatedSafeProtocolSS.
+Module SecureDNSProtocolSecure <: AutomatedSafeProtocolSS.
 
-  Import ShareSecretProtocol.
+  Import SecureDNSProtocol.
 
+  (* Some things may need to change here.  t__hon is where we place the 
+   * type that the protocol computes.  It is set to Nat now, because we
+   * return a natual number.
+   *)
   Definition t__hon := Nat.
   Definition t__adv := Unit.
-  Definition b := tt.
+  Definition b    := tt.
+
+  (* These two variables hook up the starting points for both specification and
+   * implementation universes.  If you followed the template above, this shouldn't
+   * need to be changed.
+   *)
   Definition iu0  := ideal_univ_start.
   Definition ru0  := real_univ_start.
 
-  Import Gen Tacs SetLemmas.
-
+  (* These are here to help the proof automation.  Don't change. *)
   Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start real_univ_start : core.
   Hint Unfold
        mkiU mkiUsr mkrU mkrUsr
@@ -105,7 +111,21 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocolSS.
       gen1.
       gen1.
       gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
       
+    (* The remaining parts of the proof script shouldn't need to change. *)
     - intros.
       simpl in *.
 
@@ -113,11 +133,12 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocolSS.
         simpl in *; autounfold with core;
           subst; simpl;
             unfold safety, alignment;
+      (* 129 *)
             ( split;
             [ solve_honest_actions_safe; clean_map_lookups; eauto 8
             | simpl; split; trivial; intros; rstep; subst; solve_labels_align
             ]).
-      
+
       Unshelve.
       all: auto.
 
@@ -136,7 +157,7 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocolSS.
     - unfold AdversarySafety.keys_honest; rewrite Forall_natmap_forall; intros.
       econstructor; unfold mkrUsr; simpl.
       rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty; eauto.
-      solve_perm_merges.
+      simpl in *; solve_perm_merges.
     - unfold lameAdv; simpl; eauto.
   Qed.
 
@@ -196,12 +217,4 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocolSS.
   Qed.
   
 
-End ShareSecretProtocolSecure.
-
-(*
- * 1) make protocols  518.64s user 0.45s system 99% cpu 8:39.13 total  ~ 6.2GB
- * 2) add cleanup of chmaps to close:
- *    make protocols  414.45s user 0.43s system 99% cpu 6:54.90 total  ~ 5.6GB
- *
- *
- *)
+End SecureDNSProtocolSecure.

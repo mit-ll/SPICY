@@ -1513,6 +1513,30 @@ Module Gen.
                         end
           end.
 
+  (* Ltac solve_real_step_stuff1 := *)
+  (*   equality1 *)
+  (*   || simplify *)
+  (*   || match goal with *)
+  (*     | [ |- RealWorld.keys_mine _ _ ] => *)
+  (*       simpl in *; hnf *)
+  (*     | [ |- _ $k++ _ $? _ = _ ] => solve_concrete_perm_merges *)
+  (*     end. *)
+
+  (* Ltac solve_indexedRealStep := *)
+  (*   solve [ *)
+  (*       repeat (match goal with [ |- exists _ , _ ] => eexists end) *)
+  (*       ; econstructor; [ *)
+  (*         solve [ simpl; clean_map_lookups; trivial ] *)
+  (*       | autounfold; unfold RealWorld.build_data_step; simpl; *)
+  (*         repeat match goal with *)
+  (*                | [ |- RealWorld.step_user _ _ _ _ ] => solve [ eapply RealWorld.StepBindProceed; eauto ] *)
+  (*                | [ |- RealWorld.step_user _ _ _ _ ] => eapply RealWorld.StepBindRecur; eauto *)
+  (*                | [ |- RealWorld.step_user _ _ _ _ ] => *)
+  (*                  econstructor *)
+  (*                  ; repeat (progress (repeat solve_real_step_stuff1; eauto)) *)
+  (*                end *)
+  (*       | reflexivity ]]. *)
+
   Ltac solve_real_step_stuff1 :=
     equality1
     || simplify
@@ -1520,22 +1544,36 @@ Module Gen.
       | [ |- RealWorld.keys_mine _ _ ] =>
         simpl in *; hnf
       | [ |- _ $k++ _ $? _ = _ ] => solve_concrete_perm_merges
+      | [ |- ~ Map.In (next_key ?m) ?m ] =>
+        rewrite not_find_in_iff
+        ; apply Maps.next_key_not_in
+        ; trivial
       end.
 
   Ltac solve_indexedRealStep :=
-    solve [
-        repeat (match goal with [ |- exists _ , _ ] => eexists end)
-        ; econstructor; [
-          solve [ simpl; clean_map_lookups; trivial ]
-        | autounfold; unfold RealWorld.build_data_step; simpl;
-          repeat match goal with
-                 | [ |- RealWorld.step_user _ _ _ _ ] => solve [ eapply RealWorld.StepBindProceed; eauto ]
-                 | [ |- RealWorld.step_user _ _ _ _ ] => eapply RealWorld.StepBindRecur; eauto
-                 | [ |- RealWorld.step_user _ _ _ _ ] =>
-                   econstructor
-                   ; repeat (progress (repeat solve_real_step_stuff1; eauto))
-                 end
-        | reflexivity ]].
+    repeat (match goal with [ |- exists _ , _ ] => eexists end)
+    ; econstructor; [
+      solve [ simpl; clean_map_lookups; trivial ]
+    | autounfold; unfold RealWorld.build_data_step; simpl;
+      repeat match goal with
+             | [ |- RealWorld.step_user _ _ _ _ ] => solve [ eapply RealWorld.StepBindProceed; eauto ]
+             | [ |- RealWorld.step_user _ _ _ _ ] => eapply RealWorld.StepBindRecur; eauto
+             | [ |- RealWorld.step_user _ _ (_,_,?cs,?gks,_,_,_,_,_,_,?cmd) _ ] =>
+               match cmd with
+               | RealWorld.SignEncrypt _ _ _ _ =>
+                 eapply RealWorld.StepEncrypt with (c_id := next_key cs)
+               | RealWorld.Sign _ _ _ =>
+                 eapply RealWorld.StepSign with (c_id := next_key cs)
+               | RealWorld.GenerateSymKey _ => 
+                 eapply RealWorld.StepGenerateSymKey with (k_id := next_key gks)
+               | RealWorld.GenerateAsymKey _ => 
+                 eapply RealWorld.StepGenerateAsymKey with (k_id := next_key gks)
+               | _ => econstructor
+               end
+               ; repeat (progress (repeat solve_real_step_stuff1; eauto))
+             end
+    | reflexivity ].
+
 
   Ltac invert_commutes :=
     match goal with
