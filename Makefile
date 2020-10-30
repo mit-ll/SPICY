@@ -71,7 +71,7 @@ sharesecretsym: CoqMakefile
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
 secdns: CoqMakefile
-	$(eval TS := "protocols/SecureDNS.vo protocols/SecureDNSSS.vo)
+	$(eval TS := "protocols/SecureDNS.vo protocols/SecureDNSSS.vo")
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
 secvote: CoqMakefile
