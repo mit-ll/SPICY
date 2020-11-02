@@ -542,8 +542,18 @@ Section Simulation.
         U__i.(IdealWorld.users) $? uid = Some ud
       -> exists U__is' ud__s,
         istepSilent ^* U__is U__is'
+  can't be multi silent step, should be multi any step; rewritten below for discussion
         /\ U__is'.(IdealWorld.users) $? uid = Some ud__s
         /\ ud__s.(IdealWorld.protocol) = ud.(IdealWorld.protocol).
+
+  (* Definition ii_final_actions_align := *)
+  (*   forall (U__i U__is : IdealWorld.universe A), *)
+  (*     (forall lbl U__i', IdealWorld.lstep_universe U__i lbl U__i' -> False) *)
+  (*     -> (forall lbl U__is', IdealWorld.lstep_universe U__is lbl U__is' -> False) *)
+  (*     -> forall uid ud ud__s, *)
+  (*       U__i.(IdealWorld.users) $? uid = Some ud *)
+  (*       -> U__is.(IdealWorld.users) $? uid = Some ud__s *)
+  (*       -> ud__s.(IdealWorld.protocol) = ud.(IdealWorld.protocol). *)
 
   Definition simulates (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A) :=
 

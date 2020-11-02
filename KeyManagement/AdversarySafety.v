@@ -4632,7 +4632,7 @@ Section SingleAdversarySimulates.
                        , clean_keys_ok_extra_user_cleaning
                        , clean_ciphers_ok_extra_user_cleaning.
   Qed.
-
+    
   Theorem simulates_ok_with_adversary :
     forall {A B} (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A)
       (R : RealWorld.simpl_universe A -> IdealWorld.universe A -> Prop) (b : RealWorld.denote (RealWorld.Base B)),
@@ -4649,7 +4649,8 @@ Section SingleAdversarySimulates.
     inversion H as [H__silent H__l].
     inversion H__l as [H__loud H__s]; clear H__l.
     inversion H__s as [H__honactsafe H__o]; clear H__s.
-    inversion H__o as [R__start OK__start]; clear H__o.
+    inversion H__o as [R__final H__f]; clear H__o.
+    inversion H__f as [R__start OK__start]; clear H__f.
 
     unfold simulates; rewrite H5.
 
@@ -4675,7 +4676,29 @@ Section SingleAdversarySimulates.
       eapply H__honactsafe;
         eauto using ok_universe_strip_adversary_still_ok
                   , ok_adv_universe_strip_adversary_still_ok.
-  Qed.
+    - subst.
+      unfold final_actions_align in *; intros.
+      
+      rewrite strip_adv_simpl_peel_same_as_strip_adv in H4.
+      rewrite strip_adversary_same_as_peel_strip_simpl with (b0 := b) in H4.
+      specialize (R__final _ _ H4). eapply R__final.
+      unfold lameAdv, strip_adversary_univ. eauto.
+      shelve.
+      unfold strip_adversary_univ; simpl.
+      eapply clean_users_cleans_user; eauto.
+      eauto.
+      Unshelve.
+
+      unfold strip_adversary_univ. intros.  invert H14. eapply clean_users_cleans_user_inv in H15. split_ex.
+      eapply H10. econstructor; simpl in H15. eapply H14. 2: reflexivity. 2: reflexivity. 2: invert H15.
+      
+      Unshelve. shelve. eauto. eauto. eauto. eauto. eauto. eauto. eauto. eauto. eauto. eauto. eauto. eauto.
+      Unshelve.
+      
+      (* eapply indexed_labeled_honest_step_advuniv_implies_stripped_univ_step. *)
+      (* stripped universe step implies unstripped step *)
+
+  Admitted.
 
   Theorem simulates_ok_with_adversary' :
     forall {A B} (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A) (b : RealWorld.denote (RealWorld.Base B)),
