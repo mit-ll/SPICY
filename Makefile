@@ -17,7 +17,7 @@
 #  as specifically authorized by the U.S. Government may violate any copyrights that exist in this work.
 
 # KNOWNTARGETS will not be passed along to CoqMakefile
-KNOWNTARGETS := CoqMakefile all lib por test-protos share-secret pgp secdns nsproto timings
+KNOWNTARGETS := CoqMakefile all lib por test-protos share-secret pgp secdns secvote p2p nsproto timings
 
 # KNOWNFILES will not get implicit targets from the final rule, and so
 # depending on them won't invoke the submake
@@ -67,7 +67,7 @@ pgp: CoqMakefile
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
 sharesecretsym: CoqMakefile
-	$(eval TS := protocols/ShareSecretSymmetricEncProtocol.vo)
+	$(eval TS := "protocols/ShareSecretSymmetricEncProtocol.vo protocols/ShareSecretSymmetricEncProtocolSS.vo")
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
 secdns: CoqMakefile
@@ -76,6 +76,10 @@ secdns: CoqMakefile
 
 secvote: CoqMakefile
 	$(eval TS := protocols/SecureVoting.vo)
+	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
+
+p2p: CoqMakefile
+	$(eval TS := "protocols/P2P.vo")
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
 nsproto: CoqMakefile
