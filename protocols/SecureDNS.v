@@ -415,16 +415,6 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
     autounfold; econstructor; eauto.
   Qed.
 
-  Ltac focus_user :=
-    repeat
-      match goal with
-      | [ H : _ $+ (?k1,_) $? ?k2 = Some ?v |- _ ] =>
-        is_var v;
-        match type of v with
-        | RealWorld.user_data _ => idtac
-        end; destruct (k1 ==n k2); subst; clean_map_lookups
-      end.
-
   Lemma adv_univ_ok_start : adv_universe_ok ru0.
   Proof.
     autounfold; unfold adv_universe_ok; eauto.
@@ -445,10 +435,12 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
       focus_user
       ; simpl in *; econstructor; eauto.
 
-    - unfold honest_nonces_ok; intros.
-      unfold honest_nonce_tracking_ok.
-
-      focus_user
+    - unfold honest_nonces_ok, honest_user_nonces_ok, honest_nonces_ok
+      ; repeat simple apply conj
+      ; intros
+      ; clean_map_lookups
+      ; intros
+      ; focus_user
       ; try contradiction; try discriminate; simpl;
         repeat (apply conj); intros; clean_map_lookups; eauto.
 

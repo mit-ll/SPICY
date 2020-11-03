@@ -208,7 +208,7 @@ Section CommutationLemmas.
     - exists (fun x => x); eexists; repeat simple apply conj; swap 1 3; eauto.
     - exists (fun x => x); eexists; repeat simple apply conj; swap 1 3; eauto.
     - exists (fun x => x); eexists; repeat simple apply conj; swap 1 3; eauto.
-    - exists (fun x => x); eexists; repeat simple apply conj; swap 1 3; eauto.
+    (* - exists (fun x => x); eexists; repeat simple apply conj; swap 1 3; eauto. *)
   Qed.
 
   Hint Constructors nextAction : core.
@@ -337,8 +337,8 @@ Section CommutationLemmas.
       match goal with
       | [ H : msg_accepted_by_pattern _ _ _ ?pat _ |- step_user _ _ (_,_,_,_,_,_,_,_,_,_,Recv ?pat) _ ] =>
         eapply StepRecv
-      | [ H : ~ msg_accepted_by_pattern _ _ _ ?pat _ |- step_user _ _ (_,_,_,_,_,_,_,_,_,_,Recv ?pat) _ ] =>
-        eapply StepRecvDrop
+      (* | [ H : ~ msg_accepted_by_pattern _ _ _ ?pat _ |- step_user _ _ (_,_,_,_,_,_,_,_,_,_,Recv ?pat) _ ] => *)
+      (*   eapply StepRecvDrop *)
       | [ |- step_user _ _ _ _ ] => econstructor
       | [ |- _ = _ ] => reflexivity
 
@@ -349,7 +349,13 @@ Section CommutationLemmas.
         erewrite <- updateTrackedNonce_addnl_cipher by eauto
       | [ |- context [ updateSentNonce _ _ (_ $+ (_,_)) _ ]] => 
         erewrite <- updateSentNonce_addnl_cipher by eauto
-      | [ H : message_queue_ok _ _ (_ :: _) _ |- _ ] => invert H; split_ex
+      | [ H : message_queue_ok _ _ (?msgs1 ++ ?m :: ?msgs2) _ |- _ ] =>
+        unfold message_queue_ok in H
+        ; rewrite Forall_forall in H
+        ; (let LIN := fresh "LIN" in assert (List.In m (msgs1 ++ m :: msgs2)) as LIN by eauto using in_elt
+          ; eapply H in LIN)
+        ; split_ex
+        (* invert H; split_ex *)
       | [ |- context [ msg_signed_addressed (?honk $+ (_,true)) _ _ _ ]] =>
         erewrite msg_signed_addressed_nochange_addnl_honest_key
       | [ H : ?m $+ (?k1,_) $? ?k2 = _ |- ?m $? ?k2 = _ ] =>
@@ -404,6 +410,22 @@ Section CommutationLemmas.
       end.
     
     all: try solve [ (do 10 eexists); (repeat simple apply conj); repeat solver1; eauto; repeat solver1; eauto ].
+
+    - (do 10 eexists); (repeat simple apply conj); repeat solver1; eauto; repeat solver1; eauto.
+      split_ors.
+      rewrite Forall_forall in H21 |- *; intros * LIN.
+      destruct x7.
+      assert (List.In (existT _ x7 c) (x0 ++ existT _ t0 x :: x1)) as LINQ by eauto using in_or_app.
+      eapply H21 in LIN; split_ex.
+      eapply H0 in LINQ; split_ex; eauto.
+
+    - (do 10 eexists); (repeat simple apply conj); repeat solver1; eauto; repeat solver1; eauto.
+
+      rewrite Forall_forall in H21 |- *; intros * LIN.
+      destruct x5.
+      assert (List.In (existT _ x5 c) (x0 ++ existT _ t0 x :: x1)) as LINQ by eauto using in_or_app.
+      eapply H21 in LIN; split_ex.
+      eapply H0 in LINQ; split_ex; eauto.
   Qed.
 
   Lemma commutes_sound_send :
@@ -645,8 +667,9 @@ Section CommutationLemmas.
     - (do 6 eexists); split; [ | econstructor]; eauto.
     - (do 6 eexists); split; [ | econstructor]; eauto.
     - (do 6 eexists); split; [ | econstructor]; eauto.
-    - (do 6 eexists); split; [ | econstructor]; eauto.
-      autorewrite with find_user_keys; trivial.
+      (* Step Recv Drop *)
+    (* - (do 6 eexists); split; [ | econstructor]; eauto. *)
+    (*   autorewrite with find_user_keys; trivial. *)
     - destruct (u_id2 ==n rec_u_id); subst; clean_map_lookups; simpl in *.
       (do 6 eexists); split; [ | econstructor]; try congruence; eauto.
       simpl; rewrite !map_add_eq; trivial.
@@ -948,8 +971,9 @@ Section TimeMeasures.
   Lemma queues_size_readd_user_popped_msg :
     forall A (usrs usrs' : honest_users A) uid ud ud' m,
       usrs $? uid = Some ud
+      -> forall msgs1 msgs2, ud'.(msg_heap) = msgs1 ++ msgs2
+      -> ud.(msg_heap) = msgs1 ++ m :: msgs2
       -> usrs' = usrs $+ (uid, ud')
-      -> ud.(msg_heap) = m :: ud'.(msg_heap)
       -> queues_size usrs = 1 + queues_size usrs'.
   Proof.
     induction usrs using map_induction_bis;
@@ -958,12 +982,12 @@ Section TimeMeasures.
     destruct (x ==n uid); subst; clean_map_lookups; eauto.
     - rewrite map_add_eq; unfold queues_size.
       rewrite !fold_add; eauto.
-      rewrite H2; simpl; lia.
+      rewrite H1 , H2, !app_length; simpl; lia.
       
     - unfold queues_size.
       rewrite map_ne_swap by eauto.
       rewrite !fold_add by eauto.
-      specialize (IHusrs _ _ _ _ _ H0 eq_refl H2).
+      specialize (IHusrs _ _ _ _ _ H0 _ _ H1 H2 eq_refl).
       unfold queues_size in IHusrs.
       rewrite IHusrs.
       trivial.
@@ -993,7 +1017,7 @@ Section TimeMeasures.
       invert 1;
       intros;
       try solve [ exists n; simpl; erewrite <- queues_size_readd_user_same_queue_idem by eauto; split; eauto ].
-
+ 
     - assert (uid <> uid0) by (unfold not; intros RW; rewrite RW in *; contradiction).
       rewrite map_ne_swap by eauto.
 
@@ -1008,17 +1032,17 @@ Section TimeMeasures.
       
     - exists (n + 1); split; eauto.
       rewrite <- plus_assoc.
-      erewrite <- queues_size_readd_user_popped_msg; eauto; eauto.
-      simpl; eauto.
-      
-    - exists (2 + n); split; eauto.
+      erewrite <- queues_size_readd_user_popped_msg; eauto; simpl; eauto.
 
-      rewrite <- plus_assoc.
-      rewrite plus_comm with (n := n).
-      rewrite plus_assoc.
-      rewrite <- plus_assoc with (n := 1).
-      erewrite <- queues_size_readd_user_popped_msg; eauto; eauto.
-      simpl; eauto.
+    (* Recv Drop *)
+    (* - exists (2 + (n1 + n2)); split; eauto. *)
+
+    (*   rewrite <- plus_assoc. *)
+    (*   rewrite plus_comm with (n := n). *)
+    (*   rewrite plus_assoc. *)
+    (*   rewrite <- plus_assoc with (n := 1). *)
+    (*   erewrite <- queues_size_readd_user_popped_msg; eauto; eauto. *)
+    (*   simpl; eauto. *)
 
     - eapply IHboundRunningTime in H9; split_ex; eauto.
       eexists; split; eauto.
@@ -1684,7 +1708,7 @@ Proof.
         | [ H : commutes (Recv _) _ |- _ ] => invert H
         end.
 
-  1-4:
+  1-3:
     induct 1;
     intros;
     discharge_no_commutes;
@@ -1949,10 +1973,10 @@ Proof.
   eapply step_limited_change_other_user with (u_id2 := uid) in STEP; eauto; split_ands.
   
   split_ors.
-  eapply max_elt_upd_map_elements in H5; eauto; intros.
+  eapply max_elt_upd_map_elements in H6; eauto; intros.
   destruct (k' ==n uid'); subst; clean_map_lookups; eapply H3; eauto.
 
-  eapply max_elt_upd_map_elements in H5; eauto; intros.
+  eapply max_elt_upd_map_elements in H6; eauto; intros.
   destruct (k' ==n uid'); subst; clean_map_lookups; eapply H3; eauto.
 
 Qed.
@@ -2197,6 +2221,7 @@ Proof.
     specialize (H1 _ _ _ H6 eq_refl); split_ex.
   generalize H7; intros LSTEP.
   eapply silent_step_then_labeled_step with (uid1 := uid0) (uid2 := uid) in H7; eauto.
+  2: unfold goodness_predicates in *; split_ex; assumption.
   split_ex.
 
   dt x1.

@@ -87,16 +87,16 @@ Inductive msg_accepted_by_pattern (cs : ciphers) (opt_uid_to : option user_id) (
   : forall {t : type}, msg_pat -> crypto t -> Prop :=
 | MsgAccept : forall {t} (m : crypto t),
     msg_accepted_by_pattern cs opt_uid_to froms Accept m
-| ProperlySigned : forall {t} c_id k (m : message t) msg_to nonce (chk : bool),
-    cs $? c_id = Some (@SigCipher t k msg_to nonce m)
+| ProperlySigned : forall {t t'} c_id k (m : message t) msg_to nonce (chk : bool),
+    cs $? c_id = Some (SigCipher k msg_to nonce m)
     -> (if chk then (count_occ msg_seq_eq froms nonce = 0) else True)
     -> opt_uid_to = Some msg_to
-    -> msg_accepted_by_pattern cs opt_uid_to froms (Signed k chk) (@SignedCiphertext t c_id)
-| ProperlyEncrypted : forall {t} c_id k__sign k__enc (m : message t) msg_to nonce (chk : bool),
+    -> msg_accepted_by_pattern cs opt_uid_to froms (Signed k chk) (@SignedCiphertext t' c_id)
+| ProperlyEncrypted : forall {t t'} c_id k__sign k__enc (m : message t) msg_to nonce (chk : bool),
     cs $? c_id = Some (SigEncCipher k__sign k__enc msg_to nonce m)
     -> (if chk then (count_occ msg_seq_eq froms nonce = 0) else True)
     -> opt_uid_to = Some msg_to
-    -> msg_accepted_by_pattern cs opt_uid_to froms (SignedEncrypted k__sign k__enc chk) (@SignedCiphertext t c_id).
+    -> msg_accepted_by_pattern cs opt_uid_to froms (SignedEncrypted k__sign k__enc chk) (@SignedCiphertext t' c_id).
 
 Hint Extern 1 (~ In _ _) => rewrite not_find_in_iff.
 
@@ -220,19 +220,6 @@ Inductive user_cmd : user_cmd_type -> Type :=
 
 | Sign    {t} (k : key_identifier) (msg_to : user_id) (msg : message t) : user_cmd (Crypto t)
 | Verify  {t} (k : key_identifier) (c : crypto t) : user_cmd (UPair (Base Bool) (Message t))
-(* <<<<<<< HEAD *)
-(* | SignEncrypt {t} (k__sign k__enc : key_identifier) (msg_to : user_id) (msg : message t) : user_cmd (crypto t) *)
-(* | Decrypt {t} (c : crypto t) : user_cmd (message t) *)
-
-(* | Sign    {t} (k : key_identifier) (msg_to : user_id) (msg : message t) : user_cmd (crypto t) *)
-(* | Verify  {t} (k : key_identifier) (c : crypto t) : user_cmd (bool * message t) *)
-(* ======= *)
-(* | SignEncrypt {t} (k__sign k__enc : key_identifier) (msg : message t) : user_cmd (Crypto t) *)
-(* | Decrypt {t} (c : crypto t) : user_cmd (Message t) *)
-
-(* | Sign    {t} (k : key_identifier) (msg : message t) : user_cmd (Crypto t) *)
-(* | Verify  {t} (k : key_identifier) (c : crypto t) : user_cmd (UPair (Base Bool) (Message t)) *)
-(* >>>>>>> type-codes *)
 
 | GenerateSymKey  (usage : key_usage) : user_cmd (Base Access)
 | GenerateAsymKey (usage : key_usage) : user_cmd (Base Access)
@@ -482,30 +469,36 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
 
 (* Comms  *)
 | StepRecv : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs u_id gks ks ks' qmsgs qmsgs' mycs mycs' froms froms'
-               sents cur_n (msg : crypto t) msgs pat newkeys newcs,
-      qmsgs = (existT _ _ msg) :: msgs (* we have a message waiting for us! *)
-    -> qmsgs' = msgs
+               sents cur_n (msg : crypto t) msgs__front msgs__back pat newkeys newcs,
+      qmsgs = msgs__front ++ (existT _ _ msg) :: msgs__back (* we have a message waiting for us! *)
+    -> qmsgs' = msgs__front ++ msgs__back
     -> findKeysCrypto cs msg = newkeys
     -> newcs = findCiphers msg
     -> ks' = ks $k++ newkeys
     -> mycs' = newcs ++ mycs
     -> froms' = updateTrackedNonce u_id froms cs msg
     -> msg_accepted_by_pattern cs u_id froms pat msg
+    -> Forall (fun '(existT _ _ msg')  => ~ msg_accepted_by_pattern cs u_id froms pat msg') msgs__front
+                                      (* /\ forall cid c cid' c', msg = SignedCiphertext cid *)
+                                      (*                    -> cs $? cid = Some c *)
+                                      (*                    -> msg' = SignedCiphertext cid' *)
+                                      (*                    -> cs $? cid' = Some c' *)
+                                      (*                    -> cipher_nonce c <> cipher_nonce c' *)
     -> step_user (Action (Input msg pat froms)) u_id
                 (usrs, adv, cs, gks, ks , qmsgs , mycs, froms, sents, cur_n,  Recv pat)
                 (usrs, adv, cs, gks, ks', qmsgs', mycs', froms', sents, cur_n, @Return (Crypto t) msg)
 
-| StepRecvDrop : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs suid gks ks qmsgs qmsgs'
-                   mycs froms froms' sents cur_n (msg : crypto t) pat msgs,
-      qmsgs = (existT _ _ msg) :: msgs (* we have a message waiting for us! *)
-    -> qmsgs' = msgs
-    -> froms' = (if msg_signed_addressed (findUserKeys usrs) cs suid msg
-               then updateTrackedNonce suid froms cs msg
-               else froms)
-    -> ~ msg_accepted_by_pattern cs suid froms pat msg
-    -> step_user Silent suid (* Error label ... *)
-                (usrs, adv, cs, gks, ks, qmsgs , mycs, froms,  sents, cur_n, Recv pat)
-                (usrs, adv, cs, gks, ks, qmsgs', mycs, froms', sents, cur_n, @Recv t pat)
+(* | StepRecvDrop : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs suid gks ks qmsgs qmsgs' *)
+(*                    mycs froms froms' sents cur_n (msg : crypto t) pat msgs, *)
+(*       qmsgs = (existT _ _ msg) :: msgs (* we have a message waiting for us! *) *)
+(*     -> qmsgs' = msgs *)
+(*     -> froms' = (if msg_signed_addressed (findUserKeys usrs) cs suid msg *)
+(*                then updateTrackedNonce suid froms cs msg *)
+(*                else froms) *)
+(*     -> ~ msg_accepted_by_pattern cs suid froms pat msg *)
+(*     -> step_user Silent suid (* Error label ... *) *)
+(*                 (usrs, adv, cs, gks, ks, qmsgs , mycs, froms,  sents, cur_n, Recv pat) *)
+(*                 (usrs, adv, cs, gks, ks, qmsgs', mycs, froms', sents, cur_n, @Recv t pat) *)
 
 (* Augment attacker's keys with those available through messages sent, *)
 (*  * including traversing through ciphers already known by attacker, etc. *)
@@ -539,7 +532,7 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
 
 (* Encryption / Decryption *)
 | StepEncrypt : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs cs' u_id gks ks qmsgs mycs mycs' froms sents
-                  cur_n cur_n' (msg : message t) k__signid k__encid kp__enc kt__enc kt__sign c_id cipherMsg msg_to,
+                  cur_n cur_n' (msg : message t) k__signid k__encid kp__enc kt__enc kt__sign c_id cipherMsg msg_to msg_nonce,
       gks $? k__encid  = Some (MkCryptoKey k__encid Encryption kt__enc)
     -> gks $? k__signid = Some (MkCryptoKey k__signid Signing kt__sign)
     -> ks $? k__encid   = Some kp__enc
@@ -547,7 +540,8 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> ~ In c_id cs
     -> keys_mine ks (findKeysMessage msg)
     -> cur_n' = 1 + cur_n
-    -> cipherMsg = SigEncCipher k__signid k__encid msg_to (u_id, cur_n) msg
+    -> (u_id <> None -> msg_nonce = (u_id, cur_n))
+    -> cipherMsg = SigEncCipher k__signid k__encid msg_to msg_nonce msg
     -> cs' = cs $+ (c_id, cipherMsg)
     -> mycs' = c_id :: mycs
     -> step_user Silent u_id
@@ -570,14 +564,15 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
                 (usrs, adv, cs, gks, ks', qmsgs, mycs', froms, sents, cur_n, @Return (Message t) msg)
 
 (* Signing / Verification *)
-| StepSign : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs cs' u_id gks ks qmsgs mycs mycs' froms sents cur_n cur_n'
-               (msg : message t) k_id kt c_id cipherMsg msg_to,
+| StepSign : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs cs' u_id gks ks qmsgs mycs mycs'
+               froms sents cur_n cur_n' msg_nonce (msg : message t) k_id kt c_id cipherMsg msg_to,
       gks $? k_id = Some (MkCryptoKey k_id Signing kt)
     -> ks  $? k_id = Some true
     -> ~ In c_id cs
     -> keys_mine ks (findKeysMessage msg)
     -> cur_n' = 1 + cur_n
-    -> cipherMsg = SigCipher k_id msg_to (u_id, cur_n) msg
+    -> (u_id <> None -> msg_nonce = (u_id, cur_n))
+    -> cipherMsg = SigCipher k_id msg_to msg_nonce msg
     -> cs' = cs $+ (c_id, cipherMsg)
     -> mycs' = c_id :: mycs
     -> step_user Silent u_id

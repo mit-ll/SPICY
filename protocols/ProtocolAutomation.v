@@ -66,6 +66,104 @@ Module SimulationAutomation.
   Module T.
     Import RealWorld.
 
+    Lemma message_match_not_match_pattern_different :
+      forall t1 t2 (msg1 : crypto t1) (msg2 : crypto t2) cs suid froms pat,
+        ~ msg_accepted_by_pattern cs suid froms pat msg1
+        -> msg_accepted_by_pattern cs suid froms pat msg2
+        -> existT _ _ msg1 <> existT _ _ msg2.
+    Proof.
+      intros.
+      unfold not; intros.
+      generalize (projT1_eq H1); intros EQ; simpl in EQ; subst.
+      eapply inj_pair2 in H1; subst.
+      contradiction.
+    Qed.
+
+    Lemma message_queue_split_head :
+      forall t1 t2 (msg1 : crypto t1) (msg2 : crypto t2) qmsgs qmsgs1 qmsgs2
+        cs suid froms pat,
+
+        existT _ _ msg2 :: qmsgs = qmsgs1 ++ existT _ _ msg1 :: qmsgs2
+        -> msg_accepted_by_pattern cs suid froms pat msg1
+        -> ~ msg_accepted_by_pattern cs suid froms pat msg2
+        -> Forall (fun '(existT _ _ msg') => ~ msg_accepted_by_pattern cs suid froms pat msg') qmsgs1
+        -> exists qmsgs1',
+            qmsgs1 = (existT _ _ msg2) :: qmsgs1'.
+    Proof.
+      intros.
+      destruct qmsgs1.
+      - rewrite app_nil_l in H.
+        eapply message_match_not_match_pattern_different in H0; eauto.
+        invert H; contradiction.
+
+      - rewrite <- app_comm_cons in H.
+        invert H; eauto.
+    Qed.
+
+    Lemma message_queue_solve_head :
+      forall t1 t2 (msg1 : crypto t1) (msg2 : crypto t2) qmsgs qmsgs1 qmsgs2
+        cs suid froms pat,
+
+        existT _ _ msg2 :: qmsgs = qmsgs1 ++ existT _ _ msg1 :: qmsgs2
+        -> msg_accepted_by_pattern cs suid froms pat msg1
+        -> msg_accepted_by_pattern cs suid froms pat msg2
+        -> Forall (fun '(existT _ _ msg') => ~ msg_accepted_by_pattern cs suid froms pat msg') qmsgs1
+        -> qmsgs1 = []
+          /\ qmsgs2 = qmsgs
+          /\ existT _ _ msg1 = existT _ _ msg2.
+    Proof.
+      intros.
+      subst.
+      destruct qmsgs1.
+
+      rewrite app_nil_l in H
+      ; invert H
+      ; eauto.
+
+      exfalso.
+      rewrite <- app_comm_cons in H.
+      invert H; eauto.
+      invert H2; contradiction.
+    Qed.
+
+    Ltac pr_message cs uid froms pat msg :=
+      assert (msg_accepted_by_pattern cs uid froms pat msg) by (econstructor; eauto).
+
+    Ltac cleanup_msg_queue :=
+      repeat 
+        match goal with
+        | [ H : context [ (_ :: _) ++ _ ] |- _ ] =>
+          rewrite <- app_comm_cons in H
+        | [ H : _ :: _ = _ :: _ |- _ ] =>
+          invert H
+        | [ H : [] = _ ++ _ :: _ |- _ ] =>
+          apply nil_not_app_cons in H; contradiction
+        | [ H : existT _ _ _ = existT _ _ _ |- _ ] =>
+          eapply inj_pair2 in H; subst
+        end.
+
+    Ltac process_message_queue :=
+      cleanup_msg_queue;
+      match goal with
+      | [ H : (existT _ _ ?m) :: ?msgs = ?msgs1 ++ (existT _ _ ?msg) :: ?msgs2,
+          M : msg_accepted_by_pattern ?cs ?suid ?froms ?pat ?msg
+          |- _ ] =>
+
+        pr_message cs suid froms pat m
+        ; match goal with
+          | [ MSA : msg_accepted_by_pattern cs suid froms pat m
+            , HD : Forall _ msgs1
+              |- _ ] =>
+            idtac "solving " H M MSA HD
+            ; pose proof (message_queue_solve_head _ H M MSA HD)
+            ; split_ex; subst
+            ; cleanup_msg_queue; subst
+          | [ MSA : ~ msg_accepted_by_pattern cs suid froms pat msg |- _ ] =>
+            idtac "splitting"
+            ; eapply message_queue_split_head in H; eauto
+          end
+      end.
+
     Ltac churn1 :=
       match goal with
 
@@ -83,10 +181,10 @@ Module SimulationAutomation.
         is_not_var u;
         match cmd with
         | Return _ => apply step_user_inv_ret in H; contradiction
-        | Bind _ _ => apply step_user_inv_bind in H; split_ands; split_ors; split_ands; subst; try discriminate
+        | Bind _ _ => apply step_user_inv_bind in H; split_ex; split_ors; split_ex; subst; try discriminate
         | Gen => apply step_user_inv_gen in H
         | Send _ _ => apply step_user_inv_send in H
-        | Recv _ => apply step_user_inv_recv in H
+        | Recv _ => apply step_user_inv_recv in H; split_ex; subst; process_message_queue
         | SignEncrypt _ _ _ _ => apply step_user_inv_enc in H
         | Decrypt _ => apply step_user_inv_dec in H
         | Sign _ _ _ => apply step_user_inv_sign in H
@@ -142,10 +240,10 @@ Module SimulationAutomation.
         is_not_var u; is_not_evar u;
         match cmd with
         | Return _ => apply step_user_inv_ret in H; contradiction
-        | Bind _ _ => apply step_user_inv_bind in H; split_ands; split_ors; split_ands; subst; try discriminate
+        | Bind _ _ => apply step_user_inv_bind in H; split_ex; split_ors; split_ex; subst; try discriminate
         | Gen => apply step_user_inv_gen in H
         | Send _ _ => apply step_user_inv_send in H
-        | Recv _ => apply step_user_inv_recv in H; split_ex; split_ors; try discriminate
+        | Recv _ => apply step_user_inv_recv in H; split_ex; try discriminate; subst; process_message_queue
         | SignEncrypt _ _ _ _ => apply step_user_inv_enc in H
         | Decrypt _ => apply step_user_inv_dec in H
         | Sign _ _ _ => apply step_user_inv_sign in H
@@ -211,6 +309,7 @@ Module SimulationAutomation.
       intros;
         subst; invert H; try contradiction; eauto 12.
     Qed.
+
 
   End T.
 
@@ -721,7 +820,9 @@ Module SimulationAutomation.
     end; split_ex; simpl in *.
 
   Hint Extern 1 (action_matches _ _ _ _) =>
-    repeat (solve_action_matches1); NatMap.clean_map_lookups ; ChMaps.ChMap.clean_map_lookups : core.
+    repeat (solve_action_matches1)
+  ; NatMap.clean_map_lookups
+  ; ChMaps.ChMap.clean_map_lookups : core.
 
   Hint Resolve
        findUserKeys_foldfn_proper
@@ -1701,3 +1802,13 @@ Module Gen.
 
 End Gen.
                      
+(* Helps with initial universe state proofs *)
+Ltac focus_user :=
+  repeat
+    match goal with
+    | [ H : _ $+ (?k1,_) $? ?k2 = Some ?v |- _ ] =>
+      is_var v;
+      match type of v with
+      | RealWorld.user_data _ => idtac
+      end; destruct (k1 ==n k2); subst; clean_map_lookups
+    end.

@@ -32,7 +32,8 @@ Require Import
         AdversaryUniverse
         UniverseEqAutomation
         ProtocolAutomation
-        SafeProtocol.
+        SafeProtocol
+        ProtocolFunctions.
 
 Require IdealWorld RealWorld.
 
@@ -187,25 +188,25 @@ Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
     - unfold KEYS in *; solve_simple_maps; eauto.
     - rewrite Forall_natmap_forall; intros.
       solve_simple_maps; simpl;
-        unfold permission_heap_good, KEYS, A__keys, B__keys; intros;
+        unfold permission_heap_good; intros;
           solve_simple_maps; eauto.
 
     - unfold user_cipher_queues_ok.
       rewrite Forall_natmap_forall; intros.
-      cases (A ==n k); cases (B ==n k);
-        subst; clean_map_lookups; simpl in *; econstructor; eauto.
+      focus_user
+      ; simpl in *; econstructor; eauto.
 
-    - unfold honest_nonces_ok; intros.
-      unfold honest_nonce_tracking_ok.
-
-      destruct (u_id ==n A); destruct (u_id ==n B);
-        destruct (rec_u_id ==n A); destruct (rec_u_id ==n B);
-          subst; try contradiction; try discriminate; clean_map_lookups; simpl;
-            repeat (apply conj); intros; clean_map_lookups; eauto.
+    - unfold honest_nonces_ok, honest_user_nonces_ok, honest_nonces_ok
+      ; repeat simple apply conj
+      ; intros
+      ; clean_map_lookups
+      ; intros
+      ; focus_user
+      ; try contradiction; try discriminate; simpl;
+        repeat (apply conj); intros; clean_map_lookups; eauto.
 
     - unfold honest_users_only_honest_keys; intros.
-      destruct (u_id ==n A);
-        destruct (u_id ==n B);
+      focus_user;
         subst;
         simpl in *;
         clean_map_lookups;
@@ -305,31 +306,32 @@ Module SimpleEncProtocolSecure <: AutomatedSafeProtocol.
       simpl in *.
 
     - unfold KEYS in *; solve_simple_maps; eauto.
-    - rewrite Forall_natmap_forall; intros.
-      solve_simple_maps; simpl;
-        unfold permission_heap_good, KEYS, A__keys, B__keys; intros;
-          solve_simple_maps; eauto.
+    - unfold A__keys , B__keys in *
+      ; rewrite Forall_natmap_forall; intros
+      ; solve_simple_maps; simpl
+      ; unfold permission_heap_good; intros
+      ; solve_simple_maps; eauto 8.
 
     - unfold user_cipher_queues_ok.
       rewrite Forall_natmap_forall; intros.
-      cases (A ==n k); cases (B ==n k);
-        subst; clean_map_lookups; simpl in *; econstructor; eauto.
+      focus_user
+      ; simpl in *; econstructor; eauto.
 
-    - unfold honest_nonces_ok; intros.
-      unfold honest_nonce_tracking_ok.
-
-      destruct (u_id ==n A); destruct (u_id ==n B);
-        destruct (rec_u_id ==n A); destruct (rec_u_id ==n B);
-          subst; try contradiction; try discriminate; clean_map_lookups; simpl;
-            repeat (apply conj); intros; clean_map_lookups; eauto.
+    - unfold honest_nonces_ok, honest_user_nonces_ok, honest_nonces_ok
+      ; repeat simple apply conj
+      ; intros
+      ; clean_map_lookups
+      ; intros
+      ; focus_user
+      ; try contradiction; try discriminate; simpl;
+        repeat (apply conj); intros; clean_map_lookups; eauto.
 
     - unfold honest_users_only_honest_keys; intros.
-      destruct (u_id ==n A);
-        destruct (u_id ==n B);
+      focus_user;
         subst;
         simpl in *;
         clean_map_lookups;
-        unfold mkrUsr; simpl;
+        unfold mkrUsr; simpl; 
         rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty;
         eauto;
         simpl in *;

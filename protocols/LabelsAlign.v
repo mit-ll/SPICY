@@ -66,6 +66,7 @@ Lemma silent_step_then_labeled_step :
                                cur_nonce := cur_n |}
       -> forall ctx styp, syntactically_safe uid1 (compute_ids usrs) ctx cmd styp
       -> typingcontext_sound ctx usrs cs uid1
+      -> message_queues_ok cs usrs gks
       -> forall uid2 bd2 bd2',
           step_user Silent (Some uid2) bd2 bd2'
 
@@ -101,16 +102,41 @@ Proof.
     split_ex.
     dt x.
     eexists; econstructor; eauto.
-  - generalize H36; intros STEP; eapply silent_step_nochange_other_user with (u_id2 := uid1) in H36; eauto.
+  - generalize H38; intros STEP; eapply silent_step_nochange_other_user with (u_id2 := uid1) in H38; eauto.
     eapply step_limited_change_other_user with (u_id2 := uid1) in STEP; eauto; split_ex.
-    clear H0.
+    clear H1.
     eexists; econstructor; eauto.
     invert H6; [
       econstructor 1
     | econstructor 2
     | econstructor 3]; eauto.
 
-  - generalize H36; intros STEP; eapply silent_step_nochange_other_user with (u_id2 := uid1) in H36; eauto.
+    rewrite Forall_forall in H7 |- *; intros * LIN.
+    destruct x.
+    assert (List.In (existT _ x c) (msgs__front ++ existT _ t0 msg :: msgs__back))
+      as LINMSGS by eauto using in_or_app.
+    eapply H7 in LIN.
+
+    unfold message_queues_ok in H37
+    ; rewrite Forall_natmap_forall in H37
+    ; specialize (H37 _ _ H34)
+    ; simpl in H37
+    ; unfold message_queue_ok in H37
+    ; rewrite Forall_forall in H37
+    ; assert (List.In (existT _ t0 msg) (msgs__front ++ existT _ t0 msg :: msgs__back)) as LIN2 by eauto using in_elt
+    ; apply H37 in LINMSGS
+    ; apply H37 in LIN2
+    ; split_ex.
+    
+    unfold not; intros.
+    eapply LIN; clear LIN.
+    invert H9; econstructor; eauto.
+    eapply H0 in H11; split_ors; eauto.
+    specialize (H5 _ eq_refl); contradiction.
+    eapply H0 in H11; split_ors; eauto.
+    specialize (H5 _ eq_refl); contradiction.
+
+  - generalize H37; intros STEP; eapply silent_step_nochange_other_user with (u_id2 := uid1) in H37; eauto.
     (* eapply step_limited_change_other_user in STEP; eauto; split_ex. *)
     destruct (uid2 ==n rec_u_id); subst; clean_map_lookups;
       eexists; econstructor; eauto.
@@ -121,12 +147,12 @@ Proof.
     eapply step_limited_change_other_user with (u_id2 := uid1) in STEP; eauto; split_ex.
     clear H4.
     unfold typingcontext_sound in *; invert H34; split_ex; process_ctx.
-    specialize (H3 _ _ H7); context_map_rewrites; eauto.
+    specialize (H3 _ _ H8); context_map_rewrites; eauto.
 
     eapply step_limited_change_other_user with (u_id2 := uid1) in STEP; eauto; split_ex.
     clear H4.
     unfold typingcontext_sound in *; invert H34; split_ex; process_ctx.
-    specialize (H3 _ _ H7); context_map_rewrites; eauto.
+    specialize (H3 _ _ H8); context_map_rewrites; eauto.
 Qed.
 
 Lemma labels_align_user_step :
@@ -141,13 +167,14 @@ Lemma labels_align_user_step :
           -> bd'  = (usrs',  adv',  cs',  gks',  ks', qmsgs', mycs', froms', sents', cur_n', cmd')
           -> syntactically_safe_U (mkUniverse usrs adv cs gks)
           -> goodness_predicates (mkUniverse usrs adv cs gks)
+          -> message_queues_ok cs usrs gks
           -> usrs $? uid = Some (mkUserData ks cmd qmsgs mycs froms sents cur_n)
           -> forall usrs'', usrs'' = usrs' $+ (uid, mkUserData ks' cmd' qmsgs' mycs' froms' sents' cur_n')
           -> forall iu v, labels_align (mkUniverse usrs'' adv' cs' gks', iu, v)
           -> labels_align (mkUniverse usrs adv cs gks, iu, v).
 Proof.
   unfold labels_align; intros; subst.
-  invert H8.
+  invert H9.
   unfold build_data_step in H1; simpl in *.
   destruct userData; simpl in *.
 
@@ -187,7 +214,7 @@ Proof.
                                                                    ; cur_nonce := cur_n1 |}))
     by (econstructor; eauto).
 
-  eapply H7 in IRS; split_ex.
+  eapply H8 in IRS; split_ex.
   (do 3 eexists); repeat simple apply conj; eauto.
 
   unfold goodness_predicates in *; split_ex.
@@ -216,6 +243,8 @@ Proof.
   unfold mkULbl in H8; destruct lbl; invert H8.
   eapply labels_align_user_step; eauto.
   trivial.
+
+  unfold goodness_predicates in H2; split_ex; eauto.
  
   Unshelve.
   exact true.

@@ -103,6 +103,47 @@ Section ModelCheckStepLemmas.
       -> indexedStep uid (ru, iu) (ru', iu'')
   .
 
+  Lemma msg_queue_split_det :
+    forall (msgs1 msgs1' : RealWorld.queued_messages) t1 t1' msg1 msg1' msgs2 msgs2',
+      msgs1 ++ (existT _ t1 msg1) :: msgs2 = msgs1' ++ (existT _ t1' msg1') :: msgs2'
+      -> forall cs uid froms pat,
+          msg_accepted_by_pattern cs uid froms pat msg1
+          -> msg_accepted_by_pattern cs uid froms pat msg1'
+          -> Forall (fun '(existT _ t' msg') => ~ msg_accepted_by_pattern cs uid froms pat msg' ) msgs1
+          -> Forall (fun '(existT _ t' msg') => ~ msg_accepted_by_pattern cs uid froms pat msg' ) msgs1'
+          -> msgs1 = msgs1'.
+  Proof.
+    induction msgs1; intros; eauto.
+    -  rewrite app_nil_l in H.
+       destruct msgs1'; eauto.
+       invert H3.
+       destruct s; simpl in *; split_ex.
+       exfalso.
+       clear H2.
+
+       invert H0; eauto; invert H1.
+
+       invert H11.
+       eapply H6.
+       invert H.
+       econstructor; eauto.
+
+       invert H12.
+       eapply H6.
+       invert H.
+       econstructor; eauto.
+
+    - destruct msgs1'; eauto.
+
+      rewrite app_nil_l in H.
+      rewrite <- app_comm_cons in H; invert H.
+      invert H2; split_ex; contradiction.
+
+      rewrite <- !app_comm_cons in H; invert H.
+      f_equal.
+      invert H2; invert H3; eauto.
+  Qed.
+
   Lemma user_step_label_deterministic :
     forall A B C lbl1 lbl2 bd bd1' bd2' suid,
       @step_user A B C lbl1 suid bd bd1'
@@ -111,15 +152,14 @@ Section ModelCheckStepLemmas.
   Proof.
     induction 1; invert 1;
       subst;
-      eauto;
-      repeat
-        match goal with
-        | [ H : _ = _ |- _ ] => invert H; try contradiction
-        end;
       eauto.
 
     invert H.
     invert H6.
+
+    generalize H23; intros; eapply msg_queue_split_det in H23; eauto; subst.
+    eapply app_inv_head in H0.
+    invert H0; trivial.
   Qed.
 
   Hint Resolve
@@ -445,26 +485,27 @@ Lemma step_limited_change_other_user' :
                                          sent_nons := sents';
                                          cur_nonce := cur_n' |})
           -> (forall cid c, cs $? cid = Some c -> cs' $? cid = Some c)
-            /\ ( usrs'' $? u_id2 = Some {| key_heap := ks2;
+          /\ (forall cid c, cs' $? cid = Some c -> cs $? cid = Some c \/ cs $? cid = None)
+          /\ ( usrs'' $? u_id2 = Some {| key_heap := ks2;
+                                        protocol := cmdc2;
+                                        msg_heap := qmsgs2;
+                                        c_heap   := mycs2;
+                                        from_nons := froms2;
+                                        sent_nons := sents2;
+                                        cur_nonce := cur_n2 |}
+              \/ exists m,
+                usrs'' $? u_id2 = Some {| key_heap := ks2;
                                           protocol := cmdc2;
-                                          msg_heap := qmsgs2;
+                                          msg_heap := qmsgs2 ++ [m];
                                           c_heap   := mycs2;
                                           from_nons := froms2;
                                           sent_nons := sents2;
-                                          cur_nonce := cur_n2 |}
-                \/ exists m,
-                  usrs'' $? u_id2 = Some {| key_heap := ks2;
-                                            protocol := cmdc2;
-                                            msg_heap := qmsgs2 ++ [m];
-                                            c_heap   := mycs2;
-                                            from_nons := froms2;
-                                            sent_nons := sents2;
-                                            cur_nonce := cur_n2 |} )
+                                          cur_nonce := cur_n2 |} )
 .
 Proof.
   induction 1; inversion 1; inversion 1;
-    intros; subst;
-      try solve [ split; [intros | left; clean_map_lookups; trivial]; eauto ].
+    intros; subst
+    ; try solve [ repeat simple apply conj; [intros .. | left; clean_map_lookups; trivial]; eauto ].
   
   - specialize (IHstep_user _ _ _ _ _ _ _ _ _ _ _
                             _ _ _ _ _ _ _ _ _ _ _
@@ -473,8 +514,14 @@ Proof.
     specialize (IHstep_user _ _ _ _ _ _ _ _ _ _ eq_refl H25 H26 H27 eq_refl).
     split_ors; eauto.
 
-  - split; [ | clean_context; clean_map_lookups]; eauto.
+  - repeat simple apply conj; [intros .. | clean_context; clean_map_lookups]; eauto.
     destruct (rec_u_id ==n u_id2); subst; eauto.
+
+  - repeat simple apply conj; [intros .. | left; clean_map_lookups; trivial]; eauto.
+    destruct (c_id ==n cid); subst; clean_map_lookups; eauto.
+
+  - repeat simple apply conj; [intros .. | left; clean_map_lookups; trivial]; eauto.
+    destruct (c_id ==n cid); subst; clean_map_lookups; eauto.
 Qed.
 
 Lemma step_limited_change_other_user :
@@ -511,6 +558,7 @@ Lemma step_limited_change_other_user :
                                          sent_nons := sents';
                                          cur_nonce := cur_n' |})
           -> (forall cid c, cs $? cid = Some c -> cs' $? cid = Some c)
+          /\ (forall cid c, cs' $? cid = Some c -> cs $? cid = Some c \/ cs $? cid = None)
             /\ ( usrs'' $? u_id2 = Some {| key_heap := ks2;
                                           protocol := cmd2;
                                           msg_heap := qmsgs2;
@@ -921,8 +969,11 @@ Section OtherUserStep.
       clean_map_lookups;
       eauto.
 
-    rewrite <- app_comm_cons; eauto.
-    rewrite <- app_comm_cons; eauto.
+    rewrite <- app_assoc.
+    rewrite <- !app_comm_cons.
+    econstructor; eauto.
+    rewrite app_assoc; trivial.
+
     econstructor; eauto.
     congruence.
   Qed.
@@ -944,9 +995,9 @@ Section ActionMatches.
         bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
         -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
         -> lbl = Action a
-        -> (exists t (msg : crypto t) pat msgs,
+        -> (exists t (msg : crypto t) pat msgs1 msgs2,
               a = Input msg pat froms
-              /\ qmsgs = (existT crypto t msg) :: msgs
+              /\ qmsgs = msgs1 ++ (existT crypto t msg) :: msgs2
               /\ msg_accepted_by_pattern cs suid froms pat msg
               /\ nextAction cmd (@Recv t pat))
           \/ (exists t (msg : crypto t) from_usr to_usr,
@@ -958,17 +1009,17 @@ Section ActionMatches.
     - assert (Action a = Action a) as REFL by apply eq_refl.
       eapply IHstep_user in REFL; eauto.
       split_ors; subst.
-      left; (do 4 eexists); repeat simple apply conj; eauto.
+      left; (do 5 eexists); repeat simple apply conj; eauto.
       econstructor; eauto.
 
-      right; (do 4 eexists); repeat simple apply conj; eauto.
+      right; (do 5 eexists); repeat simple apply conj; eauto.
       econstructor; eauto.
       
-    - invert H20.
-      left; (do 4 eexists); repeat simple apply conj; eauto.
+    - invert H21.
+      left; (do 5 eexists); repeat simple apply conj; eauto.
       econstructor.
     - invert H20.
-      right; (do 4 eexists); repeat simple apply conj; eauto.
+      right; (do 5 eexists); repeat simple apply conj; eauto.
       econstructor.
   Qed.
 
@@ -1089,7 +1140,7 @@ Section ActionMatches.
         -> forall t__m (msg : crypto t__m) pat froms'',
             a = Input msg pat froms''
             -> exists t__m pat, nextAction cmd (@Recv t__m pat)
-                        /\ (exists qmsgs'', qmsgs = (existT _ _ msg) :: qmsgs'').
+                        /\ (exists qmsgs'' qmsgs''', qmsgs = qmsgs'' ++ (existT _ _ msg) :: qmsgs''').
 
   Proof.
     induction 1; inversion 1; inversion 1; intros; subst; try discriminate; eauto.
@@ -1099,7 +1150,7 @@ Section ActionMatches.
                             _ _ _ _ eq_refl); split_ex.
     (do 2 eexists); split; [ econstructor | ]; eauto.
 
-    invert H32; eauto.
+    invert H33; eauto.
     (do 2 eexists); split; eauto.
     econstructor.
   Qed.
@@ -1180,33 +1231,45 @@ Section ActionMatches.
     induction 1; inversion 1; inversion 1; intros; subst;
       try discriminate; eauto.
 
-    - invert H46; [
+    - invert H47; [
         econstructor 1
       | econstructor 2
       | econstructor 3
       | econstructor 4]; eauto;
         destruct (c_id ==n cid); subst; clean_map_lookups; eauto.
 
-      eapply input_action_na in H45; eauto; split_ex; subst.
-      unfold message_queues_ok in H35; rewrite Forall_natmap_forall in H35;
-        eapply H35 in H42; simpl in *.
-      invert H42; split_ex.
-      specialize (H7 _ eq_refl); clean_map_lookups.
+      eapply input_action_na in H46; eauto; split_ex; subst.
+      unfold message_queues_ok in H36; rewrite Forall_natmap_forall in H36;
+        eapply H36 in H43; simpl in *.
+
+      unfold message_queue_ok in H43
+      ; rewrite Forall_forall in H43
+      ; assert (List.In (existT _ t1 (SignedCiphertext cid)) (x1 ++ existT crypto t1 (SignedCiphertext cid) :: x2))
+        as LIN by eauto using in_elt
+      ; eapply H43 in LIN
+      ; split_ex.
+      specialize (H8 _ eq_refl); clean_map_lookups.
       
-      eapply output_action_na in H45; eauto; split_ex; subst.
-      eapply syntactically_safe_na in H7; eauto; split_ex.
+      eapply output_action_na in H46; eauto; split_ex; subst.
+      eapply syntactically_safe_na in H8; eauto; split_ex.
       invert H5; unfold typingcontext_sound in *; split_ex; process_ctx.
-      repeat equality1; clean_map_lookups.
+      repeat equality1; subst; clean_map_lookups.
       
-    - action_matches_solver;
-        destruct (c_id ==n cid); subst; clean_map_lookups; eauto; repeat equality1; subst.
-      
-      unfold message_queues_ok in H33; rewrite Forall_natmap_forall in H33;
-        eapply H33 in H40; simpl in *.
-      invert H40; split_ex; simpl in *.
-      specialize (H4 _ eq_refl); clean_map_lookups.
-      
-      eapply syntactically_safe_na in H5; eauto; split_ex.
+    - action_matches_solver; eauto.
+
+      all: destruct (c_id ==n cid); subst; clean_map_lookups; eauto.
+
+      unfold message_queues_ok in H34; rewrite Forall_natmap_forall in H34;
+        eapply H34 in H41; simpl in *.
+      unfold message_queue_ok in H41
+      ; rewrite Forall_forall in H41
+      ; assert (List.In (existT _ x (SignedCiphertext cid)) (x2 ++ existT crypto x (SignedCiphertext cid) :: x3))
+        as LIN by eauto using in_elt
+      ; eapply H41 in LIN
+      ; split_ex.
+      specialize (H5 _ eq_refl); clean_map_lookups.
+
+      eapply syntactically_safe_na in H6; eauto; split_ex.
       invert H3; unfold typingcontext_sound in *; split_ex; process_ctx.
       repeat equality1; clean_map_lookups.
 
@@ -1215,12 +1278,18 @@ Section ActionMatches.
       Local Ltac p :=
         repeat 
           match goal with
-          | [ MQ : message_queues_ok _ _ _, USRS : _ $? _ = Some {| msg_heap := (_ :: _) |}
+          | [ MQ : message_queues_ok _ _ _, USRS : _ $? _ = Some {| msg_heap := (_ ++ _ :: _) |}
               |- _ ] => 
             unfold message_queues_ok in MQ;
             rewrite Forall_natmap_forall in MQ;
             eapply MQ in USRS; simpl in *
-          | [ H : message_queue_ok _ _ (_ :: _) _ |- _ ] => invert H; split_ex
+          | [ H : message_queue_ok _ _ (?msgs1 ++ ?msg :: ?msgs2) _ |- _ ] =>
+            unfold message_queue_ok in H
+            ; rewrite Forall_forall in H
+            ; assert (List.In msg (msgs1 ++ msg :: msgs2)) as LIN by eauto using in_elt
+            ; eapply H in LIN
+            ; split_ex
+            (* invert H; split_ex *)
           | [ H : (forall _ _, findKeysCrypto _ _ $? _ = Some _ -> _) |- _ ] => progress (simpl in H); context_map_rewrites
           | [ H : syntactically_safe _ _ _ ?cmd _, NA : nextAction ?cmd _ |- _ ] =>
             is_var cmd;

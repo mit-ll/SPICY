@@ -61,6 +61,7 @@ protocols/ProtocolFunctions.v
 protocols/ShareSecretProtocol.v
 protocols/ShareSecretProtocol2.v
 protocols/NeedhamSchroeder.v
+protocols/PGP.v
 protocols/SecureDNS.v
 
 # protocols/SimplePingProtocol.v

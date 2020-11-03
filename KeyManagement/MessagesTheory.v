@@ -100,8 +100,9 @@ Hint Resolve
 Section CleanMessages.
 
   Lemma msg_honestly_signed_after_without_cleaning :
-    forall {t} (msg : crypto t) honestk cs,
-      msg_honestly_signed honestk (clean_ciphers honestk cs) msg = true
+    forall {t} (msg : crypto t) honestk honestk' cs,
+      msg_honestly_signed honestk' (clean_ciphers honestk cs) msg = true
+      -> (forall kid, honestk' $? kid = Some true -> honestk $? kid = Some true)
       -> msg_honestly_signed honestk cs msg = true.
   Proof.
     intros.
@@ -111,8 +112,13 @@ Section CleanMessages.
     - cases (clean_ciphers honestk cs $? c_id); try discriminate.
       rewrite <- find_mapsto_iff in Heq0;
         rewrite clean_ciphers_mapsto_iff in Heq0;
-        rewrite find_mapsto_iff in Heq0; split_ands.
-      rewrite H0; destruct c; try discriminate; eauto.
+        rewrite find_mapsto_iff in Heq0; split_ex.
+      context_map_rewrites.
+      invert Heq.
+      unfold honest_keyb in *.
+      cases (honestk' $? cipher_signing_key c); try discriminate.
+      destruct b; try discriminate.
+      eapply H0 in Heq; context_map_rewrites; eauto.
   Qed.
 
   Lemma honest_cipher_filter_fn_true_honest_signing_key :
@@ -711,7 +717,6 @@ End CleanMessages.
   Lemma msg_signed_addressed_new_msg_keys' :
     forall {t} (msg : message t) {t1} (c : crypto t1) honestk cs suid,
       msg_signed_addressed honestk cs suid c = true
-      -> (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true)
       -> msg_signed_addressed (honestk $k++ findKeysMessage msg) cs suid c = true.
   Proof.
     unfold msg_signed_addressed; intros.
@@ -734,7 +739,6 @@ End CleanMessages.
       -> msg_signed_addressed (honestk $k++ findKeysMessage msg) cs suid c = true.
   Proof.
     intros; apply msg_signed_addressed_new_msg_keys'; eauto.
-    intros * FKM; eapply H0 in FKM; split_ex; auto.
   Qed.
 
   Lemma msg_signed_addressed_new_msg_keys''' :

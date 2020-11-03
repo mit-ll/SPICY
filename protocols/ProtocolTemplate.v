@@ -200,10 +200,10 @@ Module MyProtocolSecure <: AutomatedSafeProtocol.
       sets_invert; split_ex;
         simpl in *; autounfold with core;
           subst; simpl;
-            unfold safety, alignment;
+            unfold safety, alignment.
             ( split;
             [ solve_honest_actions_safe; clean_map_lookups; eauto 8
-            | split; trivial; intros; rstep; subst; solve_labels_align
+            | simpl; split; trivial; intros; rstep; subst; solve_labels_align
             ]).
       
       Unshelve.
@@ -250,20 +250,20 @@ Module MyProtocolSecure <: AutomatedSafeProtocol.
 
     - unfold user_cipher_queues_ok.
       rewrite Forall_natmap_forall; intros.
-      cases (USR1 ==n k); cases (USR2 ==n k);
-        subst; clean_map_lookups; simpl in *; econstructor; eauto.
+      focus_user
+      ; simpl in *; econstructor; eauto.
 
-    - unfold honest_nonces_ok; intros.
-      unfold honest_nonce_tracking_ok.
-
-      destruct (u_id ==n USR1); destruct (u_id ==n USR2);
-        destruct (rec_u_id ==n USR1); destruct (rec_u_id ==n USR2);
-          subst; try contradiction; try discriminate; clean_map_lookups; simpl;
-            repeat (apply conj); intros; clean_map_lookups; eauto.
+    - unfold honest_nonces_ok, honest_user_nonces_ok, honest_nonces_ok
+      ; repeat simple apply conj
+      ; intros
+      ; clean_map_lookups
+      ; intros
+      ; focus_user
+      ; try contradiction; try discriminate; simpl;
+        repeat (apply conj); intros; clean_map_lookups; eauto.
 
     - unfold honest_users_only_honest_keys; intros.
-      destruct (u_id ==n USR1);
-        destruct (u_id ==n USR2);
+      focus_user;
         subst;
         simpl in *;
         clean_map_lookups;
@@ -275,6 +275,7 @@ Module MyProtocolSecure <: AutomatedSafeProtocol.
         solve_concrete_maps;
         solve_simple_maps;
         eauto.
+
   Qed.
   
   Lemma universe_starts_safe : universe_ok ru0 /\ adv_universe_ok ru0.

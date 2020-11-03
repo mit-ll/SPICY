@@ -113,8 +113,8 @@ Proof.
     + specialize (H5 k); rewrite add_neq_o in H5 by congruence.
       destruct userData; eapply step_limited_change_other_user with (u_id2 := k) in H7; eauto.
       split_ex; split_ors; clean_map_lookups; simpl in *.
-      specialize (H5 _ H7); eauto.
-      specialize (H5 _ H7); eauto.
+      specialize (H5 _ H9); eauto.
+      specialize (H5 _ H9); eauto.
 
   - invert H; unfold build_data_step in *; simpl in *.
     destruct (uid ==n k); subst; clean_map_lookups; simpl in *; eauto.
@@ -124,8 +124,8 @@ Proof.
     + specialize (H4 k); rewrite add_neq_o in H4 by congruence.
       destruct userData; eapply step_limited_change_other_user with (u_id2 := k) in H5; eauto.
       split_ex; split_ors; clean_map_lookups; simpl in *.
-      specialize (H4 _ H5); eauto.
-      specialize (H4 _ H5); eauto.
+      specialize (H4 _ H8); eauto.
+      specialize (H4 _ H8); eauto.
   - invert H; unfold build_data_step in *; simpl in *.
     destruct (uid ==n k); subst; clean_map_lookups; simpl in *; eauto.
     + specialize (H4 k); rewrite add_eq_o in H4 by trivial.
@@ -134,8 +134,8 @@ Proof.
     + specialize (H4 k); rewrite add_neq_o in H4 by congruence.
       destruct userData; eapply step_limited_change_other_user with (u_id2 := k) in H5; eauto.
       split_ex; split_ors; clean_map_lookups; simpl in *.
-      specialize (H4 _ H5); eauto.
-      specialize (H4 _ H5); eauto.
+      specialize (H4 _ H8); eauto.
+      specialize (H4 _ H8); eauto.
 Qed.
 
 Lemma resend_violation_step :
