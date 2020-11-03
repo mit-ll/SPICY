@@ -5,7 +5,7 @@
  * in this material are those of the author(s) and do not necessarily reflect the views of the 
  * Department of the Air Force.
  * 
- * © 2020 Massachusetts Institute of Technology.
+ * © 2019-2020 Massachusetts Institute of Technology.
  * 
  * MIT Proprietary, Subject to FAR52.227-11 Patent Rights - Ownership by the contractor (May 2014)
  * 
@@ -53,165 +53,35 @@ Set Implicit Arguments.
 
 Open Scope protocol_scope.
 
-Module VotingProtocol.
+Module ShareSecretProtocolSecureSS <: AutomatedSafeProtocolSS.
 
-  (* Start with two users, as that is the minimum for any interesting protocol *)
-  Notation USR1 := 0.
-  Notation USR2 := 1.
-  Notation USR3 := 2.
+  Import ShareSecretSymmetricEncProtocol.
 
-  Section IW.
-    Import IdealWorld.
-
-    (* Set up initial communication channels so each user can talk directly to the other *)
-    Notation pCH13 := 0.
-    Notation pCH23 := 1.
-    Notation CH13  := (# pCH13).
-    Notation CH23  := (# pCH23).
-
-    (* This is the initial channel vector, each channel should be represented and start with 
-     * no messages.
-     *)
-    Notation empty_chs := (#0 #+ (CH13, []) #+ (CH23, [])).
-
-    Notation PERMS1 := ($0 $+ (pCH13, writer)).
-    Notation PERMS2 := ($0 $+ (pCH23, writer)).
-    Notation PERMS3 := ($0 $+ (pCH13, reader) $+ (pCH23, reader)).
-
-    (* Fill in the users' protocol specifications here, adding additional users as needed.
-     * Note that all users must return an element of the same type, and that type needs to 
-     * be one of: ...
-     *)
-    Notation ideal_users :=
-      [
-        mkiUsr USR1 PERMS1
-               ( _ <- Send (Content 1) CH13
-                 ; @Return (Base Nat) 1
-               )
-        ; 
-
-      mkiUsr USR2 PERMS2
-             ( _ <- Send (Content 1) CH23
-               ; @Return (Base Nat) 1
-             )
-        ; 
-
-      mkiUsr USR3 PERMS3
-             ( m1 <- @Recv Nat CH13
-               ; m2 <- @Recv Nat CH23
-               ; @Return (Base Nat) (let c1 := extractContent m1 in
-                                     let c2 := extractContent m2
-                                     in if c1 ==n c2 then c1 else 100)
-             )
-      ].
-
-    (* This is where the entire specification universe gets assembled.  It is unlikely anything
-     * will need to change here.
-     *)
-    Definition ideal_univ_start :=
-      mkiU empty_chs ideal_users.
-
-  End IW.
-
-  Section RW.
-    Import RealWorld.
-    Import RealWorld.message.
-
-    (* Key management needs to be bootstrapped.  Since all honest users must only send signed
-     * messages, we need some way of initially distributing signing keys in order to be able
-     * to begin secure communication.  This is analagous in the real world where we need to 
-     * have some sort of trust relationship in order to distribute trusted keys.
-     * 
-     * Here, each user has a public asymmetric signing key.
-     *)
-    Notation KID1 := 0.
-    Notation KID2 := 1.
-    Notation KID3 := 3.
-
-    Notation KEYS := [ skey KID1 ; skey KID2 ; ekey KID3 ].
-
-    Notation KEYS1 := ($0 $+ (KID1, true) $+ (KID3, false)).
-    Notation KEYS2 := ($0 $+ (KID2, true) $+ (KID3, false)).
-    Notation KEYS3 := ($0 $+ (KID1, false) $+ (KID2, false) $+ (KID3, true)).
-
-    Notation real_users :=
-      [
-        (* User 1 implementation *)
-        MkRUserSpec USR1 KEYS1
-                    (
-                      c <- SignEncrypt KID1 KID3 USR3 (Content 1)
-                      ; _ <- Send USR3 c
-                      ; ret 1
-                    )
-        ; 
-
-      (* User 2 implementation *)
-      MkRUserSpec USR2 KEYS2
-                  (
-                    c <- SignEncrypt KID2 KID3 USR3 (Content 1)
-                    ; _ <- Send USR3 c
-                    ; ret 1
-                  )
-        ; 
-
-      (* User 2 implementation *)
-      MkRUserSpec USR3 KEYS3
-                  (
-                    voteC1 <- @Recv Nat (SignedEncrypted KID1 KID3 true)
-                    ; voteC2 <- @Recv Nat (SignedEncrypted KID2 KID3 true)
-                    ; vote1 <- Decrypt voteC1
-                    ; vote2 <- Decrypt voteC2
-                    ; ret (let v1 := extractContent vote1 in
-                           let v2 := extractContent vote2
-                           in  if v1 ==n v2 then v1 else 100)
-                  )
-      ].
-
-    (* Here is where we put the implementation universe together.  Like above, it is 
-     * unlikely anything will need to change here.
-     *)
-    Definition real_univ_start :=
-      mkrU (mkKeys KEYS) real_users.
-  End RW.
-
-  (* These are here to help the proof automation.  Don't change. *)
-  Hint Unfold
-       real_univ_start
-       ideal_univ_start
-    : user_build.
-
-  Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
-    progress(autounfold with user_build; simpl).
-  
-End VotingProtocol.
-
-Module VotingProtocolSecure <: AutomatedSafeProtocolSS.
-
-  Import VotingProtocol.
-
-  (* Some things may need to change here.  t__hon is where we place the 
-   * type that the protocol computes.  It is set to Nat now, because we
-   * return a natual number.
-   *)
   Definition t__hon := Nat.
   Definition t__adv := Unit.
-  Definition b    := tt.
-
-  (* These two variables hook up the starting points for both specification and
-   * implementation universes.  If you followed the template above, this shouldn't
-   * need to be changed.
-   *)
+  Definition b := tt.
   Definition iu0  := ideal_univ_start.
   Definition ru0  := real_univ_start.
 
   Import Gen Tacs SetLemmas.
 
-  (* These are here to help the proof automation.  Don't change. *)
   Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start real_univ_start : core.
-  Hint Unfold
-       mkiU mkiUsr mkrU mkrUsr
-       mkKeys
-    : core.
+
+  Lemma next_key_natmap_exists :
+    forall {V} (m : NatMap.t V),
+    exists k, m $? k = None.
+  Proof.
+    intros.
+    exists (next_key m); eauto using Maps.next_key_not_in.
+  Qed.
+
+  Lemma next_key_chmap_exists :
+    forall {V} (m : ChMap.t V),
+    exists k, m #? (# k) = None.
+  Proof.
+    intros.
+    exists (next_key_nat m); eauto using next_key_not_in.
+  Qed.
 
   Lemma safe_invariant :
     invariantFor
@@ -221,7 +91,6 @@ Module VotingProtocolSecure <: AutomatedSafeProtocolSS.
     eapply invariant_weaken.
 
     - eapply multiStepClosure_ok; simpl.
-      (* Calls to gen1 will need to be addded here until the model checking terminates. *)
       autounfold in *.
       gen1.
       gen1.
@@ -253,7 +122,9 @@ Module VotingProtocolSecure <: AutomatedSafeProtocolSS.
       gen1.
       gen1.
       gen1.
-
+      gen1.
+      gen1.
+      
     - intros.
       simpl in *.
 
@@ -335,7 +206,6 @@ Module VotingProtocolSecure <: AutomatedSafeProtocolSS.
         solve_concrete_maps;
         solve_simple_maps;
         eauto.
-
   Qed.
   
   Lemma universe_starts_safe : universe_ok ru0 /\ adv_universe_ok ru0.
@@ -345,4 +215,12 @@ Module VotingProtocolSecure <: AutomatedSafeProtocolSS.
   Qed.
   
 
-End MyProtocolSecure.
+End ShareSecretProtocolSecureSS.
+
+(*
+ * 1) make protocols  518.64s user 0.45s system 99% cpu 8:39.13 total  ~ 6.2GB
+ * 2) add cleanup of chmaps to close:
+ *    make protocols  414.45s user 0.43s system 99% cpu 6:54.90 total  ~ 5.6GB
+ *
+ *
+ *)

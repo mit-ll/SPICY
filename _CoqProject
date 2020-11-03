@@ -66,14 +66,17 @@ protocols/ShareSecretProtocol.v
 
 protocols/ShareSecretProtocol2.v
 protocols/ShareSecretProtocol2SS.v
+protocols/ShareSecretSymmetricEncProtocol.v
+protocols/ShareSecretSymmetricEncProtocolSS.v
 protocols/PGP.v
 protocols/PGPSS.v
 protocols/SecureDNS.v
 protocols/SecureDNSSS.v
 
-protocols/ShareSecretSymmetricEncProtocol.v
-protocols/NeedhamSchroeder.v
 protocols/SecureVoting.v
+protocols/P2P.v
+
+protocols/NeedhamSchroeder.v
 
 # protocols/SimplePingProtocol.v
 # protocols/SimpleEncProtocol.v

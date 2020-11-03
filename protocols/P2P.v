@@ -53,7 +53,7 @@ Set Implicit Arguments.
 
 Open Scope protocol_scope.
 
-Module VotingProtocol.
+Module P2PProtocol.
 
   (* Start with two users, as that is the minimum for any interesting protocol *)
   Notation USR1 := 0.
@@ -66,17 +66,34 @@ Module VotingProtocol.
     (* Set up initial communication channels so each user can talk directly to the other *)
     Notation pCH13 := 0.
     Notation pCH23 := 1.
-    Notation CH13  := (# pCH13).
-    Notation CH23  := (# pCH23).
+
+    Notation pCH1  := 4.
+    Notation pCH2  := 5.
+    Notation pCH3  := 6.
+    Notation pCH__from3  := 7.
+
+    Notation CH13 := (# pCH13).
+    Notation CH23 := (# pCH23).
+
+    (* Encryption Channelse *)
+    Notation CH1  := (# pCH1).
+    Notation CH2  := (# pCH2).
+    Notation CH3  := (# pCH3).
+
+    (* Authenticity Channel *)
+    Notation CH__from3  := (# pCH__from3).
 
     (* This is the initial channel vector, each channel should be represented and start with 
      * no messages.
      *)
-    Notation empty_chs := (#0 #+ (CH13, []) #+ (CH23, [])).
+    Notation empty_chs := (#0
+                            #+ (CH13, []) #+ (CH23, [])
+                            #+ (CH1, []) #+ (CH2, []) #+ (CH3, [])
+                          ).
 
-    Notation PERMS1 := ($0 $+ (pCH13, writer)).
-    Notation PERMS2 := ($0 $+ (pCH23, writer)).
-    Notation PERMS3 := ($0 $+ (pCH13, reader) $+ (pCH23, reader)).
+    Notation PERMS1 := ($0 $+ (pCH13, writer) $+ (pCH1, owner) $+ (pCH2, writer) $+ (pCH3, writer) $+ (pCH__from3, reader) ).
+    Notation PERMS2 := ($0 $+ (pCH23, writer) $+ (pCH1, writer) $+ (pCH2, owner) $+ (pCH3, writer) $+ (pCH__from3, reader) ).
+    Notation PERMS3 := ($0 $+ (pCH13, reader) $+ (pCH23, reader) $+ (pCH3, owner)).
 
     (* Fill in the users' protocol specifications here, adding additional users as needed.
      * Note that all users must return an element of the same type, and that type needs to 
@@ -85,23 +102,27 @@ Module VotingProtocol.
     Notation ideal_users :=
       [
         mkiUsr USR1 PERMS1
-               ( _ <- Send (Content 1) CH13
-                 ; @Return (Base Nat) 1
+               ( _ <- Send (MsgPair (sharePerm pCH1 writer) (sharePerm pCH2 writer)) CH13 (* please send generate a new key for me and pCH2 to speak over *)
+                 ; m <- @Recv Access (pCH1 #& pCH__from3)
+                 ; n <- Gen
+                 ; _ <- Send (Content n) (getPerm m #& pCH2)
+                 ; @Return (Base Nat) n
                )
         ; 
 
       mkiUsr USR2 PERMS2
-             ( _ <- Send (Content 1) CH23
-               ; @Return (Base Nat) 1
+             ( p <- @Recv Access (pCH2 #& pCH__from3)
+               ; m <- @Recv Nat (getPerm p #& pCH2)
+               ; @Return (Base Nat) (extractContent m)
              )
         ; 
 
       mkiUsr USR3 PERMS3
-             ( m1 <- @Recv Nat CH13
-               ; m2 <- @Recv Nat CH23
-               ; @Return (Base Nat) (let c1 := extractContent m1 in
-                                     let c2 := extractContent m2
-                                     in if c1 ==n c2 then c1 else 100)
+             ( m <- @Recv (TPair Access Access) CH13
+               ; ch <- CreateChannel
+               ; _ <- Send (sharePerm ch owner) (getPerm (msgSnd m) #& pCH__from3)
+               ; _ <- Send (sharePerm ch owner) (getPerm (msgFst m) #& pCH__from3)
+               ; @Return (Base Nat) 1
              )
       ].
 
@@ -124,46 +145,59 @@ Module VotingProtocol.
      * 
      * Here, each user has a public asymmetric signing key.
      *)
-    Notation KID1 := 0.
-    Notation KID2 := 1.
-    Notation KID3 := 3.
+    Notation KID__s1 := 0.
+    Notation KID__e1 := 1.
+    Notation KID__s2 := 2.
+    Notation KID__e2 := 3.
+    Notation KID__s3 := 4.
+    Notation KID__e3 := 5.
 
-    Notation KEYS := [ skey KID1 ; skey KID2 ; ekey KID3 ].
+    Notation KEYS := [ skey KID__s1 ; ekey KID__e1 
+                       ; skey KID__s2 ; ekey KID__e2
+                       ; skey KID__s3 ; ekey KID__e3 ].
 
-    Notation KEYS1 := ($0 $+ (KID1, true) $+ (KID3, false)).
-    Notation KEYS2 := ($0 $+ (KID2, true) $+ (KID3, false)).
-    Notation KEYS3 := ($0 $+ (KID1, false) $+ (KID2, false) $+ (KID3, true)).
+    Notation KEYS1 := ($0 $+ (KID__s1, true) $+ (KID__e1, true) $+ (KID__s2, false) $+ (KID__e2, false) $+ (KID__s3, false) $+ (KID__e3, false) ).
+    Notation KEYS2 := ($0 $+ (KID__s2, true) $+ (KID__e2, true) $+ (KID__s1, false) $+ (KID__e1, false) $+ (KID__s3, false) $+ (KID__e3, false) ).
+    Notation KEYS3 := ($0 $+ (KID__s3, true) $+ (KID__e3, true) $+ (KID__s2, false) $+ (KID__e2, false) $+ (KID__s1, false) $+ (KID__e1, false) ).
 
     Notation real_users :=
       [
         (* User 1 implementation *)
         MkRUserSpec USR1 KEYS1
                     (
-                      c <- SignEncrypt KID1 KID3 USR3 (Content 1)
-                      ; _ <- Send USR3 c
-                      ; ret 1
+                      c1 <- SignEncrypt KID__s1 KID__e3 USR3 (MsgPair (Permission (KID__e1, false)) (Permission (KID__e2, false)))
+                      ; _ <- Send USR3 c1
+                      ; c2 <- @Recv Access (SignedEncrypted KID__s3 KID__e1 true)
+                      ; m1 <- Decrypt c2
+                      ; n <- Gen
+                      ; c3 <- SignEncrypt KID__s1 (getKey m1) USR2 (Content n)
+                      ; _ <- Send USR2 c3
+                      ; @Return (Base Nat) n
                     )
         ; 
 
       (* User 2 implementation *)
       MkRUserSpec USR2 KEYS2
                   (
-                    c <- SignEncrypt KID2 KID3 USR3 (Content 1)
-                    ; _ <- Send USR3 c
-                    ; ret 1
+                    c1 <- @Recv Access (SignedEncrypted KID__s3 KID__e2 true)
+                    ; m1 <- Decrypt c1
+                    ; c2 <- @Recv Nat (SignedEncrypted KID__s3 (getKey m1) true)
+                    ; m2 <- Decrypt c2
+                    ; @Return (Base Nat) (extractContent m2)
                   )
         ; 
 
       (* User 2 implementation *)
       MkRUserSpec USR3 KEYS3
                   (
-                    voteC1 <- @Recv Nat (SignedEncrypted KID1 KID3 true)
-                    ; voteC2 <- @Recv Nat (SignedEncrypted KID2 KID3 true)
-                    ; vote1 <- Decrypt voteC1
-                    ; vote2 <- Decrypt voteC2
-                    ; ret (let v1 := extractContent vote1 in
-                           let v2 := extractContent vote2
-                           in  if v1 ==n v2 then v1 else 100)
+                    c1 <- @Recv (TPair Access Access) (SignedEncrypted KID__s1 KID__e3 true)
+                    ; m1 <- Decrypt c1
+                    ; ky <- GenerateSymKey Encryption
+                    ; c2 <- SignEncrypt KID__s3 (getKey (msgSnd m1)) USR2 (sharePrivKey ky)
+                    ; c3 <- SignEncrypt KID__s3 (getKey (msgFst m1)) USR1 (sharePrivKey ky)
+                    ; _ <- Send USR2 c2
+                    ; _ <- Send USR1 c3
+                    ; @Return (Base Nat) 1
                   )
       ].
 
@@ -183,11 +217,11 @@ Module VotingProtocol.
   Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
     progress(autounfold with user_build; simpl).
   
-End VotingProtocol.
+End P2PProtocol.
 
-Module VotingProtocolSecure <: AutomatedSafeProtocolSS.
+Module P2PProtocolSecure <: AutomatedSafeProtocolSS.
 
-  Import VotingProtocol.
+  Import P2PProtocol.
 
   (* Some things may need to change here.  t__hon is where we place the 
    * type that the protocol computes.  It is set to Nat now, because we
@@ -253,7 +287,27 @@ Module VotingProtocolSecure <: AutomatedSafeProtocolSS.
       gen1.
       gen1.
       gen1.
-
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      
+    (* The remaining parts of the proof script shouldn't need to change. *)
     - intros.
       simpl in *.
 
@@ -262,11 +316,43 @@ Module VotingProtocolSecure <: AutomatedSafeProtocolSS.
           subst; simpl;
             unfold safety, alignment;
             ( split;
-            [ try solve [ solve_honest_actions_safe; clean_map_lookups; eauto 8 ]
-            | try solve [ simpl; split; trivial; intros; rstep; subst; solve_labels_align ]
+            [ solve_honest_actions_safe; clean_map_lookups; eauto 8
+            | simpl; split; trivial; intros; rstep; subst; solve_labels_align
             ]).
-      
+
+       Local Ltac merge_perms_helper :=
+        repeat match goal with
+               | [ |- _ = _ ] => reflexivity
+               | [ |- _ $? _ = _ ] => solve_concrete_maps
+               end.
+
+      Ltac finish_off1 :=
+        match goal with
+        | [ H : _ $k++ _ $? ?kid = Some _  |- _ ] =>
+          apply merge_perms_split in H
+          ; destruct H
+        | [ |- _ $k++ _ $? _ = Some _ ] =>
+          solve [ erewrite merge_perms_adds_ks1; (swap 2 4; merge_perms_helper) ]
+          || solve [ erewrite merge_perms_adds_ks2; (swap 2 4; merge_perms_helper) ]
+          || solve [ erewrite merge_perms_chooses_greatest; swap 1 4; eauto; clean_map_lookups]
+        | [ H : context [ _ $+ (?k1,_) $? ?k2] |- _ ] =>
+          progress (
+              repeat (
+                  (rewrite add_neq_o in H by solve_simple_ineq)
+                  || (rewrite add_eq_o in H by trivial)
+                  || (rewrite lookup_empty_none in H)
+            ))
+        | [ |- _ $? _ = _ ] =>
+          progress solve_concrete_maps
+        | [ |- context [ _ $k++ _ ] ] =>
+          progress solve_concrete_perm_merges
+        end.
+
+      all: try solve [ repeat finish_off1].
+
       Unshelve.
+
+      all: try discriminate.
       all: auto.
 
   Qed.
@@ -345,4 +431,4 @@ Module VotingProtocolSecure <: AutomatedSafeProtocolSS.
   Qed.
   
 
-End MyProtocolSecure.
+End P2PProtocolSecure.
