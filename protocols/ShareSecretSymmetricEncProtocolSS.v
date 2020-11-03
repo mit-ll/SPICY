@@ -36,6 +36,7 @@ From protocols Require Import
         ProtocolAutomation
         SafeProtocol
         ProtocolFunctions
+        ShareSecretSymmetricEncProtocol
         SilentStepElimination.
 
 Require IdealWorld RealWorld.
