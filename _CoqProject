@@ -56,13 +56,27 @@ protocols/RealWorldStepLemmas.v
 protocols/PartialOrderReduction.v
 protocols/LabelsAlign.v
 protocols/NoResends.v
+protocols/SilentStepElimination.v
+
+protocols/GenProto.v
+protocols/GenProtoSS.v
 
 protocols/ProtocolFunctions.v
 protocols/ShareSecretProtocol.v
+
 protocols/ShareSecretProtocol2.v
-protocols/NeedhamSchroeder.v
+protocols/ShareSecretProtocol2SS.v
+protocols/ShareSecretSymmetricEncProtocol.v
+protocols/ShareSecretSymmetricEncProtocolSS.v
 protocols/PGP.v
+protocols/PGPSS.v
 protocols/SecureDNS.v
+protocols/SecureDNSSS.v
+
+protocols/SecureVoting.v
+protocols/P2P.v
+
+protocols/NeedhamSchroeder.v
 
 # protocols/SimplePingProtocol.v
 # protocols/SimpleEncProtocol.v

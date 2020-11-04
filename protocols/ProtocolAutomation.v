@@ -18,6 +18,7 @@
 From Coq Require Import
      List
      Eqdep
+     Lia
 .
 
 From KeyManagement Require Import
@@ -41,6 +42,7 @@ From protocols Require Import
      UniverseEqAutomation
      ProtocolFunctions
      PartialOrderReduction
+     SilentStepElimination
 .
 
 From KeyManagement Require
@@ -126,8 +128,13 @@ Module SimulationAutomation.
       invert H2; contradiction.
     Qed.
 
+    (* Ltac pr_message cs uid froms pat msg := *)
+    (*   assert (msg_accepted_by_pattern cs uid froms pat msg) by (econstructor; eauto). *)
     Ltac pr_message cs uid froms pat msg :=
-      assert (msg_accepted_by_pattern cs uid froms pat msg) by (econstructor; eauto).
+      (assert (msg_accepted_by_pattern cs uid froms pat msg)
+        by (econstructor; eauto))
+      || (assert (~ msg_accepted_by_pattern cs uid froms pat msg)
+          by (let MA := fresh "MA" in  unfold not; intros MA; invert MA; clean_map_lookups)).
 
     Ltac cleanup_msg_queue :=
       repeat 
@@ -143,26 +150,49 @@ Module SimulationAutomation.
         end.
 
     Ltac process_message_queue :=
+      try discriminate;
       cleanup_msg_queue;
       match goal with
       | [ H : (existT _ _ ?m) :: ?msgs = ?msgs1 ++ (existT _ _ ?msg) :: ?msgs2,
-          M : msg_accepted_by_pattern ?cs ?suid ?froms ?pat ?msg
+              M : msg_accepted_by_pattern ?cs ?suid ?froms ?pat ?msg
           |- _ ] =>
 
         pr_message cs suid froms pat m
         ; match goal with
           | [ MSA : msg_accepted_by_pattern cs suid froms pat m
-            , HD : Forall _ msgs1
+                    , HD : Forall _ msgs1
               |- _ ] =>
             idtac "solving " H M MSA HD
             ; pose proof (message_queue_solve_head _ H M MSA HD)
             ; split_ex; subst
             ; cleanup_msg_queue; subst
-          | [ MSA : ~ msg_accepted_by_pattern cs suid froms pat msg |- _ ] =>
+          | [ MSA : ~ msg_accepted_by_pattern cs suid froms pat m
+                    , HD : Forall _ msgs1
+              |- _ ] =>
             idtac "splitting"
-            ; eapply message_queue_split_head in H; eauto
+            ; pose proof (message_queue_split_head _ H M MSA HD)
+            ; split_ex; subst
+            ; invert HD
+            ; cleanup_msg_queue; subst
+            ; process_message_queue (* recurse *)
           end
       end.
+
+    Ltac step_usr_hyp H cmd :=
+      match cmd with
+      | Return _ => apply step_user_inv_ret in H; contradiction
+      | Bind _ _ => apply step_user_inv_bind in H; split_ands; split_ors; split_ands; subst; try discriminate
+      | Gen => apply step_user_inv_gen in H
+      | Send _ _ => apply step_user_inv_send in H
+      | Recv _ => apply step_user_inv_recv in H; split_ex; subst; process_message_queue
+      | SignEncrypt _ _ _ _ => apply step_user_inv_enc in H
+      | Decrypt _ => apply step_user_inv_dec in H
+      | Sign _ _ _ => apply step_user_inv_sign in H
+      | Verify _ _ => apply step_user_inv_verify in H
+      | GenerateSymKey _ => apply step_user_inv_gensym in H
+      | GenerateAsymKey _ => apply step_user_inv_genasym in H
+      | _ => idtac "***Missing inversion: " cmd; invert H
+      end; split_ex; subst.
 
     Ltac churn1 :=
       match goal with
@@ -179,20 +209,7 @@ Module SimulationAutomation.
       | [ H : RealWorld.step_user _ (Some ?u) _ _ |- _ ] => progress simpl in H
       | [ H : RealWorld.step_user _ (Some ?u) (_,_,_,_,_,_,_,_,_,_,?cmd) _ |- _ ] =>
         is_not_var u;
-        match cmd with
-        | Return _ => apply step_user_inv_ret in H; contradiction
-        | Bind _ _ => apply step_user_inv_bind in H; split_ex; split_ors; split_ex; subst; try discriminate
-        | Gen => apply step_user_inv_gen in H
-        | Send _ _ => apply step_user_inv_send in H
-        | Recv _ => apply step_user_inv_recv in H; split_ex; subst; process_message_queue
-        | SignEncrypt _ _ _ _ => apply step_user_inv_enc in H
-        | Decrypt _ => apply step_user_inv_dec in H
-        | Sign _ _ _ => apply step_user_inv_sign in H
-        | Verify _ _ => apply step_user_inv_verify in H
-        | GenerateSymKey _ => apply step_user_inv_gensym in H
-        | GenerateAsymKey _ => apply step_user_inv_genasym in H
-        | _ => idtac "***Missing inversion: " cmd; intuition idtac; subst; (progress (simpl in H) || invert H)
-        end
+        step_usr_hyp H cmd
 
       | [ STEP : RealWorld.step_user _ None (_,_,_,_,_,_,_,_,_,_,RealWorld.protocol ?adv) _
         , LAME : lameAdv _ ?adv |- _ ] => pose proof (adv_no_step LAME STEP); contradiction
@@ -215,16 +232,29 @@ Module SimulationAutomation.
       | [ H: step_universe _ _ _ _ |- _ ] => invert H
       end.
 
+    (* Derive Inversion inv_eq with (forall A (x y : A), @eq A x y) Sort Prop. *)
+    (* Check inv_eq. *)
+
+    (* Derive Inversion inv_some with (forall A, option A) Sort Prop. *)
+    (* Check inv_some. *)
+
+    (* Derive Inversion inv_some_eq with (forall A (x y : option A), @eq (option A) x y) Sort Prop. *)
+    (* Check inv_some_eq. *)
+
+    (* Lemma foo : *)
+    (*   True. *)
+    (* Proof. *)
+    (*   assert (Some 1 = None) by admit. *)
+    (*   inversion H using inv_some in H. *)
+
     Ltac prove_alignment1 :=
       equality1 ||
       match goal with
       | [ |- labels_align _ ] => unfold labels_align; intros
-      (* | [ H : _ = Action _ |- _ ] => invert H *)
-      (* | [ H : Action _ = _ |- _ ] => invert H *)
-      | [ H : _ = Output _ _ _ _ |- _ ] => invert H
-      | [ H : Output _ _ _ _ = _ |- _ ] => invert H
-      | [ H : _ = Input _ _ _ |- _ ] => invert H
-      | [ H : Input _ _ _ = _ |- _ ] => invert H
+      (* | [ H : _ = Output _ _ _ _ |- _ ] => invert H *)
+      (* | [ H : Output _ _ _ _ = _ |- _ ] => invert H *)
+      (* | [ H : _ = Input _ _ _ |- _ ] => invert H *)
+      (* | [ H : Input _ _ _ = _ |- _ ] => invert H *)
       | [ H : _ \/ False |- _ ] =>
         destruct H; [|contradiction]
       | [ H : _ \/ ?r |- _ ] =>
@@ -238,20 +268,7 @@ Module SimulationAutomation.
         progress (autounfold in H; unfold RealWorld.build_data_step in H; simpl in H)
       | [ H : step_user _ (Some ?u) (_,_,_,_,_,_,_,_,_,_,?cmd) _ |- _ ] =>
         is_not_var u; is_not_evar u;
-        match cmd with
-        | Return _ => apply step_user_inv_ret in H; contradiction
-        | Bind _ _ => apply step_user_inv_bind in H; split_ex; split_ors; split_ex; subst; try discriminate
-        | Gen => apply step_user_inv_gen in H
-        | Send _ _ => apply step_user_inv_send in H
-        | Recv _ => apply step_user_inv_recv in H; split_ex; try discriminate; subst; process_message_queue
-        | SignEncrypt _ _ _ _ => apply step_user_inv_enc in H
-        | Decrypt _ => apply step_user_inv_dec in H
-        | Sign _ _ _ => apply step_user_inv_sign in H
-        | Verify _ _ => apply step_user_inv_verify in H
-        | GenerateSymKey _ => apply step_user_inv_gensym in H
-        | GenerateAsymKey _ => apply step_user_inv_genasym in H
-        | _ => idtac "***Missing inversion: " cmd; intuition idtac; subst; (progress (simpl in H) || invert H)
-        end; split_ex; try discriminate; subst
+        step_usr_hyp H cmd
       | [ |- exists _ _ _, _ ] => simpl; (do 3 eexists); repeat simple apply conj
       end.
       (* || equality1. *)
@@ -503,40 +520,69 @@ Module SimulationAutomation.
           let Heq := fresh "Heq"
           in remember (ChMaps.next_key_nat m) as k eqn:Heq
       end
-    | [ |- (match ?m $+ (?kid1,_) $? ?kid1 with _ => _ end) ] => rewrite add_eq_o by trivial
-    | [ |- (match ?m $+ (?kid2,_) $? ?kid1 with _ => _ end) ] => rewrite add_neq_o by solve_simple_ineq (* auto 2 *)
+    (* | [ |- context [ match ?m $+ (?kid1,_) $? ?kid1 with _ => _ end ] ] => *)
+    (*   rewrite add_eq_o by trivial *)
+    | [ |- context [ match ?m $+ (?kid2,_) $? ?kid1 with _ => _ end] ] =>
+      progress (
+          repeat (
+              ( rewrite add_eq_o by trivial)
+              || (rewrite add_neq_o by solve_simple_ineq)
+            )
+        )
     | [ |- context [ #0 #? _ ]] => rewrite ChMaps.ChMap.lookup_empty_none
     | [ |- _ = _ ] => subst; reflexivity
-    | [ |- context [ _ $? _ ] ] => solve_concrete_maps
-    | [ |- context [ _ #? _ ] ] => solve_concrete_maps
+    | [ |- context [ _ $? _ ] ] => progress solve_concrete_maps
+    | [ |- context [ _ #? _ ] ] => progress solve_concrete_maps
+    | [ H : match _ $+ (?k1,_) $? ?k2 with _ => _ end |- _ ] =>
+      try (
+          progress (
+              repeat ((  rewrite add_eq_o in H by trivial)
+                      || (rewrite add_neq_o in H by solve_simple_ineq)
+                      || (rewrite lookup_empty_none in H))
+        ))
+      || destruct (k1 ==n k2); subst
     end; simpl.
 
-  Ltac solve_ideal_step_stuff := repeat solve_ideal_step_stuff1.
+  (* Ltac solve_ideal_step_stuff1 := *)
+  (*   match goal with *)
+  (*   | [ H : context [ _ #+ (_,_) #? _ ] |- _ ] => progress (repeat rw H) *)
+  (*   | [ Heq : ?k = _, H : _ #+ (?k1,_) #? ?k2 = None |- _ ] => *)
+  (*     match k2 with *)
+  (*     | # k => idtac k *)
+  (*     | _ => fail 1 *)
+  (*     end; *)
+  (*     assert (k1 <> k2) *)
+  (*       by (destruct (ChMaps.ChMap.F.eq_dec k1 k2); clear Heq; try assumption; *)
+  (*           unfold ChMaps.ChannelType.eq in *; subst; ChMaps.ChMap.clean_map_lookups); *)
+  (*     ChMaps.ChMap.clean_map_lookups *)
+  (*   | [ H : # ?x = # ?y -> False |- _ ] => assert (x <> y) by congruence; clear H *)
+  (*   | [ |- Forall _ _ ] => econstructor *)
+  (*   | [ |- {| IdealWorld.channel_vector := _; IdealWorld.users := _ |} = _] => smash_universe; solve_concrete_maps *)
+  (*   | [ |- _ = {| IdealWorld.channel_vector := _; IdealWorld.users := _ |}] => smash_universe; solve_concrete_maps *)
+  (*   | [ |- IdealWorld.screen_msg _ _ ] => econstructor *)
+  (*   | [ |- IdealWorld.permission_subset _ _ ] => econstructor *)
+  (*   | [ |- IdealWorld.check_perm _ _ _ ] => unfold IdealWorld.check_perm *)
+  (*   | [ |- ?m #? (# ?k) = None ] => *)
+  (*     solve [ is_evar k; unify k (ChMaps.next_key_nat m); apply ChMaps.next_key_not_in; trivial ] *)
+  (*   | [ |- context [ ChMaps.next_key_nat ?m ]] => *)
+  (*     match goal with *)
+  (*     | [ |- context [ IdealWorld.addMsg ] ] => unfold IdealWorld.addMsg; simpl *)
+  (*     | _ =>  *)
+  (*       idtac "posing" *)
+  (*       ; pose proof (ChMaps.next_key_not_in m _ eq_refl) *)
+  (*       ; let k := fresh "k" in *)
+  (*         let Heq := fresh "Heq" *)
+  (*         in remember (ChMaps.next_key_nat m) as k eqn:Heq *)
+  (*     end *)
+  (*   | [ |- (match ?m $+ (?kid1,_) $? ?kid1 with _ => _ end) ] => rewrite add_eq_o by trivial *)
+  (*   | [ |- (match ?m $+ (?kid2,_) $? ?kid1 with _ => _ end) ] => rewrite add_neq_o by solve_simple_ineq (* auto 2 *) *)
+  (*   | [ |- context [ #0 #? _ ]] => rewrite ChMaps.ChMap.lookup_empty_none *)
+  (*   | [ |- _ = _ ] => subst; reflexivity *)
+  (*   | [ |- context [ _ $? _ ] ] => solve_concrete_maps *)
+  (*   | [ |- context [ _ #? _ ] ] => solve_concrete_maps *)
+  (*   end; simpl. *)
 
-  (* Ltac solve_ideal_step_stuff := *)
-  (*   repeat ( *)
-  (*       match goal with *)
-  (*       | [ H : # ?x = # ?y -> False |- _ ] => assert (x <> y) by congruence; clear H *)
-  (*       | [ |- Forall _ _ ] => econstructor *)
-  (*       | [ |- {| IdealWorld.channel_vector := _; IdealWorld.users := _ |} = _] => smash_universe; solve_concrete_maps *)
-  (*       | [ |- _ = {| IdealWorld.channel_vector := _; IdealWorld.users := _ |}] => smash_universe; solve_concrete_maps *)
-  (*       | [ |- IdealWorld.screen_msg _ _ ] => econstructor *)
-  (*       | [ |- IdealWorld.permission_subset _ _ ] => econstructor *)
-  (*       | [ |- IdealWorld.check_perm _ _ _ ] => unfold IdealWorld.check_perm *)
-  (*       | [ |- ?m #? (# ?k) = None ] => *)
-  (*         solve [ is_evar k; unify k (ChMaps.next_key_nat m); apply ChMaps.next_key_not_in; trivial ] *)
-  (*       | [ |- context [ ChMaps.next_key_nat ?m ]] => *)
-  (*         pose proof (ChMaps.next_key_not_in m _ eq_refl) *)
-  (*         ; let k := fresh "k" in *)
-  (*           let Heq := fresh "Heq" *)
-  (*           in remember (ChMaps.next_key_nat m) as k eqn:Heq *)
-  (*       | [ |- (match ?m $+ (?kid1,_) $? ?kid1 with _ => _ end) ] => rewrite add_eq_o by trivial *)
-  (*       | [ |- (match ?m $+ (?kid2,_) $? ?kid1 with _ => _ end) ] => rewrite add_neq_o by solve_simple_ineq (* auto 2 *) *)
-  (*       | [ |- context [ #0 #? _ ]] => rewrite ChMaps.ChMap.lookup_empty_none *)
-  (*       | [ |- _ = _ ] => subst; reflexivity *)
-  (*       | [ |- context [ _ $? _ ] ] => solve_concrete_maps *)
-  (*       | [ |- context [ _ #? _ ] ] => solve_concrete_maps *)
-  (*       end; simpl). *)
+  Ltac solve_ideal_step_stuff := repeat solve_ideal_step_stuff1.
 
   Ltac isilent_step_univ uid :=
     eapply IdealWorld.LStepUser'; simpl; swap 2 3; [ pick_user uid | ..]; (try simple eapply @eq_refl);
@@ -1123,7 +1169,31 @@ Module Foo <: EMPTY.
 End Foo.
 Module Import SN := SetNotations(Foo).
 
-Ltac sets0 := Sets.sets ltac:(simpl in *; intuition (subst; auto; try equality; try linear_arithmetic)).
+Ltac univ_equality1 :=
+  match goal with
+  | [ |- _ = _ ] => reflexivity
+  | [ |- _ /\ _ ] => repeat simple apply conj
+  | [ |- (_,_) = (_,_) ] => rewrite pair_equal_spec
+  | [ |- {| RealWorld.users := _ |} = _ ] => eapply real_univ_eq_fields_eq
+  | [ |- {| IdealWorld.users := _ |} = _ ] => eapply ideal_univ_eq_fields_eq
+  end
+  || ( progress m_equal )
+  || ( progress ChMaps.m_equal ).
+
+(* Ltac univ_equality1 := *)
+(*   match goal with *)
+(*   | [ |- {| RealWorld.users := _ |} = _ ] => eapply real_univ_eq_fields_eq *)
+(*   | [ |- {| IdealWorld.users := _ |} = _ ] => eapply ideal_univ_eq_fields_eq *)
+(*   | [ |- _ = _ ] => reflexivity *)
+(*   end *)
+(*   || ( progress m_equal ) *)
+(*   || ( progress ChMaps.m_equal ) *)
+(* . *)
+
+Ltac univ_equality := progress (repeat univ_equality1).
+
+Ltac sets0 := Sets.sets ltac:(simpl in *
+                              ; intuition (subst; auto; try congruence; try univ_equality; try linear_arithmetic)).
 Ltac sets' :=
   propositional;
   try match goal with
@@ -1336,15 +1406,10 @@ Module Tacs.
 
   Tactic Notation "canonicalize" "users" :=
     canonicalize rusers; canonicalize iusers.
+
 End Tacs.
 
 Import Tacs.
-
-(* Definition S {t__hon t__adv : type} (U__r0 : RealWorld.universe t__hon t__adv) (U__i0 : IdealWorld.universe t__hon) *)
-(*   : trsys (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon) := *)
-(*   {| Initial := {(U__r0, U__i0)} *)
-(*      ; Step := step (U__r0, U__i0)  |}. *)
-
 
 Module Gen.
   Import
@@ -1374,8 +1439,8 @@ Module Gen.
       assumption.
   Qed.
 
-  (* Lemma in_empty_map_contra : (forall {t} x, In (elt := t) x $0 -> False). *)
-  (* Proof. propositional. invert H. invert H0. Qed. *)
+  Lemma in_empty_map_contra : (forall {t} x, Map.In (elt := t) x $0 -> False).
+  Proof. propositional. invert H. invert H0. Qed.
 
   Lemma incl_empty_empty : (forall {t}, @incl t [] []).
   Proof. cbv; auto. Qed.
@@ -1383,13 +1448,6 @@ Module Gen.
   Hint Resolve
        (* in_empty_map_contra *)
        incl_empty_empty : core.
-
-  (* Definition universe_oks : (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon) -> Prop := *)
-  (*   lift_fst universe_ok. *)
-  (* Definition adv_universe_oks : (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon) -> Prop := *)
-  (*   lift_fst adv_universe_ok. *)
-  (* Definition protos_ok : (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon) -> Prop := *)
-  (*   lift_fst honest_cmds_safe. *)
 
   Ltac concrete_isteps :=
     match goal with
@@ -1482,16 +1540,83 @@ Module Gen.
                         end
           end.
 
+  (* Ltac solve_real_step_stuff1 := *)
+  (*   equality1 *)
+  (*   || simplify *)
+  (*   || match goal with *)
+  (*     | [ |- RealWorld.keys_mine _ _ ] => *)
+  (*       simpl in *; hnf *)
+  (*     | [ |- _ $k++ _ $? _ = _ ] => solve_concrete_perm_merges *)
+  (*     end. *)
+
+  (* Ltac solve_indexedRealStep := *)
+  (*   solve [ *)
+  (*       repeat (match goal with [ |- exists _ , _ ] => eexists end) *)
+  (*       ; econstructor; [ *)
+  (*         solve [ simpl; clean_map_lookups; trivial ] *)
+  (*       | autounfold; unfold RealWorld.build_data_step; simpl; *)
+  (*         repeat match goal with *)
+  (*                | [ |- RealWorld.step_user _ _ _ _ ] => solve [ eapply RealWorld.StepBindProceed; eauto ] *)
+  (*                | [ |- RealWorld.step_user _ _ _ _ ] => eapply RealWorld.StepBindRecur; eauto *)
+  (*                | [ |- RealWorld.step_user _ _ _ _ ] => *)
+  (*                  econstructor *)
+  (*                  ; repeat (progress (repeat solve_real_step_stuff1; eauto)) *)
+  (*                end *)
+  (*       | reflexivity ]]. *)
+
+  Ltac solve_real_step_stuff1 :=
+    equality1
+    || simplify
+    || match goal with
+      | [ |- RealWorld.keys_mine _ _ ] =>
+        simpl in *; hnf
+      | [ |- _ $k++ _ $? _ = _ ] => solve_concrete_perm_merges
+      | [ |- ?m $? next_key ?m = None ] =>
+        apply Maps.next_key_not_in
+        ; trivial
+      | [ |- ~ Map.In (next_key ?m) ?m ] =>
+        rewrite not_find_in_iff
+        ; apply Maps.next_key_not_in
+        ; trivial
+      | [ H : _ $k++ _ $? ?kid = Some _  |- context [ ?kid ] ] =>
+        is_var kid
+        ; apply merge_perms_split in H
+        ; destruct H
+      | [ H : _ $+ (?k1,_) $? ?kid = Some _  |- context [ ?kid ] ] =>
+        is_var kid
+        ; destruct (k1 ==n kid); subst; clean_map_lookups
+      | [ |- context [ $0 $? _ ]] =>
+        rewrite lookup_empty_none
+      | [ |- context [ _ $k++ _ ]] =>
+        unfold merge_perms, add_key_perm, fold; simpl; clean_map_lookups
+      | [ |- _ $? _ = _ ] =>
+        clean_map_lookups
+      end.
+
   Ltac solve_indexedRealStep :=
-    solve [
-        (do 2 eexists); econstructor; [
-          solve [ simpl; clean_map_lookups; trivial ]
-        | autounfold; unfold RealWorld.build_data_step; simpl;
-          repeat match goal with
-                 | [ |- RealWorld.step_user _ _ _ _ ] => eapply RealWorld.StepBindRecur; eauto
-                 | [ |- RealWorld.step_user _ _ _ _ ] => econstructor; eauto
-                 end
-        | reflexivity ]].
+    repeat (match goal with [ |- exists _ , _ ] => eexists end)
+    ; econstructor; [
+      solve [ simpl; clean_map_lookups; trivial ]
+    | autounfold; unfold RealWorld.build_data_step; simpl;
+      repeat match goal with
+             | [ |- RealWorld.step_user _ _ _ _ ] => solve [ eapply RealWorld.StepBindProceed; eauto ]
+             | [ |- RealWorld.step_user _ _ _ _ ] => eapply RealWorld.StepBindRecur; eauto
+             | [ |- RealWorld.step_user _ _ (_,_,?cs,?gks,_,_,_,_,_,_,?cmd) _ ] =>
+               match cmd with
+               | RealWorld.SignEncrypt _ _ _ _ =>
+                 eapply RealWorld.StepEncrypt with (c_id := next_key cs)
+               | RealWorld.Sign _ _ _ =>
+                 eapply RealWorld.StepSign with (c_id := next_key cs)
+               | RealWorld.GenerateSymKey _ => 
+                 eapply RealWorld.StepGenerateSymKey with (k_id := next_key gks)
+               | RealWorld.GenerateAsymKey _ => 
+                 eapply RealWorld.StepGenerateAsymKey with (k_id := next_key gks)
+               | _ => econstructor
+               end
+               ; repeat (progress (repeat solve_real_step_stuff1; eauto))
+             end
+    | reflexivity ].
+
 
   Ltac invert_commutes :=
     match goal with
@@ -1533,106 +1658,79 @@ Module Gen.
         specialize (COMM _ H); simpl in COMM; contradiction
       end.
 
-  Ltac step_model1 :=
-    match goal with
-    | [ S : step ?st ?st' |- _ ] =>
-      concrete st; is_var st';
-      match st' with
-      | (_,_,_) => fail 2
-      | (?f,_) => destruct f as [?ru ?iu]
-      | _ => destruct st' as [[?ru ?iu] ?b]
-      end
-    | [ S : step ?st _ |- _ ] =>
-      concrete st;
-      match goal with
-      | [ LA : labels_align ?st |- _ ] =>
-        eapply label_align_step_split in S; (reflexivity || eauto 2)
-      | _ =>
-        idtac "proving alignment 1"; assert (labels_align st) by ((repeat prove_alignment1); eauto)
-      end
-    | [ S : stepC ?st _ |- _ ] =>
-      concrete st; invert S
-    | [ H : (_,_,_) = (_,_,_) |- _ ] => invert H
-    | [ H : Some _ = Some _ |- _ ] => invert H
-    | [ H : nextStep _ _ _ |- _ ] => invert H
-    | [ S : indexedModelStep ?uid ?st _ |- _ ] =>
-      concrete st;
-      match goal with
-      | [ LA : labels_align ?st |- _ ] =>
-        eapply label_align_indexedModelStep_split in S; (reflexivity || eauto 2)
-      | _ =>
-        idtac "proving alignment 2"; assert (labels_align st) by ((repeat prove_alignment1); eauto)
-      end
-    | [ H : (forall _ _, ~ indexedRealStep ?uid _ ?ru _)
-          \/ (exists _ _, ?uid <> _ /\ _ $? _ = Some _ /\ (forall _, ?sums $? _ = Some _ -> commutes ?proto _ -> False))
-      , S : summarize_univ ?ru ?sums
-        |- _ ] =>
-      ( (assert (exists lbl ru', indexedRealStep uid lbl ru ru') by solve_indexedRealStep )
-      ; (assert (exists uid2 ud2, uid <> uid2
-                           /\ ru.(RealWorld.users) $? uid2 = Some ud2
-                           /\ (forall s, sums $? uid2 = Some s -> commutes proto s)) by non_commuters ))
-      ; discharge_nextStep2 (* clear this goal since the preconditions weren't satisfied *)
-    end.
+  Lemma upper_users_cant_step_rewrite :
+    forall A B (U : RealWorld.universe A B) uid,
+      (forall uid' ud' U', U.(RealWorld.users) $? uid' = Some ud' -> uid' > uid -> ~ indexedRealStep uid' Silent U U')
+      -> (forall uid' U', uid' > uid -> ~ indexedRealStep uid' Silent U U').
+  Proof.
+    intros * H * INEQ.
+    unfold not; intros IRS.
+    invert IRS; eauto.
+    eapply H; eauto.
+  Qed.
 
-  Ltac tidy :=
-    autounfold
-    ; intros
-    ; sets_invert
-    ; propositional
-    ; subst
-    ; clean_map_lookups
-    ; subst
-    ; repeat match goal with
-             | [H : (?x1, ?y1) = ?p |- _] =>
-               match p with
-               | (?x2, ?y2) =>
-                 tryif (concrete x2; concrete y2)
-                 then let H' := fresh H
-                      in assert (H' : (x1, y1) = (x2, y2) -> x1 = x2 /\ y1 = y2)
-                        by equality
-                         ; propositional
-                         ; discriminate
-                 else invert H
-               | _ => invert H
-               end
-             | [H : Step _ _ _ |- _] =>
-               simpl in H
-             | [H : exists _, _ |- _] =>
-               invert H; propositional; subst
-             | [ H : nextAction _ _ |- _ ] =>
-               progress (simpl in H)
-             | [ H : nextAction ?cmd1 ?cmd2 |- _ ] =>
-               is_var cmd2;
-               match cmd1 with (* doubt this is general enough *)
-               | (RealWorld.protocol ?ud) => concrete ud || fail 1
-               | _ => concrete cmd1
-               end; invert H
-             | [ H : step ?st _ |- _] =>
-               progress ((repeat step_model1); split_ex; split_ors; subst)
-             | [ H : stepC ?st _ |- _ ] =>
-               progress ((repeat step_model1); split_ex; subst)
-             | [ H : O.max_elt _ = Some _ |- _ ] => 
-               unfold O.max_elt in H; simpl in H; invert H
-             | [H : In _ $0 |- _] =>
-               invert H
-             | [H : Raw.PX.MapsTo _ _ $0 |- _] =>
-               invert H
-             | [H : (existT _ _ _) = (existT _ _ _) |- _] =>
-               invert H
-             end.
+  Lemma sstep_inv_silent :
+    forall A B (U U' : RealWorld.universe A B) uid U__i b st',
+      indexedRealStep uid Silent U U'
+      -> (forall uid' U', uid' > uid -> ~ indexedRealStep uid' Silent U U')
+      -> stepSS (U,U__i,b) st'
+      -> exists U__r,
+          indexedModelStep uid (U,U__i,b) (U__r,U__i,b)
+          /\ indexedRealStep uid Silent U U__r
+          /\ st' = (U__r,U__i,b).
+  Proof.
+    intros.
+    invert H1; repeat equality1.
+    destruct (u_id ==n uid); subst.
+    - invert H2; clear_mislabeled_steps; clean_map_lookups.
+      invert H5; clear_mislabeled_steps.
+      eexists; eauto 8.
+    - invert H2.
+      + invert H5; try solve [ clear_mislabeled_steps ].
+        apply not_eq in n; split_ors.
+        * assert (uid > u_id) as GT by lia.
+          specialize (H4 _ U' GT); contradiction.
+        * assert (u_id > uid) as GT by lia.
+          specialize (H0 _ ru' GT); contradiction.
+      + eapply H3 in H; contradiction.
+  Qed.
 
-  Ltac s := simpl in *.
+  Lemma sstep_inv_labeled :
+    forall A B st st' ru,
+      (forall uid U', ~ @indexedRealStep A B uid Silent ru U')
+      -> @stepSS A B st st'
+      -> labels_align st
+      -> forall ru' iu iu' b b',
+          st = (ru,iu,b)
+          -> st' = (ru',iu',b')
+          -> b = b'
+            /\ (exists uid iu0 ra ia, 
+                  indexedRealStep uid (Action ra) ru ru'
+                  /\ (indexedIdealStep uid Silent) ^* iu iu0
+                  /\ indexedIdealStep uid (Action ia) iu0 iu'
+                  /\ action_matches (RealWorld.all_ciphers ru) (RealWorld.all_keys ru) (uid,ra) ia).
+  Proof.
+    intros; subst.
+    invert H0; clear_mislabeled_steps.
+    repeat equality1.
+
+    invert H2.
+    specialize (H u_id U'); simpl in *; contradiction.
+
+    invert H5; try contradiction; eauto 12.
+    clear_mislabeled_steps.
+  Qed.
 
   Ltac rstep :=
     repeat (autounfold
             ; equality1
-              || (progress s)
+              || (progress ( simpl in * ))
               || discriminate
               || match goal with
-                | [H : RealWorld.Output _ _ _ _ = RealWorld.Output _ _ _ _ |- _] =>
-                  invert H
-                | [H : RealWorld.Input _ _ _ = RealWorld.Input _ _ _ |- _] =>
-                  invert H
+                (* | [H : RealWorld.Output _ _ _ _ = RealWorld.Output _ _ _ _ |- _] => *)
+                (*   invert H *)
+                (* | [H : RealWorld.Input _ _ _ = RealWorld.Input _ _ _ |- _] => *)
+                (*   invert H *)
                 | [H : action_matches _ _ _ _ |- _] =>
                   invert H
                 (* | [ H : MessageEq.message_eq _ _ _ _ _ |- _ ] => *)
@@ -1654,6 +1752,313 @@ Module Gen.
                 | [H : RealWorld.step_user _ _ ?u _ |- _] =>
                   concrete u; churn
                 end).
+
+  Ltac prove_gt_pred :=
+    intros
+    ; simpl in *
+    ; repeat 
+        match goal with
+        | [ H : context [ _ $+ (_,_) $- _ ] |- _ ] =>
+          repeat (
+              (rewrite map_add_remove_neq in H by congruence)
+              || (rewrite map_add_remove_eq in H by trivial)
+              || (rewrite remove_empty in H)
+            )
+        | [ H : _ $+ (?uid,_) $? ?uid' = Some _ |- _ ] =>
+          destruct (uid ==n uid'); subst; clean_map_lookups; try lia
+        | [ |- ~ indexedRealStep _ _ _ _ ] => unfold not; intros; rstep
+        end.
+
+  Ltac assert_gt_pred U uid :=
+    let P := fresh "P"
+    in assert (forall uid' ud' U', U.(RealWorld.users) $? uid' = Some ud'
+                              -> uid' > uid
+                              -> ~ indexedRealStep uid' Silent U U') as P by prove_gt_pred
+       ; pose proof (upper_users_cant_step_rewrite P); clear P
+  .
+
+  Ltac assert_no_silents U :=
+    let P := fresh "P"
+    in assert (forall uid U', ~ indexedRealStep uid Silent U U') as P by prove_gt_pred
+  .
+
+  Ltac find_silent U us :=
+    let MAX := fresh "MEQ"
+    in  remember (O.max_elt us) eqn:MAX
+        ; unfold O.max_elt in MAX
+        ; simpl in MAX
+        ; match type of MAX with
+          | _ = Some (?uid,?u) =>
+            ( ( assert (exists U', indexedRealStep uid Silent U U') by solve_indexedRealStep
+                ; assert_gt_pred U uid)
+              || find_silent U (us $- uid)
+            ) || assert_no_silents U
+          end
+        ; subst; split_ex
+  .
+
+  Ltac inv_stepSS1 :=
+    match goal with
+    | [ STEP : stepSS (?U,_,_) _
+      , IRS : indexedRealStep ?uid Silent ?U _
+      , P : (forall _ _, _ > ?uid -> _)
+        |- _ ] =>
+
+      pose proof (sstep_inv_silent IRS P STEP)
+      ; clear STEP IRS P
+      ; split_ex
+      ; subst
+
+    | [ STEP : stepSS (?ru,?iu,?b) _
+      , P : (forall _ _, ~ indexedRealStep _ Silent _  _)
+        |- _ ] =>
+
+      progress ( unfold not in P )
+
+    | [ STEP : stepSS (?ru,?iu,?b) (_,_,_)
+      , P : (forall _ _, indexedRealStep _ Silent _ _ -> False)
+        |- _ ] =>
+
+      concrete ru
+      ; match goal with
+        | [ LA : labels_align (?ru,?iu,?b) |- _ ] =>
+          pose proof (sstep_inv_labeled P STEP LA eq_refl eq_refl )
+          ; split_ex; subst
+          ; clear STEP P LA
+
+        | _ =>
+          idtac "proving alignment 4"
+          ; assert (labels_align (ru,iu,b)) by ((repeat prove_alignment1); eauto)
+        end
+
+    | [ STEP : stepSS ?st ?st'
+      , P : (forall _ _, indexedRealStep _ Silent _ _ -> False)
+        |- _ ] =>
+
+      match st with
+      | (_,_,_) => idtac
+      | _ => destruct st as [[?ru ?iu] ?b]
+      end
+      ; match st' with
+        | (_,_,_) => idtac
+        | _ => destruct st' as [[?ru' ?iu'] ?b']
+        end
+
+    | [ H : stepSS (?U,_,_) _ |- _ ] =>
+      match U with
+      | {| RealWorld.users := ?usrs |} =>
+        find_silent U usrs
+      end
+        
+    | [ IMS : indexedModelStep ?uid (?U,_,_) _
+      , IRS : indexedRealStep ?uid _ ?U _ 
+        |- _ ] => clear IMS
+
+    end.
+
+  Ltac step_model1 :=
+    match goal with
+    | [H : Step _ _ _ |- _] =>
+      simpl in H
+    | [H : exists _, _ |- _] =>
+      destruct H; split_ex; subst (* invert H; propositional; subst *)
+    | [ H : nextAction _ _ |- _ ] =>
+      progress (simpl in H)
+    | [ H : nextAction ?cmd1 ?cmd2 |- _ ] =>
+      is_var cmd2;
+      match cmd1 with (* doubt this is general enough *)
+      | (RealWorld.protocol ?ud) => concrete ud || fail 1
+      | _ => concrete cmd1
+      end; invert H
+
+    (* | [ H : step ?st _ |- _] => *)
+    (*   progress ((repeat step_model1); split_ex; split_ors; subst) *)
+    (* | [ H : stepC ?st _ |- _ ] => *)
+    (*   progress ((repeat step_model1); split_ex; subst) *)
+    | [ H : O.max_elt _ = Some _ |- _ ] => 
+      unfold O.max_elt in H; simpl in H; invert H
+    | [H : In _ $0 |- _] =>
+      apply in_empty_map_contra in H; contradiction
+      (* invert H *)
+    | [H : Raw.PX.MapsTo _ _ $0 |- _] =>
+      invert H
+    | [H : (existT _ _ _) = (existT _ _ _) |- _] =>
+      invert H
+
+    | [ S : step ?st ?st' |- _ ] =>
+      concrete st; is_var st';
+      match st' with
+      | (_,_,_) => fail 2
+      | (?f,_) => destruct f as [?ru ?iu]
+      | _ => destruct st' as [[?ru ?iu] ?b]
+      end
+    | [ S : step ?st _ |- _ ] =>
+      concrete st;
+      match goal with
+      | [ LA : labels_align ?st |- _ ] =>
+        eapply label_align_step_split in S; (reflexivity || eauto 2); split_ex; split_ors; split_ex; subst
+      | _ =>
+        idtac "proving alignment 1"; assert (labels_align st) by ((repeat prove_alignment1); eauto)
+      end
+    | [ S : stepC ?st _ |- _ ] =>
+      concrete st; invert S
+    (* | [ H : (_,_) = (_,_) |- _ ] => apply tuple_eq_inv in H; split_ex; subst *)
+    (* | [ H : Some _ = Some _ |- _ ] => apply some_eq_inv in H; subst *)
+    | [ H : nextStep _ _ _ |- _ ] => invert H
+    | [ S : indexedModelStep ?uid ?st _ |- _ ] =>
+      concrete st;
+      match goal with
+      | [ LA : labels_align ?st |- _ ] =>
+        eapply label_align_indexedModelStep_split in S; (reflexivity || eauto 2); split_ex; split_ors; split_ex; subst
+      | _ =>
+        idtac "proving alignment 2"; assert (labels_align st) by ((repeat prove_alignment1); eauto)
+      end
+    | [ H : (forall _ _, ~ indexedRealStep ?uid _ ?ru _)
+          \/ (exists _ _, ?uid <> _ /\ _ $? _ = Some _ /\ (forall _, ?sums $? _ = Some _ -> commutes ?proto _ -> False))
+      , S : summarize_univ ?ru ?sums
+        |- _ ] =>
+      ( (assert (exists lbl ru', indexedRealStep uid lbl ru ru') by solve_indexedRealStep )
+      ; (assert (exists uid2 ud2, uid <> uid2
+                           /\ ru.(RealWorld.users) $? uid2 = Some ud2
+                           /\ (forall s, sums $? uid2 = Some s -> commutes proto s)) by non_commuters ))
+      ; discharge_nextStep2 (* clear this goal since the preconditions weren't satisfied *)
+    end.
+
+  Ltac gen_val_typ t :=
+    match t with
+    | Nat    => constr:(0)
+    | Bool   => constr:(true)
+    | Unit   => constr:(tt)
+    | Access => constr:((0,false))
+    | (TPair ?t1 ?t2) =>
+      let v1 := gen_val_typ t1 in
+      let v2 := gen_val_typ t2
+      in constr:((v1,v2))
+                  
+    end.
+
+  Ltac gen_msg t :=
+    match t with
+    | Access => let v := gen_val_typ Access in constr:(message.Permission v)
+    | Nat    => let v := gen_val_typ Nat in constr:(message.Content v)
+    | (TPair ?t1 ?t2) =>
+      let m1 := gen_msg t1 in
+      let m2 := gen_msg t2 in
+      constr:(message.MsgPair m1 m2)
+    end.
+
+  Ltac gen_crypto t :=
+    let m := gen_msg t in constr:(Content m).
+
+  Ltac gen_val_cmd_typ ct :=
+    match ct with
+    | Base ?t    => gen_val_typ t
+    | Message ?t => gen_msg t
+    | Crypto ?t  => gen_crypto t
+    | UPair ?t1 ?t2 =>
+      let v1 := gen_val_cmd_typ t1 in
+      let v2 := gen_val_cmd_typ t2 in constr:((v1,v2))
+    end.
+
+  Ltac univ_equality_discr :=
+    discriminate
+    || match goal with
+      | [ H : ?x = ?x |- _ ] => clear H
+      | [ H : RealWorld.Bind _ _ = RealWorld.Bind _ _ |- _ ] =>
+        apply invert_bind_eq in H; split_ex
+      | [ H1 : ?x = ?y1, H2 : ?x = ?y2 |- _ ] =>
+        rewrite H1 in H2
+        ; clear H1
+      | [ H1 : ?x = ?y1, H2 : ?y2 = ?x |- _ ] =>
+        rewrite H1 in H2
+        ; clear H1
+      | [ H : (?x1,?y1) = (?x2,?y2) |- _ ] =>
+        apply tuple_eq_inv in H; split_ex; subst
+      | [ H : {| users := _ |} = {| users := _ |} |- _ ] =>
+        apply split_real_univ_fields in H; split_ex
+      | [ H : Some _ = Some _ |- _ ] =>
+        apply some_eq_inv in H; subst
+      | [ H : {| key_heap := _ |} = {| key_heap := _ |} |- _ ] =>
+        apply split_real_user_data_fields in H; split_ex; subst
+      | [ H : _ $+ (_,_) = _ |- _ ] =>
+        apply map_eq_fields_eq in H; clean_map_lookups
+      | [ H : context [ _ $+ (_,_) $- _ ] |- _ ] =>
+        repeat (
+            (rewrite map_add_remove_neq in H by congruence)
+            || (rewrite map_add_remove_eq in H by trivial)
+            || (rewrite remove_empty in H)
+          )
+      | [ H : << ?t >> -> _ = _ |- _ ] =>
+        let vt := gen_val_cmd_typ t
+        in specialize (H vt)
+      end.
+
+  (* Ltac univ_equality_discr := *)
+  (*   discriminate *)
+  (*   || match goal with *)
+  (*     | [ H1 : ?x = ?y1, H2 : ?x = ?y2 |- _ ] => *)
+  (*       rewrite H1 in H2 *)
+  (*       ; clear H1 *)
+  (*     | [ H1 : ?x = ?y1, H2 : ?y2 = ?x |- _ ] => *)
+  (*       rewrite H1 in H2 *)
+  (*       ; clear H1 *)
+  (*     | [ H : (?x1,?y1) = (?x2,?y2) |- _ ] => *)
+  (*       apply tuple_eq_inv in H; split_ex; subst *)
+  (*     | [ H : {| users := _ |} = {| users := _ |} |- _ ] => *)
+  (*       apply split_real_univ_fields in H; split_ex *)
+  (*     | [ H : Some _ = Some _ |- _ ] => *)
+  (*       apply some_eq_inv in H; subst *)
+  (*     | [ H : {| key_heap := _ |} = {| key_heap := _ |} |- _ ] => *)
+  (*       apply split_real_user_data_fields in H; split_ex; subst *)
+  (*     | [ H : _ $+ (_,_) = _ |- _ ] => *)
+  (*       apply map_eq_fields_eq in H; clean_map_lookups *)
+  (*     end. *)
+
+  Ltac tidy :=
+    autounfold
+    ; intros
+    ; sets_invert
+    ; propositional
+    ; subst
+    ; clean_map_lookups
+    ; subst
+    ; idtac "discriminating univ - tidy"
+    ; repeat (
+          univ_equality_discr
+          || equality1
+          || inv_stepSS1
+          || step_model1
+        )
+    ; idtac "discriminating univ - tidy done"
+      (* match goal with *)
+      (*   | [H : Step _ _ _ |- _] => *)
+      (*     simpl in H *)
+      (*   | [H : exists _, _ |- _] => *)
+      (*     invert H; propositional; subst *)
+      (*   | [ H : nextAction _ _ |- _ ] => *)
+      (*     progress (simpl in H) *)
+      (*   | [ H : nextAction ?cmd1 ?cmd2 |- _ ] => *)
+      (*     is_var cmd2; *)
+      (*     match cmd1 with (* doubt this is general enough *) *)
+      (*     | (RealWorld.protocol ?ud) => concrete ud || fail 1 *)
+      (*     | _ => concrete cmd1 *)
+      (*     end; invert H *)
+      (*   | [ H : step ?st _ |- _] => *)
+      (*     progress ((repeat step_model1); split_ex; split_ors; subst) *)
+      (*   | [ H : stepC ?st _ |- _ ] => *)
+      (*     progress ((repeat step_model1); split_ex; subst) *)
+      (*   | [ H : O.max_elt _ = Some _ |- _ ] =>  *)
+      (*     unfold O.max_elt in H; simpl in H; invert H *)
+      (*   | [H : In _ $0 |- _] => *)
+      (*     invert H *)
+      (*   | [H : Raw.PX.MapsTo _ _ $0 |- _] => *)
+      (*     invert H *)
+      (*   | [H : (existT _ _ _) = (existT _ _ _) |- _] => *)
+      (*     invert H *)
+      (* end. *)
+  .
+
+  Ltac s := simpl in *.
 
   Ltac cleanup :=
     repeat (
@@ -1690,10 +2095,13 @@ Module Gen.
             ; is_not_evar k2
             ; rewrite ChMaps.ChMap.F.add_neq_o in H by congruence
           | [ H : mkKeys _ $? _ = _ |- _ ] => unfold mkKeys in H; simpl in H
-          | [ H : ?m $? _ = _ |- _ ] => progress (unfold m in H)
-          | [ H : RealWorld.msg_accepted_by_pattern _ _ _ _ _ |- _ ] => invert H
+          (* | [ H : ?m $? _ = _ |- _ ] => progress (unfold m in H) *)
+          | [ H : RealWorld.msg_accepted_by_pattern _ _ _ _ _ |- _ ] => clear H
+          | [ H : ~ RealWorld.msg_accepted_by_pattern _ _ _ _ _ |- _ ] => clear H
+          | [ H : RealWorld.msg_accepted_by_pattern _ _ _ _ _ -> False |- _ ] => clear H
           | [ H : IdealWorld.screen_msg _ _ |- _ ] => invert H
           | [ H : IdealWorld.permission_subset _ _ |- _ ] => invert H
+          | [ H : IdealWorld.check_perm _ _ _ |- _ ] => unfold IdealWorld.check_perm in H
           | [ H : context [ IdealWorld.addMsg _ _ _ ] |- _ ] => unfold IdealWorld.addMsg in H; simpl in H
           | [ H : Forall _ [] |- _ ] => clear H
           | [ H : context [true || _]  |- _] => rewrite orb_true_l in H
@@ -1706,10 +2114,19 @@ Module Gen.
             erewrite reduce_merge_perms in H by (clean_map_lookups; eauto)
           | [ H : context [_ $k++ _]  |- _] =>
             unfold merge_perms, add_key_perm, fold in H; simpl in H; clean_map_lookups
-          | [ H : context [match ?m $? _ with _ => _ end] |- _] => progress (unfold m in H)
-          | [ H : match _ $+ (?k1,_) $? ?k2 with _ => _ end = _ |- _ ] =>
-            (rewrite add_neq_o in H by solve_simple_ineq)
+
+          | [ H : context [ _ $+ (?k1,_) $? ?k2] |- _ ] =>
+              (rewrite add_neq_o in H by solve_simple_ineq)
             || (rewrite add_eq_o in H by trivial)
+          | [ H : context [ ?m $? _ ] |- _ ] =>
+            progress (unfold m in H)
+
+          | [ |- context [$0 $k++ _] ] => rewrite !merge_perms_left_identity
+          | [ |- context [_ $k++ $0] ] => rewrite !merge_perms_right_identity 
+          (* | [ H : context [match ?m $? _ with _ => _ end] |- _] => progress (unfold m in H) *)
+          (* | [ H : match _ $+ (?k1,_) $? ?k2 with _ => _ end = _ |- _ ] => *)
+          (*   (rewrite add_neq_o in H by solve_simple_ineq) *)
+          (*   || (rewrite add_eq_o in H by trivial) *)
           end
       ).
 
@@ -1719,11 +2136,12 @@ Module Gen.
       concrete ru
       ; concrete iuniv iu
       ; tidy
+      (* ; repeat( progress (subst; cleanup) ) *)
       ; repeat eexists
       ; propositional
       ; solve[ eauto
              | canonicalize users
-               ; equality ]
+               ; repeat univ_equality1 ]
     | [|- (?inv1 \cup ?inv2) (?ru, ?iu, _)] =>
       concrete inv1
       ; concrete ru
@@ -1740,7 +2158,8 @@ Module Gen.
       ; solve_concrete_maps
       ; canonicalize users
       ; clean_context
-      ; cleanup
+      ; repeat( progress (subst; cleanup) )
+      (* ; cleanup *)
       ; NatMap.clean_map_lookups
       ; ChMaps.ChMap.clean_map_lookups
       ; incorp
@@ -1761,6 +2180,17 @@ Module Gen.
     ; repeat close
     ; idtac "close done".
 
+  Locate intersect_empty_l.
+
+  Ltac normalize_set_arg s :=
+    match s with
+    | context[@union ?A ?X ?Y] =>
+      quote (@union A X Y) (@nil A)
+            ltac:(fun e env =>
+                    change (@union A X Y) with (interp_setexpr env e));
+      rewrite <- normalize_setexpr_ok; sets_cbv
+    end.
+
   Ltac gen1 :=
     match goal with
     | [|- multiStepClosure _ _ { } _] =>
@@ -1772,33 +2202,67 @@ Module Gen.
       eapply MscStep
       ; [ solve[ apply oneStepClosure_grow; repeat gen1' ]
         | simplify; simpl_sets (sets; tidy)]
+    | [|- multiStepClosure _ (?pr \cup ?wl) ?wl _] =>
+      progress ( normalize_set_arg pr ; normalize_set_arg wl )
     | [|- multiStepClosure _ (_ \cup ?wl) ?wl _] =>
       eapply msc_step_alt
       ; [ solve[ unfold oneStepClosure_new; repeat gen1' ]
-        | solve[ simplify
+        | solve[ idtac "proving empty intersection"
+                 ; simplify
                  ; sets
                  ; split_ex
                  ; propositional
-                 ; repeat match goal with
-                          | [H : (?x1, ?y1) = ?p |- _] =>
-                            match p with
-                            | (?x2, ?y2) =>
-                              tryif (concrete x2; concrete y2)
-                              then let H' := fresh H
-                                   in assert (H' : (x1, y1) = (x2, y2) -> x1 = x2 /\ y1 = y2)
-                                     by equality
-                                      ; propositional
-                                      ; discriminate
-                              else invert H
-                            | _ => invert H
-                            end
-                          end
+                 ; idtac "preparing to discriminate universes"
+                 ; repeat (equality1 || univ_equality_discr)
+                 ; idtac "universes discriminated"
+                 (* ; repeat match goal with *)
+                 (*          | [H : (?x1, ?y1) = ?p |- _] => *)
+                 (*            match p with *)
+                 (*            | (?x2, ?y2) => *)
+                 (*              tryif (concrete x2; concrete y2) *)
+                 (*              then let H' := fresh H *)
+                 (*                   in assert (H' : (x1, y1) = (x2, y2) -> x1 = x2 /\ y1 = y2) *)
+                 (*                     by equality *)
+                 (*                      ; propositional *)
+                 (*                      ; discriminate *)
+                 (*              else invert H *)
+                 (*            | _ => invert H *)
+                 (*            end *)
+                 (*          end *)
                | eapply intersect_empty_l]
         | rewrite ?union_empty_r ]
     end.
 
   (* Use this to generate the invariant *)
   Ltac gen := repeat gen1.
+
+  Ltac discr_sets :=
+    simplify
+    ; sets
+    ; split_ex
+    (* ; propositional *)
+    ; repeat ( equality1 || univ_equality_discr).
+
+  Ltac dedup_worklist wl k :=
+    let rec dedup_wl acc wl :=
+        idtac "iterating";
+        match wl with
+        | ?s1 \cup ?s2 =>
+          ( assert ( acc \cap s1 = { } ) by discr_sets
+            ; dedup_wl (acc \cup s1) s2 )
+          || dedup_wl acc s2
+        | ?s => 
+          ( assert ( acc \cap s = { } ) by discr_sets
+            ; k (acc \cup s) )
+          || k acc
+        end
+
+    in idtac "wl";
+       match wl with
+       | { } \cup ?s  => dedup_worklist s k
+       | ?s1 \cup ?s2 => dedup_wl s1 s2
+       | ?s1          => k s1
+       end.
 
 End Gen.
                      
@@ -1812,3 +2276,4 @@ Ltac focus_user :=
       | RealWorld.user_data _ => idtac
       end; destruct (k1 ==n k2); subst; clean_map_lookups
     end.
+

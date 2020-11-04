@@ -18,22 +18,25 @@
 From Coq Require Import
      List.
 
-Require Import
+From KeyManagement Require Import
         MyPrelude
         Maps
         ChMaps
         Messages
-        ModelCheck
         Common
         Keys
         Automation
         Tactics
         Simulation
-        AdversaryUniverse
+        AdversaryUniverse.
+
+From protocols Require Import
+        ModelCheck
         UniverseEqAutomation
         ProtocolAutomation
         SafeProtocol
-        ProtocolFunctions.
+        ProtocolFunctions
+        SilentStepElimination.
 
 Require IdealWorld RealWorld.
 
@@ -50,50 +53,47 @@ Set Implicit Arguments.
 
 Open Scope protocol_scope.
 
-Module SecureDNSProtocol.
+Module P2PProtocol.
 
   (* Start with two users, as that is the minimum for any interesting protocol *)
   Notation USR1 := 0.
   Notation USR2 := 1.
   Notation USR3 := 2.
 
-  Parameter names : NatMap.t nat.
-  
-  (* Notation names := *)
-  (*   ( $0 $+ (0,10) *)
-  (*        $+ (1,11) *)
-  (*        $+ (2,12) *)
-  (*        $+ (3,13) *)
-  (*        $+ (4,14) *)
-  (*   ). *)
-
   Section IW.
     Import IdealWorld.
 
     (* Set up initial communication channels so each user can talk directly to the other *)
-    Notation pCH12 := 0.
-    Notation pCH21 := 1.
-    Notation pCH23 := 2.
-    Notation pCH32 := 3.
-    Notation CH12  := (# pCH12).
-    Notation CH21  := (# pCH21).
-    Notation CH23  := (# pCH23).
-    Notation CH32  := (# pCH32).
+    Notation pCH13 := 0.
+    Notation pCH23 := 1.
+
+    Notation pCH1  := 4.
+    Notation pCH2  := 5.
+    Notation pCH3  := 6.
+    Notation pCH__from3  := 7.
+
+    Notation CH13 := (# pCH13).
+    Notation CH23 := (# pCH23).
+
+    (* Encryption Channelse *)
+    Notation CH1  := (# pCH1).
+    Notation CH2  := (# pCH2).
+    Notation CH3  := (# pCH3).
+
+    (* Authenticity Channel *)
+    Notation CH__from3  := (# pCH__from3).
 
     (* This is the initial channel vector, each channel should be represented and start with 
      * no messages.
      *)
-    Notation empty_chs := (#0 #+ (CH12, []) #+ (CH21, []) #+ (CH23, []) #+ (CH32, [])).
+    Notation empty_chs := (#0
+                            #+ (CH13, []) #+ (CH23, [])
+                            #+ (CH1, []) #+ (CH2, []) #+ (CH3, [])
+                          ).
 
-    Notation PERMS1 := ($0 $+ (pCH12, writer) $+ (pCH21, reader)).
-    Notation PERMS2 := ($0 $+ (pCH12, reader) $+ (pCH21, writer) $+ (pCH23, writer) $+ (pCH32, reader)).
-    Notation PERMS3 := ($0 $+ (pCH23, reader) $+ (pCH32, writer)).
-
-    Fixpoint idealServer (n : nat) {t} (r : << t >>) (c : cmd t) : cmd t :=
-      match n with
-      | 0   => @Return t r
-      | S i => (r' <- c ; idealServer i r' c)
-      end.
+    Notation PERMS1 := ($0 $+ (pCH13, writer) $+ (pCH1, owner) $+ (pCH2, writer) $+ (pCH3, writer) $+ (pCH__from3, reader) ).
+    Notation PERMS2 := ($0 $+ (pCH23, writer) $+ (pCH1, writer) $+ (pCH2, owner) $+ (pCH3, writer) $+ (pCH__from3, reader) ).
+    Notation PERMS3 := ($0 $+ (pCH13, reader) $+ (pCH23, reader) $+ (pCH3, owner)).
 
     (* Fill in the users' protocol specifications here, adding additional users as needed.
      * Note that all users must return an element of the same type, and that type needs to 
@@ -101,40 +101,28 @@ Module SecureDNSProtocol.
      *)
     Notation ideal_users :=
       [
-        (* Authorative DNS Server Specification *)
         mkiUsr USR1 PERMS1
-               (
-                 @idealServer 1 (Base Nat) 1
-                              (
-                                m <- @Recv Nat CH21
-                                ; let ip := match names $? extractContent m with
-                                            | None   => 0
-                                            | Some a => a
-                                            end
-                                  in
-                                  _ <- Send (Content ip) CH12
-                                ; @Return (Base Nat) ip
-                              )
+               ( _ <- Send (MsgPair (sharePerm pCH1 writer) (sharePerm pCH2 writer)) CH13 (* please send generate a new key for me and pCH2 to speak over *)
+                 ; m <- @Recv Access (pCH1 #& pCH__from3)
+                 ; n <- Gen
+                 ; _ <- Send (Content n) (getPerm m #& pCH2)
+                 ; @Return (Base Nat) n
                )
-        ;
+        ; 
 
-      (* Secure DNS Cache Specification *)
       mkiUsr USR2 PERMS2
-             (
-               req <- @Recv Nat CH32
-               ; _ <- Send (Content (extractContent req)) CH21
-               ; ip1 <- @Recv Nat CH12
-               ; _ <- Send (Content (extractContent ip1)) CH23
-               ; @Return (Base Nat) (extractContent ip1)
+             ( p <- @Recv Access (pCH2 #& pCH__from3)
+               ; m <- @Recv Nat (getPerm p #& pCH2)
+               ; @Return (Base Nat) (extractContent m)
              )
-        ;
+        ; 
 
-      (* DNS Client Specification *)
       mkiUsr USR3 PERMS3
-             (
-               _ <- Send (Content 0) CH32
-               ; ip1 <- @Recv Nat CH23
-               ; @Return (Base Nat) (extractContent ip1)
+             ( m <- @Recv (TPair Access Access) CH13
+               ; ch <- CreateChannel
+               ; _ <- Send (sharePerm ch owner) (getPerm (msgSnd m) #& pCH__from3)
+               ; _ <- Send (sharePerm ch owner) (getPerm (msgFst m) #& pCH__from3)
+               ; @Return (Base Nat) 1
              )
       ].
 
@@ -143,11 +131,12 @@ Module SecureDNSProtocol.
      *)
     Definition ideal_univ_start :=
       mkiU empty_chs ideal_users.
-      
+
   End IW.
 
   Section RW.
     Import RealWorld.
+    Import RealWorld.message.
 
     (* Key management needs to be bootstrapped.  Since all honest users must only send signed
      * messages, we need some way of initially distributing signing keys in order to be able
@@ -156,70 +145,60 @@ Module SecureDNSProtocol.
      * 
      * Here, each user has a public asymmetric signing key.
      *)
-    Notation KID1 := 0.
-    Notation KID2 := 1.
-    Notation KID3 := 2.
-    Notation KID4 := 3.
-    Notation KID5 := 4.
-    Notation KID6 := 5.
+    Notation KID__s1 := 0.
+    Notation KID__e1 := 1.
+    Notation KID__s2 := 2.
+    Notation KID__e2 := 3.
+    Notation KID__s3 := 4.
+    Notation KID__e3 := 5.
 
-    Notation KEYS := [ skey KID1 ; ekey KID2 ; skey KID3 ; ekey KID4 ; skey KID5 ; ekey KID6 ].
+    Notation KEYS := [ skey KID__s1 ; ekey KID__e1 
+                       ; skey KID__s2 ; ekey KID__e2
+                       ; skey KID__s3 ; ekey KID__e3 ].
 
-    Notation KEYS1 := ($0 $+ (KID1, true) $+ (KID2, true) $+ (KID3, false) $+ (KID4, false)).
-    Notation KEYS2 := ($0 $+ (KID1, false) $+ (KID2, false)
-                        $+ (KID3, true) $+ (KID4, true)
-                        $+ (KID5, false) $+ (KID6, false)).
-    Notation KEYS3 := ($0 $+ (KID3, false) $+ (KID4, false) $+ (KID5, true) $+ (KID6, true)).
-
-    Fixpoint realServer (n : nat) {t} (r : << t >>) (c : user_cmd t) : user_cmd t :=
-      match n with
-      | 0   => @Return t r
-      | S i => (r' <- c ; realServer i r' c)
-      end.
+    Notation KEYS1 := ($0 $+ (KID__s1, true) $+ (KID__e1, true) $+ (KID__s2, false) $+ (KID__e2, false) $+ (KID__s3, false) $+ (KID__e3, false) ).
+    Notation KEYS2 := ($0 $+ (KID__s2, true) $+ (KID__e2, true) $+ (KID__s1, false) $+ (KID__e1, false) $+ (KID__s3, false) $+ (KID__e3, false) ).
+    Notation KEYS3 := ($0 $+ (KID__s3, true) $+ (KID__e3, true) $+ (KID__s2, false) $+ (KID__e2, false) $+ (KID__s1, false) $+ (KID__e1, false) ).
 
     Notation real_users :=
       [
-        (* Authoritative DNS server implementation *)
+        (* User 1 implementation *)
         MkRUserSpec USR1 KEYS1
                     (
-                      @realServer 1 (Base Nat) 1
-                                  ( c <- @Recv Nat (SignedEncrypted KID3 KID2 true)
-                                    ; m <- Decrypt c
-                                    ; let ip := match names $? (extractContent m) with
-                                                | None   => 0
-                                                | Some a => a
-                                                end
-                                      in ipC <- SignEncrypt KID1 KID4 USR2 (message.Content ip)
-                                    ; _ <- Send USR2 ipC
-                                    ; @Return (Base Nat) ip
-                                  )
+                      c1 <- SignEncrypt KID__s1 KID__e3 USR3 (MsgPair (Permission (KID__e1, false)) (Permission (KID__e2, false)))
+                      ; _ <- Send USR3 c1
+                      ; c2 <- @Recv Access (SignedEncrypted KID__s3 KID__e1 true)
+                      ; m1 <- Decrypt c2
+                      ; n <- Gen
+                      ; c3 <- SignEncrypt KID__s1 (getKey m1) USR2 (Content n)
+                      ; _ <- Send USR2 c3
+                      ; @Return (Base Nat) n
                     )
-        ;
+        ; 
 
-      (* Secure DNS Cache implementation *)
+      (* User 2 implementation *)
       MkRUserSpec USR2 KEYS2
                   (
-                    reqc <- @Recv Nat (SignedEncrypted KID5 KID4 true)
-                    ; req <- Decrypt reqc
-                    ; c1 <- SignEncrypt KID3 KID2 USR1 (message.Content (extractContent req))
-                    ; _ <- Send USR1 c1
-                    ; hostC <- @Recv Nat (SignedEncrypted KID1 KID4 true)
-                    ; host <- Decrypt hostC
-                    ; c2 <- SignEncrypt KID3 KID6 USR3 (message.Content (extractContent host))
-                    ; _ <- Send USR3 c2
-                    ; @Return (Base Nat) (extractContent host)
-                  ) 
-        ;
+                    c1 <- @Recv Access (SignedEncrypted KID__s3 KID__e2 true)
+                    ; m1 <- Decrypt c1
+                    ; c2 <- @Recv Nat (SignedEncrypted KID__s3 (getKey m1) true)
+                    ; m2 <- Decrypt c2
+                    ; @Return (Base Nat) (extractContent m2)
+                  )
+        ; 
 
-      (* DNS Client implementation *)
+      (* User 2 implementation *)
       MkRUserSpec USR3 KEYS3
                   (
-                    c <- SignEncrypt KID5 KID4 USR2 (message.Content 0)
-                    ; _ <- Send USR2 c
-                    ; hostC <- @Recv Nat (SignedEncrypted KID3 KID6 true)
-                    ; host <- Decrypt hostC
-                    ; @Return (Base Nat) (extractContent host)
-                  ) 
+                    c1 <- @Recv (TPair Access Access) (SignedEncrypted KID__s1 KID__e3 true)
+                    ; m1 <- Decrypt c1
+                    ; ky <- GenerateSymKey Encryption
+                    ; c2 <- SignEncrypt KID__s3 (getKey (msgSnd m1)) USR2 (sharePrivKey ky)
+                    ; c3 <- SignEncrypt KID__s3 (getKey (msgFst m1)) USR1 (sharePrivKey ky)
+                    ; _ <- Send USR2 c2
+                    ; _ <- Send USR1 c3
+                    ; @Return (Base Nat) 1
+                  )
       ].
 
     (* Here is where we put the implementation universe together.  Like above, it is 
@@ -238,11 +217,11 @@ Module SecureDNSProtocol.
   Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
     progress(autounfold with user_build; simpl).
   
-End SecureDNSProtocol.
+End P2PProtocol.
 
-Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
+Module P2PProtocolSecure <: AutomatedSafeProtocolSS.
 
-  Import SecureDNSProtocol.
+  Import P2PProtocol.
 
   (* Some things may need to change here.  t__hon is where we place the 
    * type that the protocol computes.  It is set to Nat now, because we
@@ -261,66 +240,6 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
 
   Import Gen Tacs SetLemmas.
 
-  Ltac gen1' :=
-    simplify
-    ; tidy
-    ; idtac "rstep start"
-    ; rstep
-    ; idtac "istep start"
-    ; istep
-    ; idtac "istep done"
-    ; subst
-    ; canonicalize users
-    ; idtac "close start"
-    ; repeat close
-    ; idtac "close done"
-  .
-
-  Ltac msc_st1 := unfold oneStepClosure_new  (* ; repeat gen1' *).
-  Ltac msc_st2 :=
-    simplify
-    ; sets
-    ; split_ex
-    ; propositional
-    ; repeat match goal with
-             | [H : (?x1, ?y1) = ?p |- _] =>
-               match p with
-               | (?x2, ?y2) =>
-                 tryif (concrete x2; concrete y2)
-                 then let H' := fresh H
-                      in assert (H' : (x1, y1) = (x2, y2) -> x1 = x2 /\ y1 = y2)
-                        by equality
-                         ; propositional
-                         ; discriminate
-                 else invert H
-               | _ => invert H
-               end
-             end.
-
-  
-  Ltac mscalt' :=
-    eapply msc_step_alt
-    ; [ solve[ msc_st1; repeat gen1' ]
-      | solve[ msc_st2 | eapply intersect_empty_l ]
-      | rewrite ?union_empty_r ].
-
-  Ltac mscalt :=
-    match goal with
-    | [|- multiStepClosure _ (_ \cup ?wl) ?wl _] => mscalt'
-    end.
-
-  Ltac gen1 :=
-    match goal with
-    | [|- multiStepClosure _ _ { } _] =>
-      eapply MscDone
-    | [|- multiStepClosure _ {(_, _)} {(_, _)} _] =>
-      eapply MscStep
-      ; [ solve[ apply oneStepClosure_grow; gen1' ]
-        | simplify; simpl_sets (sets; tidy)]
-    | [|- multiStepClosure _ (_ \cup ?wl) ?wl _] => mscalt'
-    end.
-
-
   (* These are here to help the proof automation.  Don't change. *)
   Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start real_univ_start : core.
   Hint Unfold
@@ -330,12 +249,28 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
 
   Lemma safe_invariant :
     invariantFor
-      {| Initial := {(ru0, iu0, true)}; Step := @step t__hon t__adv  |}
+      {| Initial := {(ru0, iu0, true)}; Step := @stepSS t__hon t__adv  |}
       (fun st => safety st /\ alignment st ).
   Proof.
     eapply invariant_weaken.
 
     - eapply multiStepClosure_ok; simpl.
+      (* Calls to gen1 will need to be addded here until the model checking terminates. *)
+      autounfold in *.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
       gen1.
       gen1.
       gen1.
@@ -380,13 +315,44 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
         simpl in *; autounfold with core;
           subst; simpl;
             unfold safety, alignment;
-      (* 129 *)
             ( split;
             [ solve_honest_actions_safe; clean_map_lookups; eauto 8
             | simpl; split; trivial; intros; rstep; subst; solve_labels_align
             ]).
 
+       Local Ltac merge_perms_helper :=
+        repeat match goal with
+               | [ |- _ = _ ] => reflexivity
+               | [ |- _ $? _ = _ ] => solve_concrete_maps
+               end.
+
+      Ltac finish_off1 :=
+        match goal with
+        | [ H : _ $k++ _ $? ?kid = Some _  |- _ ] =>
+          apply merge_perms_split in H
+          ; destruct H
+        | [ |- _ $k++ _ $? _ = Some _ ] =>
+          solve [ erewrite merge_perms_adds_ks1; (swap 2 4; merge_perms_helper) ]
+          || solve [ erewrite merge_perms_adds_ks2; (swap 2 4; merge_perms_helper) ]
+          || solve [ erewrite merge_perms_chooses_greatest; swap 1 4; eauto; clean_map_lookups]
+        | [ H : context [ _ $+ (?k1,_) $? ?k2] |- _ ] =>
+          progress (
+              repeat (
+                  (rewrite add_neq_o in H by solve_simple_ineq)
+                  || (rewrite add_eq_o in H by trivial)
+                  || (rewrite lookup_empty_none in H)
+            ))
+        | [ |- _ $? _ = _ ] =>
+          progress solve_concrete_maps
+        | [ |- context [ _ $k++ _ ] ] =>
+          progress solve_concrete_perm_merges
+        end.
+
+      all: try solve [ repeat finish_off1].
+
       Unshelve.
+
+      all: try discriminate.
       all: auto.
 
   Qed.
@@ -404,7 +370,7 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
     - unfold AdversarySafety.keys_honest; rewrite Forall_natmap_forall; intros.
       econstructor; unfold mkrUsr; simpl.
       rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty; eauto.
-      simpl in *; solve_perm_merges.
+      solve_perm_merges.
     - unfold lameAdv; simpl; eauto.
   Qed.
 
@@ -455,6 +421,7 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
         solve_concrete_maps;
         solve_simple_maps;
         eauto.
+
   Qed.
   
   Lemma universe_starts_safe : universe_ok ru0 /\ adv_universe_ok ru0.
@@ -464,4 +431,4 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
   Qed.
   
 
-End SecureDNSProtocolSecure.
+End P2PProtocolSecure.

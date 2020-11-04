@@ -5,7 +5,7 @@
  * in this material are those of the author(s) and do not necessarily reflect the views of the 
  * Department of the Air Force.
  * 
- * © 2019-2020 Massachusetts Institute of Technology.
+ * © 2020 Massachusetts Institute of Technology.
  * 
  * MIT Proprietary, Subject to FAR52.227-11 Patent Rights - Ownership by the contractor (May 2014)
  * 
@@ -18,22 +18,25 @@
 From Coq Require Import
      List.
 
-Require Import
+From KeyManagement Require Import
         MyPrelude
         Maps
         ChMaps
         Messages
-        ModelCheck
         Common
         Keys
         Automation
         Tactics
         Simulation
-        AdversaryUniverse
+        AdversaryUniverse.
+
+From protocols Require Import
+        ModelCheck
         UniverseEqAutomation
         ProtocolAutomation
         SafeProtocol
-        ProtocolFunctions.
+        ProtocolFunctions
+        SilentStepElimination.
 
 Require IdealWorld RealWorld.
 
@@ -50,44 +53,61 @@ Set Implicit Arguments.
 
 Open Scope protocol_scope.
 
-Module ShareSecretSymmetricEncProtocol.
+Module VotingProtocol.
 
-  (* User ids *)
+  (* Start with two users, as that is the minimum for any interesting protocol *)
   Notation USR1 := 0.
   Notation USR2 := 1.
+  Notation USR3 := 2.
 
   Section IW.
     Import IdealWorld.
 
-    Notation pCH12 := 0.
-    Notation pCH21 := 1.
-    Notation CH12  := (# pCH12).
-    Notation CH21  := (# pCH21).
+    (* Set up initial communication channels so each user can talk directly to the other *)
+    Notation pCH13 := 0.
+    Notation pCH23 := 1.
+    Notation CH13  := (# pCH13).
+    Notation CH23  := (# pCH23).
 
-    Notation empty_chs := (#0 #+ (CH12, []) #+ (CH21, [])).
+    (* This is the initial channel vector, each channel should be represented and start with 
+     * no messages.
+     *)
+    Notation empty_chs := (#0 #+ (CH13, []) #+ (CH23, [])).
 
-    Notation PERMS1 := ($0 $+ (pCH12, owner) $+ (pCH21, reader)).
-    Notation PERMS2 := ($0 $+ (pCH12, reader) $+ (pCH21, owner)).
+    Notation PERMS1 := ($0 $+ (pCH13, writer)).
+    Notation PERMS2 := ($0 $+ (pCH23, writer)).
+    Notation PERMS3 := ($0 $+ (pCH13, reader) $+ (pCH23, reader)).
 
+    (* Fill in the users' protocol specifications here, adding additional users as needed.
+     * Note that all users must return an element of the same type, and that type needs to 
+     * be one of: ...
+     *)
     Notation ideal_users :=
       [
-        (mkiUsr USR1 PERMS1 
-                ( chid <- CreateChannel
-                  ; _ <- Send (sharePerm chid writer) CH12
-                  ; m <- @Recv Access (chid #& pCH21)
-                  ; n <- Gen
-                  ; _ <- Send (Content n) (getPerm m #& pCH12)
-                  ; @Return (Base Nat) n
-        )) ;
-      (mkiUsr USR2 PERMS2
-              ( m <- @Recv Access CH12
-                ; chid <- CreateChannel
-                ; _ <- Send (sharePerm chid owner) (getPerm m #& pCH21)
-                ; m <- @Recv Nat (chid #& pCH12)
-                ; @Return (Base Nat) (extractContent m)
-      ))
+        mkiUsr USR1 PERMS1
+               ( _ <- Send (Content 1) CH13
+                 ; @Return (Base Nat) 1
+               )
+        ; 
+
+      mkiUsr USR2 PERMS2
+             ( _ <- Send (Content 1) CH23
+               ; @Return (Base Nat) 1
+             )
+        ; 
+
+      mkiUsr USR3 PERMS3
+             ( m1 <- @Recv Nat CH13
+               ; m2 <- @Recv Nat CH23
+               ; @Return (Base Nat) (let c1 := extractContent m1 in
+                                     let c2 := extractContent m2
+                                     in if c1 ==n c2 then c1 else 100)
+             )
       ].
 
+    (* This is where the entire specification universe gets assembled.  It is unlikely anything
+     * will need to change here.
+     *)
     Definition ideal_univ_start :=
       mkiU empty_chs ideal_users.
 
@@ -95,43 +115,66 @@ Module ShareSecretSymmetricEncProtocol.
 
   Section RW.
     Import RealWorld.
+    Import RealWorld.message.
 
+    (* Key management needs to be bootstrapped.  Since all honest users must only send signed
+     * messages, we need some way of initially distributing signing keys in order to be able
+     * to begin secure communication.  This is analagous in the real world where we need to 
+     * have some sort of trust relationship in order to distribute trusted keys.
+     * 
+     * Here, each user has a public asymmetric signing key.
+     *)
     Notation KID1 := 0.
     Notation KID2 := 1.
+    Notation KID3 := 3.
 
-    Notation KEYS := [ skey KID1 ; skey KID2 ].
+    Notation KEYS := [ skey KID1 ; skey KID2 ; ekey KID3 ].
 
-    Notation KEYS1 := ($0 $+ (KID1, true) $+ (KID2, false)).
-    Notation KEYS2 := ($0 $+ (KID1, false) $+ (KID2, true)).
+    Notation KEYS1 := ($0 $+ (KID1, true) $+ (KID3, false)).
+    Notation KEYS2 := ($0 $+ (KID2, true) $+ (KID3, false)).
+    Notation KEYS3 := ($0 $+ (KID1, false) $+ (KID2, false) $+ (KID3, true)).
 
-    Definition real_users :=
+    Notation real_users :=
       [
+        (* User 1 implementation *)
         MkRUserSpec USR1 KEYS1
-                    ( kp <- GenerateAsymKey Encryption
-                      ; c1 <- Sign KID1 USR2 (sharePubKey kp)
-                      ; _  <- Send USR2 c1
-                      ; c2 <- @Recv Access (SignedEncrypted KID2 (fst kp) true)
-                      ; m  <- Decrypt c2
-                      ; n  <- Gen
-                      ; c3 <- SignEncrypt KID1 (getKey m) USR2 (message.Content n)
-                      ; _  <- Send USR2 c3
-                      ; @Return (Base Nat) n) ;
+                    (
+                      c <- SignEncrypt KID1 KID3 USR3 (Content 1)
+                      ; _ <- Send USR3 c
+                      ; ret 1
+                    )
+        ; 
 
+      (* User 2 implementation *)
       MkRUserSpec USR2 KEYS2
-                  ( c1 <- @Recv Access (Signed KID1 true)
-                    ; v  <- Verify KID1 c1
-                    ; kp <- GenerateSymKey Encryption
-                    ; c2 <- SignEncrypt KID2 (getKey (snd v)) USR1 (sharePrivKey kp)
-                    ; _  <- Send USR1 c2
-                    ; c3 <- @Recv Nat (SignedEncrypted KID1 (fst kp) true)
-                    ; m  <- Decrypt c3
-                    ; @Return (Base Nat) (extractContent m) )
+                  (
+                    c <- SignEncrypt KID2 KID3 USR3 (Content 1)
+                    ; _ <- Send USR3 c
+                    ; ret 1
+                  )
+        ; 
+
+      (* User 2 implementation *)
+      MkRUserSpec USR3 KEYS3
+                  (
+                    voteC1 <- @Recv Nat (SignedEncrypted KID1 KID3 true)
+                    ; voteC2 <- @Recv Nat (SignedEncrypted KID2 KID3 true)
+                    ; vote1 <- Decrypt voteC1
+                    ; vote2 <- Decrypt voteC2
+                    ; ret (let v1 := extractContent vote1 in
+                           let v2 := extractContent vote2
+                           in  if v1 ==n v2 then v1 else 100)
+                  )
       ].
 
+    (* Here is where we put the implementation universe together.  Like above, it is 
+     * unlikely anything will need to change here.
+     *)
     Definition real_univ_start :=
       mkrU (mkKeys KEYS) real_users.
   End RW.
 
+  (* These are here to help the proof automation.  Don't change. *)
   Hint Unfold
        real_univ_start
        ideal_univ_start
@@ -140,46 +183,46 @@ Module ShareSecretSymmetricEncProtocol.
   Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
     progress(autounfold with user_build; simpl).
   
-End ShareSecretSymmetricEncProtocol.
+End VotingProtocol.
 
-Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
+Module VotingProtocolSecure <: AutomatedSafeProtocolSS.
 
-  Import ShareSecretSymmetricEncProtocol.
+  Import VotingProtocol.
 
+  (* Some things may need to change here.  t__hon is where we place the 
+   * type that the protocol computes.  It is set to Nat now, because we
+   * return a natual number.
+   *)
   Definition t__hon := Nat.
   Definition t__adv := Unit.
-  Definition b := tt.
+  Definition b    := tt.
+
+  (* These two variables hook up the starting points for both specification and
+   * implementation universes.  If you followed the template above, this shouldn't
+   * need to be changed.
+   *)
   Definition iu0  := ideal_univ_start.
   Definition ru0  := real_univ_start.
 
   Import Gen Tacs SetLemmas.
 
+  (* These are here to help the proof automation.  Don't change. *)
   Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start real_univ_start : core.
-
-  Lemma next_key_natmap_exists :
-    forall {V} (m : NatMap.t V),
-    exists k, m $? k = None.
-  Proof.
-    intros.
-    exists (next_key m); eauto using Maps.next_key_not_in.
-  Qed.
-
-  Lemma next_key_chmap_exists :
-    forall {V} (m : ChMap.t V),
-    exists k, m #? (# k) = None.
-  Proof.
-    intros.
-    exists (next_key_nat m); eauto using next_key_not_in.
-  Qed.
+  Hint Unfold
+       mkiU mkiUsr mkrU mkrUsr
+       mkKeys
+    : core.
 
   Lemma safe_invariant :
     invariantFor
-      {| Initial := {(ru0, iu0, true)}; Step := @step t__hon t__adv  |}
+      {| Initial := {(ru0, iu0, true)}; Step := @stepSS t__hon t__adv  |}
       (fun st => safety st /\ alignment st ).
   Proof.
     eapply invariant_weaken.
 
     - eapply multiStepClosure_ok; simpl.
+      (* Calls to gen1 will need to be addded here until the model checking terminates. *)
+      autounfold in *.
       gen1.
       gen1.
       gen1.
@@ -210,33 +253,7 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
       gen1.
       gen1.
       gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      
+
     - intros.
       simpl in *.
 
@@ -318,6 +335,7 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
         solve_concrete_maps;
         solve_simple_maps;
         eauto.
+
   Qed.
   
   Lemma universe_starts_safe : universe_ok ru0 /\ adv_universe_ok ru0.
@@ -327,12 +345,4 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
   Qed.
   
 
-End ShareSecretProtocolSecure.
-
-(*
- * 1) make protocols  518.64s user 0.45s system 99% cpu 8:39.13 total  ~ 6.2GB
- * 2) add cleanup of chmaps to close:
- *    make protocols  414.45s user 0.43s system 99% cpu 6:54.90 total  ~ 5.6GB
- *
- *
- *)
+End VotingProtocolSecure.

@@ -285,6 +285,13 @@ Module MyOrderedMap (OT : UsualOrderedType).
     destruct (eq_dec k2 y); destruct (eq_dec k1 y); intros; subst; clean_map_lookups; eauto.
   Qed.
 
+  Lemma remove_empty :
+    forall V k,
+      (@empty V) $- k = $0.
+  Proof.
+    intros; eapply map_eq_Equal; unfold Equal; intros; eauto.
+  Qed.
+
   Lemma map_ne_swap :
     forall {V} (m : Map.t V) k v k' v',
       k <> k'

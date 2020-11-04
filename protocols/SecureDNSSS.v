@@ -5,7 +5,7 @@
  * in this material are those of the author(s) and do not necessarily reflect the views of the 
  * Department of the Air Force.
  * 
- * © 2019-2020 Massachusetts Institute of Technology.
+ * © 2020 Massachusetts Institute of Technology.
  * 
  * MIT Proprietary, Subject to FAR52.227-11 Patent Rights - Ownership by the contractor (May 2014)
  * 
@@ -18,22 +18,26 @@
 From Coq Require Import
      List.
 
-Require Import
+From KeyManagement Require Import
         MyPrelude
         Maps
         ChMaps
         Messages
-        ModelCheck
         Common
         Keys
         Automation
         Tactics
         Simulation
-        AdversaryUniverse
+        AdversaryUniverse.
+
+From protocols Require Import
+        ModelCheck
         UniverseEqAutomation
         ProtocolAutomation
         SafeProtocol
-        ProtocolFunctions.
+        ProtocolFunctions
+        SilentStepElimination
+        SecureDNS.
 
 Require IdealWorld RealWorld.
 
@@ -50,157 +54,43 @@ Set Implicit Arguments.
 
 Open Scope protocol_scope.
 
-Module ShareSecretSymmetricEncProtocol.
+Module SecureDNSProtocolSecure <: AutomatedSafeProtocolSS.
 
-  (* User ids *)
-  Notation USR1 := 0.
-  Notation USR2 := 1.
+  Import SecureDNSProtocol.
 
-  Section IW.
-    Import IdealWorld.
-
-    Notation pCH12 := 0.
-    Notation pCH21 := 1.
-    Notation CH12  := (# pCH12).
-    Notation CH21  := (# pCH21).
-
-    Notation empty_chs := (#0 #+ (CH12, []) #+ (CH21, [])).
-
-    Notation PERMS1 := ($0 $+ (pCH12, owner) $+ (pCH21, reader)).
-    Notation PERMS2 := ($0 $+ (pCH12, reader) $+ (pCH21, owner)).
-
-    Notation ideal_users :=
-      [
-        (mkiUsr USR1 PERMS1 
-                ( chid <- CreateChannel
-                  ; _ <- Send (sharePerm chid writer) CH12
-                  ; m <- @Recv Access (chid #& pCH21)
-                  ; n <- Gen
-                  ; _ <- Send (Content n) (getPerm m #& pCH12)
-                  ; @Return (Base Nat) n
-        )) ;
-      (mkiUsr USR2 PERMS2
-              ( m <- @Recv Access CH12
-                ; chid <- CreateChannel
-                ; _ <- Send (sharePerm chid owner) (getPerm m #& pCH21)
-                ; m <- @Recv Nat (chid #& pCH12)
-                ; @Return (Base Nat) (extractContent m)
-      ))
-      ].
-
-    Definition ideal_univ_start :=
-      mkiU empty_chs ideal_users.
-
-  End IW.
-
-  Section RW.
-    Import RealWorld.
-
-    Notation KID1 := 0.
-    Notation KID2 := 1.
-
-    Notation KEYS := [ skey KID1 ; skey KID2 ].
-
-    Notation KEYS1 := ($0 $+ (KID1, true) $+ (KID2, false)).
-    Notation KEYS2 := ($0 $+ (KID1, false) $+ (KID2, true)).
-
-    Definition real_users :=
-      [
-        MkRUserSpec USR1 KEYS1
-                    ( kp <- GenerateAsymKey Encryption
-                      ; c1 <- Sign KID1 USR2 (sharePubKey kp)
-                      ; _  <- Send USR2 c1
-                      ; c2 <- @Recv Access (SignedEncrypted KID2 (fst kp) true)
-                      ; m  <- Decrypt c2
-                      ; n  <- Gen
-                      ; c3 <- SignEncrypt KID1 (getKey m) USR2 (message.Content n)
-                      ; _  <- Send USR2 c3
-                      ; @Return (Base Nat) n) ;
-
-      MkRUserSpec USR2 KEYS2
-                  ( c1 <- @Recv Access (Signed KID1 true)
-                    ; v  <- Verify KID1 c1
-                    ; kp <- GenerateSymKey Encryption
-                    ; c2 <- SignEncrypt KID2 (getKey (snd v)) USR1 (sharePrivKey kp)
-                    ; _  <- Send USR1 c2
-                    ; c3 <- @Recv Nat (SignedEncrypted KID1 (fst kp) true)
-                    ; m  <- Decrypt c3
-                    ; @Return (Base Nat) (extractContent m) )
-      ].
-
-    Definition real_univ_start :=
-      mkrU (mkKeys KEYS) real_users.
-  End RW.
-
-  Hint Unfold
-       real_univ_start
-       ideal_univ_start
-    : user_build.
-
-  Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
-    progress(autounfold with user_build; simpl).
-  
-End ShareSecretSymmetricEncProtocol.
-
-Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
-
-  Import ShareSecretSymmetricEncProtocol.
-
+  (* Some things may need to change here.  t__hon is where we place the 
+   * type that the protocol computes.  It is set to Nat now, because we
+   * return a natual number.
+   *)
   Definition t__hon := Nat.
   Definition t__adv := Unit.
-  Definition b := tt.
+  Definition b    := tt.
+
+  (* These two variables hook up the starting points for both specification and
+   * implementation universes.  If you followed the template above, this shouldn't
+   * need to be changed.
+   *)
   Definition iu0  := ideal_univ_start.
   Definition ru0  := real_univ_start.
 
   Import Gen Tacs SetLemmas.
 
+  (* These are here to help the proof automation.  Don't change. *)
   Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start real_univ_start : core.
-
-  Lemma next_key_natmap_exists :
-    forall {V} (m : NatMap.t V),
-    exists k, m $? k = None.
-  Proof.
-    intros.
-    exists (next_key m); eauto using Maps.next_key_not_in.
-  Qed.
-
-  Lemma next_key_chmap_exists :
-    forall {V} (m : ChMap.t V),
-    exists k, m #? (# k) = None.
-  Proof.
-    intros.
-    exists (next_key_nat m); eauto using next_key_not_in.
-  Qed.
+  Hint Unfold
+       mkiU mkiUsr mkrU mkrUsr
+       mkKeys
+    : core.
 
   Lemma safe_invariant :
     invariantFor
-      {| Initial := {(ru0, iu0, true)}; Step := @step t__hon t__adv  |}
+      {| Initial := {(ru0, iu0, true)}; Step := @stepSS t__hon t__adv  |}
       (fun st => safety st /\ alignment st ).
   Proof.
     eapply invariant_weaken.
 
     - eapply multiStepClosure_ok; simpl.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
+      autounfold in *.
       gen1.
       gen1.
       gen1.
@@ -237,6 +127,7 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
       gen1.
       gen1.
       
+    (* The remaining parts of the proof script shouldn't need to change. *)
     - intros.
       simpl in *.
 
@@ -244,11 +135,12 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
         simpl in *; autounfold with core;
           subst; simpl;
             unfold safety, alignment;
+      (* 129 *)
             ( split;
-            [ try solve [ solve_honest_actions_safe; clean_map_lookups; eauto 8 ]
-            | try solve [ simpl; split; trivial; intros; rstep; subst; solve_labels_align ]
+            [ solve_honest_actions_safe; clean_map_lookups; eauto 8
+            | simpl; split; trivial; intros; rstep; subst; solve_labels_align
             ]).
-      
+
       Unshelve.
       all: auto.
 
@@ -267,7 +159,7 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
     - unfold AdversarySafety.keys_honest; rewrite Forall_natmap_forall; intros.
       econstructor; unfold mkrUsr; simpl.
       rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty; eauto.
-      solve_perm_merges.
+      simpl in *; solve_perm_merges.
     - unfold lameAdv; simpl; eauto.
   Qed.
 
@@ -327,12 +219,4 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
   Qed.
   
 
-End ShareSecretProtocolSecure.
-
-(*
- * 1) make protocols  518.64s user 0.45s system 99% cpu 8:39.13 total  ~ 6.2GB
- * 2) add cleanup of chmaps to close:
- *    make protocols  414.45s user 0.43s system 99% cpu 6:54.90 total  ~ 5.6GB
- *
- *
- *)
+End SecureDNSProtocolSecure.
