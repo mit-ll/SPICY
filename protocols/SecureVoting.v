@@ -345,4 +345,4 @@ Module VotingProtocolSecure <: AutomatedSafeProtocolSS.
   Qed.
   
 
-End MyProtocolSecure.
+End VotingProtocolSecure.
