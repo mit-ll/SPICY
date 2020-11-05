@@ -75,7 +75,7 @@ secdns: CoqMakefile
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
 secvote: CoqMakefile
-	$(eval TS := protocols/SecureVoting.vo)
+	$(eval TS := "protocols/SecureVoting.vo protocols/AvgSalary.vo")
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
 p2p: CoqMakefile

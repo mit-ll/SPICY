@@ -74,6 +74,7 @@ protocols/SecureDNS.v
 protocols/SecureDNSSS.v
 
 protocols/SecureVoting.v
+protocols/AvgSalary.v
 protocols/P2P.v
 
 protocols/NeedhamSchroeder.v
