@@ -602,8 +602,9 @@ Section Simulation.
   Definition ri_final_actions_align :=
     forall (U__r : RealWorld.universe A B) U__i,
       R (RealWorld.peel_adv U__r) U__i
-      -> advP U__r.(RealWorld.adversary)
-      -> (forall suid lbl U__r', RealWorld.step_universe suid U__r lbl U__r' -> False)
+      -> universe_ok U__r
+      -> adv_universe_ok U__r
+      -> (forall uid lbl U__r', RealWorld.step_universe (Some uid) U__r lbl U__r' -> False)
       -> forall uid ud__r r__r,
           U__r.(RealWorld.users) $? uid = Some ud__r
           -> ud__r.(RealWorld.protocol) = RealWorld.Return r__r
@@ -620,7 +621,7 @@ Section Simulation.
         U__i.(IdealWorld.users) $? uid = Some ud
       -> exists U__is' ud__s,
         istepSilent ^* U__is U__is'
-  can't be multi silent step, should be multi any step; rewritten below for discussion
+  (* can't be multi silent step, should be multi any step; rewritten below for discussion *)
         /\ U__is'.(IdealWorld.users) $? uid = Some ud__s
         /\ ud__s.(IdealWorld.protocol) = ud.(IdealWorld.protocol).
 
