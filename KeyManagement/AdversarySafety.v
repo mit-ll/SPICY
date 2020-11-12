@@ -2694,61 +2694,6 @@ Section SingleAdversarySimulates.
          msg_nonce_ok_none_updateTrackedNonce_idempotent
          updateRecvNonce_clean_ciphers_honestly_signed.
 
-    (* Lemma honest_silent_recv_implies_honest_or_no_step_origuniv : *)
-    (*   forall {t A B} (msg : crypto t) (usrs : honest_users A) (adv : user_data B) usrs__s cs__s *)
-    (*     cs gks  u_id honestk pat ks qmsgs mycs froms froms' sents cur_n b, *)
-    (*     ~ msg_accepted_by_pattern cs (Some u_id) froms pat msg *)
-    (*     -> honestk = findUserKeys usrs *)
-    (*     -> froms' = (if msg_signed_addressed honestk cs (Some u_id) msg *)
-    (*                then updateTrackedNonce (Some u_id) froms cs msg *)
-    (*                else froms) *)
-    (*     -> cs__s = clean_ciphers honestk cs *)
-    (*     -> usrs__s = clean_users honestk cs usrs *)
-    (*     -> step_user Silent (Some u_id) *)
-    (*                 (usrs__s, clean_adv adv honestk cs b, cs__s, clean_keys honestk gks, *)
-    (*                  clean_key_permissions honestk ks, *)
-    (*                  clean_messages honestk cs (Some u_id) froms (existT _ _ msg :: qmsgs), *)
-    (*                  mycs, froms, sents, cur_n, @Recv t pat) *)
-    (*                 (usrs__s, clean_adv adv honestk cs b, cs__s, clean_keys honestk gks, *)
-    (*                  clean_key_permissions honestk ks, *)
-    (*                  clean_messages honestk cs (Some u_id) froms' qmsgs, mycs, froms', sents, cur_n, Recv pat) *)
-    (*       \/ (usrs__s, clean_adv adv honestk cs b, cs__s, clean_keys honestk gks, *)
-    (*          clean_key_permissions honestk ks, *)
-    (*          clean_messages honestk cs (Some u_id) froms (existT _ _ msg :: qmsgs), mycs, froms, sents, cur_n, @Recv t pat) *)
-    (*         = (clean_users honestk cs usrs, clean_adv adv honestk cs b, cs__s, clean_keys honestk gks, *)
-    (*            clean_key_permissions honestk ks, *)
-    (*            clean_messages honestk cs (Some u_id) froms' qmsgs, mycs, froms', sents, cur_n, Recv pat). *)
-    (* Proof. *)
-    (*   intros; subst. *)
-    (*   cases (msg_signed_addressed (findUserKeys usrs) cs (Some u_id) msg). *)
-
-    (*   - cases (msg_nonce_ok cs froms msg). *)
-    (*     + repeat *)
-    (*         match goal with *)
-    (*         | [H : msg_nonce_ok _ _ _ = _ |- _ ] => *)
-    (*           unfold msg_nonce_ok in H; destruct msg; try discriminate; *)
-    (*             cases (cs $? c_id); try discriminate; *)
-    (*               cases (count_occ msg_seq_eq froms (cipher_nonce c)); try discriminate; clean_context *)
-    (*         | [ H : count_occ _ _ _ = 0 |- _ ] =>  *)
-    (*           rewrite <- count_occ_not_In in H *)
-    (*         end. *)
-
-    (*       left; econstructor; eauto. *)
-    (*       rewrite msg_signed_addressed_true_after_cipher_cleaning; eauto; intros; eauto. *)
-
-    (*     + right; simpl. *)
-
-    (*       unfold clean_messages at 1. *)
-    (*       unfold clean_messages', msg_filter; simpl. *)
-    (*       rewrite Heq , Heq0, fold_clean_messages1', fold_clean_messages. *)
-    (*       repeat f_equal; eauto. *)
-            
-    (*   - right; simpl. *)
-    (*     unfold clean_messages at 1. *)
-    (*     unfold clean_messages', msg_filter; simpl. *)
-    (*     rewrite Heq, fold_clean_messages1'; trivial. *)
-    (* Qed. *)
-
     Lemma clean_ciphers_eq_absurd :
       forall cs honestk c_id c,
         ~ In c_id cs
@@ -3364,93 +3309,6 @@ Section SingleAdversarySimulates.
     Qed.
 
     Hint Resolve clean_adv_msgs_keeps_honest_msg.
-
-    (* Lemma clean_messages_elt_rewrite : *)
-    (*   forall t honestk cs uid msgs1 (msg : crypto t) froms msgs2 pat cid c, *)
-    (*     Forall (fun '(existT _ _ msg') => ~ msg_accepted_by_pattern cs (Some uid) froms pat msg' *)
-    (*                                    /\ forall cid c cid' c', msg = SignedCiphertext cid *)
-    (*                                                       -> cs $? cid = Some c *)
-    (*                                                       -> msg' = SignedCiphertext cid' *)
-    (*                                                       -> cs $? cid' = Some c' *)
-    (*                                                       -> cipher_nonce c <> cipher_nonce c' ) msgs1 *)
-    (*     -> msg_honestly_signed honestk cs msg = true *)
-    (*     -> msg_to_this_user cs (Some uid) msg = true *)
-    (*     -> msg = SignedCiphertext cid *)
-    (*     -> cs $? cid = Some c *)
-    (*     -> ~ List.In (cipher_nonce c) froms *)
-    (*     -> exists froms', *)
-    (*       clean_messages honestk cs (Some uid) froms (msgs1 ++ (existT _ _ msg) :: msgs2) =  *)
-    (*       clean_messages honestk cs (Some uid) froms msgs1 *)
-    (*                      ++ (existT _ _ msg) *)
-    (*                      :: clean_messages honestk cs (Some uid) froms' msgs2 *)
-    (* . *)
-    (* Proof. *)
-    (*   induction msgs1; intros; eauto. *)
-    (*   - eexists. *)
-    (*     simpl. *)
-    (*     unfold clean_messages at 1; unfold clean_messages'; simpl. *)
-    (*     unfold msg_signed_addressed. *)
-    (*     rewrite H0, H1; simpl. *)
-    (*     unfold msg_nonce_ok; subst; context_map_rewrites. *)
-    (*     count_occ_list_in1. *)
-    (*     rewrite fold_clean_messages2', *)
-    (*     clean_messages'_fst_pull, *)
-    (*     fold_clean_messages; eauto. *)
-
-    (*   - invert H. *)
-    (*     rewrite <- app_comm_cons. *)
-
-    (*     unfold clean_messages at 1 2, clean_messages'; simpl. *)
-    (*     unfold msg_filter at 2 4; destruct a. *)
-
-    (*     generalize (IHmsgs1 _ _ msgs2 _ _ _ H8 H0 H1 eq_refl H3 H4); intros. *)
-    (*     split_ex. *)
-    (*     cases (msg_signed_addressed honestk cs (Some uid) c0); eauto. *)
-    (*     simpl. *)
-
-    (*     unfold msg_nonce_ok; destruct c0; eauto. *)
-
-    (*     rewrite !fold_clean_messages2', *)
-    (*     !clean_messages'_fst_pull, *)
-    (*     !fold_clean_messages. *)
-    (*     rewrite H, app_comm_cons; eauto. *)
-
-    (*     cases (cs $? c_id). *)
-    (*     2: { *)
-    (*       rewrite !fold_clean_messages2', *)
-    (*       !fold_clean_messages. *)
-    (*       rewrite H; eauto. *)
-    (*     } *)
-
-    (*     cases (count_occ msg_seq_eq froms (cipher_nonce c0)); eauto. *)
-
-    (*     rewrite !fold_clean_messages2', *)
-    (*     !clean_messages'_fst_pull, *)
-    (*     !fold_clean_messages. *)
-
-    (*     generalize H0; intros *)
-    (*     ; eapply IHmsgs1 with (froms := cipher_nonce c0 :: froms) (pat := pat) in H0 *)
-    (*     ; clear IHmsgs1; eauto. *)
-          
-    (*     split_ex. *)
-    (*     rewrite H0. *)
-    (*     eexists; reflexivity. *)
-
-    (*     rewrite Forall_forall in H8 |- *; intros. *)
-    (*     destruct x; intros. eapply H8 in H7; clear H8; split_ex. *)
-    (*     split; eauto. *)
-    (*     unfold not; intros; assert (msg_accepted_by_pattern cs (Some uid) froms pat c1). *)
-    (*     2: contradiction. *)
-    (*     invert H9; econstructor; eauto *)
-    (*     ; destruct chk; eauto *)
-    (*     ; rewrite <- count_occ_not_In in * *)
-    (*     ; unfold not; intros *)
-    (*     ; specialize (H8 _ _ _ _ eq_refl H3 eq_refl H11); simpl in H8 *)
-    (*     ; rewrite not_in_cons in H12; split_ex *)
-    (*     ; eauto. *)
-
-    (*     rewrite not_in_cons; eauto. *)
-    (* Qed. *)
 
     Lemma count_occ_permuted_froms_same' :
       forall froms froms',
@@ -5366,38 +5224,35 @@ Section SingleAdversarySimulates.
         -> forall cid c, cs $? cid = Some c
         -> honestk $? cipher_signing_key c = Some true
         -> n = cipher_nonce c
+        -> Forall (fun '(existT _ _ msg) => forall cid c, msg = SignedCiphertext cid -> cs $? cid = Some c -> cipher_nonce c <> n) msgs
         -> Forall (fun '(existT _ _ msg) => ~ msg_accepted_by_pattern cs (Some uid) froms pat msg) msgs.
     Proof.
       intros.
       rewrite Forall_forall in *; intros.
       destruct x; unfold not; intros; eauto.
-      apply H in H5.
-      apply H5.
+      specialize (H5 _ H6).
+      apply H in H6.
+      apply H6.
       assert (msg_honestly_signed honestk cs c0 = true) as MHS by eauto.
       pose proof (msg_honestly_signed_has_signing_key_cipher_id _ _ _ MHS); split_ex.
       eapply msg_honestly_signed_signing_key_honest in MHS; eauto.
       invert MHS; subst.
 
-      unfold msg_cipher_id in H8
+      unfold msg_cipher_id in H9
       ; destruct c0
       ; try discriminate.
 
-      unfold msg_signing_key in H7
-      ; invert H8
+      unfold msg_signing_key in H8
+      ; invert H9
       ; cases (cs $? x0); try discriminate
-      ; invert H7.
+      ; invert H8.
 
-      destruct (cid ==n x0); clean_map_lookups.
-      - invert H6; invert H1; [ econstructor 2
-                              | econstructor 3]
-        ; clean_map_lookups
-        ; simpl in *
-        ; eauto.
-        
+      specialize (H5 _ _ eq_refl Heq).
+      
+      destruct (cid ==n x0); clean_map_lookups; eauto.
+    Qed.
 
-    Admitted.
-    
-    Hint Resolve forall_not_mabp_extra_nons : core.
+    Hint Resolve forall_not_mabp_extra_nons forall_not_mabp_fewer_nons : core.
 
     Lemma in_cleaned_message_queue_must_in_message_queue' :
       forall msgs t (msg : crypto t) cs uid pat froms,
@@ -5410,8 +5265,12 @@ Section SingleAdversarySimulates.
         -> honest_nonces_unique cs honestk
         -> exists msgs1 msgs2,
               msgs = msgs1 ++ (existT _ _ msg) :: msgs2
-            (* /\ ms1 = clean_messages honestk cs (Some uid) froms msgs1 *)
-            /\ Forall (fun '(existT _ _ m) => ~ msg_accepted_by_pattern cs (Some uid) froms pat m) msgs1.
+            /\ ms1 = clean_messages honestk cs (Some uid) froms msgs1
+            /\ Forall (fun '(existT _ _ m) =>
+                        msg_accepted_by_pattern cs (Some uid) froms pat m
+                        -> List.In (existT _ _ m) ms1
+                     ) msgs1
+    .
     Proof.
       induction msgs; intros; eauto;
         simpl in H; try contradiction; split_ors; subst; eauto.
@@ -5419,52 +5278,96 @@ Section SingleAdversarySimulates.
       - exists []; eexists; repeat simple apply conj;
           try rewrite app_nil_l; eauto.
 
+        destruct ms1; eauto.
+        assert (msg_honestly_signed honestk cs msg = true) as MHS by eauto.
+        unfold msg_honestly_signed, msg_signing_key in MHS
+        ; destruct msg; try discriminate
+        ; cases (cs $? c_id); try discriminate
+        ; clear MHS.
+        assert (msg_honestly_signed honestk cs (@SignedCiphertext t0 c_id) = true) as MHS by eauto.
+
+        generalize H0; intros; invert H0; invert H3
+        ; repeat
+            match goal with
+            | [ H : count_occ _ _ _ = 0 |- _ ] => rewrite <- count_occ_not_In in H
+            | [ H : Some _ = Some _ |- _ ] => invert H
+            end
+        ; erewrite clean_messages_keeps_signed_addressed_unseen_nonce in H1; simpl; eauto.
+
+        rewrite <- app_comm_cons in H1
+        ; invert H1
+        ; invert H2
+        ; contradiction.
+        
+        unfold msg_signed_addressed; clean_map_lookups; simpl
+        ; rewrite MHS
+        ; unfold msg_to_this_user, msg_destination_user
+        ; context_map_rewrites
+        ; simpl
+        ; destruct (msg_to ==n msg_to); try contradiction
+        ; trivial.
+        
+        rewrite <- app_comm_cons in H1
+        ; invert H1
+        ; invert H2
+        ; contradiction.
+        
+        unfold msg_signed_addressed; clean_map_lookups; simpl
+        ; rewrite MHS
+        ; unfold msg_to_this_user, msg_destination_user
+        ; context_map_rewrites
+        ; simpl
+        ; destruct (msg_to ==n msg_to); try contradiction
+        ; trivial.
+        
       - destruct a.
         symmetry in H1
         ; apply clean_messages_cons_split in H1
         ; split_ors
         ; symmetry in H1.
 
-        + eapply IHmsgs with (pat := pat) in H1; eauto.
+        + generalize H1; intros CME; eapply IHmsgs with (pat := pat) in H1; eauto.
           clear IHmsgs.
           split_ex.
           subst.
-          exists (existT crypto x c :: x0); eexists; split.
+          exists (existT crypto x c :: x0); eexists; repeat simple apply conj.
           rewrite app_comm_cons; trivial.
-          econstructor; eauto.
-          unfold not; intros.
+
+
           unfold not_replayed in H5.
-          invert H1; invert H3; eauto.
-
-          invert H12.
-          rewrite honest_key_honest_keyb in H7.
-          unfold msg_honestly_signed, msg_signing_key, msg_to_this_user, msg_destination_user in H5
-          ; context_map_rewrites
-          ; simpl in H5
-          ; destruct (msg_to ==n msg_to); try contradiction
-          ; context_map_rewrites
+          unfold clean_messages at 2, clean_messages', msg_filter; simpl.
+          cases (msg_signed_addressed honestk cs (Some uid) c); eauto.
+          unfold msg_signed_addressed in Heq; rewrite andb_true_iff in Heq; destruct Heq as [RW1 RW2].
+          rewrite RW1 in H5
+          ; rewrite RW2 in H5
           ; simpl in H5.
+          destruct (msg_nonce_ok cs froms c); try discriminate.
+          rewrite fold_clean_messages1', fold_clean_messages; trivial.
 
-          rewrite H7 in H5
-          ; rewrite H9 in H5
-          ; simpl in H5
-          ; discriminate.
+          econstructor; eauto.
+          intros.
+          exfalso.
 
-          invert H12.
-          rewrite honest_key_honest_keyb in H7.
-          unfold msg_honestly_signed, msg_signing_key, msg_to_this_user, msg_destination_user in H5
+          unfold not_replayed, msg_honestly_signed, msg_signing_key, msg_to_this_user, msg_destination_user in H5
+          ; invert H3; invert H1
           ; context_map_rewrites
-          ; simpl in H5
+          ; simpl in *
+          ; context_map_rewrites
+          ; simpl in *
+          ; repeat
+              match goal with
+              | [ H : honest_key _ _ |- _ ] => rewrite honest_key_honest_keyb in H
+              | [ H : Some _ = Some _ |- _ ] => invert H
+              end
           ; destruct (msg_to ==n msg_to); try contradiction
-          ; context_map_rewrites
-          ; simpl in H5.
+          .
 
-          rewrite H7 in H5
-          ; rewrite H9 in H5
-          ; simpl in H5
-          ; discriminate.
-            
-        + destruct ms1.
+          rewrite H6, H12 in H5; simpl in H5; discriminate.
+          rewrite H6, H13 in H5; simpl in H5; discriminate.
+
+        + subst.
+          
+          destruct ms1.
           * rewrite app_nil_l in H1
             ; invert H1.
 
@@ -5487,7 +5390,7 @@ Section SingleAdversarySimulates.
             ; rewrite <- honest_key_honest_keyb in *
             ; invert H1; invert MHS
             .
-            
+
             destruct (x1 ==n c_id); subst.
             exfalso.
             
@@ -5499,16 +5402,107 @@ Section SingleAdversarySimulates.
 
             invert H2.
             
-            eapply IHmsgs with (pat := pat) in H11; eauto. 
+            generalize H9; intros CME; eapply IHmsgs with (pat := pat) in H9; eauto. 
             clear IHmsgs.
             split_ex.
             subst.
 
-            exists (existT crypto x (SignedCiphertext x1) :: x0); eexists; split.
+            exists (existT crypto x (SignedCiphertext x1) :: x0); eexists; repeat simple apply conj.
             rewrite app_comm_cons; trivial.
-            econstructor; eauto.
 
-    Admitted.
+            unfold not_replayed in H12
+            ; rewrite !andb_true_iff in H12
+            ; split_ex
+            ; unfold msg_nonce_ok in H5
+            ; context_map_rewrites
+            ; destruct (count_occ msg_seq_eq froms (cipher_nonce x2)) eqn:COUNT ; try discriminate
+            ; generalize COUNT; rewrite <- count_occ_not_In in COUNT; intros COUNT'
+            .
+            erewrite clean_messages_keeps_signed_addressed_unseen_nonce; eauto.
+            2: unfold msg_signed_addressed; rewrite H2, H12; trivial.
+
+            unfold updateTrackedNonce
+            ; context_map_rewrites
+            ; destruct (cipher_to_user x2 ==n uid); try discriminate; subst
+            ; destruct (cipher_to_user x2 ==n cipher_to_user x2); try contradiction
+            ; rewrite COUNT'
+            .  
+            
+            trivial.
+
+            econstructor; eauto.
+            rewrite Forall_forall in H13 |- *; intros.
+            destruct x4.
+            apply H13 in H2; intros; clear H13.
+            assert (cipher_nonce x2 <> cipher_nonce c) as NE by (eapply H4; eauto).
+
+            assert ( msg_signed_addressed honestk cs (Some uid) c0 = true ).
+            invert H3; invert H9
+            ; unfold msg_signed_addressed, msg_honestly_signed, msg_signing_key, msg_to_this_user, msg_destination_user
+            ; context_map_rewrites
+            ; simpl
+            ; match goal with
+              | [ H : Some _ = Some _ |- _ ] => invert H
+              end
+            ; rewrite honest_key_honest_keyb in *
+            ; destruct (msg_to ==n msg_to); try contradiction
+            ; eauto.
+
+            generalize H13
+            ; unfold msg_signed_addressed, msg_honestly_signed, msg_signing_key
+                   , msg_to_this_user, msg_destination_user in H13
+            ; destruct c0; try discriminate
+            ; cases (cs $? c_id0); try discriminate
+            ; intros.
+
+            destruct (c_id0 ==n x1)
+            ; subst; clean_map_lookups.
+            exfalso; apply H8.
+            invert H9; eauto.
+
+            assert (cipher_nonce c0 <> cipher_nonce x2) as NE2.
+            eapply H4; eauto.
+            rewrite andb_true_iff in H13; split_ex.
+            rewrite <- honest_key_honest_keyb in H13; invert H13; eauto.
+
+            assert ( msg_accepted_by_pattern cs (Some uid) (cipher_nonce x2 :: froms) pat (@SignedCiphertext t1 c_id0) ).
+            invert H3; invert H9; [ econstructor 2 | econstructor 3]; eauto
+            ; clean_map_lookups; simpl in *
+            ; destruct ( msg_seq_eq (cipher_nonce x2) nonce ); try congruence.
+
+            apply H2 in H15; eauto.
+    Qed.
+
+    Lemma in_cleaned_message_queue_must_in_message_queue'' :
+      forall msgs t (msg : crypto t) cs uid pat froms,
+
+        List.In (existT _ _ msg) msgs
+        -> msg_accepted_by_pattern cs (Some uid) froms pat msg
+        -> forall ms1 ms2 honestk, clean_messages honestk cs (Some uid) froms msgs = ms1 ++ existT _ _ msg :: ms2
+        -> Forall (fun '(existT _ _ m) => ~ msg_accepted_by_pattern cs (Some uid) froms pat m) ms1
+        -> msg_pattern_safe honestk pat
+        -> honest_nonces_unique cs honestk
+        -> exists msgs1 msgs2,
+              msgs = msgs1 ++ (existT _ _ msg) :: msgs2
+            /\ Forall (fun '(existT _ _ m) => ~ msg_accepted_by_pattern cs (Some uid) froms pat m) msgs1.
+    Proof.
+      intros.
+
+      eapply in_cleaned_message_queue_must_in_message_queue' in H; eauto
+      ; split_ex.
+
+      subst.
+      (do 2 eexists); split.
+      reflexivity.
+      rewrite Forall_forall in *; intros.
+      destruct x1.
+
+      specialize (H6 _ H); simpl in H6.
+      unfold not; intros.
+      specialize (H6 H5).
+      specialize (H2 _ H6); simpl in H2.
+      contradiction.
+    Qed.
 
     Lemma all_not_accepted_by_pattern_cleaned_not_cleaned_ciphers :
       forall cs uid froms pat (msgs : queued_messages) honestk,
@@ -5584,6 +5578,7 @@ Section SingleAdversarySimulates.
         eexists; econstructor; eauto.
 
       - xx.
+
         assert (msg_accepted_by_pattern cs0 (Some uid) froms0 pat msg) as MABP.
         invert H6; [ econstructor 1
                    | econstructor 2
@@ -5601,7 +5596,7 @@ Section SingleAdversarySimulates.
         apply H40 in na.
         assert (msg_honestly_signed (findUserKeys usrs0) cs0 msg = true) as MHS by eauto.
 
-        eapply in_cleaned_message_queue_must_in_message_queue' in H0; eauto.
+        eapply in_cleaned_message_queue_must_in_message_queue'' in H0; eauto.
 
         split_ex.
         clear H7 H1.
@@ -6183,7 +6178,40 @@ Section SingleAdversarySimulates.
       -> (forall kid, honestk' $? kid = Some true -> honestk $? kid = Some true)
       -> next_cmd_safe honestk cs uid froms sents cmd.
   Proof.
-  Admitted.
+    unfold next_cmd_safe; intros.
+    apply H in H1.
+    destruct cmd__n
+    ; split_ex; subst
+    ; repeat simple apply conj; eauto.
+
+    - unfold RealWorld.msg_honestly_signed, RealWorld.msg_signing_key in *.
+      cases (clean_ciphers honestk cs $? x); try discriminate.
+      apply clean_ciphers_inv in Heq; context_map_rewrites.
+      rewrite <- honest_key_honest_keyb in *.
+      invert H1; constructor; eauto.
+
+    - unfold RealWorld.msg_to_this_user, RealWorld.msg_destination_user in *.
+      cases (clean_ciphers honestk cs $? x); try discriminate.
+      apply clean_ciphers_inv in Heq; context_map_rewrites; eauto.
+
+    - invert H3; econstructor; eauto.
+      unfold RealWorld.msg_honestly_signed, RealWorld.msg_signing_key in *.
+      cases (clean_ciphers honestk cs $? x); try discriminate.
+      apply clean_ciphers_inv in Heq; context_map_rewrites.
+      rewrite <- honest_key_honest_keyb in *.
+      invert H1; constructor; eauto.
+
+    - apply clean_ciphers_inv in H5.
+      (do 2 eexists); eauto.
+
+    - invert H1; [ econstructor 1
+                 | econstructor 2 ]
+      ; invert H2
+      ; constructor; eauto.
+
+    - intros.
+      apply H1 in H2; split_ex; eauto.
+  Qed.
 
   Lemma next_cmd_safe_before_after_cleaning :
     forall A (usrs : RealWorld.honest_users A) cs uid froms sents t cmd,
