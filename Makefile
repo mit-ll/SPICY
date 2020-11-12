@@ -82,6 +82,10 @@ p2p: CoqMakefile
 	$(eval TS := "protocols/P2P.vo")
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
+p2pv2: CoqMakefile
+	$(eval TS := "protocols/P2Pv2.vo")
+	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
+
 nsproto: CoqMakefile
 	$(eval TS := protocols/NeedhamSchroeder.vo)
 	$(MAKE) -f CoqMakefile $(TS)

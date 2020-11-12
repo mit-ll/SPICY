@@ -53,34 +53,46 @@ Set Implicit Arguments.
 
 Open Scope protocol_scope.
 
-Module AvgSalaryProtocol.
+Module P2PProtocol.
 
   (* Start with two users, as that is the minimum for any interesting protocol *)
   Notation USR1 := 0.
   Notation USR2 := 1.
-  Notation USR3 := 2.
-  Notation USR4 := 3.
+  Notation SRV  := 2.
 
   Section IW.
     Import IdealWorld.
 
     (* Set up initial communication channels so each user can talk directly to the other *)
-    Notation pCH14 := 0.
-    Notation pCH24 := 1.
-    Notation pCH34 := 2.
-    Notation CH14  := (# pCH14).
-    Notation CH24  := (# pCH24).
-    Notation CH34  := (# pCH34).
+    Notation pCH1 := 0.
+    Notation pCH2 := 1.
+
+    Notation pCH__s1 := 2.
+    Notation pCH1s := 3.
+    Notation pCH__s2 := 4.
+    Notation pCH2s := 5.
+
+    Notation CH1  := (# pCH1).
+    Notation CH2  := (# pCH2).
+    Notation CH__s1 := (# pCH__s1).
+    Notation CH1s := (# pCH1s).
+    Notation CH__s2 := (# pCH__s2).
+    Notation CH2s := (# pCH2s).
 
     (* This is the initial channel vector, each channel should be represented and start with 
      * no messages.
      *)
-    Notation empty_chs := (#0 #+ (CH14, []) #+ (CH24, []) #+ (CH34, [])).
+    Notation empty_chs :=
+      (#0
+        #+ (CH1, []) #+ (CH2, []) #+ (CH__s1, []) #+ (CH__s2, []) #+ (CH1s, []) #+ (CH2s, [])
+      ).
 
-    Notation PERMS1 := ($0 $+ (pCH14, writer)).
-    Notation PERMS2 := ($0 $+ (pCH24, writer)).
-    Notation PERMS3 := ($0 $+ (pCH34, writer)).
-    Notation PERMS4 := ($0 $+ (pCH14, reader) $+ (pCH24, reader) $+ (pCH34, reader)).
+    Notation PERMS1 := ($0 $+ (pCH1, owner) $+ (pCH__s1, reader) $+ (pCH1s, writer)).
+    Notation PERMS2 := ($0 $+ (pCH2, owner) $+ (pCH__s2, reader) $+ (pCH2s, writer)).
+    Notation PERMS__s := ($0 $+ (pCH1, reader) $+ (pCH2, reader)
+                         $+ (pCH__s1, writer) $+ (pCH1s, reader)
+                         $+ (pCH__s2, writer) $+ (pCH2s, reader)
+                       ).
 
     (* Fill in the users' protocol specifications here, adding additional users as needed.
      * Note that all users must return an element of the same type, and that type needs to 
@@ -89,31 +101,32 @@ Module AvgSalaryProtocol.
     Notation ideal_users :=
       [
         mkiUsr USR1 PERMS1
-               ( _ <- Send (Content 1) CH14
-                 ; @Return (Base Nat) 1
+               ( _ <- Send (Content USR2) CH1s
+                 ; m <- @Recv (TPair Access Access) CH__s1
+                 ; n <- Gen
+                 ; let ch := getPerm (msgSnd m)
+                   in _ <- Send (Content n) (pCH1 #& ch)
+                 ; @Return (Base Nat) n
                )
         ; 
 
       mkiUsr USR2 PERMS2
-             ( _ <- Send (Content 1) CH24
-               ; @Return (Base Nat) 1
-             )
+               ( _ <- Send (Content USR1) CH2s
+                 ; m <- @Recv (TPair Access Access) CH__s2
+                 ; n <- Gen
+                 ; let ch := getPerm (msgSnd m)
+                   in  m <- @Recv Nat (pCH1 #& ch)
+                 ; @Return (Base Nat) (extractContent m)
+               )
         ; 
 
-      mkiUsr USR3 PERMS3
-             ( _ <- Send (Content 1) CH34
+      mkiUsr SRV PERMS__s
+             ( m1 <- @Recv Nat CH1s
+               ; m2 <- @Recv Nat CH2s
+               ; ch <- CreateChannel
+               ; _ <- Send (MsgPair (sharePerm pCH1 reader) (sharePerm ch owner)) CH__s2
+               ; _ <- Send (MsgPair (sharePerm pCH2 reader) (sharePerm ch owner)) CH__s1
                ; @Return (Base Nat) 1
-             )
-        ; 
-
-      mkiUsr USR4 PERMS4
-             ( m1 <- @Recv Nat CH14
-               ; m2 <- @Recv Nat CH24
-               ; m3 <- @Recv Nat CH34
-               ; @Return (Base Nat) (let c1 := extractContent m1 in
-                                     let c2 := extractContent m2 in
-                                     let c3 := extractContent m3
-                                     in (c1 + c2 + c3) / 3)
              )
       ].
 
@@ -136,60 +149,66 @@ Module AvgSalaryProtocol.
      * 
      * Here, each user has a public asymmetric signing key.
      *)
-    Notation KID1 := 0.
-    Notation KID2 := 1.
-    Notation KID3 := 2.
-    Notation KID4 := 3.
+    Notation KID__s1 := 0.
+    Notation KID__e1 := 1.
+    Notation KID__s2 := 2.
+    Notation KID__e2 := 3.
+    Notation KID__ss := 4.
+    Notation KID__es := 5.
 
-    Notation KEYS := [ skey KID1 ; skey KID2 ; skey KID3; ekey KID4 ].
+    Notation KEYS := [ skey KID__s1 ; ekey KID__e1
+                       ; skey KID__s2 ; ekey KID__e2
+                       ; skey KID__ss ; ekey KID__es ].
 
-    Notation KEYS1 := ($0 $+ (KID1, true) $+ (KID4, false)).
-    Notation KEYS2 := ($0 $+ (KID2, true) $+ (KID4, false)).
-    Notation KEYS3 := ($0 $+ (KID3, true) $+ (KID4, false)).
-    Notation KEYS4 := ($0 $+ (KID1, false) $+ (KID2, false) $+ (KID3, false) $+ (KID4, true) ).
+    Notation KEYS1 := ($0 $+ (KID__s1, true) $+ (KID__e1, true) $+ (KID__ss, false) $+ (KID__es, false)).
+    Notation KEYS2 := ($0 $+ (KID__s2, true) $+ (KID__e2, true) $+ (KID__ss, false) $+ (KID__es, false)).
+    Notation KEYS__s := ($0
+                        $+ (KID__s1, false) $+ (KID__e1, false)
+                        $+ (KID__s2, false) $+ (KID__e2, false)
+                        $+ (KID__ss, true) $+ (KID__es, true)).
 
     Notation real_users :=
       [
         (* User 1 implementation *)
         MkRUserSpec USR1 KEYS1
                     (
-                      c <- SignEncrypt KID1 KID4 USR4 (Content 1)
-                      ; _ <- Send USR4 c
-                      ; ret 1
+                      c1 <- SignEncrypt KID__s1 KID__es SRV (Content USR2)
+                      ; _ <- Send SRV c1
+                      ; c2 <- @Recv (TPair Access Access) (SignedEncrypted KID__ss KID__e1 true)
+                      ; m1 <- Decrypt c2
+                      ; n <- Gen
+                      ; c3 <- SignEncrypt KID__s1 (getKey (msgSnd m1)) USR2 (Content n)
+                      ; _ <- Send USR2 c3
+                      ; @Return (Base Nat) n
                     )
         ; 
 
       (* User 2 implementation *)
       MkRUserSpec USR2 KEYS2
-                  (
-                    c <- SignEncrypt KID2 KID4 USR4 (Content 1)
-                    ; _ <- Send USR4 c
-                    ; ret 1
-                  )
+                    (
+                      c1 <- SignEncrypt KID__s2 KID__es SRV (Content USR1)
+                      ; _ <- Send SRV c1
+                      ; c2 <- @Recv (TPair Access Access) (SignedEncrypted KID__ss KID__e2 true)
+                      ; m1 <- Decrypt c2
+                      ; c3 <- @Recv Nat (SignedEncrypted (getKey (msgFst m1)) (getKey (msgSnd m1)) true)
+                      ; m2 <- Decrypt c3
+                      ; @Return (Base Nat) (extractContent m2)
+                    )
         ; 
 
-      (* User 3 implementation *)
-      MkRUserSpec USR3 KEYS3
-                  (
-                    c <- SignEncrypt KID3 KID4 USR4 (Content 1)
-                    ; _ <- Send USR4 c
-                    ; ret 1
-                  )
-        ;
-      
       (* Server implementation *)
-      MkRUserSpec USR4 KEYS4
+      MkRUserSpec SRV KEYS__s
                   (
-                    salC1 <- @Recv Nat (SignedEncrypted KID1 KID4 true)
-                    ; salC2 <- @Recv Nat (SignedEncrypted KID2 KID4 true)
-                    ; salC3 <- @Recv Nat (SignedEncrypted KID3 KID4 true)
-                    ; sal1 <- Decrypt salC1
-                    ; sal2 <- Decrypt salC2
-                    ; sal3 <- Decrypt salC3
-                    ; ret (let s1 := extractContent sal1 in
-                           let s2 := extractContent sal2 in
-                           let s3 := extractContent sal3
-                           in  (s1 + s2 + s3) / 3 )
+                    c1 <- @Recv Nat (SignedEncrypted KID__s1 KID__es true)
+                    ; c2 <- @Recv Nat (SignedEncrypted KID__s2 KID__es true)
+                    ; m1 <- Decrypt c1
+                    ; m2 <- Decrypt c2
+                    ; ky <- GenerateSymKey Encryption
+                    ; c3 <- SignEncrypt KID__ss KID__e1 USR1 (MsgPair (Permission (KID__s2, false)) (sharePrivKey ky))
+                    ; c4 <- SignEncrypt KID__ss KID__e2 USR2 (MsgPair (Permission (KID__s1, false)) (sharePrivKey ky))
+                    ; _ <- Send USR2 c4
+                    ; _ <- Send USR1 c3
+                    ; @Return (Base Nat) 1
                   )
       ].
 
@@ -209,11 +228,11 @@ Module AvgSalaryProtocol.
   Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
     progress(autounfold with user_build; simpl).
   
-End AvgSalaryProtocol.
+End P2PProtocol.
 
-Module AvgSalaryProtocolSecure <: AutomatedSafeProtocolSS.
+Module P2PProtocolSecure <: AutomatedSafeProtocolSS.
 
-  Import AvgSalaryProtocol.
+  Import P2PProtocol.
 
   (* Some things may need to change here.  t__hon is where we place the 
    * type that the protocol computes.  It is set to Nat now, because we
@@ -293,7 +312,50 @@ Module AvgSalaryProtocolSecure <: AutomatedSafeProtocolSS.
       gen1.
       gen1.
       gen1.
-
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      
+    (* The remaining parts of the proof script shouldn't need to change. *)
     - intros.
       simpl in *.
 
@@ -302,12 +364,44 @@ Module AvgSalaryProtocolSecure <: AutomatedSafeProtocolSS.
           subst; simpl;
             unfold safety, alignment;
             ( split;
-            [ try solve [ solve_honest_actions_safe; clean_map_lookups; eauto 8 ]
-            | try solve [ simpl; split; trivial; intros; rstep; subst; solve_labels_align ]
+            [ solve_honest_actions_safe; clean_map_lookups; eauto 8
+            | simpl; split; trivial; intros; rstep; subst; solve_labels_align
             ]).
 
+       Local Ltac merge_perms_helper :=
+        repeat match goal with
+               | [ |- _ = _ ] => reflexivity
+               | [ |- _ $? _ = _ ] => solve_concrete_maps
+               end.
+
+      Ltac finish_off1 :=
+        match goal with
+        | [ H : _ $k++ _ $? ?kid = Some _  |- _ ] =>
+          apply merge_perms_split in H
+          ; destruct H
+        | [ |- _ $k++ _ $? _ = Some _ ] =>
+          solve [ erewrite merge_perms_adds_ks1; (swap 2 4; merge_perms_helper) ]
+          || solve [ erewrite merge_perms_adds_ks2; (swap 2 4; merge_perms_helper) ]
+          || solve [ erewrite merge_perms_chooses_greatest; swap 1 4; eauto; clean_map_lookups]
+        | [ H : context [ _ $+ (?k1,_) $? ?k2] |- _ ] =>
+          progress (
+              repeat (
+                  (rewrite add_neq_o in H by solve_simple_ineq)
+                  || (rewrite add_eq_o in H by trivial)
+                  || (rewrite lookup_empty_none in H)
+            ))
+        | [ |- _ $? _ = _ ] =>
+          progress solve_concrete_maps
+        | [ |- context [ _ $k++ _ ] ] =>
+          progress solve_concrete_perm_merges
+        end.
+
+      all: try solve [ repeat finish_off1 ].
+
       Unshelve.
-      all: contradiction.
+
+      all: try discriminate.
+      all: auto.
 
   Qed.
 
@@ -385,4 +479,4 @@ Module AvgSalaryProtocolSecure <: AutomatedSafeProtocolSS.
   Qed.
   
 
-End AvgSalaryProtocolSecure.
+End P2PProtocolSecure.
