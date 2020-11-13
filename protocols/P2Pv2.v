@@ -397,6 +397,15 @@ Module P2PProtocolSecure <: AutomatedSafeProtocolSS.
         end.
 
       all: try solve [ repeat finish_off1 ].
+      all: repeat finish_off1.
+      destruct (k_id ==n 0); subst; clean_map_lookups.
+      repeat finish_off1.
+      destruct (k_id ==n x1); subst; clean_map_lookups.
+      repeat finish_off1.
+      destruct (k_id ==n 0); subst; clean_map_lookups.
+      repeat finish_off1.
+      destruct (k_id ==n x1); subst; clean_map_lookups.
+      repeat finish_off1.
 
       Unshelve.
 
