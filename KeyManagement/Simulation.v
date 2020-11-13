@@ -614,26 +614,6 @@ Section Simulation.
               /\ ud__i.(IdealWorld.protocol) = IdealWorld.Return r__i
               /\ Rret_val_to_val r__r = Iret_val_to_val r__i.
 
-  Definition ii_final_actions_align :=
-    forall (U__i U__is : IdealWorld.universe A),
-      (forall lbl U__i', IdealWorld.lstep_universe U__i lbl U__i' -> False)
-      -> forall uid ud,
-        U__i.(IdealWorld.users) $? uid = Some ud
-      -> exists U__is' ud__s,
-        istepSilent ^* U__is U__is'
-  (* can't be multi silent step, should be multi any step; rewritten below for discussion *)
-        /\ U__is'.(IdealWorld.users) $? uid = Some ud__s
-        /\ ud__s.(IdealWorld.protocol) = ud.(IdealWorld.protocol).
-
-  (* Definition ii_final_actions_align := *)
-  (*   forall (U__i U__is : IdealWorld.universe A), *)
-  (*     (forall lbl U__i', IdealWorld.lstep_universe U__i lbl U__i' -> False) *)
-  (*     -> (forall lbl U__is', IdealWorld.lstep_universe U__is lbl U__is' -> False) *)
-  (*     -> forall uid ud ud__s, *)
-  (*       U__i.(IdealWorld.users) $? uid = Some ud *)
-  (*       -> U__is.(IdealWorld.users) $? uid = Some ud__s *)
-  (*       -> ud__s.(IdealWorld.protocol) = ud.(IdealWorld.protocol). *)
-
   Definition simulates (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A) :=
 
     (* conditions for simulation steps *)
@@ -648,6 +628,39 @@ Section Simulation.
   /\ adv_universe_ok U__r.
 
 End Simulation.
+
+Section IISimulation.
+  Import IdealWorld.
+  
+  Variable A : type.
+  Variable R : universe A -> universe A -> Prop.
+
+  Definition ii_final_labels_align (U__i U__is : universe A) :=
+    (forall lbl U__i', ~ lstep_universe U__i lbl U__i')
+    -> exists (U__is' U__is'' : universe A),
+      trc3 lstep_universe (fun _ => True) U__is U__is'
+      /\ (forall lbl U__is'', ~ lstep_universe U__is' lbl U__is'')
+      /\ forall uid ud,
+          U__i.(users) $? uid = Some ud
+          -> exists U__is' ud__s,
+            U__is'.(users) $? uid = Some ud__s
+          /\ ud__s.(protocol) = ud.(protocol).
+
+  Definition ii_step :=
+    forall (U__i : universe A) U__is,
+      R U__i U__is
+      -> forall lbl U__i',
+        lstep_universe U__i lbl U__i'
+        -> exists U__is',
+          trc3 lstep_universe (fun _ => True) U__i U__is'
+          /\ ii_final_labels_align U__i' U__is'
+          /\ R U__i' U__is'.
+
+  Definition ii_simulates (U__i U__is : universe A) :=
+    ii_step
+    /\ R U__i U__is.
+
+End IISimulation.
 
 Definition refines {A B} (advP : RealWorld.user_data B -> Prop) (U1 : RealWorld.universe A B) (U2 : IdealWorld.universe A) :=
   exists R, simulates advP R U1 U2.
