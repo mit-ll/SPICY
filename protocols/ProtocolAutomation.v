@@ -1121,6 +1121,77 @@ Module SimulationAutomation.
       | [ RW : ?ks $? ?k = _ |- context [ ?ks $? ?k ] ] => rewrite RW
       end; trivial.
 
+  Ltac has_key ks k :=
+    match ks with
+    | context [ _ $+ (k,_) ] => idtac
+    end.
+  
+  Ltac solve_merges1 :=
+    match goal with
+    | [ H : Some _ = Some _ |- _ ] => apply some_eq_inv in H; subst
+    | [ H : Some _ = None |- _ ] => discriminate H
+    | [ H : None = Some _ |- _ ] => discriminate H
+    | [ H : ?ks $? ?k = _ |- _ ] =>
+      progress (
+          repeat (
+              (rewrite add_eq_o in H by trivial)
+              || (rewrite add_neq_o in H by congruence)
+              || (rewrite lookup_empty_none in H by congruence)
+            )
+        )
+    | [ H : _ $+ (?k1,_) $? ?k2 = _ |- _ ] =>
+      destruct (k1 ==n k2); subst
+    | [ H : _ $k++ _ $? _ = None  |- _ ] =>
+      apply merge_perms_no_disappear_perms in H
+      ; destruct H
+    | [ H : _ $k++ _ $? ?kid = Some _  |- _ ] =>
+      apply merge_perms_split in H
+      ; destruct H
+    | [ |- context [ ?kss1 $k++ ?kss2 $? ?ky ] ] =>
+      has_key kss1 ky; has_key kss2 ky
+      ; erewrite merge_perms_chooses_greatest
+          with (ks1 := kss1) (ks2 := kss2) (k := ky) (k' := ky)
+    | [ |- context [ ?kss1 $k++ ?kss2 $? ?ky ] ] =>
+      has_key kss1 ky
+      ; erewrite merge_perms_adds_ks1
+          with (ks1 := kss1) (ks2 := kss2) (k := ky)
+      ; try reflexivity
+    | [ |- context [ ?kss1 $k++ ?kss2 $? ?ky ] ] =>
+      has_key kss2 ky
+      ; erewrite merge_perms_adds_ks2
+          with (ks1 := kss1) (ks2 := kss2) (k := ky)
+      ; try reflexivity
+    | [ |- context [ ?kss1 $k++ ?kss2 $? ?ky ] ] =>
+      erewrite merge_perms_adds_no_new_perms
+        with (ks1 := kss1) (ks2 := kss2) (k := ky)
+    | [ |- ?ks $? ?k = _ ] =>
+      progress (
+          repeat (
+              (rewrite add_eq_o by trivial)
+              || (rewrite add_neq_o by congruence)
+              || (rewrite lookup_empty_none by congruence)
+            )
+        )
+    | [ |- _ = _ ] => (progress simpl) || reflexivity
+    end.
+
+  (* Ltac solve_merges1 := *)
+  (*   match goal with *)
+  (*   | [ |- ?ks1 $k++ ?ks2 $? ?k = Some _ ] => *)
+  (*     has_key ks1 k; has_key ks2 k; idtac "need to handle gp"; fail 1 *)
+  (*   | [ |- ?ks1 $k++ ?ks2 $? ?k = Some _ ] => *)
+  (*     has_key ks1 k; eapply merge_perms_adds_ks1; try reflexivity *)
+  (*   | [ |- ?ks1 $k++ ?ks2 $? ?k = Some _ ] => *)
+  (*     has_key ks2 k; eapply merge_perms_adds_ks2; try reflexivity *)
+  (*   | [ |- ?ks1 $k++ ?ks2 $? ?k = None ] => *)
+  (*     eapply merge_perms_adds_no_new_perms; eauto *)
+  (*   | [ |- ?ks $? ?k = _ ] => *)
+  (*     repeat ( *)
+  (*         (rewrite add_eq_o by trivial) *)
+  (*         || (rewrite add_neq_o by congruence) *)
+  (*         || (rewrite lookup_empty_none by congruence) *)
+  (*       ) *)
+  (*   end. *)
 
   Ltac solve_honest_actions_safe1 :=
     match goal with
@@ -1141,15 +1212,10 @@ Module SimulationAutomation.
     | [ H : RealWorld.findKeysMessage _ $? _ = _ |- _ ] => progress (simpl in H)
     | [ |- (_ -> _) ] => intros
     | [ |- context [ _ $+ (_,_) $? _ ] ] => progress clean_map_lookups
-    (* | [ |- context [ RealWorld.msg_honestly_signed _ _ _ ]] => unfold RealWorld.msg_honestly_signed *)
-    (* | [ |- context [ RealWorld.honest_keyb _ _ ]] => unfold RealWorld.honest_keyb *)
-    (* | [ |- context [ RealWorld.msg_to_this_user _ _ _ ]] => unfold RealWorld.msg_to_this_user *)
-    (* | [ |- context [ RealWorld.msgCiphersSignedOk _ _ _ ]] => unfold RealWorld.msgCiphersSignedOk *)
-    (* | [ |- context [ add_key_perm _ _ _ ] ] => unfold add_key_perm *)
     | [ |- RealWorld.msg_pattern_safe _ _ ] => econstructor
     | [ |- RealWorld.honest_key _ _ ] => econstructor
-    (* | [ |- context [_ $k++ _ $? _ ] ] => progress solve_concrete_perm_merges *)
     | [ |- context [_ $k++ _ ] ] => progress reduce_merges
+    (* | [ |- context [_ $k++ _ $? _ ] ] => progress (repeat solve_merges1) *)
     | [ |- context [_ $k++ _ $? _ ] ] => progress solve_merges
     | [ |- context [ ?m $? _ ] ] => unfold m
     | [ |- Forall _ _ ] => econstructor
@@ -1549,32 +1615,11 @@ Module Gen.
                         end
           end.
 
-  Ltac has_key ks k :=
-    match ks with
-    | context [ _ $+ (k,_) ] => idtac
-    end.
-  
-  Ltac solve_merges1 :=
-    match goal with
-    | [ |- ?ks1 $k++ ?ks2 $? ?k = Some _ ] =>
-      has_key ks1 k; has_key ks2 k; idtac "need to handle gp"; fail 1
-    | [ |- ?ks1 $k++ ?ks2 $? ?k = Some _ ] =>
-      has_key ks1 k; eapply merge_perms_adds_ks1; try reflexivity
-    | [ |- ?ks1 $k++ ?ks2 $? ?k = Some _ ] =>
-      has_key ks2 k; eapply merge_perms_adds_ks2; try reflexivity
-    | [ |- ?ks1 $k++ ?ks2 $? ?k = None ] =>
-      eapply merge_perms_adds_no_new_perms; eauto
-    | [ |- ?ks $? ?k = _ ] =>
-      repeat (
-          (rewrite add_eq_o by trivial)
-          || (rewrite add_neq_o by congruence)
-          || (rewrite lookup_empty_none by congruence)
-        )
-    end.
 
   Ltac solve_real_step_stuff1 :=
     equality1
     || simplify
+    || solve_merges1
     || match goal with
       | [ |- RealWorld.keys_mine _ _ ] =>
         simpl in *; hnf
@@ -1595,8 +1640,8 @@ Module Gen.
         ; destruct (k1 ==n kid); subst; clean_map_lookups
       | [ |- context [ $0 $? _ ]] =>
         rewrite lookup_empty_none
-      | [ |- _ $k++ _ $? _ = _ ] => 
-        progress (repeat solve_merges1; trivial)
+      (* | [ |- _ $k++ _ $? _ = _ ] =>  *)
+      (*   progress (repeat solve_merges1) *)
         (* unfold merge_perms, add_key_perm, fold; simpl; clean_map_lookups *)
       | [ |- _ $? _ = _ ] =>
         clean_map_lookups

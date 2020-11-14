@@ -368,48 +368,58 @@ Module P2PProtocolSecure <: AutomatedSafeProtocolSS.
             | simpl; split; trivial; intros; rstep; subst; solve_labels_align
             ]).
 
-       Local Ltac merge_perms_helper :=
-        repeat match goal with
-               | [ |- _ = _ ] => reflexivity
-               | [ |- _ $? _ = _ ] => solve_concrete_maps
-               end.
-
-      Ltac finish_off1 :=
+      Ltac solve_merges1 :=
         match goal with
+        | [ H : Some _ = Some _ |- _ ] => apply some_eq_inv in H; subst
+        | [ H : Some _ = None |- _ ] => discriminate H
+        | [ H : None = Some _ |- _ ] => discriminate H
+        | [ H : ?ks $? ?k = _ |- _ ] =>
+          progress (
+              repeat (
+                  (rewrite add_eq_o in H by trivial)
+                  || (rewrite add_neq_o in H by congruence)
+                  || (rewrite lookup_empty_none in H by congruence)
+                )
+            )
+        | [ H : _ $+ (?k1,_) $? ?k2 = _ |- _ ] =>
+          destruct (k1 ==n k2); subst
+        | [ H : _ $k++ _ $? _ = None  |- _ ] =>
+          apply merge_perms_no_disappear_perms in H
+          ; destruct H
         | [ H : _ $k++ _ $? ?kid = Some _  |- _ ] =>
           apply merge_perms_split in H
           ; destruct H
-        | [ |- _ $k++ _ $? _ = Some _ ] =>
-          solve [ erewrite merge_perms_adds_ks1; (swap 2 4; merge_perms_helper) ]
-          || solve [ erewrite merge_perms_adds_ks2; (swap 2 4; merge_perms_helper) ]
-          || solve [ erewrite merge_perms_chooses_greatest; swap 1 4; eauto; clean_map_lookups]
-        | [ H : context [ _ $+ (?k1,_) $? ?k2] |- _ ] =>
+        | [ |- context [ ?kss1 $k++ ?kss2 $? ?ky ] ] =>
+          has_key kss1 ky; has_key kss2 ky
+          ; erewrite merge_perms_chooses_greatest
+              with (ks1 := kss1) (ks2 := kss2) (k := ky) (k' := ky)
+        | [ |- context [ ?kss1 $k++ ?kss2 $? ?ky ] ] =>
+          has_key kss1 ky
+          ; erewrite merge_perms_adds_ks1
+              with (ks1 := kss1) (ks2 := kss2) (k := ky)
+          ; try reflexivity
+        | [ |- context [ ?kss1 $k++ ?kss2 $? ?ky ] ] =>
+          has_key kss2 ky
+          ; erewrite merge_perms_adds_ks2
+              with (ks1 := kss1) (ks2 := kss2) (k := ky)
+          ; try reflexivity
+        | [ |- context [ ?kss1 $k++ ?kss2 $? ?ky ] ] =>
+          erewrite merge_perms_adds_no_new_perms
+            with (ks1 := kss1) (ks2 := kss2) (k := ky)
+        | [ |- ?ks $? ?k = _ ] =>
           progress (
               repeat (
-                  (rewrite add_neq_o in H by solve_simple_ineq)
-                  || (rewrite add_eq_o in H by trivial)
-                  || (rewrite lookup_empty_none in H)
-            ))
-        | [ |- _ $? _ = _ ] =>
-          progress solve_concrete_maps
-        | [ |- context [ _ $k++ _ ] ] =>
-          progress solve_concrete_perm_merges
+                  (rewrite add_eq_o by trivial)
+                  || (rewrite add_neq_o by congruence)
+                  || (rewrite lookup_empty_none by congruence)
+                )
+            ) 
         end.
 
-      all: try solve [ repeat finish_off1 ].
-      all: repeat finish_off1.
-      destruct (k_id ==n 0); subst; clean_map_lookups.
-      repeat finish_off1.
-      destruct (k_id ==n x1); subst; clean_map_lookups.
-      repeat finish_off1.
-      destruct (k_id ==n 0); subst; clean_map_lookups.
-      repeat finish_off1.
-      destruct (k_id ==n x1); subst; clean_map_lookups.
-      repeat finish_off1.
+      all : try solve [ repeat solve_merges1; try reflexivity; simpl; trivial ].
 
       Unshelve.
 
-      all: try discriminate.
       all: auto.
 
   Qed.
