@@ -1131,6 +1131,7 @@ Module SimulationAutomation.
     | [ H : Some _ = Some _ |- _ ] => apply some_eq_inv in H; subst
     | [ H : Some _ = None |- _ ] => discriminate H
     | [ H : None = Some _ |- _ ] => discriminate H
+    | [ H : findKeysMessage _ $? _ = _ |- _ ] => progress (simpl in H)
     | [ H : ?ks $? ?k = _ |- _ ] =>
       progress (
           repeat (
