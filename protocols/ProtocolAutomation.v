@@ -1194,6 +1194,7 @@ Module SimulationAutomation.
   (*   end. *)
 
   Ltac solve_honest_actions_safe1 :=
+    solve_merges1 ||
     match goal with
     | [ H : _ = {| RealWorld.users := _;
                    RealWorld.adversary := _;
@@ -1214,14 +1215,12 @@ Module SimulationAutomation.
     | [ |- context [ _ $+ (_,_) $? _ ] ] => progress clean_map_lookups
     | [ |- RealWorld.msg_pattern_safe _ _ ] => econstructor
     | [ |- RealWorld.honest_key _ _ ] => econstructor
-    | [ |- context [_ $k++ _ ] ] => progress reduce_merges
-    (* | [ |- context [_ $k++ _ $? _ ] ] => progress (repeat solve_merges1) *)
-    | [ |- context [_ $k++ _ $? _ ] ] => progress solve_merges
+    (* | [ |- context [_ $k++ _ ] ] => progress reduce_merges *)
+    (* | [ |- context [_ $k++ _ $? _ ] ] => progress solve_merges *)
     | [ |- context [ ?m $? _ ] ] => unfold m
     | [ |- Forall _ _ ] => econstructor
     | [ |- exists x y, (_ /\ _)] => (do 2 eexists); repeat simple apply conj; eauto 2
     | [ |- _ /\ _ ] => repeat simple apply conj
-    (* | [ |- context [ _ = RealWorld.cipher_nonce _ ]] => progress (simpl) *)
     | [ |- ~ List.In _ _ ] => progress simpl
     | [ |- ~ (_ \/ _) ] => unfold not; intros; split_ors; subst; try contradiction
     | [ H : (_,_) = (_,_) |- _ ] => invert H
@@ -1623,7 +1622,7 @@ Module Gen.
     || match goal with
       | [ |- RealWorld.keys_mine _ _ ] =>
         simpl in *; hnf
-      | [ |- _ $k++ _ $? _ = _ ] => progress solve_concrete_perm_merges
+      (* | [ |- _ $k++ _ $? _ = _ ] => progress solve_concrete_perm_merges *)
       | [ |- ?m $? next_key ?m = None ] =>
         apply Maps.next_key_not_in
         ; trivial
@@ -1631,18 +1630,15 @@ Module Gen.
         rewrite not_find_in_iff
         ; apply Maps.next_key_not_in
         ; trivial
-      | [ H : _ $k++ _ $? ?kid = Some _  |- context [ ?kid ] ] =>
-        is_var kid
-        ; apply merge_perms_split in H
-        ; destruct H
+      (* | [ H : _ $k++ _ $? ?kid = Some _  |- context [ ?kid ] ] => *)
+      (*   is_var kid *)
+      (*   ; apply merge_perms_split in H *)
+      (*   ; destruct H *)
       | [ H : _ $+ (?k1,_) $? ?kid = Some _  |- context [ ?kid ] ] =>
         is_var kid
         ; destruct (k1 ==n kid); subst; clean_map_lookups
       | [ |- context [ $0 $? _ ]] =>
         rewrite lookup_empty_none
-      (* | [ |- _ $k++ _ $? _ = _ ] =>  *)
-      (*   progress (repeat solve_merges1) *)
-        (* unfold merge_perms, add_key_perm, fold; simpl; clean_map_lookups *)
       | [ |- _ $? _ = _ ] =>
         clean_map_lookups
       end.

@@ -148,6 +148,7 @@ Module SignPingSendProtocol.
   End RW.
 
   Hint Unfold
+       A B KID1 KEY1 KEYS A__keys B__keys
        PERMS__a PERMS__b
        real_univ_start mkrU mkrUsr
        ideal_univ_start mkiU : constants.
@@ -223,7 +224,7 @@ Module EncPingSendProtocol.
   End RW.
 
   Hint Unfold
-       A B KID__A KID__B A__keys B__keys
+       A B KID__A KID__B KEY__A KEY__B KEYS A__keys B__keys
        PERMS__a PERMS__b
        real_univ_start mkrU mkrUsr
        ideal_univ_start mkiU : constants.
