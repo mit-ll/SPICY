@@ -640,11 +640,12 @@ Section IISimulation.
     -> exists (U__is' U__is'' : universe A),
       trc3 lstep_universe (fun _ => True) U__is U__is'
       /\ (forall lbl U__is'', ~ lstep_universe U__is' lbl U__is'')
-      /\ forall uid ud,
-          U__i.(users) $? uid = Some ud
-          -> exists U__is' ud__s,
-            U__is'.(users) $? uid = Some ud__s
-          /\ ud__s.(protocol) = ud.(protocol).
+      /\ forall uid ud__i r,
+          U__i.(users) $? uid = Some ud__i
+          -> ud__i.(protocol) = Return r
+          -> exists ud__is,
+            U__is'.(users) $? uid = Some ud__is
+          /\ ud__is.(protocol) = Return r.
 
   Definition ii_step :=
     forall (U__i : universe A) U__is,
