@@ -151,11 +151,9 @@ Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
       
       + sets_invert; unfold safety;
           split_ex; simpl in *; subst;
-            solve_honest_actions_safe;
-            clean_map_lookups; eauto 8.
-
-        Unshelve.
-        all:clean_map_lookups.
+            autounfold with *;
+            try solve [ solve_honest_actions_safe
+                        ; clean_map_lookups; eauto 8 ].
         
       + sets_invert;
           unfold alignment; split_ex; subst; split; trivial; repeat prove_alignment1; eauto 3.
@@ -275,11 +273,10 @@ Module SimpleEncProtocolSecure <: AutomatedSafeProtocol.
       simpl in *; split.
       
       + sets_invert; unfold safety;
-          split_ex; simpl in *; subst; solve_honest_actions_safe;
+          split_ex; simpl in *; subst;
+            autounfold with *;
+            solve_honest_actions_safe;
             clean_map_lookups; eauto 8.
-
-        Unshelve.
-        all:clean_map_lookups.
         
       + sets_invert;
           unfold alignment; split_ex; subst; split; trivial; repeat prove_alignment1; eauto 3.

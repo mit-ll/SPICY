@@ -842,7 +842,8 @@ Module SimulationAutomation.
     | [ H : _ $+ (?k1,_) $? ?k2 = Some ?d__rw |- context [ RealWorld.key_heap ?d__rw $? _ = Some _ ] ] =>
       is_var d__rw; is_var k2; is_not_var k1;
       destruct (k1 ==n k2); subst; clean_map_lookups; simpl
-    | [ H : ?P $? _ = Some {| IdealWorld.read := _; IdealWorld.write := _ |} |- _ ] => simpl in *; unfold P in H; solve_concrete_maps
+    | [ H : ?P $? _ = Some {| IdealWorld.read := _; IdealWorld.write := _ |} |- _ ] =>
+      simpl in *; unfold P in H; solve_concrete_maps
     | [ |- _ $? _ = Some _ ] => progress solve_concrete_maps
     | [ |- context [ IdealWorld.addMsg ]] => unfold IdealWorld.addMsg; simpl
     | [ |- context [ ?m #? _ ]] => progress unfold m
@@ -863,6 +864,14 @@ Module SimulationAutomation.
     | [ |- _ -> _ ] => intros
     | [ |- _ = _ ] => reflexivity
     | [ |- _ /\ _ ] => split
+    | [ |- context [ _ $? _ ]] =>
+      progress (
+          repeat (
+              (rewrite add_eq_o by trivial)
+              || (rewrite add_neq_o by congruence)
+              || (rewrite lookup_empty_none by congruence)
+            )
+        )
     end; split_ex; simpl in *.
 
   Hint Extern 1 (action_matches _ _ _ _) =>
@@ -1112,8 +1121,81 @@ Module SimulationAutomation.
       | [ RW : ?ks $? ?k = _ |- context [ ?ks $? ?k ] ] => rewrite RW
       end; trivial.
 
+  Ltac has_key ks k :=
+    match ks with
+    | context [ _ $+ (k,_) ] => idtac
+    end.
+  
+  Ltac solve_merges1 :=
+    match goal with
+    | [ H : Some _ = Some _ |- _ ] => apply some_eq_inv in H; subst
+    | [ H : Some _ = None |- _ ] => discriminate H
+    | [ H : None = Some _ |- _ ] => discriminate H
+    | [ H : findKeysMessage _ $? _ = _ |- _ ] => progress (simpl in H)
+    | [ H : ?ks $? ?k = _ |- _ ] =>
+      progress (
+          repeat (
+              (rewrite add_eq_o in H by trivial)
+              || (rewrite add_neq_o in H by congruence)
+              || (rewrite lookup_empty_none in H by congruence)
+            )
+        )
+    | [ H : _ $+ (?k1,_) $? ?k2 = _ |- _ ] =>
+      destruct (k1 ==n k2); subst
+    | [ H : _ $k++ _ $? _ = None  |- _ ] =>
+      apply merge_perms_no_disappear_perms in H
+      ; destruct H
+    | [ H : _ $k++ _ $? ?kid = Some _  |- _ ] =>
+      apply merge_perms_split in H
+      ; destruct H
+    | [ |- context [ ?kss1 $k++ ?kss2 $? ?ky ] ] =>
+      has_key kss1 ky; has_key kss2 ky
+      ; erewrite merge_perms_chooses_greatest
+          with (ks1 := kss1) (ks2 := kss2) (k := ky) (k' := ky)
+    | [ |- context [ ?kss1 $k++ ?kss2 $? ?ky ] ] =>
+      has_key kss1 ky
+      ; erewrite merge_perms_adds_ks1
+          with (ks1 := kss1) (ks2 := kss2) (k := ky)
+      ; try reflexivity
+    | [ |- context [ ?kss1 $k++ ?kss2 $? ?ky ] ] =>
+      has_key kss2 ky
+      ; erewrite merge_perms_adds_ks2
+          with (ks1 := kss1) (ks2 := kss2) (k := ky)
+      ; try reflexivity
+    | [ |- context [ ?kss1 $k++ ?kss2 $? ?ky ] ] =>
+      erewrite merge_perms_adds_no_new_perms
+        with (ks1 := kss1) (ks2 := kss2) (k := ky)
+    | [ |- ?ks $? ?k = _ ] =>
+      progress (
+          repeat (
+              (rewrite add_eq_o by trivial)
+              || (rewrite add_neq_o by congruence)
+              || (rewrite lookup_empty_none by congruence)
+            )
+        )
+    | [ |- _ = _ ] => (progress simpl) || reflexivity
+    end.
+
+  (* Ltac solve_merges1 := *)
+  (*   match goal with *)
+  (*   | [ |- ?ks1 $k++ ?ks2 $? ?k = Some _ ] => *)
+  (*     has_key ks1 k; has_key ks2 k; idtac "need to handle gp"; fail 1 *)
+  (*   | [ |- ?ks1 $k++ ?ks2 $? ?k = Some _ ] => *)
+  (*     has_key ks1 k; eapply merge_perms_adds_ks1; try reflexivity *)
+  (*   | [ |- ?ks1 $k++ ?ks2 $? ?k = Some _ ] => *)
+  (*     has_key ks2 k; eapply merge_perms_adds_ks2; try reflexivity *)
+  (*   | [ |- ?ks1 $k++ ?ks2 $? ?k = None ] => *)
+  (*     eapply merge_perms_adds_no_new_perms; eauto *)
+  (*   | [ |- ?ks $? ?k = _ ] => *)
+  (*     repeat ( *)
+  (*         (rewrite add_eq_o by trivial) *)
+  (*         || (rewrite add_neq_o by congruence) *)
+  (*         || (rewrite lookup_empty_none by congruence) *)
+  (*       ) *)
+  (*   end. *)
 
   Ltac solve_honest_actions_safe1 :=
+    solve_merges1 ||
     match goal with
     | [ H : _ = {| RealWorld.users := _;
                    RealWorld.adversary := _;
@@ -1132,21 +1214,14 @@ Module SimulationAutomation.
     | [ H : RealWorld.findKeysMessage _ $? _ = _ |- _ ] => progress (simpl in H)
     | [ |- (_ -> _) ] => intros
     | [ |- context [ _ $+ (_,_) $? _ ] ] => progress clean_map_lookups
-    (* | [ |- context [ RealWorld.msg_honestly_signed _ _ _ ]] => unfold RealWorld.msg_honestly_signed *)
-    (* | [ |- context [ RealWorld.honest_keyb _ _ ]] => unfold RealWorld.honest_keyb *)
-    (* | [ |- context [ RealWorld.msg_to_this_user _ _ _ ]] => unfold RealWorld.msg_to_this_user *)
-    (* | [ |- context [ RealWorld.msgCiphersSignedOk _ _ _ ]] => unfold RealWorld.msgCiphersSignedOk *)
-    (* | [ |- context [ add_key_perm _ _ _ ] ] => unfold add_key_perm *)
     | [ |- RealWorld.msg_pattern_safe _ _ ] => econstructor
     | [ |- RealWorld.honest_key _ _ ] => econstructor
-    (* | [ |- context [_ $k++ _ $? _ ] ] => progress solve_concrete_perm_merges *)
-    | [ |- context [_ $k++ _ ] ] => progress reduce_merges
-    | [ |- context [_ $k++ _ $? _ ] ] => progress solve_merges
+    (* | [ |- context [_ $k++ _ ] ] => progress reduce_merges *)
+    (* | [ |- context [_ $k++ _ $? _ ] ] => progress solve_merges *)
     | [ |- context [ ?m $? _ ] ] => unfold m
     | [ |- Forall _ _ ] => econstructor
     | [ |- exists x y, (_ /\ _)] => (do 2 eexists); repeat simple apply conj; eauto 2
     | [ |- _ /\ _ ] => repeat simple apply conj
-    (* | [ |- context [ _ = RealWorld.cipher_nonce _ ]] => progress (simpl) *)
     | [ |- ~ List.In _ _ ] => progress simpl
     | [ |- ~ (_ \/ _) ] => unfold not; intros; split_ors; subst; try contradiction
     | [ H : (_,_) = (_,_) |- _ ] => invert H
@@ -1540,37 +1615,15 @@ Module Gen.
                         end
           end.
 
-  (* Ltac solve_real_step_stuff1 := *)
-  (*   equality1 *)
-  (*   || simplify *)
-  (*   || match goal with *)
-  (*     | [ |- RealWorld.keys_mine _ _ ] => *)
-  (*       simpl in *; hnf *)
-  (*     | [ |- _ $k++ _ $? _ = _ ] => solve_concrete_perm_merges *)
-  (*     end. *)
-
-  (* Ltac solve_indexedRealStep := *)
-  (*   solve [ *)
-  (*       repeat (match goal with [ |- exists _ , _ ] => eexists end) *)
-  (*       ; econstructor; [ *)
-  (*         solve [ simpl; clean_map_lookups; trivial ] *)
-  (*       | autounfold; unfold RealWorld.build_data_step; simpl; *)
-  (*         repeat match goal with *)
-  (*                | [ |- RealWorld.step_user _ _ _ _ ] => solve [ eapply RealWorld.StepBindProceed; eauto ] *)
-  (*                | [ |- RealWorld.step_user _ _ _ _ ] => eapply RealWorld.StepBindRecur; eauto *)
-  (*                | [ |- RealWorld.step_user _ _ _ _ ] => *)
-  (*                  econstructor *)
-  (*                  ; repeat (progress (repeat solve_real_step_stuff1; eauto)) *)
-  (*                end *)
-  (*       | reflexivity ]]. *)
 
   Ltac solve_real_step_stuff1 :=
     equality1
     || simplify
+    || solve_merges1
     || match goal with
       | [ |- RealWorld.keys_mine _ _ ] =>
         simpl in *; hnf
-      | [ |- _ $k++ _ $? _ = _ ] => solve_concrete_perm_merges
+      (* | [ |- _ $k++ _ $? _ = _ ] => progress solve_concrete_perm_merges *)
       | [ |- ?m $? next_key ?m = None ] =>
         apply Maps.next_key_not_in
         ; trivial
@@ -1578,20 +1631,47 @@ Module Gen.
         rewrite not_find_in_iff
         ; apply Maps.next_key_not_in
         ; trivial
-      | [ H : _ $k++ _ $? ?kid = Some _  |- context [ ?kid ] ] =>
-        is_var kid
-        ; apply merge_perms_split in H
-        ; destruct H
+      (* | [ H : _ $k++ _ $? ?kid = Some _  |- context [ ?kid ] ] => *)
+      (*   is_var kid *)
+      (*   ; apply merge_perms_split in H *)
+      (*   ; destruct H *)
       | [ H : _ $+ (?k1,_) $? ?kid = Some _  |- context [ ?kid ] ] =>
         is_var kid
         ; destruct (k1 ==n kid); subst; clean_map_lookups
       | [ |- context [ $0 $? _ ]] =>
         rewrite lookup_empty_none
-      | [ |- context [ _ $k++ _ ]] =>
-        unfold merge_perms, add_key_perm, fold; simpl; clean_map_lookups
       | [ |- _ $? _ = _ ] =>
         clean_map_lookups
       end.
+  
+  (* Ltac solve_real_step_stuff1 := *)
+  (*   equality1 *)
+  (*   || simplify *)
+  (*   || match goal with *)
+  (*     | [ |- RealWorld.keys_mine _ _ ] => *)
+  (*       simpl in *; hnf *)
+  (*     | [ |- _ $k++ _ $? _ = _ ] => solve_concrete_perm_merges *)
+  (*     | [ |- ?m $? next_key ?m = None ] => *)
+  (*       apply Maps.next_key_not_in *)
+  (*       ; trivial *)
+  (*     | [ |- ~ Map.In (next_key ?m) ?m ] => *)
+  (*       rewrite not_find_in_iff *)
+  (*       ; apply Maps.next_key_not_in *)
+  (*       ; trivial *)
+  (*     | [ H : _ $k++ _ $? ?kid = Some _  |- context [ ?kid ] ] => *)
+  (*       is_var kid *)
+  (*       ; apply merge_perms_split in H *)
+  (*       ; destruct H *)
+  (*     | [ H : _ $+ (?k1,_) $? ?kid = Some _  |- context [ ?kid ] ] => *)
+  (*       is_var kid *)
+  (*       ; destruct (k1 ==n kid); subst; clean_map_lookups *)
+  (*     | [ |- context [ $0 $? _ ]] => *)
+  (*       rewrite lookup_empty_none *)
+  (*     | [ |- context [ _ $k++ _ ]] => *)
+  (*       unfold merge_perms, add_key_perm, fold; simpl; clean_map_lookups *)
+  (*     | [ |- _ $? _ = _ ] => *)
+  (*       clean_map_lookups *)
+  (*     end. *)
 
   Ltac solve_indexedRealStep :=
     repeat (match goal with [ |- exists _ , _ ] => eexists end)
