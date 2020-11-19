@@ -210,16 +210,31 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
       gen1.
       gen1.
       gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
       
     - intros.
       simpl in *.
       
       sets_invert; split_ex;
-        simpl in *; autounfold with core;
+        simpl in *; autounfold with * in *;
+          unfold KEYS in *;
           subst; simpl;
             unfold safety, alignment; unfold A,B; simpl;
             ( split;
-              [ solve_honest_actions_safe; clean_map_lookups; eauto 8
+              [ try solve [ solve_honest_actions_safe; clean_map_lookups; eauto 8 ]
               | split; trivial; intros; rstep; subst; solve_labels_align
             ]).
 
