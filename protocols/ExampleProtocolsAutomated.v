@@ -122,7 +122,7 @@ Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
   Lemma safe_invariant :
     invariantFor
       {| Initial := {(ru0, iu0, true)}; Step := @step t__hon t__adv  |}
-      (fun st => safety st /\ alignment st ).
+      (fun st => safety st /\ alignment st /\ returns_align st).
   Proof.
     eapply invariant_weaken.
 
@@ -147,18 +147,28 @@ Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
       (* time(gen). *)
       
     - intros.
-      simpl in *; split.
+      simpl in *; repeat simple apply conj.
       
       + sets_invert; unfold safety;
           split_ex; simpl in *; subst;
             solve_honest_actions_safe;
             clean_map_lookups; eauto 8.
-
-        Unshelve.
-        all:clean_map_lookups.
         
       + sets_invert;
           unfold alignment; split_ex; subst; split; trivial; repeat prove_alignment1; eauto 3.
+
+      + sets_invert
+        ; autounfold with *
+        ; split_ex
+        ; simpl in *
+        ; subst
+        ; unfold returns_align; intros
+        ; intros
+        ; find_step_or_solve
+        .
+
+        Unshelve.
+        all: exact 0 || auto.
   Qed.
 
   Lemma U_good : @universe_starts_sane _ Unit b ru0.
@@ -249,7 +259,7 @@ Module SimpleEncProtocolSecure <: AutomatedSafeProtocol.
   Lemma safe_invariant :
     invariantFor
       {| Initial := {(ru0, iu0, true)}; Step := @step t__hon t__adv  |}
-      (fun st => safety st /\ alignment st ).
+      (fun st => safety st /\ alignment st /\ returns_align st).
   Proof.
     eapply invariant_weaken.
 
@@ -272,17 +282,28 @@ Module SimpleEncProtocolSecure <: AutomatedSafeProtocol.
       gen1.
 
     - intros.
-      simpl in *; split.
+      simpl in *; repeat simple apply conj.
       
       + sets_invert; unfold safety;
-          split_ex; simpl in *; subst; solve_honest_actions_safe;
+          split_ex; simpl in *; subst;
+            solve_honest_actions_safe;
             clean_map_lookups; eauto 8.
-
-        Unshelve.
-        all:clean_map_lookups.
         
       + sets_invert;
           unfold alignment; split_ex; subst; split; trivial; repeat prove_alignment1; eauto 3.
+
+      + sets_invert
+        ; autounfold with *
+        ; split_ex
+        ; simpl in *
+        ; subst
+        ; unfold returns_align; intros
+        ; intros
+        ; find_step_or_solve
+        .
+
+        Unshelve.
+        all: exact 0 || auto.
   Qed.
 
   Lemma U_good : @universe_starts_sane _ Unit b ru0.

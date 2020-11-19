@@ -71,6 +71,7 @@ Module Type SafeProtocol.
   Axiom R_silent_simulates : simulates_silent_step (lameAdv b) R.
   Axiom R_loud_simulates : simulates_labeled_step (lameAdv b) R.
   Axiom R_honest_actions_safe : honest_actions_safe B R.
+  Axiom R_final_actions_align : ri_final_actions_align B R.
   Axiom universe_starts_safe : R (peel_adv U__r) U__i /\ universe_ok U__r /\ adv_universe_ok U__r.
 
 End SafeProtocol.
@@ -89,6 +90,7 @@ Module AdversarySafeProtocol ( Proto : SafeProtocol ).
        R_silent_simulates
        R_loud_simulates
        R_honest_actions_safe
+       R_final_actions_align
     : core.
 
   Lemma proto_lamely_refines :
@@ -181,6 +183,18 @@ Definition labels_align {t__hon t__adv} (st : @ModelState t__hon t__adv) : Prop 
         /\ indexedIdealStep uid (Action ia) iu' iu''
         /\ action_matches ru.(RealWorld.all_ciphers) ru.(RealWorld.all_keys) (uid,ra) ia.
 
+Definition returns_align {t__hon t__adv} (st : @ModelState t__hon t__adv) : Prop :=
+  let '(ru, iu, b) := st
+  in (forall uid lbl ru', indexedRealStep uid lbl ru ru' -> False)
+     -> forall uid ud__r r__r,
+      ru.(RealWorld.users) $? uid = Some ud__r
+      -> ud__r.(RealWorld.protocol) = RealWorld.Return r__r
+      -> exists (iu' : IdealWorld.universe t__hon) ud__i r__i,
+          istepSilent ^* iu iu'
+          /\ iu'.(IdealWorld.users) $? uid = Some ud__i
+          /\ ud__i.(IdealWorld.protocol) = IdealWorld.Return r__i
+          /\ Rret_val_to_val r__r = Iret_val_to_val r__i.
+
 Inductive step {t__hon t__adv : type} :
     @ModelState t__hon t__adv 
   -> @ModelState t__hon t__adv
@@ -255,9 +269,6 @@ Qed.
 Definition alignment {t__hon t__adv} (st : @ModelState t__hon t__adv) : Prop :=
   snd st = true
   /\ labels_align st.
-  (* let '(ru, iu, b) := st *)
-  (* in  b = true *)
-  (*   /\ labels_align st. *)
 
 Definition TrS {t__hon t__adv} (ru0 : RealWorld.universe t__hon t__adv) (iu0 : IdealWorld.universe t__hon) :=
   {| Initial := {(ru0, iu0, true)};
@@ -278,7 +289,7 @@ Module Type AutomatedSafeProtocol.
 
   Axiom safe_invariant : invariantFor
                            SYS
-                           (fun st => safety st /\ alignment st ).
+                           (fun st => safety st /\ alignment st /\ returns_align st).
 
 End AutomatedSafeProtocol.
 
@@ -350,12 +361,13 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
   Lemma labels_align_inv : invariantFor SYS alignment.
   Proof. eapply invariant_weaken; [ apply safe_invariant | firstorder idtac]. Qed.
 
-  Hint Resolve safety_inv labels_align_inv : core.
+  Lemma returns_align_inv : invariantFor SYS returns_align.
+  Proof. eapply invariant_weaken; [ apply safe_invariant | firstorder idtac]. Qed.
+  
+  Hint Resolve safety_inv labels_align_inv returns_align_inv : core.
 
   Definition reachable_from := (fun ru iu ru' iu' b b' => SYS.(Step)^* (ru, iu, b) (ru', iu', b')).
-  (* Definition reachable_froms := (fun st st' => reachable_from (fst st) (snd st) (fst st') (snd st')). *)
   Definition reachable := (fun ru iu => reachable_from ru0 iu0 ru iu).
-  (* Definition reachables := (fun st => reachable (fst st) (snd st)). *)
 
   Tactic Notation "invar" constr(invar_lem) :=
     eapply use_invariant
@@ -370,7 +382,6 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
     ; [ eauto .. |]
     ; simpl
     ; eauto.
-
 
   Inductive R :
     RealWorld.simpl_universe t__hon
@@ -639,6 +650,34 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
       econstructor 3; eauto.
   Qed.
 
+  Lemma sim_final : ri_final_actions_align t__adv R.
+  Proof.
+    hnf
+    ; intros * REL UOK AUOK NOSTEP * USR PROTO
+    ; invert REL.
+
+    pose proof returns_align_inv as ALIGN.
+    unfold invariantFor, SYS in ALIGN; simpl in ALIGN.
+    apply ALIGN in H3; eauto; clear ALIGN.
+    unfold returns_align in H3.
+
+    rewrite <- H in USR.
+    eapply H3 in USR; eauto.
+
+    intros.
+    invert H0; eauto.
+    unfold build_data_step in H5; simpl in H5.
+    rewrite H, H1, H2 in H5
+    ; rewrite H in H4
+    ; destruct lbl
+    ; [ eapply lame_adv_no_impact_silent_step in H5
+      | eapply lame_adv_no_impact_labeled_step in H5]
+    ; split_ex
+    ; eapply NOSTEP
+    ; econstructor 1
+    ; eauto.
+  Qed.
+  
   Lemma honest_cmds_safe_adv_change :
     forall {t1 t2} (U U' : RealWorld.universe t1 t2),
       honest_cmds_safe U
@@ -669,7 +708,7 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
     unfold safety in *; eauto with safe.
   Qed.
 
-  Hint Resolve simsilent simlabeled simsafe : safe.
+  Hint Resolve simsilent simlabeled sim_final simsafe : safe.
 
   Lemma proto_lamely_refines :
     refines (lameAdv b) ru0 iu0.

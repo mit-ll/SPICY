@@ -1540,33 +1540,56 @@ Module Gen.
                         end
           end.
 
-  (* Ltac solve_real_step_stuff1 := *)
-  (*   equality1 *)
-  (*   || simplify *)
-  (*   || match goal with *)
-  (*     | [ |- RealWorld.keys_mine _ _ ] => *)
-  (*       simpl in *; hnf *)
-  (*     | [ |- _ $k++ _ $? _ = _ ] => solve_concrete_perm_merges *)
-  (*     end. *)
+  Ltac solve_returns_align1 :=
+    match goal with
+    | [ H : users _ $? _ = Some _ |- _ ] => progress (simpl in H)
+    | [ H1 : _ $? ?u = Some ?ud, H2 : protocol ?ud = Return _ |- _ ] =>
+      progress (
+          repeat (  (rewrite add_eq_o in H1 by trivial)
+                    || (rewrite add_neq_o in H1 by congruence)
+                    || (rewrite lookup_empty_none in H1; discriminate H1)
+                 )
+        )
+    | [ H1 : _ $+ (?u1,_) $? ?u2 = Some ?ud, H2 : protocol ?ud = Return _ |- _ ] =>
+      destruct (u1 ==n u2); subst
+    | [ H1 : Some _ = Some ?ud, H2 : protocol ?ud = Return _ |- _ ] =>
+      apply some_eq_inv in H1; subst
+    | [ H : _ = Return _ |- _ ] =>
+      discriminate H
+    end.
 
-  (* Ltac solve_indexedRealStep := *)
-  (*   solve [ *)
-  (*       repeat (match goal with [ |- exists _ , _ ] => eexists end) *)
-  (*       ; econstructor; [ *)
-  (*         solve [ simpl; clean_map_lookups; trivial ] *)
-  (*       | autounfold; unfold RealWorld.build_data_step; simpl; *)
-  (*         repeat match goal with *)
-  (*                | [ |- RealWorld.step_user _ _ _ _ ] => solve [ eapply RealWorld.StepBindProceed; eauto ] *)
-  (*                | [ |- RealWorld.step_user _ _ _ _ ] => eapply RealWorld.StepBindRecur; eauto *)
-  (*                | [ |- RealWorld.step_user _ _ _ _ ] => *)
-  (*                  econstructor *)
-  (*                  ; repeat (progress (repeat solve_real_step_stuff1; eauto)) *)
-  (*                end *)
-  (*       | reflexivity ]]. *)
+  Ltac idealUnivSilentStep uid :=
+    eapply IdealWorld.LStepUser with (u_id := uid)
+    ; simpl
+    ; [ solve [ clean_map_lookups; trivial ]
+      | solve [ idealUserSilentStep ]
+      ].
+
+  Ltac step_ideal1 uid :=
+    idtac "stepping " uid
+    ; eapply TrcFront
+    ; [ idealUnivSilentStep uid |].
+  
+  Ltac multistep_ideal usrs :=
+    simpl_ideal_users_context;
+    match usrs with
+    | ?us $+ (?uid,_) =>
+      idtac "multi stepping " uid
+      ; (repeat step_ideal1 uid)
+      ; multistep_ideal us
+    | _ => eapply TrcRefl
+    end.
+
+  Ltac run_ideal_silent_steps_to_end :=
+    simpl_ideal_users_context;
+    match goal with
+    | [ |- istepSilent ^* {| IdealWorld.users := ?usrs |} ?U ] =>
+      is_evar U
+      ; multistep_ideal usrs
+    end.
 
   Ltac solve_real_step_stuff1 :=
     equality1
-    || simplify
     || match goal with
       | [ |- RealWorld.keys_mine _ _ ] =>
         simpl in *; hnf
@@ -1591,6 +1614,8 @@ Module Gen.
         unfold merge_perms, add_key_perm, fold; simpl; clean_map_lookups
       | [ |- _ $? _ = _ ] =>
         clean_map_lookups
+      | [ |- _ -> _ ] => intros
+      | [ |- _ ] => progress simpl
       end.
 
   Ltac solve_indexedRealStep :=
@@ -1598,25 +1623,136 @@ Module Gen.
     ; econstructor; [
       solve [ simpl; clean_map_lookups; trivial ]
     | autounfold; unfold RealWorld.build_data_step; simpl;
-      repeat match goal with
-             | [ |- RealWorld.step_user _ _ _ _ ] => solve [ eapply RealWorld.StepBindProceed; eauto ]
-             | [ |- RealWorld.step_user _ _ _ _ ] => eapply RealWorld.StepBindRecur; eauto
-             | [ |- RealWorld.step_user _ _ (_,_,?cs,?gks,_,_,_,_,_,_,?cmd) _ ] =>
-               match cmd with
-               | RealWorld.SignEncrypt _ _ _ _ =>
-                 eapply RealWorld.StepEncrypt with (c_id := next_key cs)
-               | RealWorld.Sign _ _ _ =>
-                 eapply RealWorld.StepSign with (c_id := next_key cs)
-               | RealWorld.GenerateSymKey _ => 
-                 eapply RealWorld.StepGenerateSymKey with (k_id := next_key gks)
-               | RealWorld.GenerateAsymKey _ => 
-                 eapply RealWorld.StepGenerateAsymKey with (k_id := next_key gks)
-               | _ => econstructor
+      repeat ( match goal with
+               | [ |- RealWorld.step_user _ _ _ _ ] => solve [ eapply RealWorld.StepBindProceed; eauto ]
+               | [ |- RealWorld.step_user _ _ _ _ ] => eapply RealWorld.StepBindRecur; eauto
+               | [ |- RealWorld.step_user _ _ (_,_,?cs,?gks,_,_,_,_,_,_,?cmd) _ ] =>
+                 match cmd with
+                 | RealWorld.SignEncrypt _ _ _ _ =>
+                   eapply RealWorld.StepEncrypt with (c_id := next_key cs)
+                 | RealWorld.Sign _ _ _ =>
+                   eapply RealWorld.StepSign with (c_id := next_key cs)
+                 | RealWorld.GenerateSymKey _ => 
+                   eapply RealWorld.StepGenerateSymKey with (k_id := next_key gks)
+                 | RealWorld.GenerateAsymKey _ => 
+                   eapply RealWorld.StepGenerateAsymKey with (k_id := next_key gks)
+                 | _ => econstructor
+                 end
                end
-               ; repeat (progress (repeat solve_real_step_stuff1; eauto))
-             end
+             )
+      ; trivial (* take a first pass to get the simple stuff *)
+      ; repeat (solve_real_step_stuff1; trivial)
+      ; eauto
+
     | reflexivity ].
 
+  Ltac find_indexed_real_step usrs uid :=
+    match usrs with
+    | ?us $+ (?u,_) =>
+      (unify uid u; solve [ solve_indexedRealStep ])
+      || find_indexed_real_step us uid
+    | $0 =>
+      fail 1
+    end.
+
+  (* note the automation here creates a bunch of extra existentials while 
+   * doint the search for available steps.  This creates several nats
+   * that need to be resolved at the end of proofs that use it.  
+   * Should look at fixing this. *)
+  Ltac find_step_or_solve :=
+    simpl in *;
+    match goal with
+    | [ H1 : forall _ _ _, indexedRealStep _ _ ?ru _ -> False
+        , H2 : ?usrs $? _ = Some ?ur
+        , H3 : RealWorld.protocol ?ur = RealWorld.Return _ |- _ ] =>
+
+      ( assert (exists uid lbl ru', indexedRealStep uid lbl ru ru')
+        by (eexists ?[uid]; (do 2 eexists); find_indexed_real_step usrs ?uid)
+        ; split_ex; exfalso; eauto
+      )
+      || ( repeat solve_returns_align1
+          ; ( (do 3 eexists); simpl in *; (repeat equality1) 
+              ; subst
+              ; repeat simple apply conj
+              ; [ solve [ run_ideal_silent_steps_to_end ]
+                | solve [ simpl; clean_map_lookups; trivial ]
+                | reflexivity
+                | reflexivity
+                ]
+        ))
+    end.
+
+  (* Ltac find_step_or_solve := *)
+  (*   simpl in *; *)
+  (*   match goal with *)
+  (*   | [ H1 : forall _ _ _, indexedRealStep _ _ ?ru _ -> False *)
+  (*       , H2 : ?usrs $? _ = Some ?ur *)
+  (*       , H3 : protocol ?ur = Return _ |- _ ] => *)
+
+  (*     ( assert (exists uid lbl ru', indexedRealStep uid lbl ru ru') *)
+  (*       by (eexists ?[uid]; (do 2 eexists); find_indexed_real_step usrs ?uid) *)
+  (*       ; split_ex; exfalso; eauto *)
+  (*     ) *)
+  (*     || ( repeat solve_returns_align1  *)
+  (*         ; (do 3 eexists); simpl in *; (repeat equality1) *)
+  (*         ; subst *)
+  (*         ; repeat simple apply conj *)
+  (*         ; repeat solve [ simpl; eauto ] *)
+  (*       ) *)
+  (*   end. *)
+
+  (* Ltac solve_real_step_stuff1 := *)
+  (*   equality1 *)
+  (*   || simplify *)
+  (*   || match goal with *)
+  (*     | [ |- RealWorld.keys_mine _ _ ] => *)
+  (*       simpl in *; hnf *)
+  (*     | [ |- _ $k++ _ $? _ = _ ] => solve_concrete_perm_merges *)
+  (*     | [ |- ?m $? next_key ?m = None ] => *)
+  (*       apply Maps.next_key_not_in *)
+  (*       ; trivial *)
+  (*     | [ |- ~ Map.In (next_key ?m) ?m ] => *)
+  (*       rewrite not_find_in_iff *)
+  (*       ; apply Maps.next_key_not_in *)
+  (*       ; trivial *)
+  (*     | [ H : _ $k++ _ $? ?kid = Some _  |- context [ ?kid ] ] => *)
+  (*       is_var kid *)
+  (*       ; apply merge_perms_split in H *)
+  (*       ; destruct H *)
+  (*     | [ H : _ $+ (?k1,_) $? ?kid = Some _  |- context [ ?kid ] ] => *)
+  (*       is_var kid *)
+  (*       ; destruct (k1 ==n kid); subst; clean_map_lookups *)
+  (*     | [ |- context [ $0 $? _ ]] => *)
+  (*       rewrite lookup_empty_none *)
+  (*     | [ |- context [ _ $k++ _ ]] => *)
+  (*       unfold merge_perms, add_key_perm, fold; simpl; clean_map_lookups *)
+  (*     | [ |- _ $? _ = _ ] => *)
+  (*       clean_map_lookups *)
+  (*     end. *)
+
+  (* Ltac solve_indexedRealStep := *)
+  (*   repeat (match goal with [ |- exists _ , _ ] => eexists end) *)
+  (*   ; econstructor; [ *)
+  (*     solve [ simpl; clean_map_lookups; trivial ] *)
+  (*   | autounfold; unfold RealWorld.build_data_step; simpl; *)
+  (*     repeat match goal with *)
+  (*            | [ |- RealWorld.step_user _ _ _ _ ] => solve [ eapply RealWorld.StepBindProceed; eauto ] *)
+  (*            | [ |- RealWorld.step_user _ _ _ _ ] => eapply RealWorld.StepBindRecur; eauto *)
+  (*            | [ |- RealWorld.step_user _ _ (_,_,?cs,?gks,_,_,_,_,_,_,?cmd) _ ] => *)
+  (*              match cmd with *)
+  (*              | RealWorld.SignEncrypt _ _ _ _ => *)
+  (*                eapply RealWorld.StepEncrypt with (c_id := next_key cs) *)
+  (*              | RealWorld.Sign _ _ _ => *)
+  (*                eapply RealWorld.StepSign with (c_id := next_key cs) *)
+  (*              | RealWorld.GenerateSymKey _ =>  *)
+  (*                eapply RealWorld.StepGenerateSymKey with (k_id := next_key gks) *)
+  (*              | RealWorld.GenerateAsymKey _ =>  *)
+  (*                eapply RealWorld.StepGenerateAsymKey with (k_id := next_key gks) *)
+  (*              | _ => econstructor *)
+  (*              end *)
+  (*              ; repeat (progress (repeat solve_real_step_stuff1; eauto)) *)
+  (*            end *)
+  (*   | reflexivity ]. *)
 
   Ltac invert_commutes :=
     match goal with
