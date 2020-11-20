@@ -1689,7 +1689,7 @@ Module Gen.
       | [ |- _ $? _ = _ ] =>
         clean_map_lookups
       | [ |- _ -> _ ] => intros
-      | [ |- _ ] => progress simpl
+      | [ |- _ ] => ( progress simpl ) || ( progress hnf )
       end.
   
   (* Ltac solve_real_step_stuff1 := *)

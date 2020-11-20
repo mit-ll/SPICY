@@ -242,7 +242,7 @@ Module AvgSalaryProtocolSecure <: AutomatedSafeProtocolSS.
   Lemma safe_invariant :
     invariantFor
       {| Initial := {(ru0, iu0, true)}; Step := @stepSS t__hon t__adv  |}
-      (fun st => safety st /\ alignment st ).
+      (fun st => safety st /\ alignment st /\ returns_align st).
   Proof.
     eapply invariant_weaken.
 
@@ -297,17 +297,19 @@ Module AvgSalaryProtocolSecure <: AutomatedSafeProtocolSS.
     - intros.
       simpl in *.
 
-      sets_invert; split_ex;
-        simpl in *; autounfold with core;
-          subst; simpl;
-            unfold safety, alignment;
-            ( split;
-            [ try solve [ solve_honest_actions_safe; clean_map_lookups; eauto 8 ]
-            | try solve [ simpl; split; trivial; intros; rstep; subst; solve_labels_align ]
-            ]).
+      sets_invert; split_ex
+      ; simpl in *; autounfold with core
+      ; subst; simpl
+      ; unfold safety, alignment, returns_align
+      ; ( repeat simple apply conj
+          ; [ solve_honest_actions_safe; clean_map_lookups; eauto 8
+            | trivial
+            | unfold labels_align; intros; rstep; subst; solve_labels_align
+            | try solve [ intros; find_step_or_solve ] 
+        ]).
 
       Unshelve.
-      all: contradiction.
+      all: exact 0 || contradiction || auto.
 
   Qed.
 
