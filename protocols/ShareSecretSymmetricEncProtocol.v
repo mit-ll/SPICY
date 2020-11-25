@@ -85,76 +85,6 @@ Module ShareSecretSymmetricEncProtocol.
 
   End IW_Simple.
 
-  Section IW_Simple_Lemmas.
-    Import IdealWorld.
-
-    Import Tacs Gen.
-
-    Lemma iw_simpl_steps_to_end : forall n,
-        exists su,
-          trc3 lstep_universe (fun _ => True) simple_univ_start su
-          /\ (forall l su', ~ lstep_universe su l su')
-          /\ (forall uid ud,
-                su.(users) $? uid = Some ud
-                -> ud.(protocol) = Return n).
-    Proof.
-      intros
-      ; unfold simple_univ_start, mkiUsr, mkiU, simple_users
-      ; simpl.
-
-      eexists; repeat simple apply conj.
-      - eapply Trc3Front; trivial.
-
-        Ltac stpu uid :=
-          eapply LStepUser' with (u_id := uid);
-          [ simpl; clean_map_lookups; trivial
-          | eapply LStepBindRecur; econstructor; eauto
-          | reflexivity ].
-
-        Ltac stpu' uid :=
-          eapply LStepUser' with (u_id := uid);
-          [ simpl; clean_map_lookups; trivial
-          | eapply LStepBindProceed; trivial
-          | reflexivity ].
-
-        stpu 0.
-        simpl; canonicalize iusers; simpl.
-        eapply Trc3Front; trivial.
-        stpu' 0.
-        simpl; canonicalize iusers; simpl.
-        eapply Trc3Front; trivial.
-        stpu 0.
-        simpl; canonicalize iusers; simpl.
-        eapply Trc3Front; trivial.
-        stpu' 0.
-        simpl; canonicalize iusers; simpl.
-        eapply Trc3Front; trivial.
-        stpu 1.
-        simpl; canonicalize iusers; simpl.
-        eapply Trc3Front; trivial.
-        stpu' 1.
-        simpl; canonicalize iusers; simpl.
-        eapply Trc3Refl.
-
-        Unshelve.
-        eassumption.
-
-      - unfold not; intros.
-        invert H; simpl in *.
-        destruct (u_id ==n 1)
-        ; [ | destruct (u_id ==n 0)]
-        ; subst; clean_map_lookups
-        ; invert H5.
-
-      - simpl; intros.
-        destruct (uid ==n 1)
-        ; [ | destruct (uid ==n 0)]
-        ; subst; clean_map_lookups
-        ; trivial.
-    Qed.
-
-  End IW_Simple_Lemmas.
-
   Section IW.
     Import IdealWorld.
 
@@ -242,6 +172,101 @@ Module ShareSecretSymmetricEncProtocol.
   
 End ShareSecretSymmetricEncProtocol.
 
+Section IW_Simple_Refinement.
+  Import IdealWorld
+         ShareSecretSymmetricEncProtocol
+         Tacs
+         Gen.
+
+  Lemma iw_simpl_steps_to_end : forall n,
+      exists su,
+        trc3 lstep_universe (fun _ => True) simple_univ_start su
+        /\ (forall l su', ~ lstep_universe su l su')
+        /\ (forall uid ud,
+              su.(users) $? uid = Some ud
+              -> ud.(protocol) = Return n).
+  Proof.
+    intros
+    ; unfold simple_univ_start, mkiUsr, mkiU, simple_users
+    ; simpl.
+
+    eexists; repeat simple apply conj.
+    - eapply Trc3Front; trivial.
+
+      Ltac stpu uid :=
+        eapply LStepUser' with (u_id := uid);
+        [ simpl; clean_map_lookups; trivial
+        | eapply LStepBindRecur; econstructor; eauto
+        | reflexivity ].
+
+      Ltac stpu' uid :=
+        eapply LStepUser' with (u_id := uid);
+        [ simpl; clean_map_lookups; trivial
+        | eapply LStepBindProceed; trivial
+        | reflexivity ].
+
+      stpu 0.
+      simpl; canonicalize iusers; simpl.
+      eapply Trc3Front; trivial.
+      stpu' 0.
+      simpl; canonicalize iusers; simpl.
+      eapply Trc3Front; trivial.
+      stpu 0.
+      simpl; canonicalize iusers; simpl.
+      eapply Trc3Front; trivial.
+      stpu' 0.
+      simpl; canonicalize iusers; simpl.
+      eapply Trc3Front; trivial.
+      stpu 1.
+      simpl; canonicalize iusers; simpl.
+      eapply Trc3Front; trivial.
+      stpu' 1.
+      simpl; canonicalize iusers; simpl.
+      eapply Trc3Refl.
+
+      Unshelve.
+      eassumption.
+
+    - unfold not; intros.
+      invert H; simpl in *.
+      destruct (u_id ==n 1)
+      ; [ | destruct (u_id ==n 0)]
+      ; subst; clean_map_lookups
+      ; invert H5.
+
+    - simpl; intros.
+      destruct (uid ==n 1)
+      ; [ | destruct (uid ==n 0)]
+      ; subst; clean_map_lookups
+      ; trivial.
+  Qed.
+
+  Inductive R__ii :
+    IdealWorld.universe Nat -> IdealWorld.universe Nat
+    -> Prop :=
+  | SimpleCatchUp : forall su' iu',
+      trc3 IdealWorld.lstep_universe (fun _ => True) su0 su'
+      -> trc3 IdealWorld.lstep_universe (fun _ => True) iu0 iu'
+      -> ( forall su'' (l : label) ,
+            IdealWorld.lstep_universe su' l su'' -> False)
+      -> R__ii iu' su'.
+
+  Theorem ii_correct :
+    ii_simulates R__ii iu0 su0.
+  Proof.
+    unfold ii_simulates, ii_step, iu0, su0.
+    split; intros.
+    shelve.
+    (* invert H. eexists. split. invert H2. invert H1. *)
+    (* invert H0. shelve. *)
+    unfold ideal_univ_start, simple_univ_start.
+    econstructor. unfold su0. unfold simple_univ_start. econstructor. 
+    econstructor.
+    intros. unfold simple_users.
+  Admitted.
+
+End IW_Simple_Refinement.
+
 Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
 
   Import ShareSecretSymmetricEncProtocol.
@@ -272,35 +297,6 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
     intros.
     exists (next_key_nat m); eauto using next_key_not_in.
   Qed.
-
-
-Inductive R__ii :
-  IdealWorld.universe Nat -> IdealWorld.universe Nat
-  -> Prop :=
-| SimpleCatchUp : forall su' iu',
-     trc3 IdealWorld.lstep_universe (fun _ => True) su0 su'
-    -> trc3 IdealWorld.lstep_universe (fun _ => True) iu0 iu'
-    -> ( forall su'' (l : label) ,
-          IdealWorld.lstep_universe su' l su'' -> False)
-    -> R__ii iu' su'.
-
-
-
-
-
-Theorem ii_correct :
-  ii_simulates R__ii iu0 su0.
-Proof.
-  unfold ii_simulates, ii_step, iu0, su0.
-  split; intros.
-  shelve.
-  (* invert H. eexists. split. invert H2. invert H1. *)
-  (* invert H0. shelve. *)
-  unfold ideal_univ_start, simple_univ_start.
-  econstructor. unfold su0. unfold simple_univ_start. econstructor. 
-  econstructor.
-  intros. unfold simple_users.
-Admitted.
 
   Lemma safe_invariant :
     invariantFor
