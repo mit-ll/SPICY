@@ -370,6 +370,8 @@ Module P2PProtocolSecure <: AutomatedSafeProtocolSS.
             | try solve [ intros; find_step_or_solve ] 
         ]).
 
+      all: idtac "sets inverted".
+
       Ltac solve_merges1 :=
         match goal with
         | [ H : Some _ = Some _ |- _ ] => apply some_eq_inv in H; subst
@@ -422,6 +424,8 @@ Module P2PProtocolSecure <: AutomatedSafeProtocolSS.
 
       Unshelve.
       all: exact 0  || auto.
+
+      all: idtac "type checking".
 
   Qed.
 
