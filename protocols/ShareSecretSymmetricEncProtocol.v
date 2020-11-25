@@ -85,6 +85,76 @@ Module ShareSecretSymmetricEncProtocol.
 
   End IW_Simple.
 
+  Section IW_Simple_Lemmas.
+    Import IdealWorld.
+
+    Import Tacs Gen.
+
+    Lemma iw_simpl_steps_to_end : forall n,
+        exists su,
+          trc3 lstep_universe (fun _ => True) simple_univ_start su
+          /\ (forall l su', ~ lstep_universe su l su')
+          /\ (forall uid ud,
+                su.(users) $? uid = Some ud
+                -> ud.(protocol) = Return n).
+    Proof.
+      intros
+      ; unfold simple_univ_start, mkiUsr, mkiU, simple_users
+      ; simpl.
+
+      eexists; repeat simple apply conj.
+      - eapply Trc3Front; trivial.
+
+        Ltac stpu uid :=
+          eapply LStepUser' with (u_id := uid);
+          [ simpl; clean_map_lookups; trivial
+          | eapply LStepBindRecur; econstructor; eauto
+          | reflexivity ].
+
+        Ltac stpu' uid :=
+          eapply LStepUser' with (u_id := uid);
+          [ simpl; clean_map_lookups; trivial
+          | eapply LStepBindProceed; trivial
+          | reflexivity ].
+
+        stpu 0.
+        simpl; canonicalize iusers; simpl.
+        eapply Trc3Front; trivial.
+        stpu' 0.
+        simpl; canonicalize iusers; simpl.
+        eapply Trc3Front; trivial.
+        stpu 0.
+        simpl; canonicalize iusers; simpl.
+        eapply Trc3Front; trivial.
+        stpu' 0.
+        simpl; canonicalize iusers; simpl.
+        eapply Trc3Front; trivial.
+        stpu 1.
+        simpl; canonicalize iusers; simpl.
+        eapply Trc3Front; trivial.
+        stpu' 1.
+        simpl; canonicalize iusers; simpl.
+        eapply Trc3Refl.
+
+        Unshelve.
+        eassumption.
+
+      - unfold not; intros.
+        invert H; simpl in *.
+        destruct (u_id ==n 1)
+        ; [ | destruct (u_id ==n 0)]
+        ; subst; clean_map_lookups
+        ; invert H5.
+
+      - simpl; intros.
+        destruct (uid ==n 1)
+        ; [ | destruct (uid ==n 0)]
+        ; subst; clean_map_lookups
+        ; trivial.
+    Qed.
+
+  End IW_Simple_Lemmas.
+
   Section IW.
     Import IdealWorld.
 
@@ -213,6 +283,10 @@ Inductive R__ii :
     -> ( forall su'' (l : label) ,
           IdealWorld.lstep_universe su' l su'' -> False)
     -> R__ii iu' su'.
+
+
+
+
 
 Theorem ii_correct :
   ii_simulates R__ii iu0 su0.
