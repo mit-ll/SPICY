@@ -56,6 +56,35 @@ Module ShareSecretSymmetricEncProtocol.
   Notation USR1 := 0.
   Notation USR2 := 1.
 
+  
+  Section IW_Simple.
+    Import IdealWorld.
+
+    Notation perms_CH := 0.
+    Notation CH := (Single perms_CH).
+
+    Notation empty_chs := (#0 #+ (CH, [])).
+
+    Definition PERMS := $0 $+ (perms_CH, {| read := true; write := true |}).
+
+    Definition simple_users :=
+      [
+        (mkiUsr USR1 PERMS 
+                (
+                  n <- Gen
+                  ; _ <- Send (Content n) CH
+                  ; @Return (Base Nat) n
+        ));
+        (mkiUsr USR2 PERMS
+                ( m <- @Recv Nat CH
+                ; @Return (Base Nat) (extractContent m)))
+        ].
+
+    Definition simple_univ_start :=
+      mkiU empty_chs simple_users.
+
+  End IW_Simple.
+
   Section IW.
     Import IdealWorld.
 
@@ -133,8 +162,9 @@ Module ShareSecretSymmetricEncProtocol.
   End RW.
 
   Hint Unfold
-       real_univ_start
+       simple_univ_start
        ideal_univ_start
+       real_univ_start
     : user_build.
 
   Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
@@ -149,6 +179,7 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
   Definition t__hon := Nat.
   Definition t__adv := Unit.
   Definition b := tt.
+  Definition su0  := simple_univ_start.
   Definition iu0  := ideal_univ_start.
   Definition ru0  := real_univ_start.
 
@@ -171,6 +202,31 @@ Module ShareSecretProtocolSecure <: AutomatedSafeProtocol.
     intros.
     exists (next_key_nat m); eauto using next_key_not_in.
   Qed.
+
+
+Inductive R__ii :
+  IdealWorld.universe Nat -> IdealWorld.universe Nat
+  -> Prop :=
+| SimpleCatchUp : forall su' iu',
+     trc3 IdealWorld.lstep_universe (fun _ => True) su0 su'
+    -> trc3 IdealWorld.lstep_universe (fun _ => True) iu0 iu'
+    -> ( forall su'' (l : label) ,
+          IdealWorld.lstep_universe su' l su'' -> False)
+    -> R__ii iu' su'.
+
+Theorem ii_correct :
+  ii_simulates R__ii iu0 su0.
+Proof.
+  unfold ii_simulates, ii_step, iu0, su0.
+  split; intros.
+  shelve.
+  (* invert H. eexists. split. invert H2. invert H1. *)
+  (* invert H0. shelve. *)
+  unfold ideal_univ_start, simple_univ_start.
+  econstructor. unfold su0. unfold simple_univ_start. econstructor. 
+  econstructor.
+  intros. unfold simple_users.
+Admitted.
 
   Lemma safe_invariant :
     invariantFor
