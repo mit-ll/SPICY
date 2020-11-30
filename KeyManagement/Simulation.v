@@ -653,7 +653,7 @@ Section IISimulation.
       -> forall lbl U__i',
         lstep_universe U__i lbl U__i'
         -> exists U__is',
-          trc3 lstep_universe (fun _ => True) U__i U__is'
+          trc3 lstep_universe (fun _ => True) U__is U__is'
           /\ ii_final_labels_align U__i' U__is'
           /\ R U__i' U__is'.
 
