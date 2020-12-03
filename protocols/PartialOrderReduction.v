@@ -2803,10 +2803,10 @@ Qed.
 
 Lemma violated_predicates_remain_violated :
   forall t__hon t__adv st1 st2,
-    ~ (no_resends_U (fst (fst st1)) /\ @alignment t__hon t__adv st1)
+    ~ (no_resends_U (fst (fst st1)) /\ @alignment t__hon t__adv st1 /\ returns_align st1)
     -> fst st2 = fst st1
     -> ( snd st2 = snd st1 \/ (snd st2 = false /\ snd st1 = true) )
-    -> ~ (no_resends_U (fst (fst st2)) /\ alignment st2).
+    -> ~ (no_resends_U (fst (fst st2)) /\ alignment st2 /\ returns_align st2).
 Proof.
   intros.
   destruct st1 as [[ru1 iu1] b1].
@@ -2828,10 +2828,10 @@ Lemma violations_translate :
     -> syntactically_safe_U (fst (fst st))
     -> summarize_univ (fst (fst st)) summaries
     -> (forall st'', step st' st'' -> False)
-    -> ~ ( no_resends_U (fst (fst st')) /\ alignment st' )
+    -> ~ ( no_resends_U (fst (fst st')) /\ alignment st' /\ returns_align st' )
     -> exists st'',
         (@stepC t__hon t__adv)^* st st''
-        /\ ~ (no_resends_U (fst (fst st'')) /\ alignment st'').
+        /\ ~ (no_resends_U (fst (fst st'')) /\ alignment st'' /\ returns_align st'' ).
 Proof.
   induct n; intros.
 
@@ -3183,8 +3183,8 @@ Theorem step_stepC' :
     -> syntactically_safe_U ru0
     -> summarize_univ ru0 summaries
     -> lameAdv b ru0.(adversary)
-    -> invariantFor (TrC ru0 iu0) (fun st => no_resends_U (fst (fst st)) /\ alignment st)
-    -> invariantFor (TrS ru0 iu0) (fun st => no_resends_U (fst (fst st)) /\ alignment st)
+    -> invariantFor (TrC ru0 iu0) (fun st => no_resends_U (fst (fst st)) /\ alignment st /\ returns_align st)
+    -> invariantFor (TrS ru0 iu0) (fun st => no_resends_U (fst (fst st)) /\ alignment st /\ returns_align st)
 .
 Proof.
   intros * RUNTIME GOOD SYN_SAFE SUMM LAME INV.
@@ -3207,23 +3207,28 @@ Proof.
   specialize (trc_trans H0 H); intros.
   apply steps_stepsi in H4; split_ex.
 
-  eapply not_and_or in H1; split_ors.
+  unfold invariantFor in INV; simpl in *.
+  eapply violations_translate in H4; eauto; split_ex.
+  apply INV in H4; eauto; split_ex.
+
+  eapply not_and_or in H1
+  ; destruct H1 as [H1 | H1]
+  ; [ | eapply not_and_or in H1]
+  ; split_ors
+  ; simpl
+  ; unfold not; intros; split_ex.
 
   - assert (~ no_resends_U (fst (fst x0)))
-      by eauto using resend_violation_steps.
-
-    unfold invariantFor in INV; simpl in *.
-    eapply violations_translate in H4; eauto; split_ex.
-    apply INV in H4; eauto; split_ex.
-    unfold not; intros; split_ex; contradiction.
-
+      by eauto using resend_violation_steps
+    ; contradiction.
+  
   - assert (~ alignment x0)
-      by eauto using alignment_violation_steps.
+      by eauto using alignment_violation_steps
+    ; contradiction.
 
-    unfold invariantFor in INV; simpl in *.
-    eapply violations_translate in H4; eauto; split_ex.
-    apply INV in H4; eauto; split_ex.
-    unfold not; intros; split_ex; contradiction.
+  - assert (~ returns_align x0)
+      by eauto using final_alignment_violation_steps
+    ; contradiction.
 Qed.
 
 Lemma ss_implies_next_safe :
@@ -3382,8 +3387,8 @@ Theorem step_stepC :
     -> syntactically_safe_U ru0
     -> summarize_univ ru0 summaries
     -> lameAdv b ru0.(adversary)
-    -> invariantFor (TrS ru0 iu0) (fun st => no_resends_U (fst (fst st)) /\ alignment st)
-    -> invariantFor (TrS ru0 iu0) (fun st => safety st /\ alignment st)
+    -> invariantFor (TrS ru0 iu0) (fun st => no_resends_U (fst (fst st)) /\ alignment st /\ returns_align st)
+    -> invariantFor (TrS ru0 iu0) (fun st => safety st /\ alignment st /\ returns_align st)
 .
 Proof.
   unfold invariantFor; intros.
@@ -3402,7 +3407,7 @@ Proof.
   destruct (classic (exists st, indexedModelStep u_id (ru',iu',true) (st,true))).
   - split_ex.
     destruct x as [ru'' iu''].
-    pose proof (indexedModelStep_step H9) as STEP.
+    pose proof (indexedModelStep_step H10) as STEP.
     assert (STEPS' : (@step t__hon t__adv) ^* (ru',iu',true) (ru'',iu'',true)) by (eauto using TrcFront).
     pose proof (trc_trans STEPS STEPS') as MORESTEPS.
 
@@ -3410,11 +3415,11 @@ Proof.
     simpl in *; split_ex.
 
     unfold syntactically_safe_U in SS;
-      specialize (SS _ _ _ H8 eq_refl); split_ex.
+      specialize (SS _ _ _ H9 eq_refl); split_ex.
 
-    assert (exists lbl, indexedRealStep u_id lbl ru' ru'') by (invert H9; eauto).
+    assert (exists lbl, indexedRealStep u_id lbl ru' ru'') by (invert H10; eauto).
     split_ex.
-    invert H13.
+    invert H15.
 
     unfold build_data_step, buildUniverse in *; simpl in *.
     clean_map_lookups.
@@ -3435,9 +3440,9 @@ Proof.
   - assert (forall st, indexedModelStep u_id (ru',iu',true) (st,true) -> False) by eauto using not_ex_all_not.
     
     subst.
-    clear H9.
+    clear H10.
     unfold syntactically_safe_U in SS;
-      specialize (SS _ _ _ H8 eq_refl); split_ex.
+      specialize (SS _ _ _ H9 eq_refl); split_ex.
     simpl in *.
 
     pose proof (na_always_exists (protocol u)); split_ex.

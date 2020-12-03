@@ -283,3 +283,39 @@ Proof.
 
   generalize H; intros VIOL; eapply alignment_violation_step in VIOL; eauto.
 Qed.
+
+Lemma final_alignment_violation_step :
+  forall t__hon t__adv st st' b,
+    @step t__hon t__adv st st'
+    -> lameAdv b (fst (fst st)).(adversary)
+    -> ~ returns_align st
+    -> ~ returns_align st'.
+Proof.
+  unfold not; intros.
+  unfold returns_align in *.
+
+  invert H; eapply H1; intros; try solve[ exfalso; eauto ].
+
+  clear H1 H2; invert H3.
+  - exfalso; eapply H; econstructor 1; eauto.
+  - unfold lameAdv in H0; simpl in H0.
+    unfold build_data_step in H1
+    ; simpl in H1
+    ; rewrite H0 in H1
+    ; invert H1.
+Qed.
+
+Lemma final_alignment_violation_steps :
+  forall t__hon t__adv st st' b,
+    (@step t__hon t__adv)^* st st'
+    -> lameAdv b (fst (fst st)).(adversary)
+    -> ~ returns_align st
+    -> ~ returns_align st'.
+Proof.
+  induction 1; intros; eauto.
+
+  assert (LAME : lameAdv b (fst (fst y)).(adversary)) by eauto using adversary_remains_lame_step.
+  destruct x, y, z; simpl in *.
+
+  generalize H; intros VIOL; eapply final_alignment_violation_step in VIOL; eauto.
+Qed.

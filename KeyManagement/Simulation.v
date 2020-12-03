@@ -481,6 +481,49 @@ Section SafeActions.
 
 End SafeActions.
 
+Section FinalValue.
+
+    Inductive final_value : Set :=
+    | FAccess
+    | FBool (b : bool)
+    | FNat (n : nat)
+    | FUnit
+    | FPair (fv1 fv2 : final_value).
+
+    Section IdealFV.
+      Import IdealWorld.
+      Import IdealWorld.IdealNotations.
+
+      Fixpoint Iret_val_to_val { t : type } :
+        forall (rv : << Base t >>), final_value :=
+        match t with
+        | Nat => (fun n => FNat n)
+        | Bool => (fun b => FBool b)
+        | Unit => (fun _ => FUnit)
+        | Access => (fun _ => FAccess)
+        | TPair t1 t2 => (fun '(f, s) => FPair (Iret_val_to_val f) (Iret_val_to_val s))
+        end.
+      
+    End IdealFV.
+
+    Section RealFV.
+      Import RealWorld.
+      Import RealWorld.RealWorldNotations.
+
+      Fixpoint Rret_val_to_val { t : type } :
+        forall (rv : << Base t >>), final_value :=
+        match t with
+        | Nat => (fun n => FNat n)
+        | Bool => (fun b => FBool b)
+        | Unit => (fun _ => FUnit)
+        | Access => (fun _ => FAccess)
+        | TPair t1 t2 => (fun '(f, s) => FPair (Rret_val_to_val f) (Rret_val_to_val s))
+        end.
+      
+    End RealFV.
+    
+End FinalValue.
+
 Definition message_queues_ok {A} (cs : RealWorld.ciphers) (usrs : RealWorld.honest_users A) (gks : keys) :=
   Forall_natmap (fun u => message_queue_ok (RealWorld.findUserKeys usrs) cs u.(RealWorld.msg_heap) gks) usrs.
 
@@ -556,12 +599,28 @@ Section Simulation.
       -> adv_universe_ok U__r
       -> honest_cmds_safe U__r.
 
+  Definition ri_final_actions_align :=
+    forall (U__r : RealWorld.universe A B) U__i,
+      R (RealWorld.peel_adv U__r) U__i
+      -> universe_ok U__r
+      -> adv_universe_ok U__r
+      -> (forall uid lbl U__r', RealWorld.step_universe (Some uid) U__r lbl U__r' -> False)
+      -> forall uid ud__r r__r,
+          U__r.(RealWorld.users) $? uid = Some ud__r
+          -> ud__r.(RealWorld.protocol) = RealWorld.Return r__r
+          -> exists (U__i' : IdealWorld.universe A) ud__i r__i,
+              istepSilent ^* U__i U__i'
+              /\ U__i'.(IdealWorld.users) $? uid = Some ud__i
+              /\ ud__i.(IdealWorld.protocol) = IdealWorld.Return r__i
+              /\ Rret_val_to_val r__r = Iret_val_to_val r__i.
+
   Definition simulates (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A) :=
 
     (* conditions for simulation steps *)
     simulates_silent_step
   /\ simulates_labeled_step
   /\ honest_actions_safe
+  /\ ri_final_actions_align
 
   (* conditions for start *)
   /\ R (RealWorld.peel_adv U__r) U__i
@@ -569,6 +628,40 @@ Section Simulation.
   /\ adv_universe_ok U__r.
 
 End Simulation.
+
+Section IISimulation.
+  Import IdealWorld.
+  
+  Variable A : type.
+  Variable R : universe A -> universe A -> Prop.
+
+  Definition ii_final_labels_align (U__i U__is : universe A) :=
+    (forall lbl U__i', ~ lstep_universe U__i lbl U__i')
+    -> exists (U__is' U__is'' : universe A),
+      trc3 lstep_universe (fun _ => True) U__is U__is'
+      /\ (forall lbl U__is'', ~ lstep_universe U__is' lbl U__is'')
+      /\ forall uid ud__i r,
+          U__i.(users) $? uid = Some ud__i
+          -> ud__i.(protocol) = Return r
+          -> exists ud__is,
+            U__is'.(users) $? uid = Some ud__is
+          /\ ud__is.(protocol) = Return r.
+
+  Definition ii_step :=
+    forall (U__i : universe A) U__is,
+      R U__i U__is
+      -> forall lbl U__i',
+        lstep_universe U__i lbl U__i'
+        -> exists U__is',
+          trc3 lstep_universe (fun _ => True) U__is U__is'
+          /\ ii_final_labels_align U__i' U__is'
+          /\ R U__i' U__is'.
+
+  Definition ii_simulates (U__i U__is : universe A) :=
+    ii_step
+    /\ R U__i U__is.
+
+End IISimulation.
 
 Definition refines {A B} (advP : RealWorld.user_data B -> Prop) (U1 : RealWorld.universe A B) (U2 : IdealWorld.universe A) :=
   exists R, simulates advP R U1 U2.
