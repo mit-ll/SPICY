@@ -18,7 +18,7 @@
 From Coq Require Import
      List.
 
-From KeyManagement Require Import
+From SPICY Require Import
         MyPrelude
         Maps
         ChMaps
@@ -28,26 +28,26 @@ From KeyManagement Require Import
         Automation
         Tactics
         Simulation
-        AdversaryUniverse.
+        AdversaryUniverse
 
-From protocols Require Import
-        ModelCheck
-        UniverseEqAutomation
-        ProtocolAutomation
-        SafeProtocol
-        ProtocolFunctions
-        SilentStepElimination.
+        ModelCheck.ModelCheck
+        ModelCheck.UniverseEqAutomation
+        ModelCheck.ProtocolAutomation
+        ModelCheck.SafeProtocol
+        ModelCheck.ProtocolFunctions
+        ModelCheck.SilentStepElimination.
 
-Require IdealWorld RealWorld.
+From SPICY Require IdealWorld RealWorld.
 
 Import IdealWorld.IdealNotations
        RealWorld.RealWorldNotations
        SimulationAutomation.
 
-Import Sets.
-Module Foo <: EMPTY.
+From Frap Require Import Sets.
+
+Module Foo <: Sets.EMPTY.
 End Foo.
-Module Import SN := SetNotations(Foo).
+Module Import SN := Sets.SetNotations(Foo).
 
 Set Implicit Arguments.
 

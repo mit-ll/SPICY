@@ -18,37 +18,34 @@
 From Coq Require Import
      List.
 
-From KeyManagement Require Import
-        MyPrelude
-        Maps
-        ChMaps
-        Messages
-        Common
-        Keys
-        Automation
-        Tactics
-        Simulation
-        AdversaryUniverse.
+From SPICY Require Import
+     MyPrelude
+     Maps
+     ChMaps
+     Messages
+     Common
+     Keys
+     Automation
+     Tactics
+     Simulation
+     AdversaryUniverse
+
+     ModelCheck.ModelCheck
+     ModelCheck.UniverseEqAutomation
+     ModelCheck.ProtocolAutomation
+     ModelCheck.SafeProtocol
+     ModelCheck.ProtocolFunctions
+     ModelCheck.SilentStepElimination
+.
 
 From protocols Require Import
-        ModelCheck
-        UniverseEqAutomation
-        ProtocolAutomation
-        SafeProtocol
-        ProtocolFunctions
-        SilentStepElimination
-        PGP.
+     PGP.
 
-Require IdealWorld RealWorld.
+From SPICY Require IdealWorld RealWorld.
 
 Import IdealWorld.IdealNotations
        RealWorld.RealWorldNotations
        SimulationAutomation.
-
-Import Sets.
-Module Foo <: EMPTY.
-End Foo.
-Module Import SN := SetNotations(Foo).
 
 Set Implicit Arguments.
 
@@ -139,9 +136,6 @@ Module PGPProtocolSecure <: AutomatedSafeProtocolSS.
       all: exact 0 || auto.
 
   Qed.
-
-  (* Show Ltac Profile. *)
-  (* Show Ltac Profile "churn2". *)
   
   Lemma U_good : @universe_starts_sane _ Unit b ru0.
   Proof.

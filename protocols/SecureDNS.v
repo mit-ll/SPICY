@@ -18,33 +18,36 @@
 From Coq Require Import
      List.
 
-Require Import
-        MyPrelude
-        Maps
-        ChMaps
-        Messages
-        ModelCheck
-        Common
-        Keys
-        Automation
-        Tactics
-        Simulation
-        AdversaryUniverse
-        UniverseEqAutomation
-        ProtocolAutomation
-        SafeProtocol
-        ProtocolFunctions.
+From SPICY Require Import
+     MyPrelude
+     Maps
+     ChMaps
+     Messages
+     ModelCheck
+     Common
+     Keys
+     Automation
+     Tactics
+     Simulation
+     AdversaryUniverse
 
-Require IdealWorld RealWorld.
+     ModelCheck.UniverseEqAutomation
+     ModelCheck.ProtocolAutomation
+     ModelCheck.SafeProtocol
+     ModelCheck.ProtocolFunctions
+.
+
+From SPICY Require IdealWorld RealWorld.
 
 Import IdealWorld.IdealNotations
        RealWorld.RealWorldNotations
        SimulationAutomation.
 
-Import Sets.
-Module Foo <: EMPTY.
+From Frap Require Import Sets.
+
+Module Foo <: Sets.EMPTY.
 End Foo.
-Module Import SN := SetNotations(Foo).
+Module Export SN := Sets.SetNotations(Foo).
 
 Set Implicit Arguments.
 
@@ -59,14 +62,6 @@ Module SecureDNSProtocol.
 
   Parameter names : NatMap.t nat.
   
-  (* Notation names := *)
-  (*   ( $0 $+ (0,10) *)
-  (*        $+ (1,11) *)
-  (*        $+ (2,12) *)
-  (*        $+ (3,13) *)
-  (*        $+ (4,14) *)
-  (*   ). *)
-
   Section IW.
     Import IdealWorld.
 
@@ -239,230 +234,3 @@ Module SecureDNSProtocol.
     progress(autounfold with user_build; simpl).
   
 End SecureDNSProtocol.
-
-Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
-
-  Import SecureDNSProtocol.
-
-  (* Some things may need to change here.  t__hon is where we place the 
-   * type that the protocol computes.  It is set to Nat now, because we
-   * return a natual number.
-   *)
-  Definition t__hon := Nat.
-  Definition t__adv := Unit.
-  Definition b    := tt.
-
-  (* These two variables hook up the starting points for both specification and
-   * implementation universes.  If you followed the template above, this shouldn't
-   * need to be changed.
-   *)
-  Definition iu0  := ideal_univ_start.
-  Definition ru0  := real_univ_start.
-
-  Import Gen Tacs SetLemmas.
-
-  Ltac gen1' :=
-    simplify
-    ; tidy
-    ; idtac "rstep start"
-    ; rstep
-    ; idtac "istep start"
-    ; istep
-    ; idtac "istep done"
-    ; subst
-    ; canonicalize users
-    ; idtac "close start"
-    ; repeat close
-    ; idtac "close done"
-  .
-
-  Ltac msc_st1 := unfold oneStepClosure_new  (* ; repeat gen1' *).
-  Ltac msc_st2 :=
-    simplify
-    ; sets
-    ; split_ex
-    ; propositional
-    ; repeat match goal with
-             | [H : (?x1, ?y1) = ?p |- _] =>
-               match p with
-               | (?x2, ?y2) =>
-                 tryif (concrete x2; concrete y2)
-                 then let H' := fresh H
-                      in assert (H' : (x1, y1) = (x2, y2) -> x1 = x2 /\ y1 = y2)
-                        by equality
-                         ; propositional
-                         ; discriminate
-                 else invert H
-               | _ => invert H
-               end
-             end.
-
-  
-  Ltac mscalt' :=
-    eapply msc_step_alt
-    ; [ solve[ msc_st1; repeat gen1' ]
-      | solve[ msc_st2 | eapply intersect_empty_l ]
-      | rewrite ?union_empty_r ].
-
-  Ltac mscalt :=
-    match goal with
-    | [|- multiStepClosure _ (_ \cup ?wl) ?wl _] => mscalt'
-    end.
-
-  Ltac gen1 :=
-    match goal with
-    | [|- multiStepClosure _ _ { } _] =>
-      eapply MscDone
-    | [|- multiStepClosure _ {(_, _)} {(_, _)} _] =>
-      eapply MscStep
-      ; [ solve[ apply oneStepClosure_grow; gen1' ]
-        | simplify; simpl_sets (sets; tidy)]
-    | [|- multiStepClosure _ (_ \cup ?wl) ?wl _] => mscalt'
-    end.
-
-
-  (* These are here to help the proof automation.  Don't change. *)
-  Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start real_univ_start : core.
-  Hint Unfold
-       mkiU mkiUsr mkrU mkrUsr
-       mkKeys
-    : core.
-
-  Lemma safe_invariant :
-    invariantFor
-      {| Initial := {(ru0, iu0, true)}; Step := @step t__hon t__adv  |}
-      (fun st => safety st /\ alignment st /\ returns_align st).
-  Proof.
-    eapply invariant_weaken.
-
-    - eapply multiStepClosure_ok; simpl.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      gen1.
-      
-    (* The remaining parts of the proof script shouldn't need to change. *)
-    - intros.
-      simpl in *.
-
-      sets_invert; split_ex
-      ; simpl in *; autounfold with core
-      ; subst; simpl
-      ; unfold safety, alignment, returns_align
-      ; ( repeat simple apply conj
-          ; [ solve_honest_actions_safe; clean_map_lookups; eauto 8
-            | trivial
-            | unfold labels_align; intros; rstep; subst; solve_labels_align
-            | try solve [ intros; find_step_or_solve ] 
-        ]).
-
-      Unshelve.
-      all: exact 0 || auto.
-
-  Qed.
-
-  (* Show Ltac Profile. *)
-  (* Show Ltac Profile "churn2". *)
-  
-  Lemma U_good : @universe_starts_sane _ Unit b ru0.
-  Proof.
-    autounfold;
-      unfold universe_starts_sane; simpl.
-    repeat (apply conj); intros; eauto.
-    - solve_perm_merges; eauto.
-    - econstructor.
-    - unfold AdversarySafety.keys_honest; rewrite Forall_natmap_forall; intros.
-      econstructor; unfold mkrUsr; simpl.
-      rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty; eauto.
-      simpl in *; solve_perm_merges.
-    - unfold lameAdv; simpl; eauto.
-  Qed.
-
-  Lemma univ_ok_start : universe_ok ru0.
-  Proof.
-    autounfold; econstructor; eauto.
-  Qed.
-
-  Lemma adv_univ_ok_start : adv_universe_ok ru0.
-  Proof.
-    autounfold; unfold adv_universe_ok; eauto.
-    unfold keys_and_permissions_good.
-    pose proof (adversary_is_lame_adv_univ_ok_clauses U_good).
-
-    intuition eauto;
-      simpl in *.
-
-    - solve_simple_maps; eauto.
-    - rewrite Forall_natmap_forall; intros.
-      solve_simple_maps; simpl;
-        unfold permission_heap_good; intros;
-          solve_simple_maps; eauto.
-
-    - unfold user_cipher_queues_ok.
-      rewrite Forall_natmap_forall; intros.
-      focus_user
-      ; simpl in *; econstructor; eauto.
-
-    - unfold honest_nonces_ok, honest_user_nonces_ok, honest_nonces_ok
-      ; repeat simple apply conj
-      ; intros
-      ; clean_map_lookups
-      ; intros
-      ; focus_user
-      ; try contradiction; try discriminate; simpl;
-        repeat (apply conj); intros; clean_map_lookups; eauto.
-
-    - unfold honest_users_only_honest_keys; intros.
-      focus_user;
-        subst;
-        simpl in *;
-        clean_map_lookups;
-        unfold mkrUsr; simpl; 
-        rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty;
-        eauto;
-        simpl in *;
-        solve_perm_merges;
-        solve_concrete_maps;
-        solve_simple_maps;
-        eauto.
-  Qed.
-  
-  Lemma universe_starts_safe : universe_ok ru0 /\ adv_universe_ok ru0.
-  Proof.
-    repeat (simple apply conj);
-      eauto using univ_ok_start, adv_univ_ok_start.
-  Qed.
-  
-
-End SecureDNSProtocolSecure.

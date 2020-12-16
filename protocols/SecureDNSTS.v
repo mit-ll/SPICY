@@ -35,131 +35,24 @@ From SPICY Require Import
      ModelCheck.ProtocolAutomation
      ModelCheck.SafeProtocol
      ModelCheck.ProtocolFunctions
-     ModelCheck.SilentStepElimination
 .
 
 From SPICY Require IdealWorld RealWorld.
+
+From protocols Require Import
+     SecureDNS.
 
 Import IdealWorld.IdealNotations
        RealWorld.RealWorldNotations
        SimulationAutomation.
 
-From Frap Require Import Sets.
-
-Module Foo <: EMPTY.
-End Foo.
-Module Import SN := SetNotations(Foo).
-
 Set Implicit Arguments.
 
 Open Scope protocol_scope.
 
-Module MyProtocol.
+Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
 
-  (* Start with two users, as that is the minimum for any interesting protocol *)
-  Notation USR1 := 0.
-  Notation USR2 := 1.
-
-  Section IW.
-    Import IdealWorld.
-
-    (* Set up initial communication channels so each user can talk directly to the other *)
-    Notation pCH12 := 0.
-    Notation pCH21 := 1.
-    Notation CH12  := (# pCH12).
-    Notation CH21  := (# pCH21).
-
-    (* This is the initial channel vector, each channel should be represented and start with 
-     * no messages.
-     *)
-    Notation empty_chs := (#0 #+ (CH12, []) #+ (CH21, [])).
-
-    Notation PERMS1 := ($0 $+ (pCH12, owner) $+ (pCH21, reader)).
-    Notation PERMS2 := ($0 $+ (pCH12, reader) $+ (pCH21, owner)).
-
-    (* Fill in the users' protocol specifications here, adding additional users as needed.
-     * Note that all users must return an element of the same type, and that type needs to 
-     * be one of: ...
-     *)
-    Notation ideal_users :=
-      [
-        (* User 1 Specification *)
-        mkiUsr USR1 PERMS1
-                (
-                  ret 1
-                )
-        ;
-
-      (* User 2 Specification *)
-      mkiUsr USR2 PERMS2
-              (
-                ret 1
-              )
-      ].
-
-    (* This is where the entire specification universe gets assembled.  It is unlikely anything
-     * will need to change here.
-     *)
-    Definition ideal_univ_start :=
-      mkiU empty_chs ideal_users.
-
-  End IW.
-
-  Section RW.
-    Import RealWorld.
-
-    (* Key management needs to be bootstrapped.  Since all honest users must only send signed
-     * messages, we need some way of initially distributing signing keys in order to be able
-     * to begin secure communication.  This is analagous in the real world where we need to 
-     * have some sort of trust relationship in order to distribute trusted keys.
-     * 
-     * Here, each user has a public asymmetric signing key.
-     *)
-    Notation KID1 := 0.
-    Notation KID2 := 1.
-
-    Notation KEYS := [ skey KID1 ; skey KID2 ].
-
-    Notation KEYS1 := ($0 $+ (KID1, true) $+ (KID2, false)).
-    Notation KEYS2 := ($0 $+ (KID1, false) $+ (KID2, true)).
-
-    Notation real_users :=
-      [
-        (* User 1 implementation *)
-        MkRUserSpec USR1 KEYS1
-                    (
-                      ret 1
-                    )
-        ; 
-
-      (* User 2 implementation *)
-      MkRUserSpec USR2 KEYS2
-                  (
-                    ret 1
-                  ) 
-      ].
-
-    (* Here is where we put the implementation universe together.  Like above, it is 
-     * unlikely anything will need to change here.
-     *)
-    Definition real_univ_start :=
-      mkrU (mkKeys KEYS) real_users.
-  End RW.
-
-  (* These are here to help the proof automation.  Don't change. *)
-  Hint Unfold
-       real_univ_start
-       ideal_univ_start
-    : user_build.
-
-  Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
-    progress(autounfold with user_build; simpl).
-  
-End MyProtocol.
-
-Module MyProtocolSecure <: AutomatedSafeProtocolSS.
-
-  Import MyProtocol.
+  Import SecureDNSProtocol.
 
   (* Some things may need to change here.  t__hon is where we place the 
    * type that the protocol computes.  It is set to Nat now, because we
@@ -187,22 +80,80 @@ Module MyProtocolSecure <: AutomatedSafeProtocolSS.
 
   Lemma safe_invariant :
     invariantFor
-      {| Initial := {(ru0, iu0, true)}; Step := @stepSS t__hon t__adv  |}
+      {| Initial := {(ru0, iu0, true)}; Step := @step t__hon t__adv  |}
       (fun st => safety st /\ alignment st /\ returns_align st).
   Proof.
     eapply invariant_weaken.
 
     - eapply multiStepClosure_ok; simpl.
-      autounfold in *.
-      (* Calls to gen1 will need to be addded here until the model checking terminates. *)
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
       gen1.
       gen1.
       
     (* The remaining parts of the proof script shouldn't need to change. *)
     - intros.
-      unfold iu0, ideal_univ_start, mkiU in *
-      ; simpl in *.
-
+      simpl in *.
 
       sets_invert; split_ex
       ; simpl in *; autounfold with core
@@ -219,7 +170,7 @@ Module MyProtocolSecure <: AutomatedSafeProtocolSS.
       all: exact 0 || auto.
 
   Qed.
-  
+
   Lemma U_good : @universe_starts_sane _ Unit b ru0.
   Proof.
     autounfold;
@@ -230,7 +181,7 @@ Module MyProtocolSecure <: AutomatedSafeProtocolSS.
     - unfold AdversarySafety.keys_honest; rewrite Forall_natmap_forall; intros.
       econstructor; unfold mkrUsr; simpl.
       rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty; eauto.
-      solve_perm_merges.
+      simpl in *; solve_perm_merges.
     - unfold lameAdv; simpl; eauto.
   Qed.
 
@@ -281,7 +232,6 @@ Module MyProtocolSecure <: AutomatedSafeProtocolSS.
         solve_concrete_maps;
         solve_simple_maps;
         eauto.
-
   Qed.
   
   Lemma universe_starts_safe : universe_ok ru0 /\ adv_universe_ok ru0.
@@ -291,4 +241,4 @@ Module MyProtocolSecure <: AutomatedSafeProtocolSS.
   Qed.
   
 
-End MyProtocolSecure.
+End SecureDNSProtocolSecure.

@@ -16,66 +16,81 @@
 # defined by DFARS 252.227-7013 or DFARS 252.227-7014 as detailed above. Use of this work other than
 #  as specifically authorized by the U.S. Government may violate any copyrights that exist in this work.
 
-# -R ./frap Frap
--R ./KeyManagement KeyManagement
--R ./protocols protocols
+-Q src/ SPICY
+-R Frap/ Frap
+-Q protocols/ protocols
 
-KeyManagement/StepRelations.v
-KeyManagement/Messages.v
-KeyManagement/MyPrelude.v
-KeyManagement/Automation.v
-KeyManagement/CipherTheory.v
-KeyManagement/MessagesTheory.v
-KeyManagement/KeysTheory.v
-KeyManagement/UsersTheory.v
-KeyManagement/InvariantsTheory.v
-KeyManagement/Common.v
-KeyManagement/ChMaps.v
-KeyManagement/Maps.v
-KeyManagement/MessageEq.v
-KeyManagement/MessageEqTheory.v
-KeyManagement/Keys.v
-KeyManagement/IdealWorld.v
-KeyManagement/RealWorld.v
-KeyManagement/Simulation.v
-KeyManagement/AdversaryUniverse.v
-KeyManagement/AdversarySafety.v
-KeyManagement/Tactics.v
-KeyManagement/SafetyAutomation.v
-KeyManagement/SyntacticallySafe.v
+# Frap Library Dependency
+Frap/Invariant.v
+Frap/Relations.v
+Frap/Sets.v
 
-protocols/ProtocolAutomation.v
-protocols/UniverseEqAutomation.v
-protocols/Sets.v
-protocols/ModelCheck.v
+src/AdversaryUniverse.v
+src/AdversarySafety.v
+src/Automation.v
+src/ChMaps.v
+src/Common.v
+src/IdealWorld.v
+src/Keys.v
+src/Maps.v
+src/MessageEq.v
+src/Messages.v
+src/MyPrelude.v
+src/RealWorld.v
+src/SafetyAutomation.v
+src/Simulation.v
+src/StepRelations.v
+src/SyntacticallySafe.v
+src/Tactics.v
+
+src/Theory/CipherTheory.v
+src/Theory/InvariantsTheory.v
+src/Theory/KeysTheory.v
+src/Theory/MessageEqTheory.v
+src/Theory/MessagesTheory.v
+src/Theory/UsersTheory.v
+
+src/ModelCheck/LabelsAlign.v
+src/ModelCheck/ModelCheck.v
+src/ModelCheck/NoResends.v
+src/ModelCheck/PartialOrderReduction.v
+src/ModelCheck/ProtocolAutomation.v
+src/ModelCheck/ProtocolFunctions.v
+src/ModelCheck/RealWorldStepLemmas.v
+src/ModelCheck/SafeProtocol.v
+src/ModelCheck/SilentStepElimination.v
+src/ModelCheck/UniverseEqAutomation.v
+
+# Test Protocols
 protocols/ExampleProtocols.v
 protocols/ExampleProtocolsAutomated.v
-
-protocols/SafeProtocol.v
-protocols/RealWorldStepLemmas.v
-protocols/PartialOrderReduction.v
-protocols/LabelsAlign.v
-protocols/NoResends.v
-protocols/SilentStepElimination.v
-
 protocols/GenProto.v
 protocols/GenProtoSS.v
+protocols/ProtocolTemplate.v
 
-protocols/ProtocolFunctions.v
+# First set of test protocols: simple Secret Sharing Protocols
 protocols/ShareSecretProtocol.v
+protocols/ShareSecretProtocolTS.v
+protocols/ShareSecretProtocolSS.v
 
-protocols/ShareSecretProtocol2.v
-protocols/ShareSecretProtocol2SS.v
-protocols/ShareSecretSymmetricEncProtocol.v
-protocols/ShareSecretSymmetricEncProtocolSS.v
+# Protocol from example section of paper
+protocols/ShareSecretProtocolSymmetricEnc.v
+protocols/ShareSecretProtocolSymmetricEncIWRefine.v
+protocols/ShareSecretProtocolSymmetricEncTS.v
+protocols/ShareSecretProtocolSymmetricEncSS.v
+
+# PGP-like protocol
 protocols/PGP.v
+protocols/PGPTS.v
 protocols/PGPSS.v
+
+# A protocol akin to DNSCurve
 protocols/SecureDNS.v
+protocols/SecureDNSTS.v
 protocols/SecureDNSSS.v
 
-protocols/SecureVoting.v
+# A network aggregation protocol
 protocols/AvgSalary.v
-protocols/P2P.v
-protocols/P2Pv2.v
 
-protocols/NeedhamSchroeder.v
+# A trusted third party network auth protocol
+protocols/P2P.v

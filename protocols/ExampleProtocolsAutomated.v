@@ -18,38 +18,42 @@
 From Coq Require Import
      List.
 
-Require Import
-        MyPrelude
-        Maps
-        ChMaps
-        Messages
-        ModelCheck
-        Common
-        Keys
-        Automation
-        Tactics
-        Simulation
-        AdversaryUniverse
-        UniverseEqAutomation
-        ProtocolAutomation
-        SafeProtocol
-        ProtocolFunctions.
+From SPICY Require Import
+     MyPrelude
+     Maps
+     ChMaps
+     Messages
+     Common
+     Keys
+     Automation
+     Tactics
+     Simulation
+     AdversaryUniverse
 
-Require IdealWorld RealWorld.
+     ModelCheck.ModelCheck
+     ModelCheck.UniverseEqAutomation
+     ModelCheck.ProtocolAutomation
+     ModelCheck.SafeProtocol
+     ModelCheck.ProtocolFunctions
+.
+
+From protocols Require Import
+     ExampleProtocols.
+
+From SPICY Require IdealWorld RealWorld.
 
 Import IdealWorld.IdealNotations.
 Import RealWorld.RealWorldNotations.
-
-Require Import ExampleProtocols.
 
 Set Implicit Arguments.
 
 Import SimulationAutomation.
 
-Import Sets.
-Module Foo <: EMPTY.
+From Frap Require Import Sets.
+
+Module Foo <: Sets.EMPTY.
 End Foo.
-Module Import SN := SetNotations(Foo).
+Module Import SN := Sets.SetNotations(Foo).
 
 Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
 

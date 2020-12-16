@@ -23,6 +23,7 @@ From SPICY Require Import
      Maps
      ChMaps
      Messages
+     ModelCheck
      Common
      Keys
      Automation
@@ -30,7 +31,6 @@ From SPICY Require Import
      Simulation
      AdversaryUniverse
 
-     ModelCheck.ModelCheck
      ModelCheck.UniverseEqAutomation
      ModelCheck.ProtocolAutomation
      ModelCheck.SafeProtocol
@@ -47,17 +47,45 @@ From Frap Require Sets.
 
 Module Foo <: Sets.EMPTY.
 End Foo.
-Module Export SN := Sets.SetNotations(Foo).
+Module Import SN := Sets.SetNotations(Foo).
 
 Set Implicit Arguments.
 
 Open Scope protocol_scope.
 
-Module ShareSecretProtocol.
+Module ShareSecretSymmetricEncProtocol.
 
   (* User ids *)
   Notation USR1 := 0.
   Notation USR2 := 1.
+  
+  Section IW_Simple.
+    Import IdealWorld.
+
+    Notation perms_CH := 0.
+    Notation CH := (Single perms_CH).
+
+    Notation empty_chs := (#0 #+ (CH, [])).
+
+    Definition PERMS := $0 $+ (perms_CH, {| read := true; write := true |}).
+
+    Definition simple_users :=
+      [
+        (mkiUsr USR1 PERMS 
+                (
+                  n <- Gen
+                  ; _ <- Send (Content n) CH
+                  ; @Return (Base Nat) n
+        ));
+        (mkiUsr USR2 PERMS
+                ( m <- @Recv Nat CH
+                ; @Return (Base Nat) (extractContent m)))
+        ].
+
+    Definition simple_univ_start :=
+      mkiU empty_chs simple_users.
+
+  End IW_Simple.
 
   Section IW.
     Import IdealWorld.
@@ -76,16 +104,18 @@ Module ShareSecretProtocol.
       [
         (mkiUsr USR1 PERMS1 
                 ( chid <- CreateChannel
-                  ; _ <- Send (Permission {| ch_perm := writer ; ch_id := chid |}) CH12
-                  ; m <- @Recv Nat (chid #& pCH21)
-                  ; @Return (Base Nat) (extractContent m)
+                  ; _ <- Send (sharePerm chid writer) CH12
+                  ; m <- @Recv Access (chid #& pCH21)
+                  ; n <- Gen
+                  ; _ <- Send (Content n) (getPerm m #& pCH12)
+                  ; @Return (Base Nat) n
         )) ;
       (mkiUsr USR2 PERMS2
               ( m <- @Recv Access CH12
-                ; n <- Gen
-                ; _ <- let chid := ch_id (extractPermission m)
-                      in  Send (Content n) (chid #& pCH21)
-                ; @Return (Base Nat) n
+                ; chid <- CreateChannel
+                ; _ <- Send (sharePerm chid owner) (getPerm m #& pCH21)
+                ; m <- @Recv Nat (chid #& pCH12)
+                ; @Return (Base Nat) (extractContent m)
       ))
       ].
 
@@ -105,23 +135,28 @@ Module ShareSecretProtocol.
     Notation KEYS1 := ($0 $+ (KID1, true) $+ (KID2, false)).
     Notation KEYS2 := ($0 $+ (KID1, false) $+ (KID2, true)).
 
-    Notation real_users :=
+    Definition real_users :=
       [
         MkRUserSpec USR1 KEYS1
                     ( kp <- GenerateAsymKey Encryption
-                      ; c1 <- Sign KID1 USR2 (Permission (fst kp, false))
+                      ; c1 <- Sign KID1 USR2 (sharePubKey kp)
                       ; _  <- Send USR2 c1
-                      ; c2 <- @Recv Nat (SignedEncrypted KID2 (fst kp) true)
+                      ; c2 <- @Recv Access (SignedEncrypted KID2 (fst kp) true)
                       ; m  <- Decrypt c2
-                      ; @Return (Base Nat) (extractContent m) ) ;
+                      ; n  <- Gen
+                      ; c3 <- SignEncrypt KID1 (getKey m) USR2 (message.Content n)
+                      ; _  <- Send USR2 c3
+                      ; @Return (Base Nat) n) ;
 
       MkRUserSpec USR2 KEYS2
                   ( c1 <- @Recv Access (Signed KID1 true)
                     ; v  <- Verify KID1 c1
-                    ; n  <- Gen
-                    ; c2 <- SignEncrypt KID2 (fst (extractPermission (snd v))) USR1 (message.Content n)
+                    ; kp <- GenerateSymKey Encryption
+                    ; c2 <- SignEncrypt KID2 (getKey (snd v)) USR1 (sharePrivKey kp)
                     ; _  <- Send USR1 c2
-                    ; @Return (Base Nat) n)
+                    ; c3 <- @Recv Nat (SignedEncrypted KID1 (fst kp) true)
+                    ; m  <- Decrypt c3
+                    ; @Return (Base Nat) (extractContent m) )
       ].
 
     Definition real_univ_start :=
@@ -129,11 +164,12 @@ Module ShareSecretProtocol.
   End RW.
 
   Hint Unfold
-       real_univ_start
+       simple_univ_start
        ideal_univ_start
+       real_univ_start
     : user_build.
 
   Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
     progress(autounfold with user_build; simpl).
   
-End ShareSecretProtocol.
+End ShareSecretSymmetricEncProtocol.

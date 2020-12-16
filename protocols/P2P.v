@@ -18,7 +18,7 @@
 From Coq Require Import
      List.
 
-From KeyManagement Require Import
+From SPICY Require Import
         MyPrelude
         Maps
         ChMaps
@@ -28,26 +28,26 @@ From KeyManagement Require Import
         Automation
         Tactics
         Simulation
-        AdversaryUniverse.
+        AdversaryUniverse
 
-From protocols Require Import
-        ModelCheck
-        UniverseEqAutomation
-        ProtocolAutomation
-        SafeProtocol
-        ProtocolFunctions
-        SilentStepElimination.
+        ModelCheck.ModelCheck
+        ModelCheck.UniverseEqAutomation
+        ModelCheck.ProtocolAutomation
+        ModelCheck.SafeProtocol
+        ModelCheck.ProtocolFunctions
+        ModelCheck.SilentStepElimination.
 
-Require IdealWorld RealWorld.
+From SPICY Require IdealWorld RealWorld.
 
 Import IdealWorld.IdealNotations
        RealWorld.RealWorldNotations
        SimulationAutomation.
 
-Import Sets.
-Module Foo <: EMPTY.
+From Frap Require Import Sets.
+
+Module Foo <: Sets.EMPTY.
 End Foo.
-Module Import SN := SetNotations(Foo).
+Module Import SN := Sets.SetNotations(Foo).
 
 Set Implicit Arguments.
 
@@ -58,42 +58,41 @@ Module P2PProtocol.
   (* Start with two users, as that is the minimum for any interesting protocol *)
   Notation USR1 := 0.
   Notation USR2 := 1.
-  Notation USR3 := 2.
+  Notation SRV  := 2.
 
   Section IW.
     Import IdealWorld.
 
     (* Set up initial communication channels so each user can talk directly to the other *)
-    Notation pCH13 := 0.
-    Notation pCH23 := 1.
+    Notation pCH1 := 0.
+    Notation pCH2 := 1.
 
-    Notation pCH1  := 4.
-    Notation pCH2  := 5.
-    Notation pCH3  := 6.
-    Notation pCH__from3  := 7.
+    Notation pCH__s1 := 2.
+    Notation pCH1s := 3.
+    Notation pCH__s2 := 4.
+    Notation pCH2s := 5.
 
-    Notation CH13 := (# pCH13).
-    Notation CH23 := (# pCH23).
-
-    (* Encryption Channelse *)
     Notation CH1  := (# pCH1).
     Notation CH2  := (# pCH2).
-    Notation CH3  := (# pCH3).
-
-    (* Authenticity Channel *)
-    Notation CH__from3  := (# pCH__from3).
+    Notation CH__s1 := (# pCH__s1).
+    Notation CH1s := (# pCH1s).
+    Notation CH__s2 := (# pCH__s2).
+    Notation CH2s := (# pCH2s).
 
     (* This is the initial channel vector, each channel should be represented and start with 
      * no messages.
      *)
-    Notation empty_chs := (#0
-                            #+ (CH13, []) #+ (CH23, [])
-                            #+ (CH1, []) #+ (CH2, []) #+ (CH3, [])
-                          ).
+    Notation empty_chs :=
+      (#0
+        #+ (CH1, []) #+ (CH2, []) #+ (CH__s1, []) #+ (CH__s2, []) #+ (CH1s, []) #+ (CH2s, [])
+      ).
 
-    Notation PERMS1 := ($0 $+ (pCH13, writer) $+ (pCH1, owner) $+ (pCH2, writer) $+ (pCH3, writer) $+ (pCH__from3, reader) ).
-    Notation PERMS2 := ($0 $+ (pCH23, writer) $+ (pCH1, writer) $+ (pCH2, owner) $+ (pCH3, writer) $+ (pCH__from3, reader) ).
-    Notation PERMS3 := ($0 $+ (pCH13, reader) $+ (pCH23, reader) $+ (pCH3, owner)).
+    Notation PERMS1 := ($0 $+ (pCH1, owner) $+ (pCH__s1, reader) $+ (pCH1s, writer)).
+    Notation PERMS2 := ($0 $+ (pCH2, owner) $+ (pCH__s2, reader) $+ (pCH2s, writer)).
+    Notation PERMS__s := ($0 $+ (pCH1, reader) $+ (pCH2, reader)
+                         $+ (pCH__s1, writer) $+ (pCH1s, reader)
+                         $+ (pCH__s2, writer) $+ (pCH2s, reader)
+                       ).
 
     (* Fill in the users' protocol specifications here, adding additional users as needed.
      * Note that all users must return an element of the same type, and that type needs to 
@@ -102,26 +101,31 @@ Module P2PProtocol.
     Notation ideal_users :=
       [
         mkiUsr USR1 PERMS1
-               ( _ <- Send (MsgPair (sharePerm pCH1 writer) (sharePerm pCH2 writer)) CH13 (* please send generate a new key for me and pCH2 to speak over *)
-                 ; m <- @Recv Access (pCH1 #& pCH__from3)
+               ( _ <- Send (Content USR2) CH1s
+                 ; m <- @Recv (TPair Access Access) CH__s1
                  ; n <- Gen
-                 ; _ <- Send (Content n) (getPerm m #& pCH2)
+                 ; let ch := getPerm (msgSnd m)
+                   in _ <- Send (Content n) (pCH1 #& ch)
                  ; @Return (Base Nat) n
                )
         ; 
 
       mkiUsr USR2 PERMS2
-             ( p <- @Recv Access (pCH2 #& pCH__from3)
-               ; m <- @Recv Nat (getPerm p #& pCH2)
-               ; @Return (Base Nat) (extractContent m)
-             )
+               ( _ <- Send (Content USR1) CH2s
+                 ; m <- @Recv (TPair Access Access) CH__s2
+                 ; n <- Gen
+                 ; let ch := getPerm (msgSnd m)
+                   in  m <- @Recv Nat (pCH1 #& ch)
+                 ; @Return (Base Nat) (extractContent m)
+               )
         ; 
 
-      mkiUsr USR3 PERMS3
-             ( m <- @Recv (TPair Access Access) CH13
+      mkiUsr SRV PERMS__s
+             ( m1 <- @Recv Nat CH1s
+               ; m2 <- @Recv Nat CH2s
                ; ch <- CreateChannel
-               ; _ <- Send (sharePerm ch owner) (getPerm (msgSnd m) #& pCH__from3)
-               ; _ <- Send (sharePerm ch owner) (getPerm (msgFst m) #& pCH__from3)
+               ; _ <- Send (MsgPair (sharePerm pCH1 reader) (sharePerm ch owner)) CH__s2
+               ; _ <- Send (MsgPair (sharePerm pCH2 reader) (sharePerm ch owner)) CH__s1
                ; @Return (Base Nat) 1
              )
       ].
@@ -149,28 +153,31 @@ Module P2PProtocol.
     Notation KID__e1 := 1.
     Notation KID__s2 := 2.
     Notation KID__e2 := 3.
-    Notation KID__s3 := 4.
-    Notation KID__e3 := 5.
+    Notation KID__ss := 4.
+    Notation KID__es := 5.
 
-    Notation KEYS := [ skey KID__s1 ; ekey KID__e1 
+    Notation KEYS := [ skey KID__s1 ; ekey KID__e1
                        ; skey KID__s2 ; ekey KID__e2
-                       ; skey KID__s3 ; ekey KID__e3 ].
+                       ; skey KID__ss ; ekey KID__es ].
 
-    Notation KEYS1 := ($0 $+ (KID__s1, true) $+ (KID__e1, true) $+ (KID__s2, false) $+ (KID__e2, false) $+ (KID__s3, false) $+ (KID__e3, false) ).
-    Notation KEYS2 := ($0 $+ (KID__s2, true) $+ (KID__e2, true) $+ (KID__s1, false) $+ (KID__e1, false) $+ (KID__s3, false) $+ (KID__e3, false) ).
-    Notation KEYS3 := ($0 $+ (KID__s3, true) $+ (KID__e3, true) $+ (KID__s2, false) $+ (KID__e2, false) $+ (KID__s1, false) $+ (KID__e1, false) ).
+    Notation KEYS1 := ($0 $+ (KID__s1, true) $+ (KID__e1, true) $+ (KID__ss, false) $+ (KID__es, false)).
+    Notation KEYS2 := ($0 $+ (KID__s2, true) $+ (KID__e2, true) $+ (KID__ss, false) $+ (KID__es, false)).
+    Notation KEYS__s := ($0
+                        $+ (KID__s1, false) $+ (KID__e1, false)
+                        $+ (KID__s2, false) $+ (KID__e2, false)
+                        $+ (KID__ss, true) $+ (KID__es, true)).
 
     Notation real_users :=
       [
         (* User 1 implementation *)
         MkRUserSpec USR1 KEYS1
                     (
-                      c1 <- SignEncrypt KID__s1 KID__e3 USR3 (MsgPair (Permission (KID__e1, false)) (Permission (KID__e2, false)))
-                      ; _ <- Send USR3 c1
-                      ; c2 <- @Recv Access (SignedEncrypted KID__s3 KID__e1 true)
+                      c1 <- SignEncrypt KID__s1 KID__es SRV (Content USR2)
+                      ; _ <- Send SRV c1
+                      ; c2 <- @Recv (TPair Access Access) (SignedEncrypted KID__ss KID__e1 true)
                       ; m1 <- Decrypt c2
                       ; n <- Gen
-                      ; c3 <- SignEncrypt KID__s1 (getKey m1) USR2 (Content n)
+                      ; c3 <- SignEncrypt KID__s1 (getKey (msgSnd m1)) USR2 (Content n)
                       ; _ <- Send USR2 c3
                       ; @Return (Base Nat) n
                     )
@@ -178,24 +185,28 @@ Module P2PProtocol.
 
       (* User 2 implementation *)
       MkRUserSpec USR2 KEYS2
-                  (
-                    c1 <- @Recv Access (SignedEncrypted KID__s3 KID__e2 true)
-                    ; m1 <- Decrypt c1
-                    ; c2 <- @Recv Nat (SignedEncrypted KID__s3 (getKey m1) true)
-                    ; m2 <- Decrypt c2
-                    ; @Return (Base Nat) (extractContent m2)
-                  )
+                    (
+                      c1 <- SignEncrypt KID__s2 KID__es SRV (Content USR1)
+                      ; _ <- Send SRV c1
+                      ; c2 <- @Recv (TPair Access Access) (SignedEncrypted KID__ss KID__e2 true)
+                      ; m1 <- Decrypt c2
+                      ; c3 <- @Recv Nat (SignedEncrypted (getKey (msgFst m1)) (getKey (msgSnd m1)) true)
+                      ; m2 <- Decrypt c3
+                      ; @Return (Base Nat) (extractContent m2)
+                    )
         ; 
 
-      (* User 2 implementation *)
-      MkRUserSpec USR3 KEYS3
+      (* Server implementation *)
+      MkRUserSpec SRV KEYS__s
                   (
-                    c1 <- @Recv (TPair Access Access) (SignedEncrypted KID__s1 KID__e3 true)
+                    c1 <- @Recv Nat (SignedEncrypted KID__s1 KID__es true)
+                    ; c2 <- @Recv Nat (SignedEncrypted KID__s2 KID__es true)
                     ; m1 <- Decrypt c1
+                    ; m2 <- Decrypt c2
                     ; ky <- GenerateSymKey Encryption
-                    ; c2 <- SignEncrypt KID__s3 (getKey (msgSnd m1)) USR2 (sharePrivKey ky)
-                    ; c3 <- SignEncrypt KID__s3 (getKey (msgFst m1)) USR1 (sharePrivKey ky)
-                    ; _ <- Send USR2 c2
+                    ; c3 <- SignEncrypt KID__ss KID__e1 USR1 (MsgPair (Permission (KID__s2, false)) (sharePrivKey ky))
+                    ; c4 <- SignEncrypt KID__ss KID__e2 USR2 (MsgPair (Permission (KID__s1, false)) (sharePrivKey ky))
+                    ; _ <- Send USR2 c4
                     ; _ <- Send USR1 c3
                     ; @Return (Base Nat) 1
                   )
@@ -250,7 +261,7 @@ Module P2PProtocolSecure <: AutomatedSafeProtocolSS.
   Lemma safe_invariant :
     invariantFor
       {| Initial := {(ru0, iu0, true)}; Step := @stepSS t__hon t__adv  |}
-      (fun st => safety st /\ alignment st ).
+      (fun st => safety st /\ alignment st /\ returns_align st).
   Proof.
     eapply invariant_weaken.
 
@@ -306,54 +317,115 @@ Module P2PProtocolSecure <: AutomatedSafeProtocolSS.
       gen1.
       gen1.
       gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
+      gen1.
       
     (* The remaining parts of the proof script shouldn't need to change. *)
     - intros.
       simpl in *.
 
-      sets_invert; split_ex;
-        simpl in *; autounfold with core;
-          subst; simpl;
-            unfold safety, alignment;
-            ( split;
-            [ solve_honest_actions_safe; clean_map_lookups; eauto 8
-            | simpl; split; trivial; intros; rstep; subst; solve_labels_align
-            ]).
+      sets_invert; split_ex
+      ; simpl in *; autounfold with core
+      ; subst; simpl
+      ; unfold safety, alignment, returns_align
+      ; ( repeat simple apply conj
+          ; [ solve_honest_actions_safe; clean_map_lookups; eauto 8
+            | trivial
+            | unfold labels_align; intros; rstep; subst; solve_labels_align
+            | try solve [ intros; find_step_or_solve ] 
+        ]).
 
-       Local Ltac merge_perms_helper :=
-        repeat match goal with
-               | [ |- _ = _ ] => reflexivity
-               | [ |- _ $? _ = _ ] => solve_concrete_maps
-               end.
+      all: idtac "sets inverted".
 
-      Ltac finish_off1 :=
+      Ltac solve_merges1 :=
         match goal with
+        | [ H : Some _ = Some _ |- _ ] => apply some_eq_inv in H; subst
+        | [ H : Some _ = None |- _ ] => discriminate H
+        | [ H : None = Some _ |- _ ] => discriminate H
+        | [ H : ?ks $? ?k = _ |- _ ] =>
+          progress (
+              repeat (
+                  (rewrite add_eq_o in H by trivial)
+                  || (rewrite add_neq_o in H by congruence)
+                  || (rewrite lookup_empty_none in H by congruence)
+                )
+            )
+        | [ H : _ $+ (?k1,_) $? ?k2 = _ |- _ ] =>
+          destruct (k1 ==n k2); subst
+        | [ H : _ $k++ _ $? _ = None  |- _ ] =>
+          apply merge_perms_no_disappear_perms in H
+          ; destruct H
         | [ H : _ $k++ _ $? ?kid = Some _  |- _ ] =>
           apply merge_perms_split in H
           ; destruct H
-        | [ |- _ $k++ _ $? _ = Some _ ] =>
-          solve [ erewrite merge_perms_adds_ks1; (swap 2 4; merge_perms_helper) ]
-          || solve [ erewrite merge_perms_adds_ks2; (swap 2 4; merge_perms_helper) ]
-          || solve [ erewrite merge_perms_chooses_greatest; swap 1 4; eauto; clean_map_lookups]
-        | [ H : context [ _ $+ (?k1,_) $? ?k2] |- _ ] =>
+        | [ |- context [ ?kss1 $k++ ?kss2 $? ?ky ] ] =>
+          has_key kss1 ky; has_key kss2 ky
+          ; erewrite merge_perms_chooses_greatest
+              with (ks1 := kss1) (ks2 := kss2) (k := ky) (k' := ky)
+        | [ |- context [ ?kss1 $k++ ?kss2 $? ?ky ] ] =>
+          has_key kss1 ky
+          ; erewrite merge_perms_adds_ks1
+              with (ks1 := kss1) (ks2 := kss2) (k := ky)
+          ; try reflexivity
+        | [ |- context [ ?kss1 $k++ ?kss2 $? ?ky ] ] =>
+          has_key kss2 ky
+          ; erewrite merge_perms_adds_ks2
+              with (ks1 := kss1) (ks2 := kss2) (k := ky)
+          ; try reflexivity
+        | [ |- context [ ?kss1 $k++ ?kss2 $? ?ky ] ] =>
+          erewrite merge_perms_adds_no_new_perms
+            with (ks1 := kss1) (ks2 := kss2) (k := ky)
+        | [ |- ?ks $? ?k = _ ] =>
           progress (
               repeat (
-                  (rewrite add_neq_o in H by solve_simple_ineq)
-                  || (rewrite add_eq_o in H by trivial)
-                  || (rewrite lookup_empty_none in H)
-            ))
-        | [ |- _ $? _ = _ ] =>
-          progress solve_concrete_maps
-        | [ |- context [ _ $k++ _ ] ] =>
-          progress solve_concrete_perm_merges
+                  (rewrite add_eq_o by trivial)
+                  || (rewrite add_neq_o by congruence)
+                  || (rewrite lookup_empty_none by congruence)
+                )
+            ) 
         end.
 
-      all: try solve [ repeat finish_off1].
+      all : try solve [ repeat solve_merges1; try reflexivity; simpl; trivial ].
 
       Unshelve.
+      all: exact 0  || auto.
 
-      all: try discriminate.
-      all: auto.
+      all: idtac "type checking".
 
   Qed.
 

@@ -18,23 +18,24 @@
 From Coq Require Import
      List.
 
-Require Import
-        MyPrelude
-        Maps
-        ChMaps
-        Messages
-        Common
-        Keys
-        Automation
-        Tactics
-        Simulation
-        AdversaryUniverse
-        UniverseEqAutomation
-        SafeProtocol
-        ProtocolFunctions
-        ProtocolAutomation.
+From SPICY Require Import
+     MyPrelude
+     AdversaryUniverse
+     Maps
+     ChMaps
+     Messages
+     Common
+     Keys
+     Automation
+     Tactics
+     Simulation
 
-Require IdealWorld RealWorld.
+     ModelCheck.UniverseEqAutomation
+     ModelCheck.SafeProtocol
+     ModelCheck.ProtocolFunctions
+     ModelCheck.ProtocolAutomation.
+
+From SPICY Require IdealWorld RealWorld.
 
 Import IdealWorld.IdealNotations.
 Import RealWorld.RealWorldNotations.
