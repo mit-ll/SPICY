@@ -363,10 +363,13 @@ Section SafeActions.
       nextAction (Sign k u_id msg) (Sign k u_id msg)
   | NaVerify : forall t k (msg : crypto t),
       nextAction (Verify k msg) (Verify k msg)
-  | NaGenSymKey : forall usg,
-      nextAction (GenerateSymKey usg) (GenerateSymKey usg)
-  | NaGenAsymKey : forall usg,
-      nextAction (GenerateAsymKey usg) (GenerateAsymKey usg)
+  | NaGenKey : forall kt usg,
+      nextAction (GenerateKey kt usg) (GenerateKey kt usg)
+
+  (* | NaGenSymKey : forall usg, *)
+  (*     nextAction (GenerateSymKey usg) (GenerateSymKey usg) *)
+  (* | NaGenAsymKey : forall usg, *)
+  (*     nextAction (GenerateAsymKey usg) (GenerateAsymKey usg) *)
   | NaBind : forall A B r (c : user_cmd B) (c1 : user_cmd r) (c2 : << r >> -> user_cmd A),
       nextAction c1 c
       -> nextAction (Bind c1 c2) c
@@ -384,8 +387,9 @@ Section SafeActions.
         | Decrypt _ => True
         | Sign _ _ _ => True
         | Verify _ _ => True
-        | GenerateAsymKey _ => True
-        | GenerateSymKey _ => True
+        | GenerateKey _ _ => True
+        (* | GenerateAsymKey _ => True *)
+        (* | GenerateSymKey _ => True *)
         | Bind _ _ => False
         end.
   Proof.
@@ -416,8 +420,9 @@ Section SafeActions.
         | Sign _ _ msg =>
           (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true /\ kp = false)
         | Verify _ _ => True
-        | GenerateAsymKey _ => True
-        | GenerateSymKey _ => True
+        | GenerateKey _ _ => True
+        (* | GenerateAsymKey _ => True *)
+        (* | GenerateSymKey _ => True *)
         | Bind _ _ => False
         end.
 

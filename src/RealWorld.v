@@ -224,8 +224,9 @@ Inductive user_cmd : user_cmd_type -> Type :=
 | Sign    {t} (k : key_identifier) (msg_to : user_id) (msg : message t) : user_cmd (Crypto t)
 | Verify  {t} (k : key_identifier) (c : crypto t) : user_cmd (UPair (Base Bool) (Message t))
 
-| GenerateSymKey  (usage : key_usage) : user_cmd (Base Access)
-| GenerateAsymKey (usage : key_usage) : user_cmd (Base Access)
+| GenerateKey (kt : key_type) (usage : key_usage) : user_cmd (Base Access)
+(* | GenerateSymKey  (usage : key_usage) : user_cmd (Base Access) *)
+(* | GenerateAsymKey (usage : key_usage) : user_cmd (Base Access) *)
 .
 
 Module RealWorldNotations.
@@ -591,26 +592,38 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> step_user Silent u_id
                 (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, Verify k_id (SignedCiphertext c_id))
                 (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, @Return (UPair (Base Bool) (Message t))(true, msg))
-| StepGenerateSymKey: forall {A B} (usrs : honest_users A) (adv : user_data B)
-                        cs u_id gks gks' ks ks' qmsgs mycs froms sents cur_n
-                        (k_id : key_identifier) k usage,
+
+| StepGenerateKey: forall {A B} (usrs : honest_users A) (adv : user_data B)
+                     cs u_id gks gks' ks ks' qmsgs mycs froms sents cur_n
+                     (k_id : key_identifier) k kt usage,
     gks $? k_id = None
-    -> k = MkCryptoKey k_id usage SymKey
+    -> k = MkCryptoKey k_id usage kt
     -> gks' = gks $+ (k_id, k)
     -> ks' = add_key_perm k_id true ks
     -> step_user Silent u_id
-                (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, GenerateSymKey usage)
+                (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, GenerateKey kt usage)
                 (usrs, adv, cs, gks', ks', qmsgs, mycs, froms, sents, cur_n, @Return (Base Access) (k_id, true))
-| StepGenerateAsymKey: forall {A B} (usrs : honest_users A) (adv : user_data B)
-                         cs u_id gks gks' ks ks' qmsgs mycs froms sents cur_n
-                         (k_id : key_identifier) k usage,
-    gks $? k_id = None
-    -> k = MkCryptoKey k_id usage AsymKey
-    -> gks' = gks $+ (k_id, k)
-    -> ks' = add_key_perm k_id true ks
-    -> step_user Silent u_id
-                (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, GenerateAsymKey usage)
-                (usrs, adv, cs, gks', ks', qmsgs, mycs, froms, sents, cur_n, @Return (Base Access) (k_id, true))
+
+(* | StepGenerateSymKey: forall {A B} (usrs : honest_users A) (adv : user_data B) *)
+(*                         cs u_id gks gks' ks ks' qmsgs mycs froms sents cur_n *)
+(*                         (k_id : key_identifier) k usage, *)
+(*     gks $? k_id = None *)
+(*     -> k = MkCryptoKey k_id usage SymKey *)
+(*     -> gks' = gks $+ (k_id, k) *)
+(*     -> ks' = add_key_perm k_id true ks *)
+(*     -> step_user Silent u_id *)
+(*                 (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, GenerateSymKey usage) *)
+(*                 (usrs, adv, cs, gks', ks', qmsgs, mycs, froms, sents, cur_n, @Return (Base Access) (k_id, true)) *)
+(* | StepGenerateAsymKey: forall {A B} (usrs : honest_users A) (adv : user_data B) *)
+(*                          cs u_id gks gks' ks ks' qmsgs mycs froms sents cur_n *)
+(*                          (k_id : key_identifier) k usage, *)
+(*     gks $? k_id = None *)
+(*     -> k = MkCryptoKey k_id usage AsymKey *)
+(*     -> gks' = gks $+ (k_id, k) *)
+(*     -> ks' = add_key_perm k_id true ks *)
+(*     -> step_user Silent u_id *)
+(*                 (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, GenerateAsymKey usage) *)
+(*                 (usrs, adv, cs, gks', ks', qmsgs, mycs, froms, sents, cur_n, @Return (Base Access) (k_id, true)) *)
 .
 
 Inductive step_universe {A B} : option user_id -> universe A B -> ulabel -> universe A B -> Prop :=

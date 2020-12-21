@@ -53,42 +53,8 @@ Definition quiet (lbl : RealWorld.rlabel) :=
   | _ => False
   end.
 
-(* Notation "~^*" := (trc3 RealWorld.step_universe quiet) (at level 0). *)
-
 Section RealWorldLemmas.
   Import RealWorld.
-
-  (* Lemma multiStepSilentInv : *)
-  (*   forall {A B} (U__r U__r': universe A B) b, *)
-  (*       ~^* U__r U__r' *)
-  (*     -> U__r.(adversary).(protocol) = Return b *)
-  (*     -> U__r = U__r' *)
-  (*     \/ exists usrs adv cs u_id userData gks ks cmd qmsgs mycs froms tos cur_n, *)
-  (*         ~^* (buildUniverse usrs adv cs gks u_id *)
-  (*                                       {| key_heap := ks *)
-  (*                                        ; protocol := cmd *)
-  (*                                        ; msg_heap := qmsgs *)
-  (*                                        ; c_heap := mycs *)
-  (*                                        ; from_nons := froms *)
-  (*                                        ; sent_nons := tos *)
-  (*                                        ; cur_nonce := cur_n |}) U__r' *)
-  (*         /\ users U__r $? u_id = Some userData *)
-  (*         /\ step_user Silent *)
-  (*                     (Some u_id) *)
-  (*                     (RealWorld.build_data_step U__r userData) *)
-  (*                     (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cur_n, cmd). *)
-  (* Proof. *)
-  (*   intros * H ADV. *)
-  (*   invert H; intuition idtac. *)
-  (*   right. *)
-  (*   invert H1; unfold quiet in H0. *)
-  (*   - unfold quiet in H0; destruct b0; try contradiction. *)
-  (*     repeat eexists; intuition; eauto. *)
-  (*   - exfalso. *)
-  (*     destruct U__r; destruct adversary; simpl in *; subst. *)
-  (*     unfold build_data_step in H; simpl in *. *)
-  (*     invert H. *)
-  (* Qed. *)
 
   Lemma invert_return :
     forall (t : user_cmd_type) (r1 r2 : denote t),
@@ -157,82 +123,63 @@ Section OtherInvLemmas.
     forall kid kid' ku ku' kt kt', MkCryptoKey kid ku kt = MkCryptoKey kid' ku' kt' -> kid = kid' /\ ku = ku' /\ kt = kt'.
   Proof. intros * H; invert H; auto.  Qed.
 
-  Lemma some_eq_inv :
-    forall A (a a' : A), Some a = Some a' -> a = a'.
-  Proof. intros * H; invert H; auto.  Qed.
-    
-  Lemma tuple_eq_inv :
-    forall A B (a a' : A) (b b' : B), (a,b) = (a',b') -> a = a' /\ b = b'.
-  Proof. intros * H; invert H; eauto. Qed.
-
-  Lemma list_eq_inv :
-    forall A (x x' : A) xs xs', x :: xs = x' :: xs' -> x = x' /\ xs = xs'.
-  Proof. intros * H; invert H; eauto. Qed.
-      
-
 End OtherInvLemmas.
 
 Ltac equality1 :=
-  match goal with
-  | [ H : ?x = ?x |- _ ] => clear H
-  | [ H : List.In _ _ |- _ ] => progress (simpl in H); intuition idtac
+  invert_base_equalities1
+  || clean_map_lookups1
+  || match goal with
+    | [ H : List.In _ _ |- _ ] => progress (simpl in H); intuition idtac
 
-  | [ H : _ $+ (_,_) $? _ = _ |- _ ] => progress clean_map_lookups
-  | [ H : _ #+ (_,_) #? _ = _ |- _ ] => progress clean_map_lookups
-  | [ H : $0 $? _ = Some _ |- _ ] => apply find_mapsto_iff in H; apply empty_mapsto_iff in H; contradiction
-  | [ H : #0 #? _ = Some _ |- _ ] => apply find_mapsto_iff in H; apply empty_mapsto_iff in H; contradiction
-  | [ H : _ $? _ = Some _ |- _ ] => progress (simpl in H)
-  | [ H : _ #? _ = Some _ |- _ ] => progress (simpl in H)
+    (* | [ H : _ $+ (_,_) $? _ = _ |- _ ] => progress clean_map_lookups *)
+    (* | [ H : _ #+ (_,_) #? _ = _ |- _ ] => progress clean_map_lookups *)
+    | [ H : _ $? _ = Some _ |- _ ] => progress (simpl in H)
+    | [ H : _ #? _ = Some _ |- _ ] => progress (simpl in H)
 
-  | [ H : _ $+ (_,_) $? _ = Some ?UD |- _ ] =>
-    match type of UD with
-    | RealWorld.user_data _ => apply lookup_some_implies_in in H; simpl in H
-    | _ => apply lookup_split in H; intuition idtac
-    end
-  | [ H : _ #+ (_,_) #? _ = Some ?UD |- _ ] =>
-    apply ChMaps.ChMap.lookup_split in H; intuition idtac
+    | [ H : _ $+ (_,_) $? _ = Some ?UD |- _ ] =>
+      match type of UD with
+      | RealWorld.user_data _ => apply lookup_some_implies_in in H; simpl in H
+      | _ => apply lookup_split in H; intuition idtac
+      end
+    | [ H : _ #+ (_,_) #? _ = Some ?UD |- _ ] =>
+      apply ChMaps.ChMap.lookup_split in H; intuition idtac
 
-  | [ H : _ = {| RealWorld.users := _ ; RealWorld.adversary := _ ; RealWorld.all_ciphers := _ ; RealWorld.all_keys := _ |} |- _ ]
-    => apply split_real_univ_fields in H; split_ex; subst
-  | [ |- RealWorld.protocol (RealWorld.adversary _) = RealWorld.Return _ ] => simpl
-  | [ H : lameAdv _ ?adv |- RealWorld.protocol ?adv = _ ] => unfold lameAdv in H; eassumption
+    | [ H : _ = {| RealWorld.users := _ |} |- _ ]
+      => apply split_real_univ_fields in H; split_ex; subst
+    | [ |- RealWorld.protocol (RealWorld.adversary _) = RealWorld.Return _ ] => simpl
+    | [ H : lameAdv _ ?adv |- RealWorld.protocol ?adv = _ ] => unfold lameAdv in H; eassumption
 
-  | [ H : RealWorld.users _ $? _ = Some _ |- _ ] => progress (simpl in H)
+    | [ H : RealWorld.users _ $? _ = Some _ |- _ ] => progress (simpl in H)
 
-  | [ H : _ = RealWorld.mkUserData _ _ _ |- _ ] => inversion H; clear H
-  | [ H : Some _ = Some _ |- _ ] => apply some_eq_inv in H; subst
-  | [ H : (_ :: _) = (_ :: _) |- _ ] => apply list_eq_inv in H; split_ex; subst
-  | [ H : (_ :: _) = ?x |- _ ] => is_var x; invert H
-  | [ H : ?x = (_ :: _) |- _ ] => is_var x; invert H
-  | [ H : (_,_) = (_,_) |- _ ] => apply tuple_eq_inv in H; split_ex; subst
-  | [ H : [] = _ ++ _ :: _ |- _ ] => apply nil_not_app_cons in H; contradiction
-  (* | [ H : (_,_,_) = (_,_,_) |- _ ] => inversion H; clear H *)
-  | [ H : Action _ = Action _ |- _ ] => apply action_eq_inv in H; subst
-  | [ H : Silent = Action _ |- _ ] => discriminate H
-  | [ H : Action _ = Silent |- _ ] => discriminate H
-  | [ H : RealWorld.Return _ = RealWorld.Return _ |- _ ] => apply invert_return in H
-  | [ H : existT _ _ _ = existT _ _ _ |- _ ] => apply inj_pair2 in H
+    | [ H : _ = RealWorld.mkUserData _ _ _ |- _ ] => inversion H; clear H
 
-  | [ H: RealWorld.SignedCiphertext _ = RealWorld.SignedCiphertext _ |- _ ] =>
-    apply ct_eq_inv in H; split_ex; subst
-  | [ H: RealWorld.SigCipher _ _ _ _ = RealWorld.SigCipher _ _ _ _ |- _ ] =>
-    apply sigcphr_eq_inv in H; split_ex; subst
-  | [ H: RealWorld.SigEncCipher _ _ _ _ _ = RealWorld.SigEncCipher _ _ _ _ _ |- _ ] =>
-    apply enccphr_eq_inv in H; split_ex; subst
-  | [ H : _ = RealWorld.Output _ _ _ _ |- _ ] => apply output_act_eq_inv in H; split_ex; subst
-  | [ H : RealWorld.Output _ _ _ _ = _ |- _ ] => apply output_act_eq_inv in H; split_ex; subst
-  | [ H : _ = RealWorld.Input _ _ _ |- _ ] => apply input_act_eq_inv in H; split_ex; subst
-  | [ H : RealWorld.Input _ _ _ = _ |- _ ] => apply input_act_eq_inv in H; split_ex; subst
-  | [ H : MkCryptoKey _ _ _ = _ |- _ ] => apply key_eq_inv in H; split_ex; subst
+    | [ H : Action _ = Action _ |- _ ] =>
+      injection H; subst
+      (* apply action_eq_inv in H; subst *)
+    (* | [ H : Silent = Action _ |- _ ] => discriminate H *)
+    (* | [ H : Action _ = Silent |- _ ] => discriminate H *)
+    | [ H : RealWorld.Return _ = RealWorld.Return _ |- _ ] => apply invert_return in H
 
-  | [ H: _ = {| IdealWorld.read := _ |} |- _ ] => invert H
-  | [ H: {| IdealWorld.read := _ |} = _ |- _ ] => invert H
+    | [ H: RealWorld.SignedCiphertext _ = RealWorld.SignedCiphertext _ |- _ ] =>
+      injection H; subst
+      (* apply ct_eq_inv in H; split_ex; subst *)
+    | [ H: RealWorld.SigCipher _ _ _ _ = RealWorld.SigCipher _ _ _ _ |- _ ] =>
+      injection H; subst
+      (* apply sigcphr_eq_inv in H; split_ex; subst *)
+    | [ H: RealWorld.SigEncCipher _ _ _ _ _ = RealWorld.SigEncCipher _ _ _ _ _ |- _ ] =>
+      injection H; subst
+      (* apply enccphr_eq_inv in H; split_ex; subst *)
+    | [ H : _ = RealWorld.Output _ _ _ _ |- _ ] => apply output_act_eq_inv in H; split_ex; subst
+    | [ H : RealWorld.Output _ _ _ _ = _ |- _ ] => apply output_act_eq_inv in H; split_ex; subst
+    | [ H : _ = RealWorld.Input _ _ _ |- _ ] => apply input_act_eq_inv in H; split_ex; subst
+    | [ H : RealWorld.Input _ _ _ = _ |- _ ] => apply input_act_eq_inv in H; split_ex; subst
+    | [ H : MkCryptoKey _ _ _ = _ |- _ ] => apply key_eq_inv in H; split_ex; subst
 
-  | [ H: exists _, _ |- _ ] => destruct H
-  | [ H: _ /\ _ |- _ ] => destruct H
+    | [ H: _ = {| IdealWorld.read := _ |} |- _ ] => injection H
+    | [ H: {| IdealWorld.read := _ |} = _ |- _ ] => injection H
 
-  | [ H : keyId _ = _ |- _] => inversion H; clear H
-  end.
+    | [ H : keyId _ = _ |- _] => inversion H; clear H
+    end.
 
 Section IdealWorldDefs.
   Import IdealWorld.
@@ -331,26 +278,6 @@ Notation "'ekey_sym' kid" := (MkCryptoKey kid Encryption SymKey) (at level 80) :
 Section InversionPrinciples.
   Import RealWorld.
 
-  (* :flag Keep Proof Equalities. *)
-
-  (* Derive Inversion_clear some_inv with (forall (s1 s2 : Type), Some s1 = Some s2) Sort Prop. *)
-
-  (* Derive Inversion_clear step_user_inv_gen with *)
-  (*     (forall (A B : Type) (lbl : rlabel) (u_id : option user_id) (usrs usrs' : honest_users A) *)
-  (*        (adv adv' : user_data B) (cs cs' : ciphers) (gks gks' : keys) (ks ks': key_perms) *)
-  (*        (qmsgs qmsgs' : queued_messages) (mycs mycs' : my_ciphers) (cmd' : user_cmd nat), *)
-  (*         step_user lbl u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, Gen) (usrs', adv', cs', gks', ks', qmsgs', mycs', cmd')) *)
-  (*     Sort Prop. *)
-  (* Check step_user_inv_gen. *)
-  (* Check some_inv. *)
-
-  (* Derive Inversion_clear step_user_inv_bind with *)
-  (*     (forall (A B C C': Type) (lbl : rlabel) (u_id : option user_id) (usrs usrs' : honest_users A) *)
-  (*        (adv adv' : user_data B) (cs cs' : ciphers) (gks gks' : keys) (ks ks': key_perms) *)
-  (*        (qmsgs qmsgs' : queued_messages) (mycs mycs' : my_ciphers) (cmd1 cmd1' : user_cmd C) (cmd : C -> user_cmd C'), *)
-  (*         step_user lbl u_id (usrs, adv, cs, gks, ks, qmsgs, mycs, Bind cmd1 cmd) (usrs', adv', cs', gks', ks', qmsgs', mycs', Bind cmd1' cmd)) *)
-  (*     Sort Prop. *)
-
   Lemma step_user_inv_ret :
     forall {A B C} (usrs usrs' : honest_users A) (adv adv' : user_data B)
       lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' tos tos' cur_n cur_n' (cmd : user_cmd C) (r : <<C>>),
@@ -438,14 +365,6 @@ Section InversionPrinciples.
                   /\ froms' = updateTrackedNonce u_id froms cs msg
                   /\ lbl = Action (Input msg pat froms)
                   /\ cmd = @Return (Crypto t) msg)
-                (* \/ ( ~ msg_accepted_by_pattern cs u_id froms pat msg *)
-                (*     /\ ks = ks' *)
-                (*     /\ mycs = mycs' *)
-                (*     /\froms' = (if msg_signed_addressed (findUserKeys usrs) cs u_id msg *)
-                (*                then updateTrackedNonce u_id froms cs msg *)
-                (*                else froms) *)
-                (*     /\ lbl = Silent *)
-                (*     /\ cmd = Recv pat) *)
               ).
   Proof.
     intros * H.
@@ -621,12 +540,12 @@ Section InversionPrinciples.
     invert H; intuition eauto 12.
   Qed.
 
-  Lemma step_user_inv_gensym :
-    forall {A B} (usrs usrs' : honest_users A) (adv adv' : user_data B) usage
+  Lemma step_user_inv_genkey :
+    forall {A B} (usrs usrs' : honest_users A) (adv adv' : user_data B) usage kt
       lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' tos tos' cur_n cur_n' cmd,
       step_user lbl
                 u_id
-                (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cur_n, GenerateSymKey usage)
+                (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cur_n, GenerateKey kt usage)
                 (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cur_n', cmd)
       -> usrs = usrs'
         /\ adv = adv'
@@ -639,7 +558,7 @@ Section InversionPrinciples.
         /\ lbl = Silent
         /\ exists k_id k,
             gks $? k_id = None
-            /\ k = MkCryptoKey k_id usage SymKey
+            /\ k = MkCryptoKey k_id usage kt
             /\ gks' = gks $+ (k_id, k)
             /\ ks' = add_key_perm k_id true ks
             /\ cmd = @Return (Base Access) (k_id,true).
@@ -648,32 +567,60 @@ Section InversionPrinciples.
     invert H; intuition eauto 12.
   Qed.
 
-  Lemma step_user_inv_genasym :
-    forall {A B} (usrs usrs' : honest_users A) (adv adv' : user_data B) usage
-      lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' tos tos' cur_n cur_n' cmd,
-      step_user lbl
-                u_id
-                (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cur_n, GenerateAsymKey usage)
-                (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cur_n', cmd)
-      -> usrs = usrs'
-        /\ adv = adv'
-        /\ cs = cs'
-        /\ qmsgs = qmsgs'
-        /\ mycs = mycs'
-        /\ froms = froms'
-        /\ tos = tos'
-        /\ cur_n = cur_n'
-        /\ lbl = Silent
-        /\ exists k_id k,
-            gks $? k_id = None
-            /\ k = MkCryptoKey k_id usage AsymKey
-            /\ gks' = gks $+ (k_id, k)
-            /\ ks' = add_key_perm k_id true ks
-            /\ cmd = @Return (Base Access) (k_id,true).
-  Proof.
-    intros * H.
-    invert H; intuition eauto 12.
-  Qed.
+  (* Lemma step_user_inv_gensym : *)
+  (*   forall {A B} (usrs usrs' : honest_users A) (adv adv' : user_data B) usage *)
+  (*     lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' tos tos' cur_n cur_n' cmd, *)
+  (*     step_user lbl *)
+  (*               u_id *)
+  (*               (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cur_n, GenerateSymKey usage) *)
+  (*               (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cur_n', cmd) *)
+  (*     -> usrs = usrs' *)
+  (*       /\ adv = adv' *)
+  (*       /\ cs = cs' *)
+  (*       /\ qmsgs = qmsgs' *)
+  (*       /\ mycs = mycs' *)
+  (*       /\ froms = froms' *)
+  (*       /\ tos = tos' *)
+  (*       /\ cur_n = cur_n' *)
+  (*       /\ lbl = Silent *)
+  (*       /\ exists k_id k, *)
+  (*           gks $? k_id = None *)
+  (*           /\ k = MkCryptoKey k_id usage SymKey *)
+  (*           /\ gks' = gks $+ (k_id, k) *)
+  (*           /\ ks' = add_key_perm k_id true ks *)
+  (*           /\ cmd = @Return (Base Access) (k_id,true). *)
+  (* Proof. *)
+  (*   intros * H. *)
+  (*   invert H; intuition eauto 12. *)
+  (* Qed. *)
+
+  
+  (* Lemma step_user_inv_genasym : *)
+  (*   forall {A B} (usrs usrs' : honest_users A) (adv adv' : user_data B) usage *)
+  (*     lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' tos tos' cur_n cur_n' cmd, *)
+  (*     step_user lbl *)
+  (*               u_id *)
+  (*               (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cur_n, GenerateAsymKey usage) *)
+  (*               (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cur_n', cmd) *)
+  (*     -> usrs = usrs' *)
+  (*       /\ adv = adv' *)
+  (*       /\ cs = cs' *)
+  (*       /\ qmsgs = qmsgs' *)
+  (*       /\ mycs = mycs' *)
+  (*       /\ froms = froms' *)
+  (*       /\ tos = tos' *)
+  (*       /\ cur_n = cur_n' *)
+  (*       /\ lbl = Silent *)
+  (*       /\ exists k_id k, *)
+  (*           gks $? k_id = None *)
+  (*           /\ k = MkCryptoKey k_id usage AsymKey *)
+  (*           /\ gks' = gks $+ (k_id, k) *)
+  (*           /\ ks' = add_key_perm k_id true ks *)
+  (*           /\ cmd = @Return (Base Access) (k_id,true). *)
+  (* Proof. *)
+  (*   intros * H. *)
+  (*   invert H; intuition eauto 12. *)
+  (* Qed. *)
 
   Lemma adv_no_step :
     forall {A B} (usrs usrs' : honest_users A) (adv adv' : user_data B) b
@@ -716,8 +663,9 @@ Ltac step_usr_id uid :=
     | Decrypt _ => apply step_user_inv_dec in H
     | Sign _ _ _ => apply step_user_inv_sign in H
     | Verify _ _ => apply step_user_inv_verify in H
-    | GenerateSymKey _ => apply step_user_inv_gensym in H
-    | GenerateAsymKey _ => apply step_user_inv_genasym in H
+    | GenerateKey _ _ => apply step_user_inv_genkey in H
+    (* | GenerateSymKey _ => apply step_user_inv_gensym in H *)
+    (* | GenerateAsymKey _ => apply step_user_inv_genasym in H *)
     | _ => idtac "***Missing inversion: " cmd; invert H
     end
   end; split_ex; split_ors; split_ex; subst.

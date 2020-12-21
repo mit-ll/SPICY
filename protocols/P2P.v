@@ -203,7 +203,7 @@ Module P2PProtocol.
                     ; c2 <- @Recv Nat (SignedEncrypted KID__s2 KID__es true)
                     ; m1 <- Decrypt c1
                     ; m2 <- Decrypt c2
-                    ; ky <- GenerateSymKey Encryption
+                    ; ky <- GenerateKey SymKey Encryption
                     ; c3 <- SignEncrypt KID__ss KID__e1 USR1 (MsgPair (Permission (KID__s2, false)) (sharePrivKey ky))
                     ; c4 <- SignEncrypt KID__ss KID__e2 USR2 (MsgPair (Permission (KID__s1, false)) (sharePrivKey ky))
                     ; _ <- Send USR2 c4

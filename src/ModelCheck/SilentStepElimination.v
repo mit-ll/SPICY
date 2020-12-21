@@ -221,13 +221,8 @@ Proof.
     eapply next_key_not_in; eauto.
 
   - eexists.
-    eapply StepGenerateSymKey with (k_id0 := next_key gks''); clean_map_lookups; eauto.
+    eapply StepGenerateKey with (k_id0 := next_key gks''); clean_map_lookups; eauto.
     eapply next_key_not_in; eauto.
-
-  - eexists.
-    eapply StepGenerateAsymKey with (k_id0 := next_key gks''); clean_map_lookups; eauto.
-    eapply next_key_not_in; eauto.
-
     Unshelve.
     auto.
 Qed.
@@ -567,11 +562,7 @@ Proof.
 
   - eexists.
     
-    eapply StepGenerateSymKey with (k_id0 := next_key gks''); clean_map_lookups; eauto.
-    eapply next_key_not_in; eauto.
-
-  - eexists.
-    eapply StepGenerateAsymKey with (k_id0 := next_key gks''); clean_map_lookups; eauto.
+    eapply StepGenerateKey with (k_id0 := next_key gks''); clean_map_lookups; eauto.
     eapply next_key_not_in; eauto.
 
     Unshelve.
@@ -596,8 +587,7 @@ Lemma step_then_silent_step_inv :
                                from_nons := froms;
                                sent_nons := sents;
                                cur_nonce := cur_n |}
-      (* -> message_queues_ok cs usrs gks *)
-      (* -> user_cipher_queues_ok cs (findUserKeys usrs) usrs *)
+
       -> forall uid2 bd2 bd2' cmd2 ks2 qmsgs2 mycs2 froms2 sents2 cur_n2 usrs'' cmdc' ud2,
 
           step_user Silent (Some uid2)
@@ -980,10 +970,10 @@ Proof.
       eapply silent_step_na_commuting with (s := useless_summary) in SS; eauto
       ; split_ex.
       
-      eapply commutes_sound with (u_id1 := uid0) (u_id2 := uid) in H15; eauto; simpl.
+      eapply commutes_sound with (u_id1 := uid0) (u_id2 := uid) in H14; eauto; simpl.
 
       split_ex; subst.
-      unfold build_data_step in H15; destruct ru.
+      unfold build_data_step in H14; destruct ru.
       dt x14; dt x15; destruct x16; simpl in *.
 
       (do 2 eexists); repeat simple apply conj; eauto.

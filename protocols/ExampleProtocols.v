@@ -160,15 +160,15 @@ Module SignPingSendProtocol.
   (*   progress(autounfold with constants; simpl). *)
 
   Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
-    progress(autounfold with constants; simpl).
+    progress(autounfold with constants; simpl) : core.
 
-  Hint Extern 1 (PERMS__a $? _ = _) => unfold PERMS__a.
-  Hint Extern 1 (PERMS__b $? _ = _) => unfold PERMS__b.
+  Hint Extern 1 (PERMS__a $? _ = _) => unfold PERMS__a : core.
+  Hint Extern 1 (PERMS__b $? _ = _) => unfold PERMS__b : core.
 
   Hint Extern 1 (istepSilent ^* _ _) =>
   autounfold with constants; simpl;
     repeat (ideal_single_silent_multistep A);
-    repeat (ideal_single_silent_multistep B); solve_refl.
+    repeat (ideal_single_silent_multistep B); solve_refl : core.
   
 End SignPingSendProtocol.
 
@@ -236,14 +236,14 @@ Module EncPingSendProtocol.
   (*   progress(autounfold with constants; simpl). *)
 
   Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
-    progress(autounfold with constants; simpl).
+    progress(autounfold with constants; simpl) : core.
 
-  Hint Extern 1 (PERMS__a $? _ = _) => unfold PERMS__a.
-  Hint Extern 1 (PERMS__b $? _ = _) => unfold PERMS__b.
+  Hint Extern 1 (PERMS__a $? _ = _) => unfold PERMS__a : core.
+  Hint Extern 1 (PERMS__b $? _ = _) => unfold PERMS__b : core.
 
   Hint Extern 1 (istepSilent ^* _ _) =>
   autounfold with constants; simpl;
     repeat (ideal_single_silent_multistep A);
-    repeat (ideal_single_silent_multistep B); solve_refl.
+    repeat (ideal_single_silent_multistep B); solve_refl : core.
   
 End EncPingSendProtocol.

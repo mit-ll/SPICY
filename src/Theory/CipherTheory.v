@@ -109,7 +109,8 @@ Section CleanCiphers.
        honest_cipher_filter_fn_filter_proper
        honest_cipher_filter_fn_filter_transpose
        honest_cipher_filter_fn_filter_proper_eq
-       honest_cipher_filter_fn_filter_transpose_eq.
+       honest_cipher_filter_fn_filter_transpose_eq
+  : core.
 
   Lemma clean_ciphers_mapsto_iff : forall cs c_id c,
       MapsTo c_id c (clean_ciphers honestk cs) <-> MapsTo c_id c cs /\ honest_cipher_filter_fn honestk c_id c = true.
@@ -155,12 +156,9 @@ Section CleanCiphers.
   Qed.
 
   Hint Constructors
-       msg_accepted_by_pattern.
+       msg_accepted_by_pattern : core.
 
-  (* Hint Extern 1 (_ $+ (?k, _) $? ?k = Some _) => rewrite add_eq_o. *)
-  (* Hint Extern 1 (_ $+ (?k, _) $? ?v = _) => rewrite add_neq_o. *)
-
-  Hint Extern 1 (_ $+ (_,_) $? _ = _) => progress clean_map_lookups.
+  Hint Extern 1 (_ $+ (_,_) $? _ = _) => progress clean_map_lookups : core.
 
   Lemma clean_ciphers_eliminates_dishonest_cipher :
     forall c_id c cs k,
@@ -179,7 +177,7 @@ Section CleanCiphers.
     cases c; rewrite H0 in Heq; invert Heq.
   Qed.
 
-  Hint Resolve clean_ciphers_eliminates_dishonest_cipher clean_ciphers_keeps_honest_cipher.
+  Hint Resolve clean_ciphers_eliminates_dishonest_cipher clean_ciphers_keeps_honest_cipher : core.
 
   Lemma clean_ciphers_keeps_added_honest_cipher :
     forall c_id c cs,
@@ -225,7 +223,7 @@ Section CleanCiphers.
       + rewrite add_neq_o; eauto.
   Qed.
 
-  Hint Resolve clean_ciphers_no_new_ciphers.
+  Hint Resolve clean_ciphers_no_new_ciphers : core.
 
   Lemma clean_ciphers_eliminates_added_dishonest_cipher :
     forall c_id c cs k,
@@ -256,7 +254,7 @@ Section CleanCiphers.
     apply not_find_in_iff; eauto.
   Qed.
 
-  Hint Resolve not_in_ciphers_not_in_cleaned_ciphers.
+  Hint Resolve not_in_ciphers_not_in_cleaned_ciphers : core.
 
   Lemma dishonest_cipher_cleaned :
     forall cs c_id cipherMsg k,
@@ -277,9 +275,9 @@ Section CleanCiphers.
       unfold honest_cipher_filter_fn; cases cipherMsg; invert H; simpl in *; rewrite H0; eauto. 
   Qed.
 
-  Hint Resolve dishonest_cipher_cleaned.
+  Hint Resolve dishonest_cipher_cleaned : core.
 
-  Hint Extern 1 (honest_cipher_filter_fn _ _ ?c = _) => unfold honest_cipher_filter_fn; cases c.
+  Hint Extern 1 (honest_cipher_filter_fn _ _ ?c = _) => unfold honest_cipher_filter_fn; cases c : core.
 
   Lemma clean_ciphers_added_honest_cipher_not_cleaned :
     forall cs c_id c k,

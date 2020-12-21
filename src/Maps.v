@@ -52,11 +52,16 @@ Module MyOrderedMap (OT : UsualOrderedType).
       (@empty V) $? k = None.
   Proof. unfold find, Raw.find; trivial. Qed.
 
+  Lemma map_not_none : forall V k (m : Map.t V),
+      m $? k <> None
+      -> exists v, m $? k = Some v.
+  Proof.  unfold not; intros; cases (m $? k); try contradiction; eauto. Qed.
+
   Ltac context_map_rewrites1 :=
     match goal with
     | [ H : ?m $? ?k = _ |- context[?m $? ?k] ] => rewrite H
     | [ H : context [ match ?matchee with _ => _ end ]
-            ,  H1 : ?matchee = _ |- _] => rewrite H1 in H
+      , H1 : ?matchee = _ |- _] => rewrite H1 in H
     end.
 
   Ltac contra_map_lookup1 :=
@@ -66,37 +71,57 @@ Module MyOrderedMap (OT : UsualOrderedType).
     | [ H : ?ks $? ?k = _ |- context [ ?ks $? ?k <> _] ] => unfold not; intros
     end.
 
-  Ltac clean_map_lookups1 :=
+  Local Ltac clean_map_lookups1' :=
     invert_base_equalities1
     || contra_map_lookup1
     || context_map_rewrites1
     || match goal with
-      | [ H : context [ $0 $? _ ] |- _ ] => rewrite lookup_empty_none in H
-      | [ H : _ $+ (?k,_) $? ?k = _ |- _ ] => rewrite add_eq_o in H by trivial
-      | [ H : _ $+ (?k1,_) $? ?k2 = _ |- _ ] => rewrite add_neq_o in H by auto 2
-      | [ H : _ $+ (?k1,_) $? ?k2 = _ |- _ ] => rewrite add_eq_o in H by auto 2
-      | [ H : context [ match _ $+ (?k,_) $? ?k with _ => _ end ] |- _ ] => rewrite add_eq_o in H by trivial
-      | [ H : context [ match _ $+ (?k1,_) $? ?k2 with _ => _ end ] |- _ ] => rewrite add_neq_o in H by auto 2
-      | [ H : context [ match _ $+ (?k1,_) $? ?k2 with _ => _ end ] |- _ ] => rewrite add_eq_o in H by auto 2
-      | [ |- context[_ $+ (?k,_) $? ?k] ] => rewrite add_eq_o by trivial
-      | [ |- context[_ $+ (?k1,_) $? ?k2] ] => rewrite add_neq_o by auto 2
-      | [ |- context[_ $+ (?k1,_) $? ?k2] ] => rewrite add_eq_o by auto 2
-      | [ |- context[_ $- ?k $? ?k] ] => rewrite remove_eq_o by trivial
-      | [ |- context[_ $- ?k1 $? ?k2] ] => rewrite remove_neq_o by auto 2
-      | [ |- context[_ $- ?k1 $? ?k2] ] => rewrite remove_eq_o by auto 2
+      | [ H : context [ $0 $? _ ] |- _ ] =>
+        rewrite lookup_empty_none in H
+        ; try discriminate H
+      | [ |- context [ $0 $? _ ] ] =>
+        rewrite lookup_empty_none
+      | [ H : context [ _ $+ (_,_) $? _ ] |- _ ] =>
+        progress (
+            repeat (
+                ( rewrite add_eq_o in H by trivial )
+              || ( rewrite add_neq_o in H by auto 2 )
+              || ( rewrite lookup_empty_none in H ) ) )
+
+      | [ |- context [ _ $+ (_,_) $? _ ] ] =>
+        progress (
+            repeat (
+                ( rewrite add_eq_o by trivial )
+              || ( rewrite add_neq_o by auto 2 )
+              || ( rewrite lookup_empty_none ) ) )
+
+      | [ H : context [ _ $- _ $? _ ] |- _ ] =>
+        progress (
+            repeat (
+                ( rewrite remove_eq_o in H by trivial )
+              || ( rewrite remove_neq_o in H by auto 2 ) ) )
+
+      | [ |- context [ _ $- _ $? _ ] ] =>
+        progress (
+            repeat (
+                ( rewrite remove_eq_o by trivial )
+              || ( rewrite remove_neq_o by auto 2 ) ) )
+
       | [ H : ~ In _ _ |- _ ] => rewrite not_find_in_iff in H
       | [ |- ~ In _ _ ] => rewrite not_find_in_iff
       | [ H : In _ _ |- _ ] => rewrite in_find_iff in H
-      | [ H1 : ?m $? ?k = _ , H2 : ?m $? ?k = _ |- _] => rewrite H1 in H2
       | [ H1 : ?m $? ?k1 = _ , H2 : ?m $? ?k2 = _ |- _] =>
         assert (k1 = k2) as RW by auto 2; rewrite RW in H1; clear RW; rewrite H1 in H2
-      | [ H : ?m $? ?k <> None |- _ ] => cases (m $? k); try contradiction; clear H
+      | [ H : ?m $? ?k = None -> False |- _ ] =>
+        change (m $? k = None -> False) with (m $? k <> None) in H
+      | [ H : ?m $? ?k <> None |- _ ] =>
+        apply map_not_none in H; split_ex
       | [ H : MapsTo _ _ _ |- _ ] => rewrite find_mapsto_iff in H
       | [ |- context [ MapsTo _ _ _ ] ] => rewrite find_mapsto_iff
       end.
 
   Ltac contra_map_lookup := repeat (invert_base_equalities1 || contra_map_lookup1).
-  Ltac clean_map_lookups := repeat clean_map_lookups1.
+  Local Ltac clean_map_lookups' := repeat clean_map_lookups1'.
   Ltac context_map_rewrites := repeat context_map_rewrites1.
 
   Lemma lookup_some_implies_in : forall V (m : Map.t V) k v,
@@ -116,7 +141,7 @@ Module MyOrderedMap (OT : UsualOrderedType).
       -> (k' <> k /\ m $? k' = Some v') \/ (k' = k /\ v' = v).
   Proof.
     intros;
-      case (eq_dec k k'); intros; subst; clean_map_lookups; eauto.
+      case (eq_dec k k'); intros; subst; clean_map_lookups'; eauto.
   Qed.
 
   Lemma map_eq_fields_eq :
@@ -265,7 +290,7 @@ Module MyOrderedMap (OT : UsualOrderedType).
       m $+ (k,v1) $+ (k,v2) = m $+ (k,v2).
   Proof.
     intros; apply map_eq_Equal; unfold Equal; intros;
-      destruct (eq_dec k y); subst; clean_map_lookups; eauto.
+      destruct (eq_dec k y); subst; clean_map_lookups'; eauto.
   Qed.
 
   Lemma map_add_remove_eq :
@@ -273,7 +298,7 @@ Module MyOrderedMap (OT : UsualOrderedType).
       m $+ (k, v1) $- k = m $- k.
   Proof.
     intros. apply map_eq_Equal; unfold Equal; intros.
-    destruct (eq_dec k y); subst; clean_map_lookups; eauto.
+    destruct (eq_dec k y); subst; clean_map_lookups'; eauto.
   Qed.
 
   Lemma map_add_remove_neq :
@@ -282,7 +307,7 @@ Module MyOrderedMap (OT : UsualOrderedType).
       -> m $+ (k1, v1) $- k2 = m $- k2 $+ (k1, v1).
   Proof.
     intros. apply map_eq_Equal; unfold Equal; intros.
-    destruct (eq_dec k2 y); destruct (eq_dec k1 y); intros; subst; clean_map_lookups; eauto.
+    destruct (eq_dec k2 y); destruct (eq_dec k1 y); intros; subst; clean_map_lookups'; eauto.
   Qed.
 
   Lemma remove_empty :
@@ -299,7 +324,7 @@ Module MyOrderedMap (OT : UsualOrderedType).
   Proof.
     intros.
     apply map_eq_Equal; unfold Equal; intros.
-    cases (eq_dec y k); cases (eq_dec y k'); subst; clean_map_lookups; auto; contradiction.
+    cases (eq_dec y k); cases (eq_dec y k'); subst; clean_map_lookups'; auto; contradiction.
   Qed.
 
   Lemma map_remove_not_in_idempotent :
@@ -309,7 +334,7 @@ Module MyOrderedMap (OT : UsualOrderedType).
   Proof.
     intros.
     eapply map_eq_Equal; unfold Equal; intros.
-    destruct (eq_dec y k1); subst; clean_map_lookups; eauto.
+    destruct (eq_dec y k1); subst; clean_map_lookups'; eauto.
   Qed.
 
   Ltac Equal_eq :=
@@ -324,8 +349,24 @@ Module MyOrderedMap (OT : UsualOrderedType).
       -> m $- k = m.
   Proof.
     intros; apply map_eq_Equal. unfold Equal; intros;
-      destruct (eq_dec k y); subst; context_map_rewrites; clean_map_lookups; trivial.
+      destruct (eq_dec k y); subst; context_map_rewrites; clean_map_lookups'; trivial.
   Qed.
+
+  Ltac clean_map_lookups1 :=
+    clean_map_lookups1'
+    || match goal with
+      | [ H : context [ $0 $- _ ] |- _ ] =>
+        rewrite remove_empty in H
+      | [ H : context [ _ $+ (_,_) $- _ ] |- _ ] =>
+        progress (
+            repeat (
+                (rewrite map_add_remove_neq in H by congruence)
+                || (rewrite map_add_remove_eq in H by trivial)
+                || (rewrite remove_empty in H)
+          ) )
+      end.
+
+  Ltac clean_map_lookups := repeat clean_map_lookups1.
 
   Ltac solve_simple_maps1 :=
     clean_map_lookups1
@@ -373,19 +414,6 @@ Module MyOrderedMap (OT : UsualOrderedType).
       match type of CANON with
       | _ = ?m' => clear CANON; try canonicalize_map m'
       end
-      (* match m1 with *)
-      (* | context [ add k _ _ ] => *)
-      (*   assert ( CANON : m = m $- k $+ (k,v) ); [  *)
-      (*     maps_equal *)
-      (*   | repeat *)
-      (*       (rewrite map_add_remove_eq in CANON by trivial) *)
-      (*     || (rewrite map_add_remove_neq in CANON by eauto) *)
-      (*     || (rewrite remove_not_in_map_idempotent in CANON by eauto) *)
-      (*   ]; rewrite !CANON; *)
-      (*   match type of CANON with *)
-      (*   | _ = ?m' => clear CANON; try canonicalize_map m' *)
-      (*   end *)
-      (* end *)
     end.
 
   Lemma canonicalize_map_test1 :

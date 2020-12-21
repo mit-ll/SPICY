@@ -82,20 +82,57 @@ Ltac assert_if_new P tac :=
 
 Global Set Structural Injection.
 
+Section OtherInvLemmas.
+
+  Lemma nil_not_app_cons :
+    forall A (l1 l2 : list A) e,
+      [] = l1 ++ e :: l2
+      -> False.
+  Proof.
+    intros.
+    destruct l1.
+    rewrite app_nil_l in H; invert H.
+    rewrite <- app_comm_cons in H; invert H.
+  Qed.
+
+  Lemma some_eq_inv :
+    forall A (a a' : A), Some a = Some a' -> a = a'.
+  Proof. intros * H; injection H; trivial. Qed.
+    
+  Lemma tuple_eq_inv :
+    forall A B (a a' : A) (b b' : B), (a,b) = (a',b') -> a = a' /\ b = b'.
+  Proof. intros * H; invert H; eauto. Qed.
+
+  Lemma list_eq_inv :
+    forall A (x x' : A) xs xs', x :: xs = x' :: xs' -> x = x' /\ xs = xs'.
+  Proof. intros * H; invert H; eauto. Qed.
+
+End OtherInvLemmas.
+
+
 Ltac invert_base_equalities1 :=
   discriminate
   || contradiction
+  || (progress split_ex)
   || match goal with
-    | [ H : exists _, _ |- _ ] => destruct H
-    | [ H : _ /\ _ |- _ ] => destruct H
-    | [ H : Some _ = Some _ |- _ ] => injection H; subst
+    | [ H : ?x = ?x |- _ ] => clear H
     | [ H : ?x <> ?x |- _ ] => contradict H; trivial
-    | [ H1 : ?lhs = true , H2 : ?lhs = false |- _ ] => rewrite H1 in H2; invert H2
+    (* | [ H : exists _, _ |- _ ] => destruct H *)
+    (* | [ H : _ /\ _ |- _ ] => destruct H *)
+    | [ H : existT _ _ _ = existT _ _ _ |- _ ] => apply inj_pair2 in H
+    | [ H : Some _ = Some _ |- _ ] => injection H; subst (* apply some_eq_inv in H; subst *)
+    | [ H : (_ :: _) = (_ :: _) |- _ ] => injection H; subst (* apply list_eq_inv in H; split_ex; subst *)
+    | [ H : (_ :: _) = ?x |- _ ] => is_var x; invert H
+    | [ H : ?x = (_ :: _) |- _ ] => is_var x; invert H
+    | [ H : (_,_) = (_,_) |- _ ] => injection H; subst (* apply tuple_eq_inv in H; split_ex; subst *)
+    | [ H : [] = _ ++ _ :: _ |- _ ] => apply nil_not_app_cons in H; contradiction
+    (* | [ H : Some _ = Some _ |- _ ] => injection H; subst *)
+    | [ H1 : ?lhs = true , H2 : ?lhs = false |- _ ] => rewrite H1 in H2; discriminate H2
     | [ H : Some ?x1 <> Some ?x2 |- _ ] =>
-      let I := fresh "I" in 
+      let I := fresh "I" in
       assert (x1 <> x2) by (unfold not; intro I; apply (f_equal Some) in I; contradiction); clear H
     | [ H : Some ?x1 = Some ?x2 -> False |- _ ] =>
-      let I := fresh "I" in 
+      let I := fresh "I" in
       assert (x1 <> x2) by (unfold not; intro I; apply (f_equal Some) in I; contradiction); clear H
     end.
 

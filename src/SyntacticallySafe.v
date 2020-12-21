@@ -25,14 +25,16 @@ From SPICY Require Import
      Automation
      Maps
      Keys
-     KeysTheory
      Messages
-     MessagesTheory
      Tactics
      Simulation
      RealWorld
-     InvariantsTheory
-     SafetyAutomation.
+     SafetyAutomation
+
+     Theory.KeysTheory
+     Theory.MessagesTheory
+     Theory.InvariantsTheory
+.
 
 Set Implicit Arguments.
 Import RealWorld RealWorldNotations.
@@ -142,10 +144,13 @@ Inductive syntactically_safe (u_id : user_id) (uids : list user_id) :
     List.In {| cmd_type := Crypto t ; cmd_val := msg ; safetyTy := TyRecvCphr |} context
     -> syntactically_safe u_id uids context (@Verify t k msg) TyRecvMsg
 
-| SafeGenerateSymKey : forall context usage,
-    syntactically_safe u_id uids context (GenerateSymKey usage) TyHonestKey
-| SafeGenerateAsymKey : forall context usage,
-    syntactically_safe u_id uids context (GenerateAsymKey usage) TyHonestKey
+| SafeGenerateKey : forall context kt usage,
+    syntactically_safe u_id uids context (GenerateKey kt usage) TyHonestKey
+
+(* | SafeGenerateSymKey : forall context usage, *)
+(*     syntactically_safe u_id uids context (GenerateSymKey usage) TyHonestKey *)
+(* | SafeGenerateAsymKey : forall context usage, *)
+(*     syntactically_safe u_id uids context (GenerateAsymKey usage) TyHonestKey *)
 .
 
 Definition compute_ids' {V} (m : NatMap.t V) :=
@@ -488,10 +493,6 @@ Hint Extern 1 (_ $+ (_,_) $? _ = _) => progress clean_map_lookups : core.
 Hint Extern 1 (_ $+ (?k1,_) $? ?k2 = _) =>
   solve [ destruct (k1 ==n k2); subst; clean_map_lookups; trivial ] : core.
 
-
-(* Lemma syntactically_safe_nochange_usrs_ks_mycs : *)
-(*   forall  *)
-
 Lemma keys_mine_addln_keys :
   forall ks1 ks2 ks3,
     keys_mine ks1 ks3
@@ -802,7 +803,9 @@ Proof.
 
     unfold typingcontext_sound in *; split_ands; split; intros; eauto.
     autorewrite with find_user_keys; process_ctx; eauto.
+
     eapply H4 in H9; split_ex; subst.
+
     destruct (rec_u_id ==n u_id2);
     destruct (rec_u_id ==n cipher_to_user x0);
       destruct (u_id1 ==n cipher_to_user x0); subst; clean_map_lookups; eauto;
@@ -830,12 +833,6 @@ Proof.
     destruct (u_id1 ==n cipher_to_user x0); subst; clean_map_lookups; eauto;
       process_ctx; eauto.
     
-  - unfold typingcontext_sound in *; split_ands; split; intros; eauto.
-    autorewrite with find_user_keys; process_ctx; eauto.
-    eapply H1 in H6; split_ex; subst.
-    destruct (u_id1 ==n cipher_to_user x0); subst; clean_map_lookups; eauto;
-      process_ctx; eauto.
-
   - unfold typingcontext_sound in *; split_ands; split; intros; eauto.
     autorewrite with find_user_keys; process_ctx; eauto.
     eapply H1 in H6; split_ex; subst.
@@ -902,8 +899,6 @@ Section PredicatePreservation.
       eapply H33 in FKM; split_ex; eauto.
       unfold encrypted_ciphers_ok in *; rewrite Forall_natmap_forall in *; intros; eauto.
 
-    - eapply encrypted_ciphers_ok_new_honest_key_adv_univ with (honestk := (findUserKeys usrs'));
-        simpl; eauto; simpl; eauto.
     - eapply encrypted_ciphers_ok_new_honest_key_adv_univ with (honestk := (findUserKeys usrs'));
         simpl; eauto; simpl; eauto.
   Qed.
@@ -1283,7 +1278,6 @@ Section PredicatePreservation.
                   specialize (H19 _ _ H10); split_ex; split_ands; eauto.
 
     - eapply adv_no_honest_keys_after_new_adv_key; eauto.
-    - eapply adv_no_honest_keys_after_new_adv_key; eauto.
 
   Qed.
 
@@ -1352,7 +1346,7 @@ Section PredicatePreservation.
       intuition idtac.
       right; right; split; eauto; intros.
       solve_perm_merges;
-        specialize (H17 _ _ H18); split_ands; discriminate.
+        specialize (H17 _ _ H13); split_ex; discriminate.
   Qed.
 
   Lemma adv_step_keys_good_ss :
@@ -1392,10 +1386,6 @@ Section PredicatePreservation.
         specialize_msg_ok; subst.
         specialize (H9 _ _ H20); eauto.
 
-    - unfold keys_and_permissions_good in *; intuition eauto.
-      destruct (k_id ==n k_id0); subst; clean_map_lookups; eauto.
-      rewrite Forall_natmap_forall in *; intros.
-      eapply permission_heap_good_addnl_key; eauto.
     - unfold keys_and_permissions_good in *; intuition eauto.
       destruct (k_id ==n k_id0); subst; clean_map_lookups; eauto.
       rewrite Forall_natmap_forall in *; intros.
@@ -1571,16 +1561,6 @@ Section PredicatePreservation.
       destruct (k_id ==n k); subst; clean_map_lookups.
       destruct (k_id ==n k); subst; clean_map_lookups; eauto.
 
-    - split_ex; split; eauto.
-      
-      rewrite !Forall_forall in *; split_ex; intros; eauto.
-      destruct x; intros.
-      eapply H0 in H2; split_ex; split; intros; eauto.
-      eapply H2 in H4; split_ex; split; intros; eauto.
-
-      destruct (k_id ==n k); subst; clean_map_lookups.
-      destruct (k_id ==n k); subst; clean_map_lookups; eauto.
-
   Qed.
 
   Lemma adv_step_adv_goodness :
@@ -1668,13 +1648,6 @@ Section PredicatePreservation.
       eapply H2 in H4; eauto; split_ex; split; eauto.
       destruct (k ==n k_id); subst; clean_map_lookups; eauto.
 
-    - split_ex; split; eauto.
-      rewrite Forall_forall in *; eauto; intros.
-      destruct x; intros.
-      eapply H0 in H2; eauto.
-      split_ex; split; intros; eauto.
-      eapply H2 in H4; eauto; split_ex; split; eauto.
-      destruct (k ==n k_id); subst; clean_map_lookups; eauto.
   Qed.
 
   Definition goodness_predicates {A B} (U : universe A B) : Prop :=
@@ -1872,7 +1845,8 @@ Section PredicatePreservation.
 
     simpl in *; clean_context.
     destruct (rec_u_id ==n u_id); subst; clean_map_lookups.
-    exists rec_u.(msg_heap); exists [existT crypto t0 msg]; split; eauto; destruct rec_u; trivial.
+
+    exists rec_u.(msg_heap); exists [existT crypto t0 msg]; split; eauto; destruct rec_u; simpl in *; eauto.
     exists qmsgs2; exists[]; rewrite app_nil_r; eauto.
   Qed.
 

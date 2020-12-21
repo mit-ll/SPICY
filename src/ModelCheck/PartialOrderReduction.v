@@ -93,10 +93,12 @@ Section CommutationLemmas.
       summarize (Sign k u_id msg) s
   | SumVerify : forall t k (msg : crypto t) s,
       summarize (Verify k msg) s
-  | SumGenSymKey : forall usg s,
-      summarize (GenerateSymKey usg) s
-  | SumGenAsymKey : forall usg s,
-      summarize (GenerateAsymKey usg) s
+  | SumGenKey : forall usg kt s,
+      summarize (GenerateKey kt usg) s
+  (* | SumGenSymKey : forall usg s, *)
+  (*     summarize (GenerateSymKey usg) s *)
+  (* | SumGenAsymKey : forall usg s, *)
+  (*     summarize (GenerateAsymKey usg) s *)
   | SumBind : forall t1 t2 (c1 : user_cmd t1) (c2 : << t1 >> -> user_cmd t2) s,
       summarize c1 s
       -> (forall r__v, summarize (c2 r__v) s)
@@ -113,8 +115,7 @@ Section CommutationLemmas.
     | Decrypt _ => True
     | Sign _ _ _ => True
     | Verify _ _ => True
-    | GenerateSymKey _ => True
-    | GenerateAsymKey _ => True
+    | GenerateKey _ _ => True
     | Bind _ _ => False
     end.
 
@@ -208,8 +209,6 @@ Section CommutationLemmas.
     - exists (fun x => x); eexists; repeat simple apply conj; swap 1 3; eauto.
     - exists (fun x => x); eexists; repeat simple apply conj; swap 1 3; eauto.
     - exists (fun x => x); eexists; repeat simple apply conj; swap 1 3; eauto.
-    - exists (fun x => x); eexists; repeat simple apply conj; swap 1 3; eauto.
-    (* - exists (fun x => x); eexists; repeat simple apply conj; swap 1 3; eauto. *)
   Qed.
 
   Hint Constructors nextAction : core.
@@ -522,6 +521,7 @@ Section CommutationLemmas.
       try
         solve [
           (do 10 eexists); (repeat simple apply conj); repeat solver1; eauto; repeat solver1; try congruence; eauto; stuff ] .
+
   Qed.
 
   Lemma commutes_sound_recur_cmd1' :
@@ -678,7 +678,6 @@ Section CommutationLemmas.
       (do 6 eexists); split; [ | econstructor]; try congruence; eauto.
       maps_equal; clean_map_lookups; trivial.
 
-    - (do 6 eexists); split; [ | econstructor]; eauto.
     - (do 6 eexists); split; [ | econstructor]; eauto.
     - (do 6 eexists); split; [ | econstructor]; eauto.
     - (do 6 eexists); split; [ | econstructor]; eauto.
@@ -887,10 +886,8 @@ Section TimeMeasures.
       boundRunningTime (Sign k u_id msg) (2 + n)
   | BrtVerify : forall t k (msg : crypto t) n,
       boundRunningTime (Verify k msg) (2 + n)
-  | BrtGenSymKey : forall usg n,
-      boundRunningTime (GenerateSymKey usg) (2 + n)
-  | BrtGenAsymKey : forall usg n,
-      boundRunningTime (GenerateAsymKey usg) (2 + n)
+  | BrtGenSymKey : forall kt usg n,
+      boundRunningTime (GenerateKey kt usg) (2 + n)
   | BrtBind : forall t1 t2 (c1 : user_cmd t1) (c2 : << t1 >> -> user_cmd t2) n1 n2,
       boundRunningTime c1 n1
       -> (forall t, boundRunningTime (c2 t) n2)
@@ -1134,8 +1131,6 @@ Section TimeMeasures.
                         usrs' $- uid $? uid0 = Some u ->
                         exists u' : user_data A, us $- uid $? uid0 = Some u' /\ protocol u = protocol u')).
       intros; destruct (uid ==n uid0); subst; clean_map_lookups; eauto.
-      rewrite remove_eq_o in H6 by congruence; discriminate.
-      rewrite remove_neq_o in H6 by congruence; eauto.
 
       specialize (IHboundRunningTimeUniv _ ARG); clear ARG.
 
@@ -1143,9 +1138,7 @@ Section TimeMeasures.
       rewrite <- H5; assumption.
       eapply IHboundRunningTimeUniv; intros; eauto.
 
-      destruct (uid ==n uid0); subst.
-      rewrite remove_eq_o in H6 by congruence; discriminate.
-      rewrite remove_neq_o in * by congruence.
+      destruct (uid ==n uid0); subst; clean_map_lookups.
       eapply H3 in H6; split_ex.
       
       eexists; split; eauto.
@@ -1788,29 +1781,7 @@ Proof.
 
     (do 11 eexists).
       match goal with
-      | [ |- context [ gks $+ (?kid,?k) ]] => eapply StepGenerateSymKey with (k_id0 := next_key (gks $+ (kid,k)))
-      end; clean_map_lookups; eauto using next_key_not_in.
-    (do 11 eexists).
-      match goal with
-      | [ |- context [ gks $+ (?kid,?k) ]] => eapply StepGenerateSymKey with (k_id0 := next_key (gks $+ (kid,k)))
-      end; clean_map_lookups; eauto using next_key_not_in.
-
-    eapply IHsummarize in H7; eauto.
-
-  - induct 1;
-      intros;
-      step_usr_id uid1;
-      discharge_no_commutes;
-      clean_map_lookups;
-      try solve [ (do 11 eexists); econstructor; eauto ].
-
-    (do 11 eexists).
-      match goal with
-      | [ |- context [ gks $+ (?kid,?k) ]] => eapply StepGenerateAsymKey with (k_id0 := next_key (gks $+ (kid,k)))
-      end; clean_map_lookups; eauto using next_key_not_in.
-    (do 11 eexists).
-      match goal with
-      | [ |- context [ gks $+ (?kid,?k) ]] => eapply StepGenerateAsymKey with (k_id0 := next_key (gks $+ (kid,k)))
+      | [ |- context [ gks $+ (?kid,?k) ]] => eapply StepGenerateKey with (k_id0 := next_key (gks $+ (kid,k)))
       end; clean_map_lookups; eauto using next_key_not_in.
 
     eapply IHsummarize in H7; eauto.
@@ -2472,9 +2443,9 @@ Proof.
         eapply max_elt_non_stepped_user with (uid := uid) (uid' := uid0) in MAX; eauto; split_ex.
       rename x0 into msg_heap'.
 
-      specialize (IHstepsi _ _ H17 _ _ next); simpl in *.
+      specialize (IHstepsi _ _ H16 _ _ next); simpl in *.
 
-      apply NatMap.O.max_elt_MapsTo in H17; rewrite find_mapsto_iff in H17; clean_map_lookups.
+      apply NatMap.O.max_elt_MapsTo in H16; rewrite find_mapsto_iff in H16; clean_map_lookups.
       eapply commutes_noblock with (usrs := users ru) (usrs1' := usrs0) in next; eauto; split_ex.
       
       eapply IHstepsi in H13; clear IHstepsi; eauto 2.
@@ -2501,10 +2472,10 @@ Proof.
 
       invert H13; clear_labeled_commuting_steps uid.
 
-      eapply commutes_sound with (u_id1 := uid0) (u_id2 := uid) in H22; eauto.
+      eapply commutes_sound with (u_id1 := uid0) (u_id2 := uid) in H21; eauto.
       split_ex; subst.
 
-      unfold build_data_step in H22; destruct ru; simpl in *.
+      unfold build_data_step in H21; destruct ru; simpl in *.
       dt x13; dt x14; destruct x15; simpl in *.
 
       (do 2 eexists); repeat simple apply conj; eauto.
@@ -2948,12 +2919,12 @@ Proof.
         apply not_all_ex_not in H5; split_ex.
 
         apply imply_to_and in H5; split_ands.
+        apply imply_to_and in H10; split_ands.
         apply imply_to_and in H11; split_ands.
-        apply imply_to_and in H12; split_ands.
 
         firstorder idtac; simpl in *.
 
-        eapply na_deterministic in H12; eauto; split_ands; subst;
+        eapply na_deterministic in H11; eauto; split_ands; subst;
           try match goal with
               | [ H : JMeq _ _ |- _ ] => invert H
               end.

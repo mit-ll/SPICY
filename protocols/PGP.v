@@ -116,7 +116,7 @@ Module PGPProtocol.
                       ; @Return (Base Nat) (extractContent m2)) ;
 
       MkRUserSpec USR2 KEYS2
-                  ( kp <- GenerateSymKey Encryption
+                  ( kp <- GenerateKey SymKey Encryption
                     ; c1 <- SignEncrypt KID2 KID3 USR1 (sharePrivKey kp)
                     ; _  <- Send USR1 c1
                     ; n  <- Gen

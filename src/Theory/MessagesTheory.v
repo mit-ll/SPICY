@@ -97,7 +97,8 @@ Qed.
 Hint Resolve
      accepted_safe_msg_pattern_honestly_signed
      accepted_safe_msg_pattern_to_this_user
-     accepted_safe_msg_pattern_replay_safe.
+     accepted_safe_msg_pattern_replay_safe
+  : core.
 
 Section CleanMessages.
 
@@ -135,8 +136,7 @@ Section CleanMessages.
       destruct c; rewrite <- honest_key_honest_keyb; eauto.
   Qed.
   
-  Hint Resolve honest_cipher_filter_fn_true_honest_signing_key.
-  (* Hint Extern 1 (honest_key _ _) => process_keys_messages. *)
+  Hint Resolve honest_cipher_filter_fn_true_honest_signing_key : core.
 
   Lemma msg_honestly_signed_before_after_cleaning :
     forall {t} (msg : crypto t) honestk cs,
@@ -204,7 +204,8 @@ Section CleanMessages.
        msg_to_this_user_before_after_cleaning
        msg_honestly_signed_after_without_cleaning
        msg_honestly_signed_before_after_cleaning
-       msg_honestly_signed_before_after_cleaning'.
+       msg_honestly_signed_before_after_cleaning'
+    : core.
 
   Lemma message_not_replayed_addnl_destruct :
     forall {t1 t2} (msg1 : crypto t1) (msg2 : crypto t2) to_usr cs froms msgs,
@@ -216,7 +217,7 @@ Section CleanMessages.
     invert H2; eauto 8.
   Qed.
 
-  Hint Resolve message_not_replayed_addnl_destruct.
+  Hint Resolve message_not_replayed_addnl_destruct : core.
 
   Lemma fold_msg_filter :
     forall honestk cs to_usr sigM acc,
@@ -258,8 +259,6 @@ Section CleanMessages.
       = clean_messages honestk cs to_usr froms msgs.
   Proof.
     unfold clean_messages; trivial. Qed.
-
-  (* Hint Resolve message_not_replayed_cons_split. *)
 
   Ltac message_cleaning :=
     repeat
@@ -428,7 +427,7 @@ Section CleanMessages.
       split_ands; eauto.
   Qed.
 
-  Hint Resolve msg_nonce_same_after_cleaning.
+  Hint Resolve msg_nonce_same_after_cleaning : core.
 
   Lemma msg_nonce_same_not_same_contra :
     forall {t} (msg : crypto t) honestk cs c,
@@ -446,7 +445,7 @@ Section CleanMessages.
     contradiction.
   Qed.
 
-  Hint Resolve msg_nonce_same_not_same_contra.
+  Hint Resolve msg_nonce_same_not_same_contra : core.
 
   Ltac process_clean_messages :=
     repeat (
@@ -523,7 +522,7 @@ Section CleanMessages.
       intros; destruct c; eauto.
   Qed.
 
-  Hint Resolve honest_cipher_signing_key_cipher_filter_fn_true.
+  Hint Resolve honest_cipher_signing_key_cipher_filter_fn_true : core.
 
   Lemma msg_signed_addressed_true_after_cipher_cleaning :
     forall {t} honestk honestk' cs msg_to (msg : crypto t),
@@ -560,7 +559,8 @@ Section CleanMessages.
 
   Hint Resolve
        msg_signed_addressed_true_after_cipher_cleaning
-       msg_nonce_ok_after_cipher_cleaning.
+       msg_nonce_ok_after_cipher_cleaning
+    : core.
 
   Lemma clean_messages_idempotent' :
     forall msgs honestk honestk' cs msg_to acc froms,
@@ -702,7 +702,7 @@ End CleanMessages.
       try discriminate; solve_perm_merges; eauto.
   Qed.
 
-  Hint Resolve msg_honestly_signed_new_msg_keys.
+  Hint Resolve msg_honestly_signed_new_msg_keys : core.
 
   Lemma msg_signed_addressed_new_msg_keys :
     forall {t} (msg : crypto t) {t1} (c : crypto t1) honestk cs suid,
@@ -714,7 +714,7 @@ End CleanMessages.
       rewrite andb_true_iff in *; split_ands; split; eauto.
   Qed.
 
-  Hint Resolve msg_signed_addressed_new_msg_keys.
+  Hint Resolve msg_signed_addressed_new_msg_keys : core.
 
   Lemma msg_signed_addressed_new_msg_keys' :
     forall {t} (msg : message t) {t1} (c : crypto t1) honestk cs suid,
@@ -762,7 +762,11 @@ End CleanMessages.
       solve_perm_merges; eauto.
   Qed.
 
-  Hint Resolve msg_signed_addressed_new_msg_keys' msg_signed_addressed_new_msg_keys'' msg_signed_addressed_new_msg_keys'''.
+  Hint Resolve
+       msg_signed_addressed_new_msg_keys'
+       msg_signed_addressed_new_msg_keys''
+       msg_signed_addressed_new_msg_keys'''
+    : core.
   
   Lemma msg_honestly_signed_addnl_cipher :
     forall {t} (msg : crypto t) honestk cs c_id c,
@@ -804,8 +808,10 @@ End CleanMessages.
         end; eauto.
   Qed.
 
-  Hint Resolve msg_honestly_signed_addnl_cipher.
-  Hint Resolve msg_honestly_signed_addnl_honest_key.
+  Hint Resolve
+       msg_honestly_signed_addnl_cipher
+       msg_honestly_signed_addnl_honest_key
+    : core.
 
   Lemma msg_signed_addressed_addnl_honest_key :
     forall {t} (msg : crypto t) honestk cs suid k_id,
@@ -817,4 +823,4 @@ End CleanMessages.
     rewrite andb_true_iff in *; split_ands; eauto using msg_honestly_signed_addnl_honest_key.
   Qed.
 
-  Hint Resolve msg_signed_addressed_addnl_honest_key.
+  Hint Resolve msg_signed_addressed_addnl_honest_key : core.

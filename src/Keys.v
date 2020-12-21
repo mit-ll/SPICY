@@ -135,13 +135,14 @@ Qed.
 
 Hint Resolve
      add_key_perm_proper       add_key_perm_transpose
-     add_key_perm_proper_Equal add_key_perm_transpose_Equal.
+     add_key_perm_proper_Equal add_key_perm_transpose_Equal
+  : core.
 
 Section KeyMergeTheorems.
   Variable all_keys : keys.
   Variable honestk advk : key_perms.
 
-  Hint Resolve empty_Empty.
+  Hint Resolve empty_Empty : core.
 
   Lemma merge_perms_notation :
     forall ks1 ks2,
@@ -189,7 +190,7 @@ Section KeyMergeTheorems.
     unfold merge_perms; intros; rewrite fold_Empty; eauto.
   Qed.
 
-  Hint Rewrite merge_perms_right_identity merge_perms_left_identity.
+  Hint Rewrite merge_perms_right_identity merge_perms_left_identity : core.
 
   Lemma merge_perms_adds_no_new_perms :
     forall ks2 k ks1,
@@ -203,7 +204,7 @@ Section KeyMergeTheorems.
       eauto.
   Qed.
 
-  Hint Resolve merge_perms_adds_no_new_perms.
+  Hint Resolve merge_perms_adds_no_new_perms : core.
 
   Lemma merge_perms_came_from_somewhere1 :
     forall ks2 ks1 k v,
@@ -233,7 +234,7 @@ Section KeyMergeTheorems.
         clean_map_lookups.
   Qed.
 
-  Hint Resolve merge_perms_came_from_somewhere1 merge_perms_came_from_somewhere2.
+  Hint Resolve merge_perms_came_from_somewhere1 merge_perms_came_from_somewhere2 : core.
 
   Lemma merge_perms_adds_ks1 :
     forall ks2 ks1 k v ks,
@@ -276,7 +277,7 @@ Section KeyMergeTheorems.
         clean_map_lookups.
   Qed.
 
-  Hint Resolve merge_perms_adds_ks1 merge_perms_adds_ks2.
+  Hint Resolve merge_perms_adds_ks1 merge_perms_adds_ks2 : core.
 
   Lemma merge_perms_no_disappear_perms :
     forall ks2 k ks1,
@@ -312,7 +313,7 @@ Section KeyMergeTheorems.
         clean_map_lookups.
   Qed.
 
-  Hint Resolve merge_perms_chooses_greatest.
+  Hint Resolve merge_perms_chooses_greatest : core.
 
   Lemma merge_perms_some_inv :
     forall ks1 ks2 k p,
@@ -624,4 +625,4 @@ Ltac solve_greatest :=
     | [ |- context [ ?b || ?b ] ] => rewrite orb_diag
     end; trivial.
 
-Hint Extern 1 (_ = greatest_permission _ _) => solve_greatest.
+Hint Extern 1 (_ = greatest_permission _ _) => solve_greatest : core.

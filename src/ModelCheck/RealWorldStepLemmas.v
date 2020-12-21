@@ -1338,8 +1338,6 @@ Section ActionMatches.
 
       all: p'.
       
-    - action_matches_solver; eauto; p'.
-
   Qed.
 
   Lemma action_matches_other_user_silent_step_inv :

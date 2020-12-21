@@ -39,7 +39,8 @@ Section FindKeysLemmas.
 
   Hint Constructors
        honest_key
-       msg_pattern_safe.
+       msg_pattern_safe
+  : core.
 
   Lemma findUserKeys_foldfn_proper :
     forall {A},
@@ -70,7 +71,8 @@ Section FindKeysLemmas.
   Qed.
 
   Hint Resolve findUserKeys_foldfn_proper findUserKeys_foldfn_transpose
-       findUserKeys_foldfn_proper_Equal findUserKeys_foldfn_transpose_Equal.
+       findUserKeys_foldfn_proper_Equal findUserKeys_foldfn_transpose_Equal
+    : core.
 
   Lemma findUserKeys_notation :
     forall {A} (usrs : honest_users A),
@@ -197,11 +199,11 @@ Section FindKeysLemmas.
         eauto.
   Qed.
 
-  Hint Extern 1 (match _ $? _ with _ => _ end = _) => context_map_rewrites.
+  Hint Extern 1 (match _ $? _ with _ => _ end = _) => context_map_rewrites : core.
   Hint Extern 1 (match ?m $? ?k with _ => _ end = _) =>
     match goal with
     | [ H : ?m $? ?k = _ |- _ ] => rewrite H
-    end.
+    end : core.
 
   Lemma findUserKeys_has_private_key_of_user :
     forall {A} (usrs : honest_users A) u_id u_d ks k,
@@ -247,7 +249,7 @@ Section FindKeysLemmas.
       solve_perm_merges; eauto.
   Qed.
 
-  Hint Resolve honest_key_after_new_keys.
+  Hint Resolve honest_key_after_new_keys : core.
 
   Lemma honest_keyb_after_new_keys :
     forall honestk msgk k_id,
@@ -257,7 +259,7 @@ Section FindKeysLemmas.
     intros; rewrite <- honest_key_honest_keyb in *; eauto.
   Qed.
 
-  Hint Resolve honest_keyb_after_new_keys.
+  Hint Resolve honest_keyb_after_new_keys : core.
 
   Lemma not_honest_key_after_new_pub_keys :
     forall pubk honestk k,
@@ -274,7 +276,7 @@ Section FindKeysLemmas.
      || (progress subst)); eauto.
   Qed.
 
-  Hint Resolve not_honest_key_after_new_pub_keys.
+  Hint Resolve not_honest_key_after_new_pub_keys : core.
 
   Lemma message_honestly_signed_after_add_keys :
     forall {t} (msg : crypto t) cs honestk ks,
@@ -299,8 +301,8 @@ Section FindKeysLemmas.
       simpl in *;
       solve_perm_merges; eauto.
 
-    specialize (H0 _ _ H2); destruct b; subst; auto.
-    specialize (H0 _ _ H2); subst; eauto.
+    specialize (H0 _ _ H1); destruct b; subst; auto.
+    specialize (H0 _ _ H1); subst; eauto.
   Qed.
 
   Lemma cipher_honestly_signed_after_msg_keys :
@@ -312,7 +314,7 @@ Section FindKeysLemmas.
       rewrite <- honest_key_honest_keyb in *; eauto.
   Qed.
 
-  Hint Resolve cipher_honestly_signed_after_msg_keys.
+  Hint Resolve cipher_honestly_signed_after_msg_keys : core.
 
   Lemma ciphers_honestly_signed_after_msg_keys :
     forall honestk msgk cs,
@@ -322,7 +324,7 @@ Section FindKeysLemmas.
     induction 1; econstructor; eauto.
   Qed.
 
-  Hint Extern 1 (Some _ = Some _) => f_equal.
+  Hint Extern 1 (Some _ = Some _) => f_equal : core.
 
 End FindKeysLemmas.
 
@@ -334,7 +336,7 @@ Ltac solve_findUserKeys_rewrites :=
     | [ |- context [match _ $? _ with _ => _ end]] => context_map_rewrites
     end; simpl; trivial.
 
-Hint Rewrite @findUserKeys_readd_user_same_keys_idempotent' using solve [ solve_findUserKeys_rewrites ] : find_user_keys.
+Hint Rewrite @findUserKeys_readd_user_same_keys_idempotent' using solve [ solve_findUserKeys_rewrites ] : find_user_keys .
 Hint Rewrite @findUserKeys_readd_user_addnl_keys using solve [ solve_findUserKeys_rewrites ] : find_user_keys.
 Hint Rewrite @findUserKeys_readd_user_private_key using solve [ solve_findUserKeys_rewrites ] : find_user_keys.
 
@@ -401,7 +403,8 @@ Section CleanKeys.
   Hint Resolve
        honest_key_filter_fn_proper
        honest_key_filter_fn_filter_proper honest_key_filter_fn_filter_transpose
-       honest_key_filter_fn_filter_proper_Equal honest_key_filter_fn_filter_transpose_Equal.
+       honest_key_filter_fn_filter_proper_Equal honest_key_filter_fn_filter_transpose_Equal
+    : core.
 
   Lemma clean_keys_inv :
     forall honestk k_id k ks,
@@ -451,7 +454,7 @@ Section CleanKeys.
       keys_solver honestk; eauto.
   Qed.
 
-  Hint Resolve clean_keys_adds_no_keys.
+  Hint Resolve clean_keys_adds_no_keys : core.
 
   Lemma clean_keys_idempotent :
     forall honestk ks,
@@ -505,7 +508,8 @@ Section CleanKeys.
   Hint Resolve
        honest_perm_filter_fn_proper
        honest_perm_filter_fn_filter_proper honest_perm_filter_fn_filter_transpose
-       honest_perm_filter_fn_filter_proper_Equal honest_perm_filter_fn_filter_transpose_Equal.
+       honest_perm_filter_fn_filter_proper_Equal honest_perm_filter_fn_filter_transpose_Equal
+    : core.
 
   Lemma clean_key_permissions_inv :
     forall honestk k_id k ks,
@@ -575,7 +579,8 @@ Section CleanKeys.
        clean_key_permissions_inv
        clean_key_permissions_adds_no_permissions
        clean_key_permissions_keeps_honest_permission
-       clean_key_permissions_drops_dishonest_permission.
+       clean_key_permissions_drops_dishonest_permission
+  : core.
 
   Lemma clean_key_permissions_idempotent :
     forall honestk ks,

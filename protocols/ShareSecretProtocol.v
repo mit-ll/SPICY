@@ -108,7 +108,7 @@ Module ShareSecretProtocol.
     Notation real_users :=
       [
         MkRUserSpec USR1 KEYS1
-                    ( kp <- GenerateAsymKey Encryption
+                    ( kp <- GenerateKey AsymKey Encryption
                       ; c1 <- Sign KID1 USR2 (Permission (fst kp, false))
                       ; _  <- Send USR2 c1
                       ; c2 <- @Recv Nat (SignedEncrypted KID2 (fst kp) true)

@@ -24,21 +24,22 @@ From SPICY Require Import
      Maps
      Common
      Keys
-     KeysTheory
      Tactics
      Messages
      MessageEq
      Automation
      Simulation
      AdversaryUniverse
-     CipherTheory
-     UsersTheory
+     
+     Theory.KeysTheory
+     Theory.CipherTheory
+     Theory.UsersTheory
 .
 
 Set Implicit Arguments.
 
-Hint Resolve in_eq in_cons.
-Remove Hints absurd_eq_true trans_eq_bool.
+Hint Resolve in_eq in_cons : core.
+Remove Hints absurd_eq_true trans_eq_bool : core.
 
 Module SafetyAutomation.
 
@@ -117,7 +118,7 @@ Module SafetyAutomation.
       clean_context; eauto.
   Qed.
 
-  Hint Resolve msg_honestly_signed_signing_key_honest.
+  Hint Resolve msg_honestly_signed_signing_key_honest : core.
 
   Ltac user_queue_lkup TAG :=
     match goal with
@@ -343,7 +344,8 @@ Module SafetyAutomation.
        findUserKeys_foldfn_proper
        findUserKeys_foldfn_transpose
        findUserKeys_foldfn_proper_Equal
-       findUserKeys_foldfn_transpose_Equal.
+       findUserKeys_foldfn_transpose_Equal
+  : core.
 
   Lemma users_permission_heaps_good_merged_permission_heaps_good :
     forall {A} (usrs : honest_users A) gks,
@@ -363,16 +365,16 @@ Module SafetyAutomation.
       eapply merge_perms_split in H0; split_ors; eauto.
   Qed.
 
-  Hint Resolve users_permission_heaps_good_merged_permission_heaps_good.
+  Hint Resolve users_permission_heaps_good_merged_permission_heaps_good : core.
 
-  Hint Extern 1 (_ $+ (?k, _) $? _ = Some _) => progress (clean_map_lookups; trivial).
-  Hint Extern 1 (honest_keyb _ _ = true) => rewrite <- honest_key_honest_keyb.
-  Hint Extern 1 (_ && _ = true) => rewrite andb_true_iff.
+  Hint Extern 1 (_ $+ (?k, _) $? _ = Some _) => progress (clean_map_lookups; trivial) : core.
+  Hint Extern 1 (honest_keyb _ _ = true) => rewrite <- honest_key_honest_keyb : core.
+  Hint Extern 1 (_ && _ = true) => rewrite andb_true_iff : core.
 
-  Hint Extern 1 (honest_key_filter_fn _ _ _ = _) => unfold honest_key_filter_fn; context_map_rewrites.
-  Hint Extern 1 (honest_perm_filter_fn _ _ _ = _) => unfold honest_perm_filter_fn; context_map_rewrites.
+  Hint Extern 1 (honest_key_filter_fn _ _ _ = _) => unfold honest_key_filter_fn; context_map_rewrites : core.
+  Hint Extern 1 (honest_perm_filter_fn _ _ _ = _) => unfold honest_perm_filter_fn; context_map_rewrites : core.
 
-  Hint Extern 1 (user_cipher_queue _ _ = _) => unfold user_cipher_queue; context_map_rewrites.
-  Hint Extern 1 (user_keys _ _ = Some _ ) => unfold user_keys; context_map_rewrites.
+  Hint Extern 1 (user_cipher_queue _ _ = _) => unfold user_cipher_queue; context_map_rewrites : core.
+  Hint Extern 1 (user_keys _ _ = Some _ ) => unfold user_keys; context_map_rewrites : core.
 
 End SafetyAutomation.

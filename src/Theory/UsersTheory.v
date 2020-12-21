@@ -127,7 +127,8 @@ Section CleanUsers.
   Qed.
 
   Hint Resolve findUserKeys_foldfn_proper findUserKeys_foldfn_transpose
-       findUserKeys_foldfn_proper_Equal findUserKeys_foldfn_transpose_Equal.
+       findUserKeys_foldfn_proper_Equal findUserKeys_foldfn_transpose_Equal
+    : core.
 
 End CleanUsers.
 
@@ -135,9 +136,9 @@ Section FindUserKeysCleanUsers.
   Import RealWorld.
 
   Hint Resolve findUserKeys_foldfn_proper findUserKeys_foldfn_transpose
-       findUserKeys_foldfn_proper_Equal findUserKeys_foldfn_transpose_Equal.
-
-  Hint Resolve clean_users_adds_no_users.
+       findUserKeys_foldfn_proper_Equal findUserKeys_foldfn_transpose_Equal
+       clean_users_adds_no_users
+    : core.
 
   Lemma findUserKeys_add_user :
     forall {A} (usrs : honest_users A) u_id u_d,
@@ -182,7 +183,7 @@ Section FindUserKeysCleanUsers.
       cases (findUserKeys (clean_users (honestk $k++ ukeys) cs usrs) $? k_id); solve_perm_merges; eauto.
   Qed.
 
-  Hint Resolve findUserKeys_clean_users_addnl_keys.
+  Hint Resolve findUserKeys_clean_users_addnl_keys : core.
 
   Lemma clean_users_no_change_honestk :
     forall {A} (usrs : honest_users A) cs k_id,
@@ -337,7 +338,7 @@ Section FindUserKeysCleanUsers.
   Hint Resolve
        clean_key_permissions_ok_extra_user_cleaning
        clean_messages_idempotent
-       .
+    : core.
 
   Lemma clean_users_idempotent' :
     forall {A} (usrs : honest_users A) cs,

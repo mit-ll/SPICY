@@ -138,7 +138,7 @@ Module ShareSecretSymmetricEncProtocol.
     Definition real_users :=
       [
         MkRUserSpec USR1 KEYS1
-                    ( kp <- GenerateAsymKey Encryption
+                    ( kp <- GenerateKey AsymKey Encryption
                       ; c1 <- Sign KID1 USR2 (sharePubKey kp)
                       ; _  <- Send USR2 c1
                       ; c2 <- @Recv Access (SignedEncrypted KID2 (fst kp) true)
@@ -151,7 +151,7 @@ Module ShareSecretSymmetricEncProtocol.
       MkRUserSpec USR2 KEYS2
                   ( c1 <- @Recv Access (Signed KID1 true)
                     ; v  <- Verify KID1 c1
-                    ; kp <- GenerateSymKey Encryption
+                    ; kp <- GenerateKey SymKey Encryption
                     ; c2 <- SignEncrypt KID2 (getKey (snd v)) USR1 (sharePrivKey kp)
                     ; _  <- Send USR1 c2
                     ; c3 <- @Recv Nat (SignedEncrypted KID1 (fst kp) true)

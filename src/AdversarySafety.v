@@ -20,6 +20,7 @@ From Coq Require Import
      Morphisms
      Eqdep
      Permutation
+     Classical
      Program.Equality (* for dependent induction *)
 .
 
@@ -106,7 +107,7 @@ Section UniverseLemmas.
     eexists; eapply clean_keys_keeps_honest_key; eauto.
   Qed.
 
-  Hint Resolve permission_heap_good_clean_keys.
+  Hint Resolve permission_heap_good_clean_keys : core.
 
   Lemma keys_and_permissions_good_clean_keys :
     forall {A} (usrs : honest_users A) adv_heap cs gks,
@@ -149,7 +150,7 @@ Section UniverseLemmas.
     cases b; eauto.
   Qed.
 
-  Hint Resolve findUserKeys_keys_mine_user.
+  Hint Resolve findUserKeys_keys_mine_user : core.
 
   Lemma merge_keys_mine :
     forall ks1 ks2,
@@ -201,9 +202,7 @@ Section UniverseLemmas.
     contradiction.
   Qed.
 
-  Hint Resolve cipher_honestly_signed_false_addnl_honest_key.
-
-
+  Hint Resolve cipher_honestly_signed_false_addnl_honest_key : core.
 
   (* Step adv no honest keys *)
 
@@ -215,7 +214,7 @@ Section UniverseLemmas.
     induction usrs using P.map_induction_bis; intros; Equal_eq; eauto.
   Qed.
 
-  Hint Resolve users_permission_heaps_good_merged_permission_heaps_good.
+  Hint Resolve users_permission_heaps_good_merged_permission_heaps_good : core.
 
 End UniverseLemmas.
 
@@ -229,8 +228,9 @@ Section SingleAdversarySimulates.
    *   safely ignore all adversary messages (wipe them from the universe) -- Adam's suggestion, I am not exactly sure how...
    *   or, prove an appended simulation relation, but I am not sure how to generically express this
    *)
-  Hint Resolve accepted_safe_msg_pattern_honestly_signed.
-  Hint Resolve encrypted_ciphers_ok_addnl_cipher.
+  Hint Resolve
+       accepted_safe_msg_pattern_honestly_signed
+       encrypted_ciphers_ok_addnl_cipher : core.
 
   Section RealWorldLemmas.
     Import RealWorld.
@@ -288,7 +288,8 @@ Section SingleAdversarySimulates.
     Hint Resolve
          honest_heap_private_honestk
          honest_key_not_cleaned
-         adv_key_not_honestk.
+         adv_key_not_honestk
+    : core.
 
     Lemma user_cipher_queue_cleaned_users_nochange :
       forall {A} (usrs : honest_users A) honestk cs u_id,
@@ -320,7 +321,7 @@ Section SingleAdversarySimulates.
       simpl; trivial.
     Qed.
 
-    Hint Resolve user_in_univ_user_in_stripped_univ.
+    Hint Resolve user_in_univ_user_in_stripped_univ : core.
 
     Lemma prop_in_adv_message_queues_still_good_after_cleaning :
       forall msgs honestk cs suid froms P,
@@ -337,13 +338,13 @@ Section SingleAdversarySimulates.
       rewrite clean_messages'_fst_pull; eauto.
     Qed.
 
-    Hint Resolve prop_in_adv_message_queues_still_good_after_cleaning.
-
-    Hint Resolve honest_cipher_filter_fn_true_honest_signing_key.
-    Hint Extern 1 (honest_key _ _) => process_keys_messages.
     Hint Resolve
+         prop_in_adv_message_queues_still_good_after_cleaning
+         honest_cipher_filter_fn_true_honest_signing_key
          msg_honestly_signed_after_without_cleaning
-         msg_honestly_signed_before_after_cleaning.
+         msg_honestly_signed_before_after_cleaning
+    : core.
+    Hint Extern 1 (honest_key _ _) => process_keys_messages : core.
     
     Lemma msgCiphersSigned_before_clean_ciphers' :
       forall (msgs : queued_messages) honestk cs,
@@ -354,7 +355,7 @@ Section SingleAdversarySimulates.
       destruct x; intuition eauto.
     Qed.
 
-    Hint Resolve clean_ciphers_keeps_honest_cipher.
+    Hint Resolve clean_ciphers_keeps_honest_cipher : core.
 
     Lemma msgCiphersSigned_after_clean_ciphers' :
       forall (msgs : queued_messages) honestk honestk' cs,
@@ -391,7 +392,8 @@ Section SingleAdversarySimulates.
 
     Hint Resolve
          msgCiphersSigned_after_clean_ciphers
-         clean_keys_keeps_honest_key.
+         clean_keys_keeps_honest_key
+      : core.
 
     Lemma clean_ciphers_encrypted_ciphers_ok :
       forall honestk cs gks,
@@ -447,7 +449,7 @@ Section SingleAdversarySimulates.
       - eapply SigEncCipherHonestSignedEncKeyHonestOk; eauto using msgCiphersSigned_cleaned_honestk.
     Qed.
 
-    Hint Resolve clean_ciphers_encrypted_ciphers_ok.
+    Hint Resolve clean_ciphers_encrypted_ciphers_ok : core.
 
     Lemma ok_universe_strip_adversary_still_ok :
       forall {A B} (U__ra U__r: universe A B) b,
@@ -518,7 +520,7 @@ Section SingleAdversarySimulates.
           eauto.
     Qed.
 
-    Hint Resolve msg_honestly_signed_cipher_honestly_signed.
+    Hint Resolve msg_honestly_signed_cipher_honestly_signed : core.
 
     Lemma findKeysCrypto_ok_clean_global_keys :
       forall {t} (msg : crypto t) cs gks honestk,
@@ -534,7 +536,7 @@ Section SingleAdversarySimulates.
       erewrite clean_keys_keeps_honest_key in H2; eauto.
     Qed.
     
-    Hint Resolve findKeysCrypto_ok_clean_global_keys.
+    Hint Resolve findKeysCrypto_ok_clean_global_keys : core.
 
     Lemma msg_signing_key_same_after_cleaning :
       forall {t} (msg : crypto t) cs honestk k1 k2,
@@ -660,7 +662,7 @@ Section SingleAdversarySimulates.
           specialize (H9 _ _ H12); intuition eauto.
     Qed.
 
-    Hint Resolve clean_users_no_change_honestk clean_users_no_change_honestk'.
+    Hint Resolve clean_users_no_change_honestk clean_users_no_change_honestk' : core.
 
     Lemma message_queues_ok_after_cleaning :
       forall {A} (usrs : honest_users A) honestk cs gks,
@@ -680,7 +682,8 @@ Section SingleAdversarySimulates.
 
     Hint Resolve
          msg_to_this_user_before_after_cleaning
-         msg_to_this_user_false_before_after_cleaning.
+         msg_to_this_user_false_before_after_cleaning
+      : core.
 
     Ltac instantiate_cs_lkup :=
       match goal with 
@@ -935,7 +938,7 @@ Section SingleAdversarySimulates.
         | [ H : _ \/ _ |- _ ] => destruct H
         end.
 
-    Hint Extern 1 (message_queue_ok _ _ _ _) => eassumption || (msg_queue_prop; eassumption).
+    Hint Extern 1 (message_queue_ok _ _ _ _) => eassumption || (msg_queue_prop; eassumption) : core.
 
     Ltac process_nonce_ok :=
       process_message_queue;
@@ -963,7 +966,7 @@ Section SingleAdversarySimulates.
         trivial.
     Qed.
 
-    Hint Resolve clean_ciphers_nochange_cipher.
+    Hint Resolve clean_ciphers_nochange_cipher : core.
     
     Lemma honest_nonce_tracking_ok_after_cleaning :
       forall honestk honestk' cs me my_sents my_non you your_froms your_msgs,
@@ -1153,12 +1156,14 @@ Section SingleAdversarySimulates.
 
         subst; destruct (cipher_to_user x0 ==n cipher_to_user x0); try contradiction; eauto.
         eapply H11 in n; eauto; simpl in *; subst.
-        unfold honest_user_nonces_ok in H13; split_ex.
+        (* unfold honest_user_nonces_ok in H13; split_ex. *)
+        unfold honest_user_nonces_ok in H4; split_ex.
         process_nonce_ok; eauto.
+
         unfold msg_nonce_not_same
         ; right
         ; intros.
-        invert H36; clean_map_lookups.
+        invert H35; clean_map_lookups.
         destruct (c_id ==n c_id0); subst; clean_map_lookups; process_nonce_ok.
         
         eapply H11 in H3; eauto; simpl in *; subst; eauto.
@@ -1166,7 +1171,7 @@ Section SingleAdversarySimulates.
         unfold msg_nonce_not_same
         ; right
         ; intros.
-        invert H26; clean_map_lookups.
+        invert H25; clean_map_lookups.
         destruct (c_id ==n c_id0); subst; clean_map_lookups; process_nonce_ok.
         
         subst; destruct (cipher_to_user x0 ==n cipher_to_user x0); try contradiction; eauto.
@@ -1243,8 +1248,7 @@ Section SingleAdversarySimulates.
       assert (cs $? c_id0 <> None) by eauto; contradiction.
   Qed.
 
-  Hint Resolve nonce_not_in_msg_queue_addnl_cipher.
-    
+  Hint Resolve nonce_not_in_msg_queue_addnl_cipher : core.
 
   Ltac simply_specialize :=
     repeat
@@ -1608,7 +1612,7 @@ Section SingleAdversarySimulates.
     .
     right; split_ors; try discriminate; intros.
     destruct (cid' ==n c_id0); subst; clean_map_lookups; eauto.
-    invert H7; eauto.
+    invert H13; eauto.
   Qed.
 
   Hint Resolve
@@ -1616,7 +1620,8 @@ Section SingleAdversarySimulates.
        msg_queue_honest_no_dupes_new_cipher
        msg_queue_values_ok_new_cipher
        sents_ok_increase_nonce
-       froms_ok_increase_nonce.
+       froms_ok_increase_nonce
+    : core.
 
   Lemma nat_lt_nat_plus_one :
     forall n, n < n + 1.
@@ -1630,7 +1635,7 @@ Section SingleAdversarySimulates.
     intros; rewrite Nat.add_1_r; eauto.
   Qed.
 
-  Hint Resolve nat_lt_nat_plus_one nat_le_nat_plus_one.
+  Hint Resolve nat_lt_nat_plus_one nat_le_nat_plus_one : core.
 
   Lemma honest_nonces_unique_new_cipher :
     forall cs honestk cid c uid sents cur_n,
@@ -2232,7 +2237,8 @@ Section SingleAdversarySimulates.
          findUserKeys_readd_user_same_key_heap_idempotent
          ciphers_honestly_signed_after_msg_keys
          findUserKeys_has_private_key_of_user
-         not_in_ciphers_not_in_cleaned_ciphers.
+         not_in_ciphers_not_in_cleaned_ciphers
+      : core.
 
     Lemma cipher_message_keys_already_in_honest :
       forall {A t} (msg : message t) (usrs : honest_users A) honestk cs msg_to nonce c_id k__s k__e gks,
@@ -2332,7 +2338,7 @@ Section SingleAdversarySimulates.
         end; rewrite MHS; simpl; eauto.
     Qed.
 
-    Hint Resolve msg_filter_same_new_honest_key.
+    Hint Resolve msg_filter_same_new_honest_key : core.
     
     Lemma clean_messages_new_honest_key_idempotent :
       forall honestk k_id msgs cs gks suid froms,
@@ -2464,7 +2470,7 @@ Section SingleAdversarySimulates.
       rewrite H0; eauto.
     Qed.
 
-    Hint Resolve clean_key_permissions_new_honest_key'.
+    Hint Resolve clean_key_permissions_new_honest_key' : core.
 
     Lemma clean_adv_new_honest_key_idempotent :
       forall {A B} (usrs : honest_users A) (adv : user_data B) k_id cs gks b,
@@ -2500,7 +2506,7 @@ Section SingleAdversarySimulates.
       - rewrite !clean_users_adds_no_users; eauto.
     Qed.
 
-    Hint Resolve clean_keys_new_honest_key.
+    Hint Resolve clean_keys_new_honest_key : core.
 
     Lemma honestly_signed_message_accepted_by_pattern_same_after_cleaning :
       forall {t} (msg : crypto t) cs msg_to froms pat honestk,
@@ -2525,7 +2531,8 @@ Section SingleAdversarySimulates.
 
     Hint Resolve
          honestly_signed_message_accepted_by_pattern_same_after_cleaning
-         message_not_accepted_by_pattern_same_after_cleaning.
+         message_not_accepted_by_pattern_same_after_cleaning
+      : core.
 
     Lemma msg_signed_addressed_nochange_addnl_cipher :
       forall {t} (msg : crypto t) honestk suid cs c_id c tf,
@@ -2618,7 +2625,7 @@ Section SingleAdversarySimulates.
           specialize (H0 _ S); contradiction.
     Qed.
 
-    Hint Resolve clean_messages_addnl_cipher_idempotent clean_adv_msgs_addnl_cipher_idempotent.
+    Hint Resolve clean_messages_addnl_cipher_idempotent clean_adv_msgs_addnl_cipher_idempotent : core.
 
     Lemma clean_users_addnl_cipher_idempotent :
       forall {A} (usrs : honest_users A) honestk cs c_id c gks,
@@ -2637,7 +2644,7 @@ Section SingleAdversarySimulates.
       f_equal; eauto.
     Qed.
 
-    Hint Resolve clean_users_addnl_cipher_idempotent.
+    Hint Resolve clean_users_addnl_cipher_idempotent : core.
 
     Lemma clean_messages_keeps_signed_addressed_unseen_nonce :
       forall t honestk u_id cs c_id c froms msgs,
@@ -2693,7 +2700,8 @@ Section SingleAdversarySimulates.
          clean_messages_keeps_signed_addressed_unseen_nonce
          clean_key_permissions_keeps_honest_permission
          msg_nonce_ok_none_updateTrackedNonce_idempotent
-         updateRecvNonce_clean_ciphers_honestly_signed.
+         updateRecvNonce_clean_ciphers_honestly_signed
+      : core.
 
     Lemma clean_ciphers_eq_absurd :
       forall cs honestk c_id c,
@@ -2708,17 +2716,17 @@ Section SingleAdversarySimulates.
       clean_map_lookups; rewrite clean_ciphers_no_new_ciphers in H1; symmetry in H1; auto; clean_map_lookups.
     Qed.
 
-    Hint Resolve clean_ciphers_eq_absurd.
+    Hint Resolve clean_ciphers_eq_absurd : core.
 
     Lemma honest_silent_new_key_implies_honest_step_origuniv :
       forall {A B} (usrs : honest_users A) (adv : user_data B) 
-        cs gks gks' k_id usage u_id honestk honestk' ks qmsgs mycs froms sents cur_n b keygen_cmd kt,
+        cs gks gks' k_id usage u_id honestk honestk' ks qmsgs mycs froms sents cur_n b kt,
           gks $? k_id = None
         -> honestk = findUserKeys usrs
         -> honestk' = findUserKeys usrs $+ (k_id,true)
         -> gks' = gks $+ (k_id, {| keyId := k_id; keyUsage := usage; keyType := kt |})
-        -> ( (keygen_cmd = GenerateAsymKey usage /\ kt = AsymKey)
-          \/ (keygen_cmd = GenerateSymKey usage /\ kt = SymKey) )
+        (* -> ( (keygen_cmd = GenerateAsymKey usage /\ kt = AsymKey) *)
+        (*   \/ (keygen_cmd = GenerateSymKey usage /\ kt = SymKey) ) *)
         -> message_queues_ok cs usrs gks
         -> adv_message_queue_ok usrs cs gks adv.(msg_heap)
         -> keys_and_permissions_good gks usrs adv.(key_heap)
@@ -2740,7 +2748,7 @@ Section SingleAdversarySimulates.
                      , clean_keys honestk gks
                      , clean_key_permissions honestk ks
                      , clean_messages honestk cs (Some u_id) froms qmsgs
-                     , mycs, froms, sents, cur_n, keygen_cmd)
+                     , mycs, froms, sents, cur_n, GenerateKey kt usage )
                     (  clean_users honestk' cs usrs
                      , clean_adv adv honestk' cs b
                      , clean_ciphers honestk' cs
@@ -3110,8 +3118,6 @@ Section SingleAdversarySimulates.
       specialize_msg_ok; eauto.
     Qed.
 
-    Locate action_adversary_safe.
-
     Lemma honest_labeled_step_univ_ok :
       forall {A B} (U U' : universe A B) uid a__r,
         universe_ok U
@@ -3294,7 +3300,7 @@ Section SingleAdversarySimulates.
       cases (cs $? c_id); try discriminate; trivial.
     Qed.
 
-    Hint Resolve honestly_signed_message_to_this_user_None_always_true.
+    Hint Resolve honestly_signed_message_to_this_user_None_always_true : core.
 
     Lemma clean_adv_msgs_keeps_honest_msg :
       forall {t} (msg : crypto t) honestk cs msgs,
@@ -3309,7 +3315,7 @@ Section SingleAdversarySimulates.
         rewrite <- app_comm_cons; f_equal; eauto.
     Qed.
 
-    Hint Resolve clean_adv_msgs_keeps_honest_msg.
+    Hint Resolve clean_adv_msgs_keeps_honest_msg : core.
 
     Lemma count_occ_permuted_froms_same' :
       forall froms froms',
@@ -3454,12 +3460,14 @@ Section SingleAdversarySimulates.
         ; invert Heq.
         pose proof (msg_honestly_signed_has_signing_key_cipher_id (@SignedCiphertext t0 cid) _ _ H0)
         ; split_ex.
-        pose proof (msg_honestly_signed_signing_key_honest (@SignedCiphertext t0 cid) honestk cs H0 H11).
-        invert H13; subst.
-        unfold msg_signing_key in H11
+        pose proof (msg_honestly_signed_signing_key_honest (@SignedCiphertext t0 cid) honestk cs H0 H8).
+        invert H11; subst.
+        invert H12.
+        unfold msg_signing_key in H8
         ; context_map_rewrites
-        ; invert H11.
-        generalize (H6 _ _ _ _ n H3 Heq0 H14 H8); intros.
+        ; invert H8.
+        (* generalize (H6 _ _ _ _ n H3 Heq0 H14 H8); intros. *)
+        generalize (H6 _ _ _ _ n H3 Heq0 H11 H1); intros.
 
         (* TODO tbraje -- this is likely not right. should update tracked nonce *)
         assert (count_occ msg_seq_eq (cipher_nonce c :: froms) (cipher_nonce c0) =
@@ -3477,7 +3485,7 @@ Section SingleAdversarySimulates.
         !clean_messages'_fst_pull,
         !fold_clean_messages.
 
-        invert H12.
+        (* invert H12. *)
 
         eapply IHmsgs1 with (froms := cipher_nonce c0 :: froms) (pat := pat) in H0
         ; clear IHmsgs1; eauto.
@@ -3491,8 +3499,8 @@ Section SingleAdversarySimulates.
           unfold not; intros.
           assert (msg_accepted_by_pattern cs (Some (cipher_to_user c0)) froms pat c1).
           invert H12; econstructor; eauto; destruct chk; eauto; rewrite <- count_occ_not_In in *.
-          apply not_in_cons in H16; split_ex; eauto.
-          apply not_in_cons in H16; split_ex; eauto.
+          apply not_in_cons in H15; split_ex; eauto.
+          apply not_in_cons in H15; split_ex; eauto.
           contradiction.
         }
 
@@ -3664,7 +3672,7 @@ Section SingleAdversarySimulates.
               solve_perm_merges; eauto.
     Qed.
 
-    Hint Resolve honest_users_only_honest_keys_nochange_keys.
+    Hint Resolve honest_users_only_honest_keys_nochange_keys : core.
 
     Lemma merge_perms_true_either_true :
       forall ks1 ks2 k_id,
@@ -3674,9 +3682,10 @@ Section SingleAdversarySimulates.
       intros; split_ors; solve_perm_merges.
     Qed.
 
-    Hint Resolve merge_perms_true_either_true.
-
-    Hint Resolve honest_users_only_honest_keys_gen_key.
+    Hint Resolve
+         merge_perms_true_either_true
+         honest_users_only_honest_keys_gen_key
+      : core.
 
     Lemma next_action_next_cmd_safe :
       forall honestk cs uid froms sents {A} (cmd : user_cmd A) {B} (cmd__n : user_cmd B),
@@ -3703,7 +3712,8 @@ Section SingleAdversarySimulates.
 
     Hint Resolve
          next_action_next_cmd_safe
-         next_action_next_cmd_safe_bind.
+         next_action_next_cmd_safe_bind
+      : core.
 
     Ltac process_next_cmd_safe :=
       try
@@ -4136,11 +4146,6 @@ Section SingleAdversarySimulates.
         intuition eauto using clean_ciphers_new_honest_key_idempotent
                             , clean_messages_new_honest_key_idempotent
                             , clean_users_new_honest_key_idempotent.
-      - msg_queue_prop.
-        intuition eauto using clean_ciphers_new_honest_key_idempotent
-                            , clean_messages_new_honest_key_idempotent
-                            , clean_users_new_honest_key_idempotent.
-
         Unshelve.
         auto.
     Qed.
@@ -4237,7 +4242,7 @@ Section SingleAdversarySimulates.
         f_equal; auto.
     Qed.
 
-    Hint Resolve dishonest_cipher_cleaned.
+    Hint Resolve dishonest_cipher_cleaned : core.
 
     Lemma  adv_step_implies_no_new_ciphers_after_cleaning :
       forall {A B C} cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
@@ -4270,7 +4275,7 @@ Section SingleAdversarySimulates.
       unfold honest_key_filter_fn; context_map_rewrites; trivial.
     Qed.
 
-    Hint Resolve clean_keys_drops_added_dishonest_key.
+    Hint Resolve clean_keys_drops_added_dishonest_key : core.
 
     Lemma adv_step_implies_no_new_keys_after_cleaning :
       forall {A B C} cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
@@ -4426,7 +4431,8 @@ Section SingleAdversarySimulates.
       Hint Resolve
            adv_step_implies_no_user_impact_after_cleaning
            adv_step_implies_no_new_keys_after_cleaning
-           adv_step_implies_no_new_ciphers_after_cleaning.
+           adv_step_implies_no_new_ciphers_after_cleaning
+        : core.
 
       (* some rewrites to get the goal matching the R assumption *)
       match goal with
@@ -4440,8 +4446,10 @@ Section SingleAdversarySimulates.
         trivial.
     Qed.
 
-    Hint Resolve encrypted_ciphers_ok_new_honest_key_adv_univ.
-    Hint Resolve users_permission_heaps_good_merged_permission_heaps_good.
+    Hint Resolve
+         encrypted_ciphers_ok_new_honest_key_adv_univ
+         users_permission_heaps_good_merged_permission_heaps_good
+      : core.
     
     Lemma honest_silent_step_adv_univ_enc_ciphers_ok :
       forall {A B C} cs cs' u_id suid lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
@@ -4482,7 +4490,7 @@ Section SingleAdversarySimulates.
       - econstructor; eauto.
         econstructor; eauto 2.
       - eapply encrypted_ciphers_ok_new_honest_key_adv_univ with (honestk := (findUserKeys usrs')); simpl; eauto; simpl; eauto.
-      - eapply encrypted_ciphers_ok_new_honest_key_adv_univ with (honestk := (findUserKeys usrs')); simpl; eauto; simpl; eauto.
+
     Qed.
 
     Ltac new_key_not_in_honestk :=
@@ -4537,8 +4545,7 @@ Section SingleAdversarySimulates.
     Qed.
 
     Hint Resolve
-         (* cipher_action_safe_after_before_cleaning *)
-         action_adversary_safe_after_before_cleaning.
+         action_adversary_safe_after_before_cleaning : core.
 
     Lemma honest_silent_new_cipher_implies_honest_step_origuniv' :
       forall {t A B} (msg : message t) (msg_c : crypto t) (usrs : honest_users A) (adv : user_data B) 
@@ -4635,7 +4642,7 @@ Section SingleAdversarySimulates.
         unfold honest_keyb; context_map_rewrites; eauto.
     Qed.
 
-    Hint Resolve msg_accepted_by_pattern_after_cleaning_honest_key.
+    Hint Resolve msg_accepted_by_pattern_after_cleaning_honest_key : core.
 
     Lemma honest_labeled_recv_implies_honest_step_origuniv :
       forall {t A B} (msg : crypto t) (usrs: honest_users A) (adv : user_data B) usrs__s cs__s
@@ -4713,16 +4720,16 @@ Section SingleAdversarySimulates.
         maps_equal.
         invert H13.
         unfold msg_signed_addressed in MSA; rewrite andb_true_iff in MSA; split_ex.
-        unfold msg_honestly_signed, msg_signing_key in H12; context_map_rewrites; clean_context.
+        unfold msg_honestly_signed, msg_signing_key in H13; context_map_rewrites; clean_context.
         specialize_simply.
         cases (@findKeysCrypto t0 cs (SignedCiphertext x2) $? y).
-        ** specialize (H15 _ _ Heq0); split_ands; subst.
+        ** specialize (H15 _ _ Heq); split_ex; subst.
            erewrite clean_key_permissions_keeps_honest_permission; eauto; symmetry.
-           unfold findKeysCrypto. unfold findKeysCrypto in Heq0; context_map_rewrites.
+           unfold findKeysCrypto. unfold findKeysCrypto in Heq; context_map_rewrites.
            erewrite clean_ciphers_keeps_honest_cipher; eauto.
 
         ** rewrite clean_key_permissions_adds_no_permissions; eauto; symmetry.
-           unfold findKeysCrypto. unfold findKeysCrypto in Heq0; context_map_rewrites.
+           unfold findKeysCrypto. unfold findKeysCrypto in Heq; context_map_rewrites.
            erewrite clean_ciphers_keeps_honest_cipher; eauto.
 
         ** rewrite H17; trivial.
@@ -4746,7 +4753,7 @@ Section SingleAdversarySimulates.
         end; erewrite clean_key_permissions_keeps_honest_permission; eauto.
     Qed.
 
-    Hint Resolve keys_mine_after_cleaning.
+    Hint Resolve keys_mine_after_cleaning : core.
     
     Lemma honest_labeled_send_implies_step_origuniv :
       forall {t A B} (msg : crypto t) (usrs: honest_users A) (adv : user_data B) rec_u
@@ -5109,8 +5116,6 @@ Section SingleAdversarySimulates.
       (do 2 eexists); eauto.
       (do 2 eexists); eauto.
     Qed.
-
-    From Coq Require Import Classical.
 
     Lemma in_cleaned_message_queue_must_in_message_queue :
       forall msgs t (msg : crypto t) cs suid pat froms,
@@ -5631,11 +5636,7 @@ Section SingleAdversarySimulates.
         xx; eauto.
 
       - xx.
-        eexists; eapply StepGenerateSymKey with (k_id0 := next_key gks0); eauto.
-        clean_map_lookups; apply next_key_not_in; trivial.
-        
-      - xx.
-        eexists; eapply StepGenerateAsymKey with (k_id0 := next_key gks0); eauto.
+        eexists; eapply StepGenerateKey with (k_id0 := next_key gks0); eauto.
         clean_map_lookups; apply next_key_not_in; trivial.
 
         Unshelve.
@@ -5682,7 +5683,6 @@ Section SingleAdversarySimulates.
       eapply honest_cmd_safe_advuniv with
           (honestk' := (findUserKeys (clean_users (findUserKeys (users U__ra)) (all_ciphers U__ra) (users U__ra)))); eauto.
     Qed.
-    (* Hint Resolve honest_cmds_safe_advuniv. *)
 
     Lemma silent_step_advuniv_implies_univ_ok :
       forall {A B} (U U' : universe A B) lbl suid,
@@ -5720,25 +5720,25 @@ Section SingleAdversarySimulates.
      
   End RealWorldLemmas.
 
-  Hint Constructors RealWorld.step_user.
+  Hint Constructors RealWorld.step_user : core.
 
   Hint Extern 1 (RealWorld.step_user _ _ (RealWorld.build_data_step _ _) _) =>
-    progress unfold RealWorld.build_data_step.
+    progress unfold RealWorld.build_data_step : core.
 
   Hint Extern 1 (RealWorld.step_user _ _ (_, _, _ , RealWorld.protocol _) _) => 
     match goal with
     | [ H : _ = RealWorld.protocol _ |- _ ] => rewrite <- H
-    end.
+    end : core.
 
-  Hint Extern 1 (_ = _) => progress m_equal.
-  Hint Extern 1 (_ = _) => progress f_equal.
+  Hint Extern 1 (_ = _) => progress m_equal : core.
+  Hint Extern 1 (_ = _) => progress f_equal : core.
   Hint Extern 1 (_ = _) =>
-    progress unfold RealWorld.build_data_step, RealWorld.buildUniverse; simpl.
+    progress unfold RealWorld.build_data_step, RealWorld.buildUniverse; simpl : core.
   Hint Extern 1 (_ = _) =>
     match goal with
     | [ H : RealWorld.adversary _ = _ |- _ ] => rewrite <- H
-    end.
-  Hint Extern 1 (_ = RealWorld.adversary _) => solve [ symmetry ; assumption ].
+    end : core.
+  Hint Extern 1 (_ = RealWorld.adversary _) => solve [ symmetry ; assumption ] : core.
 
   Lemma simulates_with_adversary_silent :
     forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A)
@@ -5984,7 +5984,7 @@ Section SingleAdversarySimulates.
         end; eauto using content_eq_strip_keys.
   Qed.
   
-  Hint Resolve action_matches_strip.
+  Hint Resolve action_matches_strip : core.
 
   Lemma simulates_with_adversary_labeled :
     forall {A B} (U__ra : RealWorld.universe A B) (U__i : IdealWorld.universe A)
@@ -6069,7 +6069,7 @@ Section SingleAdversarySimulates.
     - apply clean_ciphers_no_new_ciphers; auto.
   Qed.
 
-  Hint Unfold honest_cipher_filter_fn.
+  Hint Unfold honest_cipher_filter_fn : core.
 
   Lemma universe_starts_ok_clean_keys_idempotent :
     forall honestk ks,
@@ -6250,7 +6250,7 @@ Section SingleAdversarySimulates.
          simulates_with_adversary_silent
          simulates_with_adversary_labeled
          simulates_start_ok_adding_adversary
-    .
+      : core.
 
     unfold simulates_silent_step, simulates_labeled_step, honest_actions_safe.
     assert (R (strip_adversary U__ra) U__i /\ universe_ok U__ra /\ adv_universe_ok U__ra) by eauto.
@@ -6373,7 +6373,7 @@ Inductive iCouldGenerate : forall {A},
     -> iCouldGenerate U (a :: acts)
 .
 
-Hint Constructors rCouldGenerate iCouldGenerate.
+Hint Constructors rCouldGenerate iCouldGenerate : core.
 
 Lemma ideal_multi_silent_stays_could_generate :
   forall {A} (U__i U__i' : IdealWorld.universe A),
@@ -6421,13 +6421,14 @@ Inductive traceMatches : list RealWorld.uaction -> list IdealWorld.action -> Pro
     -> traceMatches (a__r :: acts__r) (a__i :: acts__i)
 .
 
-Hint Constructors traceMatches.
+Hint Constructors traceMatches : core.
 Hint Resolve
      silent_step_adv_univ_implies_adv_universe_ok
      silent_step_advuniv_implies_univ_ok
      honest_labeled_step_univ_ok
      labeled_step_adv_univ_implies_adv_universe_ok
-     action_adversary_safe_after_before_cleaning.
+     action_adversary_safe_after_before_cleaning
+  : core.
 
 Lemma simulation_relation_multi_stripped :
   forall {A B} (U__r : RealWorld.universe A B) (U__i : IdealWorld.universe A)
@@ -6624,7 +6625,7 @@ Inductive iCouldGen : forall {A},
     -> iCouldGen U (iaction_inout a :: uids)
 .
 
-Hint Constructors rCouldGen iCouldGen.
+Hint Constructors rCouldGen iCouldGen : core.
 
 Lemma real_labeled_step_in_out :
   forall {A B C} lbl suid bd bd',

@@ -45,7 +45,7 @@ Import SafetyAutomation.
 
 Section RealWorldLemmas.
 
-  Hint Unfold message_no_adv_private.
+  Hint Unfold message_no_adv_private : core.
 
   Lemma adv_no_honest_keys_empty :
     forall honestk,
@@ -57,8 +57,9 @@ Section RealWorldLemmas.
     invert H.
   Qed.
 
-  Hint Resolve msg_honestly_signed_addnl_cipher.
-  Hint Resolve msg_honestly_signed_addnl_honest_key.
+  Hint Resolve
+       msg_honestly_signed_addnl_cipher
+       msg_honestly_signed_addnl_honest_key : core.
 
   Lemma msgCiphersSignedOk_addnl_cipher' :
     forall cs (msgs : queued_messages) honestk c_id c,
@@ -80,7 +81,7 @@ Section RealWorldLemmas.
   Proof. unfold msgCiphersSignedOk; intros; eapply msgCiphersSignedOk_addnl_cipher'; eauto. Qed.
 
   Hint Resolve
-       msgCiphersSignedOk_addnl_cipher.
+       msgCiphersSignedOk_addnl_cipher : core.
   
   Lemma msgCiphersSignedOk_new_honest_key' :
     forall (msgCphrs : queued_messages) honestk cs k,
@@ -101,7 +102,7 @@ Section RealWorldLemmas.
     intros; eapply msgCiphersSignedOk_new_honest_key'; eauto.
   Qed.
 
-  Hint Resolve msgCiphersSignedOk_new_honest_key.
+  Hint Resolve msgCiphersSignedOk_new_honest_key : core.
 
   Lemma msg_signing_key_in_ciphers :
     forall {t} (c : crypto t) cs k,
@@ -147,9 +148,9 @@ Section RealWorldLemmas.
       -> msgCiphersSignedOk honestk' (clean_ciphers honestk cs) msg.
   Proof. unfold msgCiphersSignedOk; intros; eapply msgCiphersSignedOk_cleaned_honestk'; auto. Qed.
 
-  Hint Resolve msgCiphersSigned_cleaned_honestk.
+  Hint Resolve msgCiphersSigned_cleaned_honestk : core.
 
-  Hint Constructors encrypted_cipher_ok.
+  Hint Constructors encrypted_cipher_ok : core.
   
   Lemma encrypted_cipher_ok_addnl_cipher :
     forall honestk cs ks c_id c1 c2,
@@ -220,7 +221,7 @@ Section RealWorldLemmas.
       destruct kp; eauto.
   Qed.
 
-  Hint Resolve keys_mine_addnl_honest_key.
+  Hint Resolve keys_mine_addnl_honest_key : core.
 
   Lemma encrypted_cipher_ok_addnl_honest_key :
     forall honestk cs ks k c,
@@ -283,7 +284,8 @@ Section RealWorldLemmas.
   
   Hint Resolve
        encrypted_ciphers_ok_addnl_cipher
-       encrypted_ciphers_ok_addnl_key.
+       encrypted_ciphers_ok_addnl_key
+    : core.
 
   (* Definition adv_preds {B} (adv : user_data B) (honestk : key_perms) := *)
   (*   (forall kid, adv.(key_heap) $? kid = Some true -> honestk $? kid = Some true -> False). *)
@@ -314,10 +316,14 @@ Section RealWorldLemmas.
       + unfold not; intros; split_ors; split_ands; contra_map_lookup; contradiction.
       + intros.
         specialize (H4 _ _ H5).
-        specialize (ADV k); unfold not; split_ors; split_ands; contra_map_lookup; try contradiction;
-          unfold keys_and_permissions_good, permission_heap_good in *; split_ands;
-            try specialize (H12 _ _ H4); try specialize (H13 _ _ H4);  split_ex; eexists;
-              intuition (intros; eauto); contra_map_lookup.
+        specialize (ADV k); unfold not; split_ors; split_ex; contra_map_lookup; try contradiction;
+          unfold keys_and_permissions_good, permission_heap_good in *; split_ex
+          ; match goal with
+            | [ H : (forall _ _, key_heap ?u $? _ = Some _ -> _), ARG : key_heap ?u $? _ = Some _ |- _ ] =>
+              specialize (H _ _ ARG); split_ex; eexists;
+                intuition (intros; eauto); contra_map_lookup
+            end.
+
     - econstructor; eauto.
       specialize (H22 k_id); eauto.
       eapply SigCipherNotHonestOk; unfold not; intros; split_ors; split_ands; contra_map_lookup; try contradiction; eauto.
@@ -430,8 +436,6 @@ Proof.
   - specialize (H _ _ H1 _ _ H2).
     destruct (k_id ==n k_id0); subst.
     eapply merge_perms_chooses_greatest with (ks2 := $0 $+ (k_id0, true)) in H; eauto.
-    clean_map_lookups; reflexivity.
-
     eapply merge_perms_adds_ks1; eauto.
     clean_map_lookups; eauto.
 Qed.
@@ -598,7 +602,7 @@ Proof.
   eexists; cases (c_id ==n x); subst; split_ands; clean_map_lookups; eauto.
 Qed.
 
-Hint Resolve user_cipher_queue_ok_addnl_global_cipher.
+Hint Resolve user_cipher_queue_ok_addnl_global_cipher : core.
 
 Lemma user_cipher_queues_ok_addnl_global_cipher :
   forall {A} (usrs : honest_users A) honestk cs c_id c,
@@ -689,7 +693,7 @@ Proof.
     cases (findUserKeys usrs $? k_id); simpl in *; eapply H1.
 Qed.
 
-Hint Resolve user_cipher_queues_ok_addnl_generated_key user_cipher_queues_ok_addnl_generated_key'.
+Hint Resolve user_cipher_queues_ok_addnl_generated_key user_cipher_queues_ok_addnl_generated_key' : core.
 
 Lemma msgCiphersSignedOk_user_cipher_queue_ok_findCiphers :
   forall {t} (msg : crypto t) honestk cs,
@@ -716,7 +720,8 @@ Qed.
 
 Hint Resolve
      cipher_honestly_signed_after_msg_keys
-     msgCiphersSignedOk_user_cipher_queue_ok_findCiphers.
+     msgCiphersSignedOk_user_cipher_queue_ok_findCiphers
+  : core.
 
 Lemma user_cipher_queue_ok_add_user :
   forall {t} (msg : crypto t) cs honestk mycs,
@@ -735,7 +740,8 @@ Qed.
 
 Hint Resolve
      user_cipher_queue_ok_add_user
-     user_cipher_queue_ok_addnl_pubk.
+     user_cipher_queue_ok_addnl_pubk
+  : core.
 
 Lemma user_cipher_queues_ok_add_user :
   forall {A t} (usrs usrs' : honest_users A) (msg : crypto t) honestk u_id ks cmd cmd' qmsgs qmsgs' mycs froms froms' sents sents' cur_n cur_n' cs,
@@ -781,7 +787,7 @@ Proof.
   exfalso; eauto.
 Qed.
 
-Hint Resolve keys_and_permissions_good_user_new_pubk.
+Hint Resolve keys_and_permissions_good_user_new_pubk : core.
 
 Ltac process_permission_heaps :=
   repeat
@@ -834,10 +840,8 @@ Proof.
     process_permission_heaps;
     permission_heaps_prop;
     specialize_msg_ok;
-    eauto;
-    clean_map_lookups.
-
-  cases (gks' $? k_id); try contradiction; eauto.
+    clean_map_lookups;
+    eauto.
 Qed.
 
 Lemma permission_heap_good_addnl_key :
@@ -864,7 +868,7 @@ Proof.
   cases (ks $? keyId k); clean_map_lookups; eauto.
 Qed.
 
-Hint Resolve permission_heap_good_addnl_key permission_heap_good_new_key_perm.
+Hint Resolve permission_heap_good_addnl_key permission_heap_good_new_key_perm : core.
 
 Lemma permission_heaps_good_addnl_key :
   forall {A} (usrs : honest_users A) gks k,
@@ -875,7 +879,7 @@ Proof.
   intros; rewrite Forall_natmap_forall in *; intros; eauto.
 Qed.
 
-Hint Resolve permission_heaps_good_addnl_key.
+Hint Resolve permission_heaps_good_addnl_key : core.
 
 Lemma keys_and_permissions_good_addnl_key :
   forall {A} gks (usrs : honest_users A) adv_heap k_id k,
@@ -888,7 +892,7 @@ Proof.
   destruct (keyId k ==n k_id); subst; clean_map_lookups; eauto.
 Qed.
 
-Hint Resolve keys_and_permissions_good_addnl_key.
+Hint Resolve keys_and_permissions_good_addnl_key : core.
 
 Lemma keys_and_permissions_good_readd_user_same_perms :
   forall {A} (usrs : honest_users A) adv_heap gks ks cmd cmd' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' u_id,
@@ -906,7 +910,7 @@ Proof.
   simpl in *; eauto.
 Qed.
 
-Hint Resolve keys_and_permissions_good_readd_user_same_perms.
+Hint Resolve keys_and_permissions_good_readd_user_same_perms : core.
 
 Lemma keys_and_permissions_good_new_honest_key :
   forall {A} (usrs : honest_users A) gks k_id k ks u_id cmd cmd' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' adv_heap,
@@ -940,7 +944,7 @@ Proof.
     + eapply keys_and_permissions_good_addnl_key; eauto; unfold keys_and_permissions_good; eauto.
 Qed.
 
-Hint Resolve keys_and_permissions_good_new_honest_key.
+Hint Resolve keys_and_permissions_good_new_honest_key : core.
 
 Lemma honest_silent_step_keys_good :
   forall {A B C} u_id suid cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
@@ -1019,10 +1023,6 @@ Proof.
     destruct (k_id ==n k_id0); subst; clean_map_lookups; eauto.
     rewrite Forall_natmap_forall in *; intros.
     eapply permission_heap_good_addnl_key; eauto.
-  - unfold keys_and_permissions_good in *; intuition eauto.
-    destruct (k_id ==n k_id0); subst; clean_map_lookups; eauto.
-    rewrite Forall_natmap_forall in *; intros.
-    eapply permission_heap_good_addnl_key; eauto.
 Qed.
   
 Lemma permission_heap_good_clean_keys :
@@ -1086,7 +1086,7 @@ Hint Resolve
      user_cipher_queues_ok_addnl_pubk
      findUserKeys_has_key_of_user
      findUserKeys_has_private_key_of_user
-.
+  : core.
 
 
 Lemma honest_silent_step_user_cipher_queues_ok :
@@ -1170,7 +1170,8 @@ Proof.
   destruct (k_id ==n k); subst; clean_map_lookups; intuition auto.
 Qed.
 
-Hint Resolve message_no_adv_private_new_keys message_no_adv_private_new_honestk.
+Hint Resolve message_no_adv_private_new_keys message_no_adv_private_new_honestk : core.
+
 Lemma msgCiphersSigned_after_msg_keys :
   forall {t} (msg : crypto t) cs honestk msgk,
     msgCiphersSignedOk honestk cs msg
@@ -1197,7 +1198,7 @@ Proof.
     end; intuition eauto; repeat process_keys_messages; eauto.
 Qed.
 
-Hint Resolve msgCiphersSigned_after_msg_keys msgCiphersSigned_new_private_key.
+Hint Resolve msgCiphersSigned_after_msg_keys msgCiphersSigned_new_private_key : core.
 
 Lemma message_queue_ok_adding_public_keys :
   forall msgs cs honestk pubk ks,
@@ -1261,7 +1262,7 @@ Proof.
   eapply message_queues_ok_user_adding_public_keys; eauto.
 Qed.
 
-Hint Resolve message_queues_ok_user_adding_public_keys message_queues_ok_user_adding_public_keys'.
+Hint Resolve message_queues_ok_user_adding_public_keys message_queues_ok_user_adding_public_keys' : core.
 
 Lemma message_queues_ok_readd_user_same_queue :
   forall {A} (usrs : honest_users A) cs u_id ks cmd cmd' qmsgs mycs mycs' froms froms' sents sents' cur_n cur_n' gks,
@@ -1276,7 +1277,7 @@ Proof.
   msg_queue_prop; eauto.
 Qed.
 
-Hint Resolve message_queues_ok_readd_user_same_queue.
+Hint Resolve message_queues_ok_readd_user_same_queue : core.
 
 Lemma message_queues_ok_readd_user_popped_queue :
   forall {A} (usrs : honest_users A) cs u_id ks cmd cmd' qmsgs1 qmsgs2 mycs mycs'
@@ -1293,7 +1294,8 @@ Qed.
 Hint Resolve
      message_queues_ok_readd_user_popped_queue
      msgCiphersSignedOk_addnl_cipher
-     msgCiphersSignedOk_new_honest_key'.
+     msgCiphersSignedOk_new_honest_key'
+  : core.
 
 Lemma message_queue_ok_addnl_cipher :
   forall msgs cs honestk c_id c gks,
@@ -1325,7 +1327,7 @@ Proof.
     unfold message_no_adv_private,findKeysCrypto in *; intros; clean_map_lookups; context_map_rewrites; eauto.
 Qed.
 
-Hint Resolve message_queue_ok_addnl_cipher.
+Hint Resolve message_queue_ok_addnl_cipher : core.
 
 Lemma message_queues_ok_addnl_cipher :
   forall {A} (usrs : honest_users A) cs c_id c gks,
@@ -1336,7 +1338,7 @@ Proof.
   unfold message_queues_ok in *; intros; rewrite Forall_natmap_forall in *; intros; eauto.
 Qed.
 
-Hint Resolve message_queues_ok_addnl_cipher.
+Hint Resolve message_queues_ok_addnl_cipher : core.
 
 Lemma new_global_key_not_in_heaps :
   forall perms ks k_id,
@@ -1352,14 +1354,14 @@ Proof.
   end.
 Qed.
 
-Hint Resolve new_global_key_not_in_heaps.
+Hint Resolve new_global_key_not_in_heaps : core.
 
 Lemma msg_signing_key_cipher_id_in_ciphers :
   forall {t} (c : crypto t) cs k_id c_id,
     msg_signing_key cs c = Some k_id
     -> msg_cipher_id c = Some c_id
     -> exists c, cs $? c_id = Some c
-                 /\ (exists {t} (m : message t) msg_to nonce,
+                 /\ (exists t (m : message t) msg_to nonce,
                         c = SigCipher k_id msg_to nonce m
                         \/ exists k__enc, c = SigEncCipher k_id k__enc msg_to nonce m).
 Proof.
@@ -1388,7 +1390,10 @@ Proof.
   - unfold not; intro; destruct (k_id ==n k); subst; split_ands; clean_map_lookups; specialize_msg_ok; eauto.
   - specialize_msg_ok; destruct (k_id ==n k); subst; clean_map_lookups; split_ands; try contradiction; eauto.
     split; intros; repeat invert_base_equalities1; eauto.
-    invert H4; clean_map_lookups; specialize_msg_ok; eauto.
+    repeat
+      match goal with
+      | [ H : honest_key _ _ |- _ ] => invert H
+      end; clean_map_lookups; specialize_msg_ok; eauto.
 Qed.
 
 Lemma message_queue_ok_addnl_adv_key :
@@ -1441,7 +1446,7 @@ Proof.
   msg_queue_prop; eapply message_queue_ok_addnl_adv_key; eauto.
 Qed.
 
-Hint Resolve message_queues_ok_addnl_honest_key message_queues_ok_addnl_adv_key.
+Hint Resolve message_queues_ok_addnl_honest_key message_queues_ok_addnl_adv_key : core.
 
 Lemma msg_cipher_id_in_mycs :
   forall {t} (msg : crypto t) mycs c_id,
@@ -1453,7 +1458,7 @@ Proof.
     clean_context; eauto.
 Qed.
 
-Hint Resolve msg_cipher_id_in_mycs.
+Hint Resolve msg_cipher_id_in_mycs : core.
 
 Lemma honestly_signed_message_in_key_heap :
   forall {t} (msg : crypto t) honestk cs gks k_id,
@@ -1469,7 +1474,7 @@ Proof.
   specialize (H0 _ _ Heq); split_ex; contra_map_lookup.
 Qed.
 
-Hint Resolve honestly_signed_message_in_key_heap.
+Hint Resolve honestly_signed_message_in_key_heap : core.
 
 Lemma honest_labeled_step_message_queues_ok :
   forall {A B C} u_id suid cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
@@ -1589,9 +1594,7 @@ Proof.
   destruct c; subst; eauto.
 Qed.
 
-Hint Resolve msgCiphersSignedOk_honest_key.
-
-
+Hint Resolve msgCiphersSignedOk_honest_key : core.
 
 Lemma adv_step_message_queues_ok :
   forall {A B C} cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
@@ -1737,7 +1740,8 @@ Qed.
 
 Hint Resolve
      msg_honestly_signed_addnl_cipher
-     msg_to_this_user_addnl_cipher.
+     msg_to_this_user_addnl_cipher
+  : core.
 
 Lemma adv_cipher_queue_ok_msg_send :
   forall {A t} (usrs : honest_users A) (msg : crypto t) cs u_id adv_mycs ks cmd cmd' qmsgs mycs froms sents cur_n cur_n',
@@ -1912,7 +1916,7 @@ Hint Resolve
      adv_cipher_queue_ok_readd_user_same_mycs_froms_msgs
      adv_cipher_queue_ok_new_cipher
      adv_cipher_queue_ok_new_adv_cipher
-.
+  : core.
 
 Lemma adv_step_adv_cipher_queue_ok :
   forall {A B C} cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B) suid
@@ -2052,7 +2056,7 @@ Proof.
       simpl; split; eauto.
 Qed.
 
-Hint Resolve adv_cipher_queue_ok_addnl_honest_key.
+Hint Resolve adv_cipher_queue_ok_addnl_honest_key : core.
 
 Lemma honest_silent_step_adv_cipher_queue_ok :
   forall {A B C} u_id suid cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
@@ -2079,54 +2083,6 @@ Proof.
   induction 1; inversion 2; inversion 6; intros; subst; try discriminate;
     eauto 2; clean_context;
       eauto.
-
-  (*  Note: From RecvDrop rule *)
-  (* - unfold adv_cipher_queue_ok in *; rewrite Forall_forall in *; intros. *)
-  (*   specialize (H25 _ H4); split_ex. *)
-  (*   eexists; split; eauto. *)
-  (*   autorewrite with find_user_keys; split_ors; split_ex; eauto. *)
-  (*   right. *)
-  (*   destruct (u_id ==n x1); *)
-  (*     destruct (u_id ==n cipher_to_user x0); *)
-  (*     subst; clean_map_lookups; *)
-  (*       do 3 eexists; *)
-  (*       simpl in *; process_predicate; eauto; simpl. *)
-
-
-
-  (*   + cases ( msg_signed_addressed (findUserKeys usrs') cs' (Some (cipher_to_user x0)) msg ); eauto. *)
-  (*     unfold updateTrackedNonce; destruct msg; eauto. *)
-  (*     unfold msg_signed_addressed, msg_honestly_signed, msg_signing_key in Heq; *)
-  (*       cases (cs' $? c_id); eauto. *)
-  (*     cases (cipher_to_user x0 ==n cipher_to_user c); eauto. *)
-  (*     cases (count_occ msg_seq_eq froms (cipher_nonce c)); eauto. *)
-  (*   + simpl in H8. *)
-  (*     split_ors. *)
-  (*     * generalize (eq_sigT_fst H8); intros; subst. *)
-  (*       apply inj_pair2 in H8; subst. *)
-  (*       rewrite H9. *)
-  (*       unfold updateTrackedNonce. *)
-  (*       unfold msg_signed_addressed, msg_honestly_signed, msg_signing_key, msg_to_this_user, msg_destination_user in H9; *)
-  (*         destruct c; try discriminate; *)
-  (*           cases (cs' $? c_id); try discriminate; *)
-  (*             cases (cipher_to_user c ==n cipher_to_user x0); *)
-  (*             apply andb_true_iff in H9; *)
-  (*             split_ands; try discriminate. *)
-  (*       rewrite e. *)
-  (*       destruct (cipher_to_user x0 ==n cipher_to_user x0); try contradiction. *)
-  (*       cases (count_occ msg_seq_eq froms (cipher_nonce c)); eauto. *)
-  (*       ** unfold msg_nonce_same in H10. *)
-  (*          assert ( cipher_nonce x0 = cipher_nonce c) by eauto. *)
-  (*          rewrite H11; eauto. *)
-  (*       ** unfold msg_nonce_same in H10. *)
-  (*          assert ( cipher_nonce x0 = cipher_nonce c) by eauto. *)
-  (*          assert (count_occ msg_seq_eq froms (cipher_nonce c) > 0). *)
-  (*          rewrite Heq0. apply gt_Sn_O. *)
-           
-  (*          rewrite <- count_occ_In in H12; rewrite H11; eauto. *)
-  (*     * right. *)
-  (*       eexists; split; eauto. *)
-  (*       simpl; split; eauto. *)
 
   - unfold adv_cipher_queue_ok in *; rewrite Forall_forall in *; intros.
     specialize (H25 _ H4); split_ex; split_ands.
@@ -2186,7 +2142,7 @@ Proof.
   destruct (k_id ==n k_id0); subst; clean_map_lookups; intuition eauto.
 Qed.
 
-Hint Resolve adv_no_honest_keys_after_new_honest_key adv_no_honest_keys_after_new_adv_key.
+Hint Resolve adv_no_honest_keys_after_new_honest_key adv_no_honest_keys_after_new_adv_key : core.
 
 
 Lemma adv_step_adv_no_honest_keys :
@@ -2230,7 +2186,6 @@ Proof.
                 try contradiction;
                 specialize (H19 _ _ H10); split_ex; split_ands; eauto.
 
-  - eapply adv_no_honest_keys_after_new_adv_key; eauto.
   - eapply adv_no_honest_keys_after_new_adv_key; eauto.
 
 Qed.
@@ -2293,7 +2248,7 @@ Proof.
     intuition idtac.
     right; right; split; eauto; intros.
     solve_perm_merges;
-      specialize (H14 _ _ H17); split_ands; discriminate.
+      specialize (H14 _ _ H15); split_ex; discriminate.
 Qed.
 
 
@@ -2363,11 +2318,7 @@ Proof.
     end; clean_map_lookups; eauto.
 Qed.
 
-Hint Resolve cipher_honestly_signed_false_same_msg_recv cipher_honestly_signed_false_same_msg_recv'.
-
-
-
-
+Hint Resolve cipher_honestly_signed_false_same_msg_recv cipher_honestly_signed_false_same_msg_recv' : core.
 
 Lemma adv_message_queue_ok_msg_recv :
   forall {A t} (usrs : honest_users A) (msg : crypto t) cs gks u_id ks cmd cmd' qmsgs1 qmsgs2 mycs froms sents cur_n adv_msgs,
@@ -2475,7 +2426,7 @@ Proof.
            destruct x0; eauto.
 Qed.
 
-Hint Resolve adv_message_queue_ok_msg_recv.
+Hint Resolve adv_message_queue_ok_msg_recv : core.
 
 Lemma adv_message_queue_ok_addnl_honestk_key :
   forall {A} (usrs : honest_users A) adv_heap cs gks k_id usage kt u_id ks cmd cmd' qmsgs mycs froms sents n adv_keys,
@@ -2575,7 +2526,7 @@ Proof.
       clean_context; eauto.
 Qed.
 
-Hint Resolve adv_message_queue_ok_addnl_honestk_key adv_message_queue_ok_addnl_global_key.
+Hint Resolve adv_message_queue_ok_addnl_honestk_key adv_message_queue_ok_addnl_global_key : core.
 
 Lemma adv_message_queue_ok_addnl_cipher :
   forall {A} (usrs : honest_users A) adv_heap cs gks c_id c,
@@ -2682,7 +2633,8 @@ Proof.
       process_predicate.
 Qed.
 
-Hint Resolve adv_message_queue_ok_addnl_cipher adv_message_queue_ok_users_same_keys_sents.
+Hint Resolve adv_message_queue_ok_addnl_cipher adv_message_queue_ok_users_same_keys_sents : core.
+
 Lemma updateTrackedNonce_same_or_one_added :
   forall {t} (msg : crypto t) suid froms cs,
     updateTrackedNonce suid froms cs msg = froms
@@ -2840,7 +2792,8 @@ Qed.
 
 Hint Resolve
      adv_message_queue_ok_msg_recv_drop
-     adv_message_queue_ok_msg_recv_drop'.
+     adv_message_queue_ok_msg_recv_drop'
+  : core.
 
 Lemma adv_message_queue_ok_msg_adv_send :
   forall {A t} (usrs : honest_users A) (msg : crypto t) cs gks u_id ks cmd cmd' qmsgs mycs froms sents cur_n adv_msgs,
@@ -2885,7 +2838,7 @@ Proof.
       do 3 eexists; process_predicate; eauto; simpl.
 Qed.
 
-Hint Resolve adv_message_queue_ok_msg_adv_send.
+Hint Resolve adv_message_queue_ok_msg_adv_send : core.
 
 Lemma honest_silent_step_adv_message_queue_ok :
   forall {A B C} u_id suid cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
