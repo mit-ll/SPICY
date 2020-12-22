@@ -48,6 +48,7 @@ src/Theory/InvariantsTheory.v
 src/Theory/KeysTheory.v
 src/Theory/MessageEqTheory.v
 src/Theory/MessagesTheory.v
+src/Theory/NonceTracking.v
 src/Theory/UsersTheory.v
 
 src/ModelCheck/LabelsAlign.v

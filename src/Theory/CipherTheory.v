@@ -31,6 +31,7 @@ From SPICY Require Import
      Automation
      AdversaryUniverse
      RealWorld
+     Simulation
 
      Theory.KeysTheory
 .
@@ -330,4 +331,82 @@ Section CleanCiphers.
     unfold honest_cipher_filter_fn in *; assumption.
   Qed.
 
+  Lemma honest_cipher_filter_fn_nochange_pubk :
+    forall pubk k v,
+      (forall k kp, pubk $? k = Some kp -> honestk $? k = Some true /\ kp = false)
+      -> honest_cipher_filter_fn honestk k v =
+        honest_cipher_filter_fn (honestk $k++ pubk) k v.
+  Proof.
+    unfold honest_cipher_filter_fn; intros;
+      unfold cipher_honestly_signed;
+      cases v; unfold honest_keyb; simpl;
+        solve_perm_merges; auto;
+          match goal with
+          | [ H : (forall _ _, ?pubk $? _ = Some _ -> _), ARG : ?pubk $? _ = Some _ |- _ ] =>
+            specialize (H _ _ ARG); split_ands; subst
+          end; clean_map_lookups; eauto.
+  Qed.
+
+  Lemma clean_ciphers_nochange_pubk :
+    forall pubk cs,
+      (forall k p, pubk $? k = Some p -> honestk $? k = Some true /\ p = false)
+      -> clean_ciphers (honestk $k++ pubk) cs = clean_ciphers honestk cs.
+  Proof.
+    intros; unfold clean_ciphers, filter.
+    apply P.fold_rec_bis; intros; Equal_eq; eauto.
+    rewrite fold_add; eauto; simpl.
+    erewrite <- honest_cipher_filter_fn_nochange_pubk; eauto.
+    subst; trivial.
+  Qed.
+
 End CleanCiphers.
+
+Ltac encrypted_ciphers_prop :=
+  match goal with
+  | [ H  : encrypted_ciphers_ok _ (?cs $+ (?cid,?c)) _ |- _ ] => generalize (Forall_natmap_in_prop_add H); intros
+  | [ H1 : ?cs $? _ = Some _, H2 : encrypted_ciphers_ok _ ?cs _ |- _ ] => generalize (Forall_natmap_in_prop _ H2 H1); simpl; intros
+  end;
+  repeat match goal with
+         | [ H : encrypted_cipher_ok _ _ _ _ |- _ ] => invert H
+         | [ H : honest_keyb _ _ = true |- _] => apply honest_keyb_true_honestk_has_key in H
+         end; try contradiction.
+
+Lemma clean_ciphers_new_honest_key_idempotent :
+  forall honestk k_id cs gks,
+    encrypted_ciphers_ok honestk cs gks
+    -> ~ In k_id gks
+    -> clean_ciphers (honestk $+ (k_id, true)) cs = clean_ciphers honestk cs.
+Proof.
+  intros.
+  apply map_eq_Equal; unfold Equal; intros.
+  cases (cs $? y).
+  - case_eq (honest_cipher_filter_fn honestk y c); intros.
+    + assert (honest_cipher_filter_fn honestk y c = true) as HCFF by assumption.
+      unfold honest_cipher_filter_fn, cipher_honestly_signed in HCFF; encrypted_ciphers_prop
+      ; erewrite !clean_ciphers_keeps_honest_cipher; eauto.
+
+      simpl; unfold honest_keyb
+      ; destruct (k ==n k_id)
+      ; clean_map_lookups
+      ; trivial.
+      simpl; unfold honest_keyb
+      ; destruct (k__s ==n k_id)
+      ; clean_map_lookups
+      ; trivial.
+
+    + assert (honest_cipher_filter_fn honestk y c = false) as HCFF by assumption.
+      unfold honest_cipher_filter_fn, cipher_honestly_signed, honest_keyb in HCFF.
+      encrypted_ciphers_prop;
+        try
+          match goal with
+          | [ H : honestk $? _ = _ |- _ ] => rewrite H in HCFF; discriminate
+          end.
+      * erewrite !clean_ciphers_eliminates_dishonest_cipher; eauto.
+        unfold cipher_signing_key, honest_keyb;
+          solve_simple_maps; eauto.
+      * erewrite !clean_ciphers_eliminates_dishonest_cipher; eauto.
+        unfold cipher_signing_key, honest_keyb;
+          solve_simple_maps; eauto.
+  - rewrite !clean_ciphers_no_new_ciphers; auto.
+Qed.
+

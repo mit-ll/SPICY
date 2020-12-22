@@ -95,6 +95,8 @@ Definition denote (t : cmd_type) :=
   | Message t' => message t'
   end
 .
+
+Declare Scope idealworld_scope.
 Notation "<< t >>" := (denote t) (at level 75) : idealworld_scope.
 Delimit Scope idealworld_scope with idealworld.
 Open Scope idealworld_scope.

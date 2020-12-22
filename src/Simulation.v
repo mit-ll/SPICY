@@ -260,8 +260,7 @@ Section RealWorldUniverseProperties.
                            msg_signing_key cs m = Some k
                            -> gks $? k <> None
                            /\ ( honest_key honestk k
-                             -> message_no_adv_private cs m
-                             /\ msgCiphersSignedOk honestk cs m)
+                             -> message_no_adv_private cs m)
                        )
                      end) msgs.
 
@@ -334,7 +333,6 @@ Section RealWorldUniverseProperties.
                                         /\ ~ List.In (cipher_nonce c) froms
     | Output msg msg_from msg_to sents => msg_honestly_signed honestk cs msg = true
                                        /\ msg_to_this_user cs msg_to msg = true
-                                       /\ msgCiphersSignedOk honestk cs msg
                                        /\ exists c_id c, msg = SignedCiphertext c_id
                                                  /\ cs $? c_id = Some c
                                                  /\ fst (cipher_nonce c) = msg_from  (* only send my messages *)
@@ -365,11 +363,6 @@ Section SafeActions.
       nextAction (Verify k msg) (Verify k msg)
   | NaGenKey : forall kt usg,
       nextAction (GenerateKey kt usg) (GenerateKey kt usg)
-
-  (* | NaGenSymKey : forall usg, *)
-  (*     nextAction (GenerateSymKey usg) (GenerateSymKey usg) *)
-  (* | NaGenAsymKey : forall usg, *)
-  (*     nextAction (GenerateAsymKey usg) (GenerateAsymKey usg) *)
   | NaBind : forall A B r (c : user_cmd B) (c1 : user_cmd r) (c2 : << r >> -> user_cmd A),
       nextAction c1 c
       -> nextAction (Bind c1 c2) c
@@ -398,7 +391,7 @@ Section SafeActions.
 
   Definition next_cmd_safe (honestk : key_perms) (cs : ciphers) (u_id : user_id)
              (froms : recv_nonces) (sents : sent_nonces) {A} (cmd : user_cmd A) :=
-    forall {B} (cmd__n : user_cmd B),
+    forall B (cmd__n : user_cmd B),
       nextAction cmd cmd__n
       -> match cmd__n with
         | Return _ => True
@@ -406,7 +399,6 @@ Section SafeActions.
         | Send msg_to msg =>
           msg_honestly_signed honestk cs msg = true
           /\ msg_to_this_user cs (Some msg_to) msg = true
-          /\ msgCiphersSignedOk honestk cs msg
           /\ (exists c_id c, msg = SignedCiphertext c_id
                        /\ cs $? c_id = Some c
                        /\ fst (cipher_nonce c) = (Some u_id)  (* only send my messages *)
@@ -421,8 +413,6 @@ Section SafeActions.
           (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true /\ kp = false)
         | Verify _ _ => True
         | GenerateKey _ _ => True
-        (* | GenerateAsymKey _ => True *)
-        (* | GenerateSymKey _ => True *)
         | Bind _ _ => False
         end.
 
@@ -508,11 +498,7 @@ Definition honest_nonces_ok {A} (cs : RealWorld.ciphers) (usrs : RealWorld.hones
 Definition universe_ok {A B} (U : RealWorld.universe A B) : Prop :=
   let honestk := RealWorld.findUserKeys U.(RealWorld.users)
   in  encrypted_ciphers_ok honestk U.(RealWorld.all_ciphers) U.(RealWorld.all_keys)
-.
-
-Definition adv_universe_ok {A B} (U : RealWorld.universe A B) : Prop :=
-  let honestk := RealWorld.findUserKeys U.(RealWorld.users)
-  in  keys_and_permissions_good U.(RealWorld.all_keys) U.(RealWorld.users) U.(RealWorld.adversary).(RealWorld.key_heap)
+    /\ keys_and_permissions_good U.(RealWorld.all_keys) U.(RealWorld.users) U.(RealWorld.adversary).(RealWorld.key_heap)
     /\ user_cipher_queues_ok U.(RealWorld.all_ciphers) honestk U.(RealWorld.users)
     /\ message_queues_ok U.(RealWorld.all_ciphers) U.(RealWorld.users) U.(RealWorld.all_keys)
     /\ adv_cipher_queue_ok U.(RealWorld.all_ciphers) U.(RealWorld.users) U.(RealWorld.adversary).(RealWorld.c_heap)
@@ -530,7 +516,6 @@ Section Simulation.
     forall (U__r : RealWorld.universe A B) U__i,
       R (RealWorld.peel_adv U__r) U__i
     -> universe_ok U__r
-    -> adv_universe_ok U__r
     -> advP U__r.(RealWorld.adversary)
     -> forall suid U__r',
         RealWorld.step_universe suid U__r Silent U__r'
@@ -542,7 +527,6 @@ Section Simulation.
     forall (U__r : RealWorld.universe A B) U__i,
       R (RealWorld.peel_adv U__r) U__i
     -> universe_ok U__r
-    -> adv_universe_ok U__r
     -> advP U__r.(RealWorld.adversary)
     -> forall uid U__r' ra,
         indexedRealStep uid (Action ra) U__r U__r'
@@ -556,14 +540,12 @@ Section Simulation.
     forall (U__r : RealWorld.universe A B) U__i,
         R (RealWorld.peel_adv U__r) U__i
       -> universe_ok U__r
-      -> adv_universe_ok U__r
       -> honest_cmds_safe U__r.
 
   Definition ri_final_actions_align :=
     forall (U__r : RealWorld.universe A B) U__i,
       R (RealWorld.peel_adv U__r) U__i
       -> universe_ok U__r
-      -> adv_universe_ok U__r
       -> (forall uid lbl U__r', RealWorld.step_universe (Some uid) U__r lbl U__r' -> False)
       -> forall uid ud__r r__r,
           U__r.(RealWorld.users) $? uid = Some ud__r
@@ -585,7 +567,7 @@ Section Simulation.
   (* conditions for start *)
   /\ R (RealWorld.peel_adv U__r) U__i
   /\ universe_ok U__r
-  /\ adv_universe_ok U__r.
+  .
 
 End Simulation.
 

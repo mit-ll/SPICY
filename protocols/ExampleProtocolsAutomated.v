@@ -190,25 +190,24 @@ Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
     - unfold lameAdv; simpl; eauto.
   Qed.
 
-  Lemma univ_ok_start : universe_ok ru0.
+  Lemma universe_starts_safe : universe_ok ru0.
   Proof.
-    autounfold; econstructor; eauto.
-  Qed.
-
-  Lemma adv_univ_ok_start : adv_universe_ok ru0.
-  Proof.
-    autounfold; unfold adv_universe_ok; eauto.
-    unfold keys_and_permissions_good.
     pose proof (adversary_is_lame_adv_univ_ok_clauses U_good).
+    
+    unfold universe_ok
+    ; autounfold
+    ; simpl
+    ; intuition eauto
+    .
 
-    intuition eauto;
-      simpl in *.
+    - econstructor; eauto.
+    - unfold keys_and_permissions_good, KEYS; solve_simple_maps; intuition eauto.
+      solve_simple_maps; eauto.
 
-    - unfold KEYS in *; solve_simple_maps; eauto.
-    - rewrite Forall_natmap_forall; intros.
-      solve_simple_maps; simpl;
-        unfold permission_heap_good; intros;
-          solve_simple_maps; eauto.
+      rewrite Forall_natmap_forall; intros.
+      solve_simple_maps; simpl
+      ; unfold permission_heap_good; intros;
+        solve_concrete_maps; eauto.
 
     - unfold user_cipher_queues_ok.
       rewrite Forall_natmap_forall; intros.
@@ -237,13 +236,9 @@ Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
         solve_concrete_maps;
         solve_simple_maps;
         eauto.
+
   Qed.
-  
-  Lemma universe_starts_safe : universe_ok ru0 /\ adv_universe_ok ru0.
-  Proof.
-    repeat (simple apply conj);
-      eauto using univ_ok_start, adv_univ_ok_start.
-  Qed.
+
 
 End SimplePingProtocolSecure.
 
@@ -326,26 +321,25 @@ Module SimpleEncProtocolSecure <: AutomatedSafeProtocol.
     - unfold lameAdv; simpl; eauto.
   Qed.
 
-  Lemma univ_ok_start : universe_ok ru0.
+  Lemma universe_starts_safe : universe_ok ru0.
   Proof.
-    autounfold; econstructor; eauto.
-  Qed.
-
-  Lemma adv_univ_ok_start : adv_universe_ok ru0.
-  Proof.
-    autounfold; unfold adv_universe_ok; eauto.
-    unfold keys_and_permissions_good.
     pose proof (adversary_is_lame_adv_univ_ok_clauses U_good).
+    
+    unfold universe_ok
+    ; autounfold
+    ; simpl
+    ; intuition eauto
+    .
 
-    intuition eauto;
-      simpl in *.
+    - econstructor; eauto.
+    - unfold keys_and_permissions_good, KEYS; solve_simple_maps; intuition eauto.
+      solve_simple_maps; eauto.
 
-    - unfold KEYS in *; solve_simple_maps; eauto.
-    - unfold A__keys , B__keys in *
-      ; rewrite Forall_natmap_forall; intros
-      ; solve_simple_maps; simpl
-      ; unfold permission_heap_good; intros
-      ; solve_simple_maps; eauto 8.
+      rewrite Forall_natmap_forall; intros.
+
+      solve_simple_maps; simpl
+      ; unfold permission_heap_good; intros;
+        solve_simple_maps; solve_concrete_maps; eauto.
 
     - unfold user_cipher_queues_ok.
       rewrite Forall_natmap_forall; intros.
@@ -374,12 +368,7 @@ Module SimpleEncProtocolSecure <: AutomatedSafeProtocol.
         solve_concrete_maps;
         solve_simple_maps;
         eauto.
-  Qed.
-  
-  Lemma universe_starts_safe : universe_ok ru0 /\ adv_universe_ok ru0.
-  Proof.
-    repeat (simple apply conj);
-      eauto using univ_ok_start, adv_univ_ok_start.
+
   Qed.
 
 End SimpleEncProtocolSecure.

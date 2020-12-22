@@ -31,6 +31,7 @@ From SPICY Require Import
      RealWorld
      SafetyAutomation
 
+     Theory.CipherTheory
      Theory.KeysTheory
      Theory.MessagesTheory
      Theory.InvariantsTheory
@@ -319,31 +320,6 @@ Hint Resolve
      HonestKey_skip HonestKey_split
      HonestKey_augment_context
   : core.
-
-Lemma message_no_adv_private_merge :
-  forall honestk t (msg : crypto t) cs,
-    message_no_adv_private honestk cs msg
-    -> honestk $k++ findKeysCrypto cs msg = honestk.
-Proof.
-  intros.
-  unfold message_no_adv_private in *.
-  maps_equal.
-  cases (findKeysCrypto cs msg $? y); solve_perm_merges; eauto.
-  specialize (H _ _ Heq); split_ands; subst; clean_map_lookups; eauto.
-  specialize (H _ _ Heq); split_ands; clean_map_lookups; eauto.
-Qed.
-
-Lemma message_only_honest_merge :
-  forall honestk t (msg : message t),
-    (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true)
-    -> honestk $k++ findKeysMessage msg = honestk.
-Proof.
-  intros.
-  maps_equal.
-  cases (findKeysMessage msg $? y); solve_perm_merges; eauto.
-  specialize (H _ _ Heq); split_ands; subst; clean_map_lookups; eauto.
-  specialize (H _ _ Heq); split_ands; clean_map_lookups; eauto.
-Qed.
 
 Lemma Forall_In_refl :
   forall a (l : list a),
@@ -1197,26 +1173,18 @@ Section PredicatePreservation.
       + simpl in *; context_map_rewrites.
         repeat simple apply conj; intros; eauto.
         discriminate.
-        unfold message_no_adv_private, msgCiphersSignedOk; simpl.
+        unfold message_no_adv_private; simpl.
         context_map_rewrites.
         split; intros; eauto.
-        econstructor; eauto.
-        unfold msg_honestly_signed, msg_signing_key; context_map_rewrites;
-          simpl;
-          rewrite <- honest_key_honest_keyb;
-          eauto.
+        apply H27 in H20; split_ex; auto.
+
       + simpl in *; context_map_rewrites.
         repeat simple apply conj; intros; eauto.
         discriminate.
-        unfold message_no_adv_private, msgCiphersSignedOk; simpl.
+        unfold message_no_adv_private; simpl.
         context_map_rewrites.
-        split; intros; eauto.
-        clean_map_lookups.
-        econstructor; eauto.
-        unfold msg_honestly_signed, msg_signing_key; context_map_rewrites;
-          simpl;
-          rewrite <- honest_key_honest_keyb;
-          eauto.
+        split; intros
+        ; clean_map_lookups.
   Qed.
 
   Definition adv_goodness {A} (usrs : honest_users A)

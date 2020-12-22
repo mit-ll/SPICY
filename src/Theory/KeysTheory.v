@@ -656,6 +656,18 @@ Section CleanKeys.
     specialize (H _ _ H0); intuition idtac.
   Qed.
 
+  Lemma clean_keys_drops_added_dishonest_key :
+    forall honestk gks k_id ku kt,
+      ~ In k_id gks
+      -> honestk $? k_id = None
+      -> clean_keys honestk (gks $+ (k_id, {| keyId := k_id; keyUsage := ku; keyType := kt |}))
+        = clean_keys honestk gks.
+  Proof.
+    intros; unfold clean_keys, filter; apply map_eq_Equal; unfold Equal; intros.
+    rewrite fold_add; eauto.
+    unfold honest_key_filter_fn; context_map_rewrites; trivial.
+  Qed.
+
 End CleanKeys.
 
 Section MergeKeysLemmas.
@@ -713,3 +725,145 @@ Hint Resolve
      honest_perm_filter_fn_filter_proper honest_perm_filter_fn_filter_transpose
      honest_perm_filter_fn_filter_proper_Equal honest_perm_filter_fn_filter_transpose_Equal
      : core.
+
+Lemma message_no_adv_private_merge :
+  forall honestk t (msg : crypto t) cs,
+    message_no_adv_private honestk cs msg
+    -> honestk $k++ findKeysCrypto cs msg = honestk.
+Proof.
+  intros.
+  unfold message_no_adv_private in *.
+  maps_equal.
+  cases (findKeysCrypto cs msg $? y); solve_perm_merges; eauto.
+  specialize (H _ _ Heq); split_ands; subst; clean_map_lookups; eauto.
+  specialize (H _ _ Heq); split_ands; clean_map_lookups; eauto.
+Qed.
+
+
+Lemma message_only_honest_merge :
+  forall honestk t (msg : message t),
+    (forall k_id kp, findKeysMessage msg $? k_id = Some kp -> honestk $? k_id = Some true)
+    -> honestk $k++ findKeysMessage msg = honestk.
+Proof.
+  intros.
+  maps_equal.
+  cases (findKeysMessage msg $? y); solve_perm_merges; eauto.
+  specialize (H _ _ Heq); split_ands; subst; clean_map_lookups; eauto.
+  specialize (H _ _ Heq); split_ands; clean_map_lookups; eauto.
+Qed.
+
+Lemma honest_keyb_true_honestk_has_key :
+  forall honestk k,
+    honest_keyb honestk k = true -> honestk $? k = Some true.
+Proof. intros * H; rewrite <- honest_key_honest_keyb in H; destruct H; assumption. Qed.
+
+Lemma clean_key_permissions_new_honest_key' :
+  forall honestk k_id gks,
+    gks $? k_id = None
+    -> clean_key_permissions (honestk $+ (k_id, true)) gks = clean_key_permissions honestk gks.
+Proof.
+  intros.
+  unfold clean_key_permissions, filter.
+  apply P.fold_rec_bis; intros; Equal_eq; eauto.
+  subst; simpl.
+
+  rewrite fold_add; eauto.
+  assert (honest_perm_filter_fn (honestk $+ (k_id,true)) k e = honest_perm_filter_fn honestk k e)
+    as RW.
+
+  unfold honest_perm_filter_fn; destruct (k_id ==n k); subst; clean_map_lookups; eauto.
+  apply find_mapsto_iff in H0; contra_map_lookup.
+  rewrite RW; trivial.
+Qed.
+
+Lemma clean_key_permissions_new_honest_key :
+  forall honestk k_id ks,
+    ~ In k_id ks
+    -> clean_key_permissions (honestk $+ (k_id, true)) (add_key_perm k_id true ks) =
+      add_key_perm k_id true (clean_key_permissions honestk ks).
+Proof.
+  intros; clean_map_lookups.
+  unfold add_key_perm, greatest_permission.
+  assert (clean_key_permissions honestk ks $? k_id = None)
+    as CKP
+      by (apply clean_key_permissions_adds_no_permissions; auto);
+    rewrite CKP, H.
+  unfold clean_key_permissions at 1; unfold filter; rewrite fold_add; eauto.
+  unfold honest_perm_filter_fn; clean_map_lookups; eauto.
+
+  apply map_eq_Equal; unfold Equal; intros.
+  destruct (k_id ==n y); subst; clean_map_lookups; eauto.
+  pose proof clean_key_permissions_new_honest_key';
+    unfold clean_key_permissions, filter, honest_perm_filter_fn in *; eauto.
+  rewrite H0; eauto.
+Qed.
+
+Lemma clean_key_permissions_nochange_pubk :
+  forall honestk pubk perms,
+    (forall k kp, pubk $? k = Some kp -> honestk $? k = Some true /\ kp = false)
+    -> clean_key_permissions (honestk $k++ pubk) perms = clean_key_permissions honestk perms.
+Proof.
+  intros.
+  apply map_eq_Equal; unfold Equal; intros.
+  cases (clean_key_permissions honestk perms $? y).
+  - apply clean_key_permissions_inv in Heq; split_ands.
+    apply clean_key_permissions_keeps_honest_permission; eauto.
+    unfold honest_perm_filter_fn in *.
+    cases (honestk $? y); try destruct b0; try discriminate.
+    cases (pubk $? y); solve_perm_merges; eauto.
+  - cases (perms $? y).
+    + eapply clean_key_permissions_inv' in Heq; eauto.
+      eapply clean_key_permissions_drops_dishonest_permission; eauto.
+      unfold honest_perm_filter_fn in *.
+      specialize (H y).
+      cases (honestk $? y); try destruct b0; try discriminate.
+      cases (pubk $? y);
+        match goal with
+        | [ PUB : pubk $? y = Some ?b, H : (forall kp, Some ?b = Some kp -> ?conc) |- _ ] =>
+          assert (Some b = Some b) as SOME by trivial; apply H in SOME; split_ands; discriminate
+        | _ => solve_perm_merges
+        end; eauto.
+      cases (pubk $? y);
+        match goal with
+        | [ PUB : pubk $? y = Some ?b, H : (forall kp, Some ?b = Some kp -> ?conc) |- _ ] =>
+          assert (Some b = Some b) as SOME by trivial; apply H in SOME; split_ands; discriminate
+        | _ => solve_perm_merges
+        end; eauto.
+    + apply clean_key_permissions_adds_no_permissions; eauto.
+Qed.
+
+Lemma clean_keys_nochange_pubk :
+  forall honestk pubk ks,
+    (forall k kp, pubk $? k = Some kp -> honestk $? k = Some true /\ kp = false)
+    -> clean_keys (honestk $k++ pubk) ks = clean_keys honestk ks.
+Proof.
+  intros; unfold clean_keys, filter.
+
+  induction ks using P.map_induction_bis; intros; Equal_eq; eauto.
+  rewrite !fold_add; eauto.
+  rewrite IHks; trivial.
+
+  assert (honest_key_filter_fn (honestk $k++ pubk) x e = honest_key_filter_fn honestk x e).
+  unfold honest_key_filter_fn.
+  specialize (H x).
+  cases (honestk $? x); cases (pubk $? x); subst;
+    try match goal with
+        | [ PUB : pubk $? x = Some ?b, H : (forall kp, Some ?b = Some kp -> ?conc) |- _ ] =>
+          assert (Some b = Some b) as SOME by trivial; apply H in SOME; split_ands; try discriminate
+        end;
+    solve_perm_merges; eauto.
+
+  rewrite H1; trivial.
+Qed.
+
+Lemma adv_key_not_honestk :
+  forall k_id honestk advk,
+    advk $? k_id = Some true
+    -> adv_no_honest_keys honestk advk
+    -> honest_keyb honestk k_id = false.
+Proof.
+  unfold adv_no_honest_keys, honest_keyb; intros.
+  specialize (H0 k_id); split_ors; split_ands;
+    context_map_rewrites; auto;
+      contradiction.
+Qed.

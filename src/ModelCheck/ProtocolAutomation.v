@@ -27,13 +27,14 @@ From SPICY Require Import
      Automation
      Common
      Keys
-     Theory.KeysTheory
      Maps
      Messages
      MessageEq
      RealWorld
      Simulation
      Tactics
+
+     Theory.KeysTheory
 
      ModelCheck.ModelCheck
      ModelCheck.SafeProtocol
@@ -882,15 +883,14 @@ Module SimulationAutomation.
       end; trivial.
 
   Ltac simplify_terms :=
-    unfold RealWorld.msgCiphersSignedOk;
-    unfold RealWorld.msg_honestly_signed;
-    unfold RealWorld.msg_signing_key;
-    unfold RealWorld.msg_to_this_user;
-    unfold RealWorld.msg_destination_user;
-    unfold RealWorld.cipher_signing_key;
-    unfold RealWorld.honest_keyb;
-    unfold RealWorld.cipher_nonce;
-    unfold add_key_perm.
+    unfold RealWorld.msg_honestly_signed
+         , RealWorld.msg_signing_key
+         , RealWorld.msg_to_this_user
+         , RealWorld.msg_destination_user
+         , RealWorld.cipher_signing_key
+         , RealWorld.honest_keyb
+         , RealWorld.cipher_nonce
+         , add_key_perm.
 
   Ltac assert_lkp ks k tac :=
     let ev' := fresh "ev"

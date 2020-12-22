@@ -31,6 +31,7 @@ From SPICY Require Import
      Tactics
      RealWorld
      AdversaryUniverse
+     Simulation
 
      Theory.KeysTheory
      Theory.MessagesTheory
@@ -126,11 +127,96 @@ Section CleanUsers.
     unfold option_map; context_map_rewrites; trivial.
   Qed.
 
-  Hint Resolve findUserKeys_foldfn_proper findUserKeys_foldfn_transpose
-       findUserKeys_foldfn_proper_Equal findUserKeys_foldfn_transpose_Equal
-    : core.
+  (* Hint Resolve findUserKeys_foldfn_proper findUserKeys_foldfn_transpose *)
+  (*      findUserKeys_foldfn_proper_Equal findUserKeys_foldfn_transpose_Equal *)
+  (*   : core. *)
 
+  Lemma clean_users_nochange_pubk :
+    forall {A} (usrs: honest_users A) cs pubk,
+      (forall k kp, pubk $? k = Some kp -> honestk $? k = Some true /\ kp = false)
+      -> clean_users (honestk $k++ pubk) cs usrs = clean_users honestk cs usrs.
+  Proof.
+    intros; unfold clean_users.
+    eapply map_eq_Equal; unfold Equal; intros.
+    rewrite !mapi_o; simpl; intros; subst; trivial.
+    cases (usrs $? y); eauto.
+    simpl.
+    f_equal. f_equal.
+    - rewrite clean_key_permissions_nochange_pubk; eauto.
+    - rewrite clean_messages_nochange_pubk; trivial.
+  Qed.
+  
 End CleanUsers.
+
+Lemma clean_users_new_honest_key_idempotent :
+  forall {A} (usrs : honest_users A) adv_heap honestk k_id cs gks,
+    ~ In k_id gks
+    -> honestk = findUserKeys usrs
+    -> message_queues_ok cs usrs gks
+    -> keys_and_permissions_good gks usrs adv_heap
+    -> clean_users (honestk $+ (k_id, true)) cs usrs = clean_users honestk cs usrs.
+Proof.
+  intros; subst.
+  apply map_eq_Equal; unfold Equal; intros.
+  cases (usrs $? y).
+  - erewrite !clean_users_cleans_user; eauto.
+    unfold keys_and_permissions_good in *; split_ands.
+    eapply Forall_natmap_in_prop in H2; eauto.
+    msg_queue_prop. unfold permission_heap_good in *.
+    cases (key_heap u $? k_id). specialize (H2 _ _ Heq0); split_ex; clean_map_lookups.
+    f_equal; symmetry
+    ; eauto using clean_messages_new_honest_key_idempotent, clean_key_permissions_new_honest_key'.
+
+  - rewrite !clean_users_adds_no_users; eauto.
+Qed.
+
+Lemma clean_users_addnl_cipher_idempotent :
+  forall {A} (usrs : honest_users A) honestk cs c_id c gks,
+    ~ In c_id cs
+    -> message_queues_ok cs usrs gks
+    -> honestk = findUserKeys usrs
+    -> clean_users honestk (cs $+ (c_id,c)) usrs = clean_users honestk cs usrs.
+Proof.
+  intros.
+  apply map_eq_Equal; unfold Equal; intros.
+  unfold clean_users.
+  rewrite !mapi_o; simpl; intros; subst; trivial.
+  cases (usrs $? y); eauto; simpl.
+  msg_queue_prop.
+  f_equal; subst.
+  f_equal; eauto using clean_messages_addnl_cipher_idempotent.
+Qed.
+
+Lemma clean_users_nochange_pubk_step :
+  forall {A} (usrs: honest_users A) honestk cs pubk u_id ks cmd qmsgs mycs froms sents cur_n u_d u_d',
+    (forall k kp, pubk $? k = Some kp -> honestk $? k = Some true /\ kp = false)
+    -> u_d = {| key_heap := ks $k++ pubk
+               ; protocol := cmd
+               ; msg_heap := qmsgs
+               ; c_heap := mycs ; from_nons := froms ; sent_nons := sents ; cur_nonce := cur_n |}
+    -> u_d' = {| key_heap := clean_key_permissions honestk (ks $k++ pubk)
+                ; protocol := cmd
+                ; msg_heap := clean_messages honestk cs (Some u_id) froms qmsgs
+                ; c_heap := mycs ; from_nons := froms ; sent_nons := sents ; cur_nonce := cur_n |}
+    -> clean_users (honestk $k++ pubk) cs (usrs $+ (u_id,u_d)) =
+      clean_users honestk cs usrs $+ (u_id,u_d').
+Proof.
+  intros.
+  eapply map_eq_Equal; unfold Equal; intros.
+  cases (u_id ==n y); subst; clean_map_lookups.
+  + erewrite clean_users_cleans_user; clean_map_lookups; eauto. simpl.
+    f_equal.
+    rewrite clean_key_permissions_nochange_pubk; eauto.
+    rewrite clean_messages_nochange_pubk; auto.
+  + unfold clean_users.
+    rewrite !mapi_o; intros; subst; trivial.
+    clean_map_lookups.
+
+    cases (usrs $? y); simpl; auto.
+    f_equal. f_equal.
+    rewrite clean_key_permissions_nochange_pubk; eauto.
+    rewrite clean_messages_nochange_pubk; auto.
+Qed.
 
 Section FindUserKeysCleanUsers.
   Import RealWorld.

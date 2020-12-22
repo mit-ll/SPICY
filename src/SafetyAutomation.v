@@ -31,8 +31,9 @@ From SPICY Require Import
      Simulation
      AdversaryUniverse
      
-     Theory.KeysTheory
      Theory.CipherTheory
+     Theory.KeysTheory
+     Theory.MessagesTheory
      Theory.UsersTheory
 .
 
@@ -80,63 +81,63 @@ Module SafetyAutomation.
     repeat solve_simple_maps1;
     try discriminate; try contradiction; context_map_rewrites.
   
-  Lemma message_honestly_signed_msg_signing_key_honest :
-    forall {t} (msg : crypto t) honestk cs,
-      msg_honestly_signed honestk cs msg  = true
-      -> exists k,
-        msg_signing_key cs msg = Some k
-        /\ honest_key honestk k.
-  Proof.
-    intros.
-    unfold msg_honestly_signed in *; destruct msg; try discriminate;
-      repeat
-        match goal with
-        | [ H : (match ?m with _ => _ end) = _ |- _ ] => cases m; try discriminate; simpl in *
-        | [ H : Some _ = Some _ |- _ ] => invert H
-        | [ H : honest_keyb _ _ = true |- _] => rewrite <- honest_key_honest_keyb in H
-        end; eauto.
-  Qed.
+  (* Lemma message_honestly_signed_msg_signing_key_honest : *)
+  (*   forall {t} (msg : crypto t) honestk cs, *)
+  (*     msg_honestly_signed honestk cs msg  = true *)
+  (*     -> exists k, *)
+  (*       msg_signing_key cs msg = Some k *)
+  (*       /\ honest_key honestk k. *)
+  (* Proof. *)
+  (*   intros. *)
+  (*   unfold msg_honestly_signed in *; destruct msg; try discriminate; *)
+  (*     repeat *)
+  (*       match goal with *)
+  (*       | [ H : (match ?m with _ => _ end) = _ |- _ ] => cases m; try discriminate; simpl in * *)
+  (*       | [ H : Some _ = Some _ |- _ ] => invert H *)
+  (*       | [ H : honest_keyb _ _ = true |- _] => rewrite <- honest_key_honest_keyb in H *)
+  (*       end; eauto. *)
+  (* Qed. *)
 
-  Lemma msg_honestly_signed_has_signing_key_cipher_id :
-    forall {t} (msg : crypto t) honestk cs,
-      msg_honestly_signed honestk cs msg = true
-      -> (exists k, msg_signing_key cs msg = Some k)
-        /\ (exists cid, msg_cipher_id msg = Some cid).
-  Proof.
-    unfold msg_honestly_signed, msg_signing_key, msg_cipher_id; intros.
-    destruct msg; try discriminate; repeat process_keys_messages; eauto.
-  Qed.
+  (* Lemma msg_honestly_signed_has_signing_key_cipher_id : *)
+  (*   forall {t} (msg : crypto t) honestk cs, *)
+  (*     msg_honestly_signed honestk cs msg = true *)
+  (*     -> (exists k, msg_signing_key cs msg = Some k) *)
+  (*       /\ (exists cid, msg_cipher_id msg = Some cid). *)
+  (* Proof. *)
+  (*   unfold msg_honestly_signed, msg_signing_key, msg_cipher_id; intros. *)
+  (*   destruct msg; try discriminate; repeat process_keys_messages; eauto. *)
+  (* Qed. *)
 
-  Lemma msg_honestly_signed_signing_key_honest :
-    forall {t} (msg : crypto t) honestk cs k,
-      msg_honestly_signed honestk cs msg = true
-      -> msg_signing_key cs msg = Some k
-      -> honest_key honestk k.
-  Proof.
-    unfold msg_honestly_signed, msg_signing_key; intros.
-    destruct msg; try discriminate; repeat process_keys_messages. constructor;
-      clean_context; eauto.
-  Qed.
+  (* Lemma msg_honestly_signed_signing_key_honest : *)
+  (*   forall {t} (msg : crypto t) honestk cs k, *)
+  (*     msg_honestly_signed honestk cs msg = true *)
+  (*     -> msg_signing_key cs msg = Some k *)
+  (*     -> honest_key honestk k. *)
+  (* Proof. *)
+  (*   unfold msg_honestly_signed, msg_signing_key; intros. *)
+  (*   destruct msg; try discriminate; repeat process_keys_messages. constructor; *)
+  (*     clean_context; eauto. *)
+  (* Qed. *)
 
   Hint Resolve msg_honestly_signed_signing_key_honest : core.
 
-  Ltac user_queue_lkup TAG :=
-    match goal with
-    | [ H : user_queue ?usrs ?uid = Some ?qmsgs |- _ ] =>
-      assert (exists cmd mycs ks froms sents cur_n,
-                 usrs $? uid = Some {| key_heap := ks
-                                     ; msg_heap := qmsgs
-                                     ; protocol := cmd
-                                     ; c_heap := mycs
-                                     ; from_nons := froms
-                                     ; sent_nons := sents
-                                     ; cur_nonce := cur_n |})
-        as TAG by (unfold user_queue in H;
-                   cases (usrs $? uid); try discriminate;
-                   match goal with
-                   | [ H1 : Some _ = Some _ |- exists t v w x y z, Some ?u = _ ] => invert H1; destruct u; repeat eexists; reflexivity
-                   end)
-    end.
+  (* Ltac user_queue_lkup TAG := *)
+  (*   match goal with *)
+  (*   | [ H : user_queue ?usrs ?uid = Some ?qmsgs |- _ ] => *)
+  (*     assert (exists cmd mycs ks froms sents cur_n, *)
+  (*                usrs $? uid = Some {| key_heap := ks *)
+  (*                                    ; msg_heap := qmsgs *)
+  (*                                    ; protocol := cmd *)
+  (*                                    ; c_heap := mycs *)
+  (*                                    ; from_nons := froms *)
+  (*                                    ; sent_nons := sents *)
+  (*                                    ; cur_nonce := cur_n |}) *)
+  (*       as TAG by (unfold user_queue in H; *)
+  (*                  cases (usrs $? uid); try discriminate; *)
+  (*                  match goal with *)
+  (*                  | [ H1 : Some _ = Some _ |- exists t v w x y z, Some ?u = _ ] => invert H1; destruct u; repeat eexists; reflexivity *)
+  (*                  end) *)
+  (*   end. *)
 
   Ltac user_cipher_queue_lkup TAG :=
     match goal with
@@ -174,94 +175,10 @@ Module SafetyAutomation.
                    end)
     end.
 
-  Ltac specialize_msg_queue_ok :=
-    repeat
-      match goal with
-      | [ H : (forall k, msg_signing_key _ ?msg = Some k -> _) |- _] =>
-        match goal with
-        | [ MSK : msg_signing_key _ msg = Some _ |- _ ] => specialize (H _ MSK); split_ands
-        | [ MHS : msg_honestly_signed ?honk _ msg = true |- _ ] =>
-          apply message_honestly_signed_msg_signing_key_honest in MHS; split_ex; split_ands
-        end
-      | [ HK : honest_key ?honk ?k, H : (honest_key ?honk ?k -> _) |- _ ] => specialize (H HK); split_ands
-      end.
-
-  Ltac specialize_msg_ok :=
-    repeat 
-      match goal with
-      (* | [ H : (?arg -> _) , ARG : ?arg |- _ ] => specialize (H ARG) *)
-      | [ H : (forall k, msg_signing_key ?cs ?msg = Some k -> _)
-      , MSK : msg_signing_key ?cs ?msg = Some _ |- _ ] => specialize (H _ MSK); split_ands
-      | [ H : (forall cid, msg_cipher_id ?msg = Some cid -> _)
-      , MCID : msg_cipher_id ?msg = Some _ |- _ ] => specialize (H _ MCID); split_ands
-      | [ H1 : (forall k, msg_signing_key ?cs ?msg = Some k -> _)
-        , H2 : (forall cid, msg_cipher_id ?msg = Some cid -> _)
-       , MHS : msg_honestly_signed _ _ _ = true |- _ ] => 
-        generalize (msg_honestly_signed_has_signing_key_cipher_id _ _ _ MHS); intros; split_ands; split_ex
-      | [ MPS : msg_pattern_safe ?honk _
-        , MAP :  msg_accepted_by_pattern ?cs _ _ _ ?msg |- _ ] =>
-        assert_if_new (msg_honestly_signed honk cs msg = true) eauto
-      | [ H1 : msg_honestly_signed ?honk _ ?msg = true, H2 : msg_signing_key _ ?msg = Some ?k |- _ ] =>
-        assert_if_new (honest_key honk k) eauto
-      | [ H : (forall k kp, findKeysCrypto ?cs ?msg $? k = Some kp -> _), ARG : findKeysCrypto ?cs ?msg $? _ = Some _ |- _ ] =>
-          specialize (H _ _ ARG)
-      | [ HK : honest_key ?honk ?k, H : (honest_key ?honk ?k -> _) |- _] => specialize (H HK); split_ands
-      | [ HL : ?honk $? ?k = Some true, H : (honest_key ?honk ?k -> _) |- _] =>
-        assert (honest_key honk k) as HK by (constructor; auto); specialize (H HK); split_ands
-      | [ PK : ?pubk $? _ = Some _, H : (forall k p, ?pubk $? k = Some p -> _) |- _ ] => specialize (H _ _ PK); split_ands
-      | [ MC : msg_cipher_id ?c = Some _, H : (forall cid, msg_cipher_id ?c = Some cid -> _) |- _ ] =>
-        specialize (H _ MC); split_ands
-      end.
-
-  Lemma break_msg_queue_prop :
-    forall elt e (l1 l2 : list elt) P,
-      Forall (fun x => P x) (l1 ++ e :: l2)
-      -> P e
-        /\ Forall (fun x => P x) (l1 ++ l2)
-  .
-  Proof.
-    intros * H
-    ; rewrite List.Forall_app in *
-    ; destruct H as [H H']
-    ; invert H'
-    ; eauto.
-  Qed.
-
-  Ltac msg_queue_prop :=
-    match goal with
-    | [ OK : message_queues_ok ?cs ?us ?gks |- _ ] =>
-      match goal with
-      | [ H : us $? _ = Some ?u |- _ ] =>
-        prop_not_unifies (message_queue_ok (findUserKeys us) cs (msg_heap u) gks);
-        generalize (Forall_natmap_in_prop _ OK H); simpl; intros
-      | _ => let USR := fresh "USR"
-            in user_queue_lkup USR;
-               do 6 (destruct USR as [?x USR]);
-               generalize (Forall_natmap_in_prop _ OK USR); simpl; intros
-      end
-    end;
-    repeat
-      match goal with
-      | [ H : message_queue_ok _ _ (_ :: _) _ |- _ ] => invert H; split_ands
-      | [ H : message_queue_ok _ _ (?msgs1 ++ ?msg :: ?msgs2) _ |- _ ] =>
-        unfold message_queue_ok in H
-        ; eapply break_msg_queue_prop in H
-        ; split_ex
-      | [ H : (forall k, msg_signing_key ?msg = Some k -> _) |- _] =>
-        specialize_msg_queue_ok
-      | [ MHS : msg_honestly_signed _ _ ?msg = _ , MTCH : match ?msg with _ => _ end |- _ ] =>
-        unfold msg_honestly_signed in MHS; destruct msg; try discriminate; rewrite MHS in *;
-        split_ands; simpl in *
-      end.
-
-  Lemma honest_keyb_true_honestk_has_key :
-    forall honestk k,
-      honest_keyb honestk k = true -> honestk $? k = Some true.
-  Proof. intros * H; rewrite <- honest_key_honest_keyb in H; destruct H; assumption. Qed.
 
   Ltac user_cipher_queues_prop :=
     match goal with
-    | [ OK : user_cipher_queues_ok ?cs ?honk ?us |- _ ] => 
+    | [ OK : user_cipher_queues_ok ?cs ?honk ?us |- _ ] =>
       match goal with
       | [ H : us $? _ = Some ?u |- _ ] =>
         prop_not_unifies (user_cipher_queue_ok cs honk (c_heap u));
@@ -307,15 +224,15 @@ Module SafetyAutomation.
       permission_heaps_prop
     end.
 
-  Ltac encrypted_ciphers_prop :=
-    match goal with
-    | [ H  : encrypted_ciphers_ok _ (?cs $+ (?cid,?c)) _ |- _ ] => generalize (Forall_natmap_in_prop_add H); intros
-    | [ H1 : ?cs $? _ = Some _, H2 : encrypted_ciphers_ok _ ?cs _ |- _ ] => generalize (Forall_natmap_in_prop _ H2 H1); simpl; intros
-    end;
-    repeat match goal with
-           | [ H : encrypted_cipher_ok _ _ _ _ |- _ ] => invert H
-           | [ H : honest_keyb _ _ = true |- _] => apply honest_keyb_true_honestk_has_key in H
-           end; try contradiction.
+  (* Ltac encrypted_ciphers_prop := *)
+  (*   match goal with *)
+  (*   | [ H  : encrypted_ciphers_ok _ (?cs $+ (?cid,?c)) _ |- _ ] => generalize (Forall_natmap_in_prop_add H); intros *)
+  (*   | [ H1 : ?cs $? _ = Some _, H2 : encrypted_ciphers_ok _ ?cs _ |- _ ] => generalize (Forall_natmap_in_prop _ H2 H1); simpl; intros *)
+  (*   end; *)
+  (*   repeat match goal with *)
+  (*          | [ H : encrypted_cipher_ok _ _ _ _ |- _ ] => invert H *)
+  (*          | [ H : honest_keyb _ _ = true |- _] => apply honest_keyb_true_honestk_has_key in H *)
+  (*          end; try contradiction. *)
 
   Ltac refine_signed_messages :=
     repeat

@@ -29,18 +29,22 @@ From SPICY Require Import
      Automation
      Maps
      Keys
-     Theory.KeysTheory
      Messages
      MessageEq
-     Theory.MessageEqTheory
      Tactics
      Simulation
      RealWorld
-     Theory.InvariantsTheory
      AdversaryUniverse
      AdversarySafety
      SafetyAutomation
      SyntacticallySafe
+
+     Theory.CipherTheory
+     Theory.InvariantsTheory
+     Theory.KeysTheory
+     Theory.MessageEqTheory
+     Theory.MessagesTheory
+     Theory.NonceTracking
      Theory.UsersTheory
 
      ModelCheck.RealWorldStepLemmas
@@ -64,7 +68,6 @@ Module SN := Sets.SetNotations(Foo).
 
 Set Implicit Arguments.
 
-(* Import SimulationAutomation. *)
 Import SafetyAutomation.
 
 Section CommutationLemmas.
@@ -95,10 +98,6 @@ Section CommutationLemmas.
       summarize (Verify k msg) s
   | SumGenKey : forall usg kt s,
       summarize (GenerateKey kt usg) s
-  (* | SumGenSymKey : forall usg s, *)
-  (*     summarize (GenerateSymKey usg) s *)
-  (* | SumGenAsymKey : forall usg s, *)
-  (*     summarize (GenerateAsymKey usg) s *)
   | SumBind : forall t1 t2 (c1 : user_cmd t1) (c2 : << t1 >> -> user_cmd t2) s,
       summarize c1 s
       -> (forall r__v, summarize (c2 r__v) s)
@@ -804,11 +803,8 @@ Section CommutationLemmas.
     forall {A B} (U__r : universe A B) lbl1 u_id1 u_id2 userData1 userData2 bd1 bd1',
       U__r.(users) $? u_id1 = Some userData1
       -> U__r.(users) $? u_id2 = Some userData2
-      (* -> honest_cmds_safe U__r *)
       -> syntactically_safe_U U__r
       -> goodness_predicates U__r
-      (* -> universe_ok U__r *)
-      (* -> adv_universe_ok U__r *)
       -> step_user lbl1 (Some u_id1) bd1 bd1'
       -> bd1 = build_data_step U__r userData1
       -> forall U__r' lbl2 bd2 bd2' userData2',
@@ -833,7 +829,6 @@ Section CommutationLemmas.
     intros.
     destruct U__r; destruct U__r'; simpl in *.
     destruct userData1; destruct userData2; destruct userData2'; simpl in *.
-    (* unfold universe_ok, adv_universe_ok in *; split_ands. *)
     unfold goodness_predicates in *; split_ands.
     unfold build_data_step, buildUniverse_step, buildUniverse in *; simpl in *.
 
@@ -1031,16 +1026,6 @@ Section TimeMeasures.
     - exists (n + 1); split; eauto.
       rewrite <- plus_assoc.
       erewrite <- queues_size_readd_user_popped_msg; eauto; simpl; eauto.
-
-    (* Recv Drop *)
-    (* - exists (2 + (n1 + n2)); split; eauto. *)
-
-    (*   rewrite <- plus_assoc. *)
-    (*   rewrite plus_comm with (n := n). *)
-    (*   rewrite plus_assoc. *)
-    (*   rewrite <- plus_assoc with (n := 1). *)
-    (*   erewrite <- queues_size_readd_user_popped_msg; eauto; eauto. *)
-    (*   simpl; eauto. *)
 
     - eapply IHboundRunningTime in H9; split_ex; eauto.
       eexists; split; eauto.
@@ -2099,49 +2084,6 @@ Proof.
 Qed.
 
 Hint Resolve indexedIdealSteps_ideal_steps : core.
-
-(* Inductive indexedModelStep {t__hon t__adv : type} (uid : user_id) : *)
-(*     @ModelState t__hon t__adv  *)
-(*   -> @ModelState t__hon t__adv *)
-(*   -> Prop := *)
-(* | RealSilenti : forall ru ru' iu b, *)
-(*     indexedRealStep uid Silent ru ru' *)
-(*     -> indexedModelStep uid (ru, iu, b) (ru', iu, b) *)
-(* | BothLoudi : forall ru ru' iu iu' iu'' ra ia b, *)
-(*     indexedRealStep uid (Action ra) ru ru' *)
-(*     -> (indexedIdealStep uid Silent) ^* iu iu' *)
-(*     -> indexedIdealStep uid (Action ia) iu' iu'' *)
-(*     -> action_matches ru.(all_ciphers) ru.(all_keys) ra ia *)
-(*     -> labels_align (ru, iu, b) *)
-(*     -> indexedModelStep uid (ru, iu, b) (ru', iu'', b) *)
-(* | MisalignedCanStepi : forall ru ru' iu iu' iu'' ra ia b, *)
-(*     indexedRealStep uid (Action ra) ru ru' *)
-(*     -> (indexedIdealStep uid Silent) ^* iu iu' *)
-(*     -> indexedIdealStep uid (Action ia) iu' iu'' *)
-(*     -> ~ labels_align (ru, iu, b) *)
-(*     -> indexedModelStep uid (ru, iu, b) (ru', iu'', false) *)
-(* | MisalignedCantStepi : forall ru ru' iu iu' ra b, *)
-(*     indexedRealStep uid (Action ra) ru ru' *)
-(*     -> (indexedIdealStep uid Silent) ^* iu iu' *)
-(*     -> (forall lbl iu'', indexedIdealStep uid lbl iu' iu'' -> False) *)
-(*     -> ~ labels_align (ru, iu, b) *)
-(*     -> indexedModelStep uid (ru, iu, b) (ru', iu, false) *)
-(* . *)
-
-(* Lemma indexedModelStep_step : *)
-(*   forall t__hon t__adv uid st st', *)
-(*     @indexedModelStep t__hon t__adv uid st st' *)
-(*     -> step st st'. *)
-(* Proof. *)
-(*   intros. *)
-(*   invert H; [ *)
-(*     econstructor 1 *)
-(*   | econstructor 2 *)
-(*   | econstructor 3 *)
-(*   | econstructor 4 ]; eauto. *)
-
-(*   invert H0; econstructor; eauto. *)
-(* Qed. *)
 
 Hint Constructors indexedModelStep indexedIdealStep indexedRealStep : core.
 Hint Resolve action_matches_other_user_silent_step_inv : core.
@@ -3240,8 +3182,8 @@ Proof.
     apply H2 in H11; split_ex; subst.
     apply H1 in H10.
     unfold msg_honestly_signed, msg_signing_key,
-    msg_to_this_user, msg_destination_user,
-    msgCiphersSignedOk, honest_keyb;
+           msg_to_this_user, msg_destination_user,
+           honest_keyb;
       context_map_rewrites.
     destruct ( cipher_to_user x0 ==n cipher_to_user x0 ); try contradiction.
     repeat simple apply conj; eauto.

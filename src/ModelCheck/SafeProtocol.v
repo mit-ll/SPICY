@@ -76,7 +76,7 @@ Module Type SafeProtocol.
   Axiom R_loud_simulates : simulates_labeled_step (lameAdv b) R.
   Axiom R_honest_actions_safe : honest_actions_safe B R.
   Axiom R_final_actions_align : ri_final_actions_align B R.
-  Axiom universe_starts_safe : R (peel_adv U__r) U__i /\ universe_ok U__r /\ adv_universe_ok U__r.
+  Axiom universe_starts_safe : R (peel_adv U__r) U__i /\ universe_ok U__r.
 
 End SafeProtocol.
 
@@ -112,8 +112,11 @@ Module AdversarySafeProtocol ( Proto : SafeProtocol ).
     pose proof universe_starts_safe.
     pose proof U_good.
     unfold universe_starts_ok; intros.
-    unfold universe_ok, adv_universe_ok, universe_starts_sane in *; split_ands.
+    unfold universe_ok, universe_starts_sane in *; split_ex.
     intuition eauto.
+
+    Unshelve.
+    exact $0.
   Qed.
 
   Hint Resolve proto_starts_ok : core.
@@ -289,7 +292,7 @@ Module Type AutomatedSafeProtocol.
   Notation SYS := (TrS ru0 iu0).
 
   Axiom U_good : universe_starts_sane b ru0.
-  Axiom universe_starts_safe : universe_ok ru0 /\ adv_universe_ok ru0.
+  Axiom universe_starts_safe : universe_ok ru0.
 
   Axiom safe_invariant : invariantFor
                            SYS
@@ -578,7 +581,7 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
   Lemma simsilent : simulates_silent_step (lameAdv b) R.
   Proof.
     hnf
-    ; intros * REL UOK AUOK LAME * STEP
+    ; intros * REL UOK LAME * STEP
     ; invert REL.
 
     generalize (reachable_from_silent_step H3 STEP LAME H H1 H2);
@@ -613,7 +616,7 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
   Lemma simlabeled : simulates_labeled_step (lameAdv b) R.
   Proof.
     hnf
-    ; intros * REL UOK AUOK LAME * STEP
+    ; intros * REL UOK LAME * STEP
     ; invert REL.
 
     generalize (reachable_from_labeled_step H3 STEP LAME H H1 H2);
@@ -657,7 +660,7 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
   Lemma sim_final : ri_final_actions_align t__adv R.
   Proof.
     hnf
-    ; intros * REL UOK AUOK NOSTEP * USR PROTO
+    ; intros * REL UOK NOSTEP * USR PROTO
     ; invert REL.
 
     pose proof returns_align_inv as ALIGN.
@@ -739,8 +742,11 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
     pose proof universe_starts_safe.
     pose proof U_good.
     unfold universe_starts_ok; intros.
-    unfold universe_ok, adv_universe_ok, universe_starts_sane in *; split_ands.
+    unfold universe_ok, universe_starts_sane in *; split_ex.
     intuition eauto.
+
+    Unshelve.
+    exact $0.
   Qed.
 
   Hint Resolve proto_starts_ok : safe.

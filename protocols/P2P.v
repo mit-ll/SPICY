@@ -429,9 +429,6 @@ Module P2PProtocolSecure <: AutomatedSafeProtocolSS.
 
   Qed.
 
-  (* Show Ltac Profile. *)
-  (* Show Ltac Profile "churn2". *)
-  
   Lemma U_good : @universe_starts_sane _ Unit b ru0.
   Proof.
     autounfold;
@@ -446,25 +443,25 @@ Module P2PProtocolSecure <: AutomatedSafeProtocolSS.
     - unfold lameAdv; simpl; eauto.
   Qed.
 
-  Lemma univ_ok_start : universe_ok ru0.
+  Lemma universe_starts_safe : universe_ok ru0.
   Proof.
-    autounfold; econstructor; eauto.
-  Qed.
-
-  Lemma adv_univ_ok_start : adv_universe_ok ru0.
-  Proof.
-    autounfold; unfold adv_universe_ok; eauto.
-    unfold keys_and_permissions_good.
     pose proof (adversary_is_lame_adv_univ_ok_clauses U_good).
+    
+    unfold universe_ok
+    ; autounfold
+    ; simpl
+    ; intuition eauto
+    .
 
-    intuition eauto;
-      simpl in *.
+    - econstructor; eauto.
+    - unfold keys_and_permissions_good; solve_simple_maps; intuition eauto.
+      solve_simple_maps; eauto.
 
-    - solve_simple_maps; eauto.
-    - rewrite Forall_natmap_forall; intros.
-      solve_simple_maps; simpl;
-        unfold permission_heap_good; intros;
-          solve_simple_maps; eauto.
+      rewrite Forall_natmap_forall; intros.
+
+      solve_simple_maps; simpl
+      ; unfold permission_heap_good; intros;
+        solve_simple_maps; solve_concrete_maps; eauto.
 
     - unfold user_cipher_queues_ok.
       rewrite Forall_natmap_forall; intros.
@@ -486,21 +483,13 @@ Module P2PProtocolSecure <: AutomatedSafeProtocolSS.
         simpl in *;
         clean_map_lookups;
         unfold mkrUsr; simpl; 
-        rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty;
-        eauto;
-        simpl in *;
-        solve_perm_merges;
-        solve_concrete_maps;
-        solve_simple_maps;
-        eauto.
-
+          rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty;
+          eauto;
+          simpl in *;
+          solve_perm_merges;
+          solve_concrete_maps;
+          solve_simple_maps;
+          eauto.
   Qed.
-  
-  Lemma universe_starts_safe : universe_ok ru0 /\ adv_universe_ok ru0.
-  Proof.
-    repeat (simple apply conj);
-      eauto using univ_ok_start, adv_univ_ok_start.
-  Qed.
-  
 
 End P2PProtocolSecure.

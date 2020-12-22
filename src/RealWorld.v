@@ -101,7 +101,7 @@ Inductive msg_accepted_by_pattern (cs : ciphers) (opt_uid_to : option user_id) (
     -> opt_uid_to = Some msg_to
     -> msg_accepted_by_pattern cs opt_uid_to froms (SignedEncrypted k__sign k__enc chk) (@SignedCiphertext t' c_id).
 
-Hint Extern 1 (~ In _ _) => rewrite not_find_in_iff.
+Hint Extern 1 (~ In _ _) => rewrite not_find_in_iff : core.
 
 Section SafeMessages.
   Variable all_keys : keys.
@@ -202,6 +202,8 @@ Fixpoint denote (t : user_cmd_type) :=
   | UPair t1 t2 => (denote t1 * denote t2)%type
   end
 .
+
+Declare Scope realworld_scope.
 Notation "<< t >>" := (denote t) (at level 75) : realworld_scope.
 Delimit Scope realworld_scope with realworld.
 Open Scope realworld_scope.
@@ -225,8 +227,6 @@ Inductive user_cmd : user_cmd_type -> Type :=
 | Verify  {t} (k : key_identifier) (c : crypto t) : user_cmd (UPair (Base Bool) (Message t))
 
 | GenerateKey (kt : key_type) (usage : key_usage) : user_cmd (Base Access)
-(* | GenerateSymKey  (usage : key_usage) : user_cmd (Base Access) *)
-(* | GenerateAsymKey (usage : key_usage) : user_cmd (Base Access) *)
 .
 
 Module RealWorldNotations.
@@ -326,13 +326,7 @@ Definition findMsgCiphers {t} (msg : crypto t) : queued_messages :=
   match msg with
   | Content _          => []
   | SignedCiphertext _ => [existT _ _ msg]
-  (* | Signature m c      => (existT _ _ msg) :: findMsgCiphers m *)
   end.
-
-Definition msgCiphersSignedOk {t} (honestk : key_perms) (cs : ciphers) (msg : crypto t) :=
-  Forall (fun sigm => match sigm with
-                     (existT _ _ m) => msg_honestly_signed honestk cs m = true
-                   end) (findMsgCiphers msg).
 
 Definition user_keys {A} (usrs : honest_users A) (u_id : user_id) : option key_perms :=
   match usrs $? u_id with
@@ -483,26 +477,10 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
     -> froms' = updateTrackedNonce u_id froms cs msg
     -> msg_accepted_by_pattern cs u_id froms pat msg
     -> Forall (fun '(existT _ _ msg')  => ~ msg_accepted_by_pattern cs u_id froms pat msg') msgs__front
-                                      (* /\ forall cid c cid' c', msg = SignedCiphertext cid *)
-                                      (*                    -> cs $? cid = Some c *)
-                                      (*                    -> msg' = SignedCiphertext cid' *)
-                                      (*                    -> cs $? cid' = Some c' *)
-                                      (*                    -> cipher_nonce c <> cipher_nonce c' *)
     -> step_user (Action (Input msg pat froms)) u_id
                 (usrs, adv, cs, gks, ks , qmsgs , mycs, froms, sents, cur_n,  Recv pat)
                 (usrs, adv, cs, gks, ks', qmsgs', mycs', froms', sents, cur_n, @Return (Crypto t) msg)
 
-(* | StepRecvDrop : forall {A B} {t} (usrs : honest_users A) (adv : user_data B) cs suid gks ks qmsgs qmsgs' *)
-(*                    mycs froms froms' sents cur_n (msg : crypto t) pat msgs, *)
-(*       qmsgs = (existT _ _ msg) :: msgs (* we have a message waiting for us! *) *)
-(*     -> qmsgs' = msgs *)
-(*     -> froms' = (if msg_signed_addressed (findUserKeys usrs) cs suid msg *)
-(*                then updateTrackedNonce suid froms cs msg *)
-(*                else froms) *)
-(*     -> ~ msg_accepted_by_pattern cs suid froms pat msg *)
-(*     -> step_user Silent suid (* Error label ... *) *)
-(*                 (usrs, adv, cs, gks, ks, qmsgs , mycs, froms,  sents, cur_n, Recv pat) *)
-(*                 (usrs, adv, cs, gks, ks, qmsgs', mycs, froms', sents, cur_n, @Recv t pat) *)
 
 (* Augment attacker's keys with those available through messages sent, *)
 (*  * including traversing through ciphers already known by attacker, etc. *)
@@ -604,26 +582,6 @@ Inductive step_user : forall A B C, rlabel -> option user_id -> data_step0 A B C
                 (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, GenerateKey kt usage)
                 (usrs, adv, cs, gks', ks', qmsgs, mycs, froms, sents, cur_n, @Return (Base Access) (k_id, true))
 
-(* | StepGenerateSymKey: forall {A B} (usrs : honest_users A) (adv : user_data B) *)
-(*                         cs u_id gks gks' ks ks' qmsgs mycs froms sents cur_n *)
-(*                         (k_id : key_identifier) k usage, *)
-(*     gks $? k_id = None *)
-(*     -> k = MkCryptoKey k_id usage SymKey *)
-(*     -> gks' = gks $+ (k_id, k) *)
-(*     -> ks' = add_key_perm k_id true ks *)
-(*     -> step_user Silent u_id *)
-(*                 (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, GenerateSymKey usage) *)
-(*                 (usrs, adv, cs, gks', ks', qmsgs, mycs, froms, sents, cur_n, @Return (Base Access) (k_id, true)) *)
-(* | StepGenerateAsymKey: forall {A B} (usrs : honest_users A) (adv : user_data B) *)
-(*                          cs u_id gks gks' ks ks' qmsgs mycs froms sents cur_n *)
-(*                          (k_id : key_identifier) k usage, *)
-(*     gks $? k_id = None *)
-(*     -> k = MkCryptoKey k_id usage AsymKey *)
-(*     -> gks' = gks $+ (k_id, k) *)
-(*     -> ks' = add_key_perm k_id true ks *)
-(*     -> step_user Silent u_id *)
-(*                 (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, GenerateAsymKey usage) *)
-(*                 (usrs, adv, cs, gks', ks', qmsgs, mycs, froms, sents, cur_n, @Return (Base Access) (k_id, true)) *)
 .
 
 Inductive step_universe {A B} : option user_id -> universe A B -> ulabel -> universe A B -> Prop :=

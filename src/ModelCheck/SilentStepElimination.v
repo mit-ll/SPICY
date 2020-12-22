@@ -29,27 +29,30 @@ From SPICY Require Import
      Automation
      Maps
      Keys
-     Theory.KeysTheory
      Messages
      MessageEq
-     Theory.MessageEqTheory
      Tactics
      Simulation
      RealWorld
-     Theory.InvariantsTheory
      AdversaryUniverse
      AdversarySafety
      SafetyAutomation
      SyntacticallySafe
+
+     Theory.CipherTheory
+     Theory.InvariantsTheory
+     Theory.KeysTheory
+     Theory.MessagesTheory
+     Theory.MessageEqTheory
      Theory.UsersTheory
 
-     ModelCheck.RealWorldStepLemmas
-     ModelCheck.ModelCheck
-     ModelCheck.ProtocolFunctions
-     ModelCheck.SafeProtocol
      ModelCheck.LabelsAlign
+     ModelCheck.ModelCheck
      ModelCheck.NoResends
+     ModelCheck.ProtocolFunctions
      ModelCheck.PartialOrderReduction
+     ModelCheck.RealWorldStepLemmas
+     ModelCheck.SafeProtocol
 .
 
 From Frap Require
@@ -1591,8 +1594,8 @@ Proof.
     apply H2 in H11; split_ex; subst.
     apply H1 in H10.
     unfold msg_honestly_signed, msg_signing_key,
-    msg_to_this_user, msg_destination_user,
-    msgCiphersSignedOk, honest_keyb;
+           msg_to_this_user, msg_destination_user,
+           honest_keyb;
       context_map_rewrites.
     destruct ( cipher_to_user x0 ==n cipher_to_user x0 ); try contradiction.
     repeat simple apply conj; eauto.
@@ -1787,7 +1790,7 @@ Module Type AutomatedSafeProtocolSS.
   Notation SYS := (TrSS ru0 iu0).
 
   Axiom U_good : universe_starts_sane b ru0.
-  Axiom universe_starts_safe : universe_ok ru0 /\ adv_universe_ok ru0.
+  Axiom universe_starts_safe : universe_ok ru0.
 
   Axiom safe_invariant : invariantFor
                            SYS

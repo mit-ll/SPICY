@@ -22,11 +22,8 @@ From SPICY Require Import
      Automation
      Maps
      Keys
-     Theory.KeysTheory
      Messages
-     Theory.MessagesTheory
      MessageEq
-     Theory.MessageEqTheory
      Tactics
      Simulation
      RealWorld
@@ -34,6 +31,12 @@ From SPICY Require Import
      SafetyAutomation
      SyntacticallySafe
      AdversarySafety
+
+     Theory.CipherTheory
+     Theory.KeysTheory
+     Theory.MessageEqTheory
+     Theory.MessagesTheory
+     Theory.NonceTracking
 
      ModelCheck.ProtocolFunctions
      ModelCheck.SafeProtocol
@@ -62,26 +65,24 @@ Ltac dt bd :=
 Lemma universe_predicates_preservation :
   forall {A B} (U U' : universe A B) suid lbl,
     universe_ok U
-    -> adv_universe_ok U
     -> honest_cmds_safe U
     -> step_universe suid U lbl U'
-    -> universe_ok U'
-      /\ adv_universe_ok U'.
+    -> universe_ok U'.
 Proof.
-  intros * UOK AUOK HCS STEP.
-  destruct lbl;
-    intuition eauto.
+  intros * UOK HCS STEP.
+  destruct lbl
+  ; destruct suid
+  ; eauto using
+          silent_step_advuniv_implies_univ_ok
+  ; invert STEP.
 
-  - destruct u, suid; [| invert STEP].
-    generalize STEP; eapply labeled_step_uid_same in STEP; subst.
-    intros.
-    unfold adv_universe_ok in *; split_ands;
-      eapply honest_labeled_step_univ_ok;
-      eauto using honest_cmds_implies_safe_actions.
+  unfold mkULbl in H3
+  ; destruct lbl
+  ; try discriminate
+  ; invert H3.
 
-  - destruct u, suid; [| invert STEP].
-    generalize STEP; eapply labeled_step_uid_same in STEP; subst.
-    intros; eauto.
+  eapply labeled_step_adv_univ_implies_universe_ok; eauto.
+  econstructor; eauto; simpl; eauto.
 Qed.
 
 Section ModelCheckStepLemmas.
@@ -318,7 +319,7 @@ Lemma msg_signed_addressed_nochange_addnl_honest_key :
     -> (forall k, msg_signing_key cs msg = Some k ->
             gks $? k <> None /\
             (honest_key honestk k ->
-             message_no_adv_private honestk cs msg /\ msgCiphersSignedOk honestk cs msg))
+             message_no_adv_private honestk cs msg))
     -> msg_signed_addressed honestk cs suid msg = tf
     -> msg_signed_addressed (honestk $+ (k_id,true)) cs suid msg = tf.
 Proof.
@@ -331,35 +332,6 @@ Proof.
   unfold honest_keyb in *.
   destruct (k_id ==n k); subst; clean_map_lookups; eauto.
   specialize (H1 _ eq_refl); split_ands; contradiction.
-Qed.
-
-(* need to know that msg, if cipher, is in cs *)
-Lemma updateTrackedNonce_addnl_cipher :
-  forall suid nons cs {t} (msg : crypto t) c_id c,
-    ~ In c_id cs
-    -> (forall cid, msg_cipher_id msg = Some cid -> cs $? cid <> None)
-    -> updateTrackedNonce suid nons cs msg =
-      updateTrackedNonce suid nons (cs $+ (c_id, c)) msg.
-Proof.
-  intros.
-  unfold updateTrackedNonce.
-  destruct msg; eauto.
-  destruct (c_id ==n c_id0); subst; clean_map_lookups; eauto.
-  specialize (H0 _ eq_refl); contradiction.
-Qed.
-
-Lemma updateSentNonce_addnl_cipher :
-  forall suid nons cs {t} (msg : crypto t) c_id c,
-    ~ In c_id cs
-    -> (forall cid, msg_cipher_id msg = Some cid -> cs $? cid <> None)
-    -> updateSentNonce suid nons cs msg =
-      updateSentNonce suid nons (cs $+ (c_id, c)) msg.
-Proof.
-  intros.
-  unfold updateSentNonce.
-  destruct msg; eauto.
-  destruct (c_id ==n c_id0); subst; clean_map_lookups; eauto.
-  specialize (H0 _ eq_refl); contradiction.
 Qed.
 
 Lemma msg_not_accepted_pattern_addnl_cipher :
@@ -751,8 +723,8 @@ Section MessageEqLemmas.
     induction qmsgs; intros; subst; eauto.
     unfold key_perms_from_message_queue in *.
     destruct a.
-    pose proof (clean_messages_cons_split cs honestk uid froms qmsgs _ _ c0 eq_refl); intros.
-    pose proof (clean_messages_cons_split (cs $+ (c_id,c)) honestk uid froms qmsgs _ _ c0 eq_refl); intros.
+    pose proof (clean_messages_cons_split cs honestk uid froms qmsgs c0 eq_refl); intros.
+    pose proof (clean_messages_cons_split (cs $+ (c_id,c)) honestk uid froms qmsgs c0 eq_refl); intros.
     invert H1;
       assert ( message_queue_ok honestk cs qmsgs gks ) by (unfold message_queue_ok; eassumption).
     split_ex.
@@ -787,8 +759,8 @@ Section MessageEqLemmas.
     induction qmsgs; intros; subst; eauto.
     unfold key_perms_from_message_queue in *.
     destruct a.
-    pose proof (clean_messages_cons_split cs honestk uid froms qmsgs _ _ c eq_refl); intros.
-    pose proof (clean_messages_cons_split cs (honestk $+ (kid,true)) uid froms qmsgs _ _ c eq_refl); intros.
+    pose proof (clean_messages_cons_split cs honestk uid froms qmsgs c eq_refl); intros.
+    pose proof (clean_messages_cons_split cs (honestk $+ (kid,true)) uid froms qmsgs c eq_refl); intros.
     invert H1;
       assert ( message_queue_ok honestk cs qmsgs gks ) by (unfold message_queue_ok; eassumption).
     split_ex.
@@ -1218,9 +1190,6 @@ Section ActionMatches.
               -> usrs $? uid2 = Some (mkUserData ks2 cmd2 qmsgs2 mycs2 froms2 sents2 cur_n2)
               -> forall ctx uids sty, syntactically_safe uid2 uids ctx cmd2 sty
               -> typingcontext_sound ctx usrs cs uid2
-                                (* -> forall t__n (cmd__n : user_cmd t__n) s, nextAction cmd cmd__n *)
-                                (*                                -> summarize cmd2 s *)
-                                (*                                -> commutes cmd__n s *)
               -> step_user (Action a) (Some uid2)
                           (usrs, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
                           (usrs'', adv'', cs'', gks'', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
@@ -1360,9 +1329,6 @@ Section ActionMatches.
             -> usrs $? uid2 = Some (mkUserData ks2 cmd2 qmsgs2 mycs2 froms2 sents2 cur_n2)
             -> forall ctx sty, syntactically_safe uid2 uids ctx cmd2 sty
             -> typingcontext_sound ctx usrs cs uid2
-            (* -> forall t__n (cmd__n : user_cmd t__n) s, nextAction cmd1 cmd__n *)
-            (* -> summarize cmd2 s *)
-            (* -> commutes cmd__n s *)
             -> step_user (Action a) (Some uid2)
                         (usrs, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
                         (usrs'', adv'', cs'', gks'', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
