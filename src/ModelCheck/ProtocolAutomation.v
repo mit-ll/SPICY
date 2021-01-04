@@ -852,7 +852,7 @@ Module SimulationAutomation.
     forall A, @RealWorld.findUserKeys A $0 = $0.
   Proof. trivial. Qed.
   
-  Hint Constructors RealWorld.honest_key RealWorld.msg_pattern_safe : core.
+  Hint Constructors RealWorld.msg_pattern_safe : core.
 
   Lemma reduce_merge_perms :
     forall perms1 perms2 kid perm1 perm2,

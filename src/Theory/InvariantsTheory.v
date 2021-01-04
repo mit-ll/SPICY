@@ -644,7 +644,7 @@ Proof.
     rewrite <- honest_key_honest_keyb in *;
     unfold add_key_perm;
     match goal with
-    | [ H : honest_key _ ?kid |- _ ] => invert H; econstructor; destruct (k_id ==n kid); subst
+    | [ H : honest_key _ ?kid |- _ ] => destruct (k_id ==n kid); subst
     end; context_map_rewrites; clean_map_lookups; simpl; eauto;
       cases (honestk $? k_id); clean_map_lookups; auto.
 Qed.
@@ -1294,7 +1294,6 @@ Proof.
     specialize_msg_ok; eauto;
       repeat
         match goal with
-        | [ H : honest_key (_ $k++ _) _ |- _ ] => invert H
         | [ H : _ $k++ _ $? _ = Some true |- _ ] => apply merge_perms_split in H; split_ors
         end;
       specialize_msg_ok; eauto.
@@ -1469,10 +1468,6 @@ Proof.
   - unfold not; intro; destruct (k_id ==n k); subst; split_ands; clean_map_lookups; specialize_msg_ok; eauto.
   - specialize_msg_ok; destruct (k_id ==n k); subst; clean_map_lookups; split_ands; try contradiction; eauto.
     split; intros; repeat invert_base_equalities1; eauto.
-    repeat
-      match goal with
-      | [ H : honest_key _ _ |- _ ] => invert H
-      end; clean_map_lookups; specialize_msg_ok; eauto.
 Qed.
 
 Lemma message_queue_ok_addnl_adv_key :
@@ -1618,11 +1613,7 @@ Proof.
           context_map_rewrites;
           clean_map_lookups.
 
-      * destruct p; specialize_msg_ok; eauto.
-      * unfold msg_honestly_signed in *; simpl in *; context_map_rewrites; simpl in *.
-        unfold honest_keyb in *;
-          cases (findUserKeys usrs $? k); try discriminate;
-            destruct b; try discriminate; contradiction.
+      destruct p; specialize_msg_ok; eauto.
 Qed.
 
 Lemma honest_silent_step_message_queues_ok :
@@ -1722,7 +1713,7 @@ Proof.
 Qed.
 
     Hint Resolve honest_cipher_filter_fn_true_honest_signing_key : core.
-    Hint Extern 1 (honest_key _ _) => process_keys_messages : core.
+    Hint Extern 5 (honest_key _ _) => process_keys_messages : core.
 
     Lemma message_queue_ok_after_cleaning :
       forall msgs honestk honestk' cs gks suid mycs,

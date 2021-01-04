@@ -248,9 +248,8 @@ Module MyProtocolSecure <: AutomatedSafeProtocol.
     - solve_perm_merges; eauto.
     - econstructor.
     - unfold AdversarySafety.keys_honest; rewrite Forall_natmap_forall; intros.
-      econstructor; unfold mkrUsr; simpl.
+      unfold mkrUsr; simpl.
       rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty; eauto.
-      solve_perm_merges.
     - unfold lameAdv; simpl; eauto.
   Qed.
 

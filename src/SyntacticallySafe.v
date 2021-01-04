@@ -461,7 +461,6 @@ Ltac process_ctx := repeat process_ctx1.
 
 Hint Constructors
      RealWorld.msg_accepted_by_pattern 
-     RealWorld.honest_key
      RealWorld.msg_pattern_safe
   : core.
 Hint Extern 1 (List.In _ _) => progress simpl : core.

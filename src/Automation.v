@@ -52,7 +52,7 @@ Lemma honest_key_honest_keyb :
     honest_key honestk k <-> honest_keyb honestk k = true.
 Proof.
   split; unfold honest_keyb; intros.
-  - destruct H; context_map_rewrites; trivial.
+  - context_map_rewrites; trivial.
   - cases (honestk $? k); subst; try discriminate.
     cases b; try discriminate; econstructor; eauto.
 Qed.

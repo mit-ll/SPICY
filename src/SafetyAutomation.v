@@ -64,8 +64,8 @@ Module SafetyAutomation.
     | [ |- let (_,_) := ?x in _] => destruct x
     | [ H : context [ honest_keyb _ _ = _ ] |- _ ] => unfold honest_keyb in H
     | [ |- context [ honest_keyb _ _ ] ] => unfold honest_keyb
-    | [ H : honest_key _ _ |- _ ] => invert H
-    | [ |- honest_key _ _ ] => constructor
+    (* | [ H : honest_key _ _ |- _ ] => invert H *)
+    (* | [ |- honest_key _ _ ] => constructor *)
     | [ H : (if ?b then _ else _) = _ |- _ ] => is_var b; destruct b
     | [ H : (match ?honk $? ?k with _ => _ end) = _ |- _ ] => cases (honk $? k)
     | [ |- context [ if ?b then _ else _ ] ] => is_var b; destruct b

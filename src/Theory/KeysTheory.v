@@ -38,7 +38,6 @@ Set Implicit Arguments.
 Section FindKeysLemmas.
 
   Hint Constructors
-       honest_key
        msg_pattern_safe
   : core.
 
@@ -245,8 +244,9 @@ Section FindKeysLemmas.
         honest_key honestk k_id
       -> honest_key (honestk $k++ msgk) k_id.
   Proof.
-    invert 1; intros; econstructor;
-      solve_perm_merges; eauto.
+    intros
+    ; solve_perm_merges
+    ; eauto.
   Qed.
 
   Hint Resolve honest_key_after_new_keys : core.
@@ -261,22 +261,22 @@ Section FindKeysLemmas.
 
   Hint Resolve honest_keyb_after_new_keys : core.
 
-  Lemma not_honest_key_after_new_pub_keys :
-    forall pubk honestk k,
-      ~ honest_key honestk k
-      -> (forall (k_id : NatMap.Map.key) (kp : bool), pubk $? k_id = Some kp -> kp = false)
-      -> ~ honest_key (honestk $k++ pubk) k.
-  Proof.
-    unfold not; intros * NOTHK FN HK; invert HK.
-    repeat (solve_perm_merges1
-     || maps_equal1
-     || match goal with
-       | [ H : (forall k_id kp, ?pubk $? k_id = Some kp -> _), ARG : ?pubk $? _ = Some _ |- _ ] => specialize (H _ _ ARG); subst
-       end
-     || (progress subst)); eauto.
-  Qed.
+  (* Lemma not_honest_key_after_new_pub_keys : *)
+  (*   forall pubk honestk k, *)
+  (*     ~ honest_key honestk k *)
+  (*     -> (forall (k_id : NatMap.Map.key) (kp : bool), pubk $? k_id = Some kp -> kp = false) *)
+  (*     -> ~ honest_key (honestk $k++ pubk) k. *)
+  (* Proof. *)
+  (*   unfold not; intros * NOTHK FN HK; invert HK. *)
+  (*   repeat (solve_perm_merges1 *)
+  (*    || maps_equal1 *)
+  (*    || match goal with *)
+  (*      | [ H : (forall k_id kp, ?pubk $? k_id = Some kp -> _), ARG : ?pubk $? _ = Some _ |- _ ] => specialize (H _ _ ARG); subst *)
+  (*      end *)
+  (*    || (progress subst)); eauto. *)
+  (* Qed. *)
 
-  Hint Resolve not_honest_key_after_new_pub_keys : core.
+  (* Hint Resolve not_honest_key_after_new_pub_keys : core. *)
 
   Lemma message_honestly_signed_after_add_keys :
     forall {t} (msg : crypto t) cs honestk ks,
@@ -755,7 +755,7 @@ Qed.
 Lemma honest_keyb_true_honestk_has_key :
   forall honestk k,
     honest_keyb honestk k = true -> honestk $? k = Some true.
-Proof. intros * H; rewrite <- honest_key_honest_keyb in H; destruct H; assumption. Qed.
+Proof. intros * H; rewrite <- honest_key_honest_keyb in H; assumption. Qed.
 
 Lemma clean_key_permissions_new_honest_key' :
   forall honestk k_id gks,

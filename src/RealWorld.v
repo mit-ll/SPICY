@@ -103,14 +103,16 @@ Inductive msg_accepted_by_pattern (cs : ciphers) (opt_uid_to : option user_id) (
 
 Hint Extern 1 (~ In _ _) => rewrite not_find_in_iff : core.
 
+Notation honest_key honk kid := (honk $? kid = Some true).
+
 Section SafeMessages.
   Variable all_keys : keys.
   Variable honestk advk : key_perms.
 
-  Inductive honest_key (k_id : key_identifier) : Prop :=
-  | HonestKey :
-        honestk $? k_id = Some true
-      -> honest_key k_id.
+  (* Inductive honest_key (k_id : key_identifier) : Prop := *)
+  (* | HonestKey : *)
+  (*       honestk $? k_id = Some true *)
+  (*     -> honest_key k_id. *)
 
   Definition honest_keyb (k_id : key_identifier) : bool :=
     match honestk $? k_id with
@@ -179,11 +181,12 @@ Section SafeMessages.
 
   Inductive msg_pattern_safe : msg_pat -> Prop :=
   | HonestlySignedSafe : forall k,
-        honest_key k
+        honest_key honestk k
       -> msg_pattern_safe (Signed k true)
   | HonestlySignedEncryptedSafe : forall k__sign k__enc,
-        honest_key k__sign
-      -> msg_pattern_safe (SignedEncrypted k__sign k__enc true).
+        honest_key honestk k__sign
+      -> msg_pattern_safe (SignedEncrypted k__sign k__enc true)
+  .
 
 End SafeMessages.
 

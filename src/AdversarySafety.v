@@ -103,7 +103,6 @@ Section SingleAdversarySimulates.
         -> honest_key (findUserKeys usrs) k_id.
     Proof.
       intros.
-      constructor.
       unfold user_keys in *; cases (usrs $? u_id); subst; clean_map_lookups.
       eapply findUserKeys_has_private_key_of_user; eauto.
     Qed.
@@ -160,7 +159,7 @@ Section SingleAdversarySimulates.
          clean_ciphers_encrypted_ciphers_ok
       : core.
 
-    Hint Extern 1 (honest_key _ _) => process_keys_messages : core.
+    (* Hint Extern 5 (honest_key _ _) => process_keys_messages : core. *)
 
     Lemma ok_universe_strip_adversary_still_ok :
       forall {A B} (U__ra U__r: universe A B) (b : <<(Base B)>>),
@@ -402,7 +401,8 @@ Section SingleAdversarySimulates.
         simpl.
 
       - msg_queue_prop.
-        split_ands; specialize_msg_ok.
+        split_ex; specialize_msg_ok.
+        
         intuition eauto using clean_ciphers_nochange_pubk
                             , clean_messages_nochange_pubk
                             , clean_users_nochange_pubk_step
@@ -412,6 +412,7 @@ Section SingleAdversarySimulates.
 
       - destruct rec_u; simpl in *.
         intuition idtac.
+
 
         eapply map_eq_Equal; unfold Equal; intros.
         cases (y ==n u_id); subst; clean_map_lookups.
@@ -737,9 +738,12 @@ Section SingleAdversarySimulates.
         clean_context.
  
       - unfold honest_users_only_honest_keys in *; intros.
-        destruct (u_id ==n u_id0); subst; clean_map_lookups; eauto;
-          simpl in *;
-          rewrite findUserKeys_readd_user_addnl_keys; eauto.
+        destruct (u_id ==n u_id0)
+        ; subst
+        ; clean_map_lookups
+        ; rewrite findUserKeys_readd_user_addnl_keys by eauto
+        ; simpl in *
+        ; eauto.
 
         specialize (H11 _ _ H27); simpl in *.
         solve_perm_merges;
@@ -771,12 +775,12 @@ Section SingleAdversarySimulates.
 
       - unfold honest_users_only_honest_keys in *; intros.
         assert (rec_u_id <> u_id) by eauto.
-        destruct (u_id ==n u_id0); destruct (u_id ==n rec_u_id);
-          subst;
-          try contradiction;
-          clean_map_lookups;
-          simpl in *;
-          eauto.
+        destruct (u_id ==n u_id0); destruct (u_id ==n rec_u_id)
+        ; subst
+        ; try contradiction
+        ; clean_map_lookups
+        ; simpl in *
+        ; eauto.
 
         + specialize (H10 _ _ H26 _ _ H11).
           autorewrite with find_user_keys; eauto.
@@ -944,7 +948,7 @@ Section SingleAdversarySimulates.
               usrs' $? u_id' = Some u_d
               -> usrs $? u_id' <> None.
     Proof.
-      induction 1; inversion 1; inversion 1; intros; subst; eauto;
+       induction 1; inversion 1; inversion 1; intros; subst; eauto;
         repeat match goal with
                | [ H : ?us $? ?uid = Some _ |- ?us $? ?uid <> None ] => solve [ rewrite H; intro C; invert C ]
                end.
@@ -1051,8 +1055,6 @@ Section SingleAdversarySimulates.
         intuition eauto using clean_ciphers_new_honest_key_idempotent
                             , clean_messages_new_honest_key_idempotent
                             , clean_users_new_honest_key_idempotent.
-        Unshelve.
-        auto.
     Qed.
 
     Lemma honest_silent_step_nochange_clean_adv_messages :
@@ -1273,10 +1275,10 @@ Section SingleAdversarySimulates.
       - clean_context.
         unfold honest_nonces_ok in H25; split_ex.
         clean_map_lookups.
-        specialize (H14 _ _ _ _ H9 H8 H2).
+        specialize (H14 _ _ _ _ H9 H7 H2).
         unfold honest_nonce_tracking_ok in H14; split_ex.
         specialize (H15 _ _ H5); specialize_simply; split_ex.
-        specialize (H13 _ _ H8); unfold honest_user_nonces_ok in H13; split_ex.
+        specialize (H13 _ _ H7); unfold honest_user_nonces_ok in H13; split_ex.
         rewrite Forall_forall in H16; specialize (H16 _ H10).
 
         apply count_occ_eq_0_clean_msgs in Heq.
@@ -1480,8 +1482,10 @@ Section SingleAdversarySimulates.
       intros * HONK AA.
       destruct a; unfold action_adversary_safe in *; split_ex; subst; eauto.
 
-      - split; eauto 8.
+      - split.
         invert H; econstructor; eauto.
+        (do 2 eexists); repeat simple apply conj; eauto.
+        
       - repeat (apply conj); eauto 8.
         invert H.
         rewrite H3.
@@ -1846,19 +1850,41 @@ Section SingleAdversarySimulates.
                        clean_key_permissions honestk' ks',
                        clean_messages honestk' cs' suid froms' qmsgs', mycs', froms', sents', cur_n', cmd').
     Proof.
-      induction 1; inversion 5; inversion 9; intros; subst; clean_context;
-        autorewrite with find_user_keys in *;
-        try solve [ left; econstructor; eauto;
+
+      Ltac solve_clean_keys_clean_key_permissions' :=
+        match goal with
+        | [  |- clean_keys ?honestk ?gks $? ?kid = Some _ ] =>
+          match goal with
+          | [ H : honestk $? kid = Some true |- _] => idtac
+          | [ H : honest_key honestk kid |- _] => idtac
+          | _ => assert (honest_key honestk kid) by eauto
+          end
+        | [  |- clean_key_permissions ?honestk ?gks $? ?kid = Some _ ] =>
+          match goal with
+          | [ H : honestk $? kid = Some true |- _] => idtac
+          | [ H : honest_key honestk kid |- _] => idtac
+          | _ => assert (honest_key honestk kid) by eauto
+          (* | _ => assert (honestk $? kid = Some true) by eauto *)
+          end
+        end;
+        unfold clean_keys, clean_key_permissions;
+        rewrite <- find_mapsto_iff, filter_iff; auto; rewrite find_mapsto_iff;
+        unfold honest_key_filter_fn, honest_perm_filter_fn;
+        intuition context_map_rewrites; eauto.
+      
+      induction 1; inversion 5; inversion 9; intros; subst; clean_context
+      ; autorewrite with find_user_keys in *
+      ; try
+          match goal with
+          | [ H : (Some _ <> None) -> ?msg_nonce = (?uid, ?cur_n) |- _ ] =>
+            assert (msg_nonce = (uid,cur_n)) by (eapply H; congruence)
+            ; clear H
+            ; subst
+          end
+      ; try solve [ left; econstructor; eauto;
                     user_cipher_queues_prop; eauto;
-                    try solve_clean_keys_clean_key_permissions];
-        (* eauto using honest_silent_recv_implies_honest_or_no_step_origuniv. *)
-        try solve [ left;
-                    try
-                      match goal with
-                      | [ H : (Some _ <> None) -> ?msg_nonce = (?u_id, ?cur_n) |- _ ] =>
-                        assert (msg_nonce = (uid,cur_n)) by (apply H; congruence)
-                        ; subst
-                      end
+                    try solve_clean_keys_clean_key_permissions']
+      ; try solve [ left
                     ; eauto 12 using honest_labeled_send_implies_step_origuniv
                     , honest_silent_new_cipher_implies_honest_step_origuniv'
                     , honest_silent_decrypt_implies_honest_step_origuniv
@@ -1924,13 +1950,6 @@ Section SingleAdversarySimulates.
         unfold message_queues_ok in H26; rewrite Forall_natmap_forall in H26.
         specialize (H26 _ _ H33); eauto.
         unfold honest_nonces_ok in *; split_ex; trivial.
-
-      - assert (msg_nonce = (Some u_id, cur_n)) by (eapply H6; congruence); subst.
-        left; eapply honest_silent_new_cipher_implies_honest_step_origuniv'; eauto 12.
-
-      - assert (msg_nonce = (Some u_id, cur_n)) by (eapply H4; congruence); subst.
-        left; eapply honest_silent_new_cipher_implies_honest_step_origuniv'; eauto 12.
-
     Qed.
 
     Lemma silent_honest_step_advuniv_implies_stripped_univ_step_or_none :
@@ -2400,9 +2419,9 @@ Section SingleAdversarySimulates.
     apply map_eq_Equal; unfold Equal; intros.
     cases (ks $? y); eauto using clean_keys_adds_no_keys.
     eapply clean_keys_keeps_honest_key; eauto.
-    specialize (H _ _ Heq); invert H.
+    specialize (H _ _ Heq).
     specialize (H0 _ _ Heq).
-    unfold honest_key_filter_fn; rewrite H0 in H1; context_map_rewrites; trivial.
+    unfold honest_key_filter_fn; rewrite H0 in H; context_map_rewrites; trivial.
   Qed.
 
   Lemma universe_starts_ok_clean_key_permissions_idempotent :
@@ -2503,8 +2522,7 @@ Section SingleAdversarySimulates.
     - unfold RealWorld.msg_honestly_signed, RealWorld.msg_signing_key in *.
       cases (clean_ciphers honestk cs $? x); try discriminate.
       apply clean_ciphers_inv in Heq; context_map_rewrites.
-      rewrite <- honest_key_honest_keyb in *.
-      invert H1; constructor; eauto.
+      rewrite <- honest_key_honest_keyb in *; eauto.
 
     - unfold RealWorld.msg_to_this_user, RealWorld.msg_destination_user in *.
       cases (clean_ciphers honestk cs $? x); try discriminate.
@@ -2515,8 +2533,7 @@ Section SingleAdversarySimulates.
 
     - invert H1; [ econstructor 1
                  | econstructor 2 ]
-      ; invert H2
-      ; constructor; eauto.
+      ; eauto.
 
     - intros.
       apply H1 in H2; split_ex; eauto.

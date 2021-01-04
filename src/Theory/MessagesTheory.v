@@ -920,15 +920,13 @@ Section CleanMessages.
       ; invert Heq.
       pose proof (msg_honestly_signed_has_signing_key_cipher_id (@SignedCiphertext t0 cid) _ _ H0)
       ; split_ex.
-      pose proof (msg_honestly_signed_signing_key_honest (@SignedCiphertext t0 cid) honestk cs H0 H8).
+      pose proof (msg_honestly_signed_signing_key_honest (@SignedCiphertext t0 cid) honestk cs H0 H1).
       invert H11; subst.
-      invert H12.
-      unfold msg_signing_key in H8
+      unfold msg_signing_key in H1
       ; context_map_rewrites
-      ; invert H8.
-      generalize (H6 _ _ _ _ n H3 Heq0 H11 H1); intros.
+      ; invert H1.
+      generalize (H6 _ _ _ _ n H3 Heq0 H12 H8); intros.
 
-      (* TODO tbraje -- this is likely not right. should update tracked nonce *)
       assert (count_occ msg_seq_eq (cipher_nonce c :: froms) (cipher_nonce c0) =
               count_occ msg_seq_eq froms (cipher_nonce c0)) as RWCOUNT
           by (simpl; destruct (msg_seq_eq (cipher_nonce c) (cipher_nonce c0)); [contradiction|]; trivial).
@@ -955,7 +953,7 @@ Section CleanMessages.
         eapply H10 in LIN; split_ex.
         unfold not; intros.
         assert (msg_accepted_by_pattern cs (Some (cipher_to_user c0)) froms pat c1).
-        invert H12; econstructor; eauto; destruct chk; eauto; rewrite <- count_occ_not_In in *.
+        invert H11; econstructor; eauto; destruct chk; eauto; rewrite <- count_occ_not_In in *.
         apply not_in_cons in H15; split_ex; eauto.
         apply not_in_cons in H15; split_ex; eauto.
         contradiction.
@@ -975,14 +973,14 @@ Section CleanMessages.
         ; intros; split_ors; eauto.
       }
 
-      unfold updateTrackedNonce in H12
+      unfold updateTrackedNonce in H11
       ; context_map_rewrites
-      ; rewrite e in H12
+      ; rewrite e in H11
       ; destruct (cipher_to_user c0 ==n cipher_to_user c0); [|contradiction].
 
       eexists; split; try reflexivity.
       rewrite <- app_comm_cons.
-      rewrite <- H12.
+      rewrite <- H11.
       f_equal.
       eapply clean_messages_permuted_froms_same; eauto.
       eapply perm_swap.
@@ -1996,7 +1994,9 @@ End CleanMessages.
             ; generalize COUNT; rewrite <- count_occ_not_In in COUNT; intros COUNT'
             .
             erewrite clean_messages_keeps_signed_addressed_unseen_nonce; eauto.
-            2: unfold msg_signed_addressed; rewrite H2, H12; trivial.
+            2: {
+              unfold msg_signed_addressed; rewrite H1, H12; trivial.
+            }
 
             unfold updateTrackedNonce
             ; context_map_rewrites
@@ -2008,13 +2008,15 @@ End CleanMessages.
             trivial.
 
             econstructor; eauto.
-            rewrite Forall_forall in H13 |- *; intros.
+            rewrite Forall_forall in H9 |- *; intros.
             destruct x4.
-            apply H13 in H2; intros; clear H13.
+            apply H9 in H1; intros; clear H9.
             assert (cipher_nonce x2 <> cipher_nonce c) as NE by (eapply H4; eauto).
 
             assert ( msg_signed_addressed honestk cs (Some uid) c0 = true ).
-            invert H3; invert H9
+            invert H2
+            ; invert H3
+            (* ; invert H9 *)
             ; unfold msg_signed_addressed, msg_honestly_signed, msg_signing_key, msg_to_this_user, msg_destination_user
             ; context_map_rewrites
             ; simpl
@@ -2028,9 +2030,9 @@ End CleanMessages.
             rewrite andb_true_r; auto.
             rewrite andb_true_r; auto.
 
-            generalize H13
+            generalize H9
             ; unfold msg_signed_addressed, msg_honestly_signed, msg_signing_key
-                   , msg_to_this_user, msg_destination_user in H13
+                   , msg_to_this_user, msg_destination_user in H9
             ; destruct c0; try discriminate
             ; cases (cs $? c_id0); try discriminate
             ; intros.
@@ -2038,19 +2040,19 @@ End CleanMessages.
             destruct (c_id0 ==n x1)
             ; subst; clean_map_lookups.
             exfalso; apply H8.
-            invert H9; eauto.
+            invert H2; eauto.
 
             assert (cipher_nonce c0 <> cipher_nonce x2) as NE2.
             eapply H4; eauto.
-            rewrite andb_true_iff in H13; split_ex.
-            rewrite <- honest_key_honest_keyb in H13; invert H13; eauto.
+            rewrite andb_true_iff in H9; split_ex.
+            rewrite <- honest_key_honest_keyb in H9; invert H9; eauto.
 
             assert ( msg_accepted_by_pattern cs (Some uid) (cipher_nonce x2 :: froms) pat (@SignedCiphertext t1 c_id0) ).
-            invert H3; invert H9; [ econstructor 2 | econstructor 3]; eauto
+            invert H2; invert H3; [ econstructor 2 | econstructor 3]; eauto
             ; clean_map_lookups; simpl in *
             ; destruct ( msg_seq_eq (cipher_nonce x2) nonce ); try congruence.
 
-            apply H2 in H15; eauto.
+            apply H1 in H15; eauto.
     Qed.
 
     Lemma in_cleaned_message_queue_must_in_message_queue'' :

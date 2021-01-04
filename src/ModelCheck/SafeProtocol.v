@@ -114,9 +114,6 @@ Module AdversarySafeProtocol ( Proto : SafeProtocol ).
     unfold universe_starts_ok; intros.
     unfold universe_ok, universe_starts_sane in *; split_ex.
     intuition eauto.
-
-    Unshelve.
-    exact $0.
   Qed.
 
   Hint Resolve proto_starts_ok : core.
@@ -744,9 +741,6 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
     unfold universe_starts_ok; intros.
     unfold universe_ok, universe_starts_sane in *; split_ex.
     intuition eauto.
-
-    Unshelve.
-    exact $0.
   Qed.
 
   Hint Resolve proto_starts_ok : safe.

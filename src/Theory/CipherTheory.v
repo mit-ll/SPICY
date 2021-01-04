@@ -359,6 +359,17 @@ Section CleanCiphers.
     subst; trivial.
   Qed.
 
+  Lemma clean_ciphers_nochange_cipher :
+    forall cs c_id c,
+      clean_ciphers honestk cs $? c_id = Some c
+      -> cs $? c_id = Some c.
+  Proof.
+    intros.
+    rewrite <- find_mapsto_iff, clean_ciphers_mapsto_iff, find_mapsto_iff in H
+    ; split_ex
+    ; trivial.
+  Qed.
+
 End CleanCiphers.
 
 Ltac encrypted_ciphers_prop :=
@@ -410,3 +421,4 @@ Proof.
   - rewrite !clean_ciphers_no_new_ciphers; auto.
 Qed.
 
+Hint Immediate clean_ciphers_nochange_cipher : core.

@@ -172,7 +172,7 @@ Proof.
   invert Heq.
   erewrite clean_ciphers_keeps_honest_cipher; eauto.
   eapply honest_cipher_filter_fn_true_honest_signing_key; eauto.
-  unfold RealWorld.honest_keyb in H; econstructor; eauto.
+  unfold RealWorld.honest_keyb in H; eauto.
   cases( honestk $? RealWorld.cipher_signing_key c )
   ; try discriminate
   ; destruct b
