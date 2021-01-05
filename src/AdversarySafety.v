@@ -1,20 +1,9 @@
-(* DISTRIBUTION STATEMENT A. Approved for public release. Distribution is unlimited.
- *
- * This material is based upon work supported by the Department of the Air Force under Air Force 
- * Contract No. FA8702-15-D-0001. Any opinions, findings, conclusions or recommendations expressed 
- * in this material are those of the author(s) and do not necessarily reflect the views of the 
- * Department of the Air Force.
- * 
+(*
  * © 2019 Massachusetts Institute of Technology.
+ * MIT Proprietary, Subject to FAR52.227-11 Patent Rights - Ownership by the Contractor (May 2014)
+ * SPDX-License-Identifier: MIT
  * 
- * MIT Proprietary, Subject to FAR52.227-11 Patent Rights - Ownership by the contractor (May 2014)
- * 
- * The software/firmware is provided to you on an As-Is basis
- * 
- * Delivered to the U.S. Government with Unlimited Rights, as defined in DFARS Part 252.227-7013
- * or 7014 (Feb 2014). Notwithstanding any copyright notice, U.S. Government rights in this work are
- * defined by DFARS 252.227-7013 or DFARS 252.227-7014 as detailed above. Use of this work other than
- *  as specifically authorized by the U.S. Government may violate any copyrights that exist in this work. *)
+ *)
 From Coq Require Import
      List
      Morphisms
@@ -135,31 +124,13 @@ Section SingleAdversarySimulates.
 
     Hint Resolve user_in_univ_user_in_stripped_univ : core.
 
-    (* Lemma prop_in_adv_message_queues_still_good_after_cleaning : *)
-    (*   forall msgs honestk cs suid froms P, *)
-    (*     Forall P msgs *)
-    (*     -> Forall P (clean_messages honestk cs suid froms msgs). *)
-    (* Proof. *)
-    (*   induction msgs; intros; eauto. *)
-    (*   invert H. *)
-    (*   unfold clean_messages, clean_messages'; simpl. *)
-    (*   unfold msg_filter at 2; destruct a. *)
-    (*   destruct (msg_signed_addressed honestk cs suid c); eauto; simpl. *)
-    (*   cases (msg_nonce_ok cs froms c); eauto. *)
-    (*   rewrite fold_clean_messages2'. *)
-    (*   rewrite clean_messages'_fst_pull; eauto. *)
-    (* Qed. *)
-
     Hint Resolve
-         (* prop_in_adv_message_queues_still_good_after_cleaning *)
          honest_cipher_filter_fn_true_honest_signing_key
          msg_honestly_signed_after_without_cleaning
          msg_honestly_signed_before_after_cleaning
          clean_keys_keeps_honest_key
          clean_ciphers_encrypted_ciphers_ok
       : core.
-
-    (* Hint Extern 5 (honest_key _ _) => process_keys_messages : core. *)
 
     Lemma ok_universe_strip_adversary_still_ok :
       forall {A B} (U__ra U__r: universe A B) (b : <<(Base B)>>),
