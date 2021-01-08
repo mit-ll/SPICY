@@ -1303,6 +1303,11 @@ Section PredicatePreservation.
         specialize (H17 _ _ H13); split_ex; discriminate.
   Qed.
 
+  Hint Resolve
+       permission_heap_good_addnl_key
+       permission_heap_good_new_key_perm
+    : core.
+
   Lemma adv_step_keys_good_ss :
     forall {A B C} cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
       gks gks' ks ks' qmsgs qmsgs' mycs mycs' froms froms' sents sents' cur_n cur_n' bd bd',
@@ -1342,9 +1347,14 @@ Section PredicatePreservation.
 
     - unfold keys_and_permissions_good in *; intuition eauto.
       destruct (k_id ==n k_id0); subst; clean_map_lookups; eauto.
-      rewrite Forall_natmap_forall in *; intros.
-      eapply permission_heap_good_addnl_key; eauto.
+      rewrite Forall_natmap_forall in *; intros; eauto.
   Qed.
+
+  Hint Resolve
+       message_queues_ok_addnl_cipher
+       message_queues_ok_addnl_adv_key
+       message_queues_ok_addnl_honest_key
+    : core.
 
   Lemma adv_step_message_queues_ok_ss :
     forall {A B C} cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)

@@ -98,8 +98,6 @@ Section SafePatterns.
        accepted_safe_msg_pattern_honestly_signed
        accepted_safe_msg_pattern_to_this_user
     : core.
-  (*      accepted_safe_msg_pattern_replay_safe *)
-  (* : core. *)
 
   Lemma msg_honestly_signed_after_without_cleaning :
     forall {t} (msg : crypto t) honestk honestk' cs,
@@ -267,41 +265,6 @@ Section CleanMessages.
       = clean_messages honestk cs to_usr froms msgs.
   Proof.
     unfold clean_messages; trivial. Qed.
-
-  (* Ltac message_cleaning := *)
-  (*   repeat *)
-  (*     match goal with *)
-  (*     | [ H : msg_signed_addressed _ _ _ _ = true |- _ ] => apply andb_prop in H; split_ands *)
-  (*     | [ MHS : msg_honestly_signed _ _ _ = true, MNOK : msg_nonce_ok _ _ _ = _ |- _ ] => *)
-  (*       unfold msg_nonce_ok, msg_honestly_signed in MHS, MNOK *)
-  (*     | [ H : match ?c with | Content _ => _ | _ => _ end = _ |- _ ] => destruct c; try discriminate *)
-  (*     | [ H : match ?cs $? ?cid with _ => _ end = _ |- _ ] => cases (cs $? cid); try discriminate *)
-  (*     | [ IH : forall kid froms _ froms_non _, froms $? kid = Some froms_non *)
-  (*       , H : _ $? _ = Some _ |- _ ] => specialize (IH _ _ _ _ _ H) *)
-  (*     | [ IH : forall froms acc, snd (fold_left _ ?msgs (acc,froms)) $? ?kid = ?ans -> _ *)
-  (*        , H : snd (fold_left _ ?msgs ?arg) $? ?kid = ?ans *)
-  (*          |- _ ] => *)
-  (*       match arg with *)
-  (*       | (_,_) => specialize (IH _ _ H); split_ands *)
-  (*       | if ?ifarg then _ else _ => cases ifarg *)
-  (*       | match ?matcharg with _ => _ end => cases matcharg *)
-  (*       end *)
-  (*     | [ H : (if ?n1 <=? ?n2 then _ else _) = _ |- _ ] => cases (n1 <=? n2); try discriminate *)
-  (*     | [ H : _ $+ (?kid1,_) $? ?kid2 = None |- _ ] => destruct (kid1 ==n kid2); subst; clean_map_lookups *)
-  (*     | [ H : msg_signing_key _ _ = _ |- _ ] => unfold msg_signing_key in H *)
-  (*     | [ H : msg_signed_addressed _ _ _ _ = _ |- _ ] => unfold msg_signed_addressed in H *)
-  (*     | [ H : ?arg && _ = _, ARG : ?arg = _ |- _ ] => rewrite ARG in H; simpl in H *)
-  (*     | [ H : _ && ?arg = _, ARG : ?arg = _ |- _ ] => rewrite ARG in H; simpl in H *)
-  (*     | [ H1 : ?op = ?res1, H2 : ?op = ?res2 |- _ ] => rewrite H1 in H2; discriminate *)
-  (*     end *)
-  (*   || (progress clean_context) *)
-  (*   || (repeat *)
-  (*        match goal with *)
-  (*        | [ |- _ /\ _ ] => split *)
-  (*        | [ |- Forall _ (?x :: ?xs) ] => econstructor *)
-  (*        | [ |- _ -> _ ] => intros *)
-  (*        | [ |- _ <> _ ] => unfold not; intros *)
-  (*        end); simpl; eauto; contra_map_lookup. *)
 
   Ltac map_lkup_ok :=
     repeat

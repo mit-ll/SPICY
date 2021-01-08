@@ -249,23 +249,6 @@ Section FindKeysLemmas.
 
   Hint Resolve honest_keyb_after_new_keys : core.
 
-  (* Lemma not_honest_key_after_new_pub_keys : *)
-  (*   forall pubk honestk k, *)
-  (*     ~ honest_key honestk k *)
-  (*     -> (forall (k_id : NatMap.Map.key) (kp : bool), pubk $? k_id = Some kp -> kp = false) *)
-  (*     -> ~ honest_key (honestk $k++ pubk) k. *)
-  (* Proof. *)
-  (*   unfold not; intros * NOTHK FN HK; invert HK. *)
-  (*   repeat (solve_perm_merges1 *)
-  (*    || maps_equal1 *)
-  (*    || match goal with *)
-  (*      | [ H : (forall k_id kp, ?pubk $? k_id = Some kp -> _), ARG : ?pubk $? _ = Some _ |- _ ] => specialize (H _ _ ARG); subst *)
-  (*      end *)
-  (*    || (progress subst)); eauto. *)
-  (* Qed. *)
-
-  (* Hint Resolve not_honest_key_after_new_pub_keys : core. *)
-
   Lemma message_honestly_signed_after_add_keys :
     forall {t} (msg : crypto t) cs honestk ks,
       msg_honestly_signed honestk cs msg = true

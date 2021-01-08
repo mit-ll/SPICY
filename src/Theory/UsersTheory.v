@@ -115,10 +115,6 @@ Section CleanUsers.
     unfold option_map; context_map_rewrites; trivial.
   Qed.
 
-  (* Hint Resolve findUserKeys_foldfn_proper findUserKeys_foldfn_transpose *)
-  (*      findUserKeys_foldfn_proper_Equal findUserKeys_foldfn_transpose_Equal *)
-  (*   : core. *)
-
   Lemma clean_users_nochange_pubk :
     forall {A} (usrs: honest_users A) cs pubk,
       (forall k kp, pubk $? k = Some kp -> honestk $? k = Some true /\ kp = false)

@@ -1150,7 +1150,8 @@ Section SingleAdversarySimulates.
     Qed.
 
     Hint Resolve clean_keys_drops_added_dishonest_key : core.
-
+    Hint Immediate new_global_key_not_in_heaps : core.
+      
     Lemma adv_step_implies_no_new_keys_after_cleaning :
       forall {A B C} cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
                 gks gks' ks' qmsgs' mycs' froms' sents' cur_n' bd bd',
@@ -1175,6 +1176,7 @@ Section SingleAdversarySimulates.
             symmetry;
             cases (findUserKeys usrs' $? k_id)
             ; eauto.
+
     Qed.
 
     Lemma adv_step_implies_no_user_impact_after_cleaning :
@@ -1470,6 +1472,10 @@ Section SingleAdversarySimulates.
         eapply clean_ciphers_keeps_honest_cipher in H; eauto.
         context_map_rewrites; eauto.
     Qed.
+
+    Hint Resolve
+         clean_users_no_change_honestk''
+      : core.
 
     Lemma action_adversary_safe_after_before_cleaning :
       forall {A} (usrs : honest_users A) cs a,

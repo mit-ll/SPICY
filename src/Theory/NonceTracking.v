@@ -57,44 +57,21 @@ Ltac process_nonce_ok1 :=
   | [ H : forall _ _ _ _, _ <> _ -> _ -> _ -> honest_nonce_tracking_ok ?cs _ _ _ _ _ _ _
       , NE: ?uid1 <> ?uid2
       , U1 : ?usrs $? ?uid1 = _
-      , U2 : ?usrs $? ?uid2 = Some {|
-                                  key_heap := _;
-                                              protocol := _;
-                                                          msg_heap := ?qmsgs;
-                                                                      c_heap := _;
-                                                                                from_nons := ?froms;
-                                                                                             sent_nons := _;
-                                                                                                          cur_nonce := _ |}
+      , U2 : ?usrs $? ?uid2 = Some {| msg_heap := ?qmsgs; from_nons := ?froms |}
         |- honest_nonce_tracking_ok _ _ (Some ?uid1) _ _ _ ?froms ?qmsgs ] =>
     assert (OK : HNOK usrs cs) by (constructor; assumption)
     ; specialize (H _ _ _ _ NE U1 U2); simpl in H
   | [ H : forall _ _ _ _, _ <> _ -> _ -> _ -> honest_nonce_tracking_ok ?cs _ _ _ _ _ _ _
-                                                              (* | [ H : forall _ _ _ _, _ <> _ -> _ *)
       , NE: ?uid1 <> ?uid2
       , U1 : ?usrs $? ?uid1 = _
-      , U2 : ?usrs $? ?uid2 = Some {|
-                                  key_heap := _;
-                                              protocol := _;
-                                                          msg_heap := (?qmsgs1 ++ _ :: ?qmsgs2);
-                                                                      c_heap := _;
-                                                                                from_nons := ?froms;
-                                                                                             sent_nons := _;
-                                                                                                          cur_nonce := _ |}
+      , U2 : ?usrs $? ?uid2 = Some {| msg_heap := (?qmsgs1 ++ _ :: ?qmsgs2); from_nons := ?froms; |}
         |- honest_nonce_tracking_ok _ _ (Some ?uid1) _ _ _ ?froms (?qmsgs1 ++ ?qmsgs2) ] =>
     assert (OK : HNOK usrs cs) by (constructor; assumption)
     ; specialize (H _ _ _ _ NE U1 U2); simpl in H
   | [ H : forall _ _ _ _, _ <> _ -> _ -> _ -> honest_nonce_tracking_ok ?cs _ _ _ _ _ _ _
-                                                              (* | [ H : forall _ _ _ _, _ <> _ -> _ *)
       , NE: ?uid1 <> ?uid2
       , U1 : ?usrs $? ?uid1 = _
-      , U2 : ?usrs $? ?uid2 = Some {|
-                                  key_heap := _;
-                                              protocol := _;
-                                                          msg_heap := (?qmsgs1 ++ _ :: ?qmsgs2);
-                                                                      c_heap := _;
-                                                                                from_nons := ?froms;
-                                                                                             sent_nons := _;
-                                                                                                          cur_nonce := _ |}
+      , U2 : ?usrs $? ?uid2 = Some {| msg_heap := (?qmsgs1 ++ _ :: ?qmsgs2); from_nons := ?froms; |}
         |- honest_nonce_tracking_ok _ _ (Some ?uid1) _ _ _ (_ :: ?froms) (?qmsgs1 ++ ?qmsgs2) ] =>
     assert (OK : HNOK usrs cs) by (constructor; assumption)
     ; specialize (H _ _ _ _ NE U1 U2); simpl in H
