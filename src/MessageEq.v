@@ -13,7 +13,6 @@ From SPICY Require Import
      ChMaps
      Messages
      Maps
-     Common
      Keys
      Tactics
      IdealWorld

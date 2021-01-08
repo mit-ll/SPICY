@@ -12,8 +12,7 @@ From Coq Require Import
 From SPICY Require Import
      MyPrelude
      Maps
-     ChMaps
-     Common.
+     ChMaps.
 
 From SPICY Require
      IdealWorld
@@ -125,7 +124,7 @@ Section IdealLemmas.
   Import IdealWorld.
 
   Lemma ideal_univ_eq_fields_eq :
-    forall {A} (us us' : user_list (user A)) cv cv',
+    forall {A} (us us' : NatMap.t (user A)) cv cv',
       us = us'
       -> cv = cv'
       -> {| channel_vector := cv; users := us |}

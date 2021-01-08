@@ -21,7 +21,7 @@ Section trc_tri.
       -> trc3 P y z
       -> trc3 P x z.
 
-  Hint Constructors trc3.
+  Hint Constructors trc3 : core.
 
   Theorem trc3_one : forall x y b (P : B -> Prop), P b -> R x b y
     -> trc3 P x y.
@@ -29,16 +29,12 @@ Section trc_tri.
     eauto.
   Qed.
 
-  Hint Resolve trc3_one.
-
   Theorem trc3_trans : forall x y (P : B -> Prop), trc3 P x y
     -> forall z, trc3 P y z
       -> trc3 P x z.
   Proof.
     induction 1; eauto.
   Qed.
-
-  Hint Resolve trc3_trans.
 
 End trc_tri.
 

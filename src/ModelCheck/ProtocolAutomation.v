@@ -14,7 +14,6 @@ From SPICY Require Import
      MyPrelude
      AdversaryUniverse
      Automation
-     Common
      Keys
      Maps
      Messages
@@ -1177,7 +1176,7 @@ Ltac univ_equality1 :=
 Ltac univ_equality := progress (repeat univ_equality1).
 
 Ltac sets0 := Sets.sets ltac:(simpl in *
-                              ; intuition (subst; auto; try congruence; try univ_equality; try linear_arithmetic)).
+                              ; intuition (subst; auto; try congruence; try univ_equality; try lia)).
 Ltac sets' :=
   propositional;
   try match goal with

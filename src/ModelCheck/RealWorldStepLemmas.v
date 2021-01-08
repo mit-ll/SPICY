@@ -6,7 +6,6 @@
  *)
 From SPICY Require Import
      MyPrelude
-     Common
      Automation
      Maps
      Keys
@@ -1250,9 +1249,7 @@ Section ActionMatches.
           | [ H : (forall _ _, findKeysCrypto _ _ $? _ = Some _ -> _) |- _ ] => progress (simpl in H); context_map_rewrites
           | [ H : syntactically_safe _ _ _ ?cmd _, NA : nextAction ?cmd _ |- _ ] =>
             is_var cmd;
-            idtac cmd;
             eapply syntactically_safe_na in H; eauto; split_ex
-            ; idtac "clearing" NA
             ; clear NA
           | [ H : syntactically_safe _ _ _ (Send _ _) _ |- _ ] =>
             invert H; unfold typingcontext_sound in *; split_ex; process_ctx

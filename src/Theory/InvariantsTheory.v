@@ -14,7 +14,6 @@ From SPICY Require Import
      MyPrelude
      Maps
      Messages
-     Common
      Keys
      Tactics
      AdversaryUniverse
@@ -989,7 +988,7 @@ Proof.
     rewrite Forall_natmap_forall in *; intros.
     eapply permission_heap_good_addnl_key; eauto.
 Qed.
-  
+
 Lemma permission_heap_good_clean_keys :
   forall honestk gks uks,
     permission_heap_good gks uks
@@ -1003,30 +1002,32 @@ Qed.
 
 Hint Resolve permission_heap_good_clean_keys : core.
 
-Lemma keys_and_permissions_good_clean_keys :
-  forall {A} (usrs : honest_users A) adv_heap cs gks,
-    keys_and_permissions_good gks usrs adv_heap
-    -> keys_and_permissions_good
-        (clean_keys (findUserKeys usrs) gks)
-        (clean_users (findUserKeys usrs) cs usrs)
-        (clean_key_permissions (findUserKeys usrs) adv_heap).
-Proof.
-  unfold keys_and_permissions_good; intros; split_ands.
-  intuition (simpl; eauto).
 
-  Ltac inv_cleans :=
-    repeat
-      match goal with
-      | [ H : clean_keys _ _ $? _ = Some _ |- _ ] => eapply clean_keys_inv in H; split_ands
-      | [ H : clean_keys _ _ $? _ = None |- _ ] => eapply clean_keys_inv' in H; split_ands
-      | [ H : clean_users _ _ _ $? _ = Some _ |- _ ] => eapply clean_users_cleans_user_inv in H; split_ex; split_ands
-      end.
   
-  - inv_cleans; eauto.
-  - apply Forall_natmap_forall; intros; inv_cleans.
-    rewrite H3.
-    permission_heaps_prop; eauto.
-Qed.
+  Lemma keys_and_permissions_good_clean_keys :
+    forall {A} (usrs : honest_users A) adv_heap cs gks,
+      keys_and_permissions_good gks usrs adv_heap
+      -> keys_and_permissions_good
+          (clean_keys (findUserKeys usrs) gks)
+          (clean_users (findUserKeys usrs) cs usrs)
+          (clean_key_permissions (findUserKeys usrs) adv_heap).
+  Proof.
+    unfold keys_and_permissions_good; intros; split_ands.
+    intuition (simpl; eauto).
+
+    Ltac inv_cleans :=
+      repeat
+        match goal with
+        | [ H : clean_keys _ _ $? _ = Some _ |- _ ] => eapply clean_keys_inv in H; split_ands
+        | [ H : clean_keys _ _ $? _ = None |- _ ] => eapply clean_keys_inv' in H; split_ands
+        | [ H : clean_users _ _ _ $? _ = Some _ |- _ ] => eapply clean_users_cleans_user_inv in H; split_ex; split_ands
+        end.
+    
+    - inv_cleans; eauto.
+    - apply Forall_natmap_forall; intros; inv_cleans.
+      rewrite H3.
+      permission_heaps_prop; eauto.
+  Qed.
 
 Lemma users_permission_heaps_good_merged_permission_heaps_good :
   forall {A} (usrs : honest_users A) gks,
@@ -1035,48 +1036,6 @@ Lemma users_permission_heaps_good_merged_permission_heaps_good :
 Proof.
   induction usrs using P.map_induction_bis; intros; Equal_eq; eauto.
 Qed.
-
-    Lemma clean_keys_new_honest_key' :
-      forall honestk k_id gks,
-        gks $? k_id = None
-        -> clean_keys (honestk $+ (k_id, true)) gks = clean_keys honestk gks.
-    Proof.
-      intros.
-      unfold clean_keys, filter.
-      apply P.fold_rec_bis; intros; Equal_eq; eauto.
-      subst; simpl.
-
-      rewrite fold_add; eauto.
-      assert (honest_key_filter_fn (honestk $+ (k_id,true)) k e = honest_key_filter_fn honestk k e)
-        as RW.
-
-      unfold honest_key_filter_fn; destruct (k_id ==n k); subst; clean_map_lookups; eauto.
-      apply find_mapsto_iff in H0; contra_map_lookup.
-      rewrite RW; trivial.
-    Qed.
-
-    Lemma clean_keys_new_honest_key :
-      forall honestk k_id k gks,
-        gks $? k_id = None
-        -> permission_heap_good gks honestk
-        -> clean_keys (honestk $+ (k_id, true)) (gks $+ (k_id,k)) =
-          clean_keys honestk gks $+ (k_id, k).
-    Proof.
-      intros.
-
-      apply map_eq_Equal; unfold Equal; intros.
-      destruct (k_id ==n y); subst; clean_map_lookups; eauto.
-      - apply clean_keys_keeps_honest_key; eauto.
-        unfold honest_key_filter_fn; clean_map_lookups; eauto.
-      - unfold clean_keys at 1.
-        unfold filter.
-        rewrite fold_add; eauto.
-        unfold honest_key_filter_fn; clean_map_lookups; eauto.
-        unfold clean_keys, filter, honest_key_filter_fn; eauto.
-        pose proof (clean_keys_new_honest_key' honestk k_id gks H).
-        unfold clean_keys, filter, honest_key_filter_fn in H1.
-        rewrite H1; trivial.
-    Qed.
 
 (* user cipher queues ok *)
 
@@ -2129,6 +2088,8 @@ Ltac process_predicate :=
          end).
 
 
+Hint Resolve msg_signed_addressed_addnl_honest_key : core.
+
 Lemma adv_cipher_queue_ok_addnl_honest_key :
   forall {A} (usrs : honest_users A) adv_cs cs gks k_id u_id ks cmd cmd' qmsgs mycs froms sents n adv_ks,
     ~ In k_id gks
@@ -2189,6 +2150,12 @@ Proof.
 Qed.
 
 Hint Resolve adv_cipher_queue_ok_addnl_honest_key : core.
+
+Hint Resolve
+     msg_signed_addressed_new_msg_keys'
+     (* msg_signed_addressed_new_msg_keys'' *)
+     (* msg_signed_addressed_new_msg_keys''' *)
+  : core.
 
 Lemma honest_silent_step_adv_cipher_queue_ok :
   forall {A B C} u_id suid cs cs' lbl (usrs usrs' : honest_users A) (adv adv' : user_data B)
@@ -2479,7 +2446,8 @@ Qed.
 Hint Resolve cipher_honestly_signed_false_same_msg_recv cipher_honestly_signed_false_same_msg_recv' : core.
 
 (* adv message queue ok *)
-
+Hint Resolve msg_honestly_signed_new_msg_keys : core.
+  
 Lemma adv_message_queue_ok_msg_recv :
   forall {A t} (usrs : honest_users A) (msg : crypto t) cs gks u_id ks cmd cmd' qmsgs1 qmsgs2 mycs froms sents cur_n adv_msgs,
     message_queues_ok cs usrs gks
@@ -3443,5 +3411,3 @@ Proof.
       do 3 eexists;
       process_predicate; eauto.
 Qed.
-
-

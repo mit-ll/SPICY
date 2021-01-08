@@ -12,7 +12,6 @@ From Coq Require Import
 From SPICY Require Import
      MyPrelude
      Tactics
-     Common
      Maps
      Keys
      Messages

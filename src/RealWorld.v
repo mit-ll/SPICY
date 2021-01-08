@@ -11,7 +11,6 @@ From Coq Require Import
 
 From SPICY Require Import
      MyPrelude
-     Common
      Maps
      Keys
      Messages.
@@ -97,11 +96,6 @@ Notation honest_key honk kid := (honk $? kid = Some true).
 Section SafeMessages.
   Variable all_keys : keys.
   Variable honestk advk : key_perms.
-
-  (* Inductive honest_key (k_id : key_identifier) : Prop := *)
-  (* | HonestKey : *)
-  (*       honestk $? k_id = Some true *)
-  (*     -> honest_key k_id. *)
 
   Definition honest_keyb (k_id : key_identifier) : bool :=
     match honestk $? k_id with
@@ -253,7 +247,7 @@ Record user_data (A : type) :=
     ; cur_nonce : nat
     }.
 
-Definition honest_users A := user_list (user_data A).
+Definition honest_users A := NatMap.t (user_data A).
 
 Record simpl_universe A :=
   mkSimplUniverse {
@@ -275,7 +269,7 @@ Definition peel_adv {A B} (U : universe A B) : simpl_universe A :=
     ; s_all_ciphers := U.(all_ciphers)
     ; s_all_keys    := U.(all_keys) |}.
 
-Definition findUserKeys {A} (us : user_list (user_data A)) : key_perms :=
+Definition findUserKeys {A} (us : NatMap.t (user_data A)) : key_perms :=
   fold (fun u_id u ks => ks $k++ u.(key_heap)) us $0.
 
 Definition addUserKeys {A} (ks : key_perms) (u : user_data A) : user_data A :=
@@ -288,7 +282,7 @@ Definition addUserKeys {A} (ks : key_perms) (u : user_data A) : user_data A :=
    ; cur_nonce := u.(cur_nonce)
   |}.
 
-Definition addUsersKeys {A} (us : user_list (user_data A)) (ks : key_perms) : user_list (user_data A) :=
+Definition addUsersKeys {A} (us : NatMap.t (user_data A)) (ks : key_perms) :=
   map (addUserKeys ks) us.
 
 Fixpoint findKeysMessage {t} (msg : message t) : key_perms :=

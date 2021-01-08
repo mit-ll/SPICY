@@ -9,7 +9,6 @@ From Coq Require Import
 
 From SPICY Require Import
      MyPrelude
-     Common
      ChMaps
      Maps
      Messages.
@@ -127,7 +126,7 @@ Record user A :=
 Record universe A :=
   construct_universe {
       channel_vector : channels (* fmap channel_id channels *)
-      ; users : user_list (user A)
+      ; users : NatMap.t (user A)
     }.
 
 Inductive permission_subset : permission -> permission -> Prop :=

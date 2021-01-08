@@ -5,15 +5,19 @@
  * 
  *)
 From Coq
-     Require Import Eqdep String Arith Lia Program Bool.
+     Require Import Eqdep String Arith Lia Program Bool List.
 
 From SPICY Require Import
      StepRelations.
 
-Export String Arith StepRelations Bool.
+Export
+  String
+  Arith
+  StepRelations
+  Bool
+  List
+  ListNotations.
 
-Require Import List.
-Export List ListNotations.
 Open Scope string_scope.
 Open Scope list_scope.
 
@@ -31,86 +35,7 @@ Ltac inductN n :=
       end
   end.
 
-Ltac same_structure x y :=
-  match x with
-  | ?f ?a1 ?b1 ?c1 ?d1 =>
-    match y with
-    | f ?a2 ?b2 ?c2 ?d2 => same_structure a1 a2; same_structure b1 b2; same_structure c1 c2; same_structure d1 d2
-    | _ => fail 2
-    end
-  | ?f ?a1 ?b1 ?c1 =>
-    match y with
-    | f ?a2 ?b2 ?c2 => same_structure a1 a2; same_structure b1 b2; same_structure c1 c2
-    | _ => fail 2
-    end
-  | ?f ?a1 ?b1 =>
-    match y with
-    | f ?a2 ?b2 => same_structure a1 a2; same_structure b1 b2
-    | _ => fail 2
-    end
-  | ?f ?a1 =>
-    match y with
-    | f ?a2 => same_structure a1 a2
-    | _ => fail 2
-    end
-  | _ =>
-    match y with
-    | ?f ?a1 ?b1 ?c1 ?d1 =>
-      match x with
-      | f ?a2 ?b2 ?c2 ?d2 => same_structure a1 a2; same_structure b1 b2; same_structure c1 c2; same_structure d1 d2
-      | _ => fail 2
-      end
-    | ?f ?a1 ?b1 ?c1 =>
-      match x with
-      | f ?a2 ?b2 ?c2 => same_structure a1 a2; same_structure b1 b2; same_structure c1 c2
-      | _ => fail 2
-      end
-    | ?f ?a1 ?b1 =>
-      match x with
-      | f ?a2 ?b2 => same_structure a1 a2; same_structure b1 b2
-      | _ => fail 2
-      end
-    | ?f ?a1 =>
-      match x with
-      | f ?a2 => same_structure a1 a2
-      | _ => fail 2
-      end
-    | _ => idtac
-    end
-  end.
-
-Ltac instantiate_obvious1 H :=
-  match type of H with
-  | _ ++ _ = _ ++ _ -> _ => fail 1
-  | ?x = ?y -> _ =>
-    (same_structure x y; specialize (H eq_refl))
-    || (has_evar (x, y); fail 3)
-  | JMeq.JMeq ?x ?y -> _ =>
-    (same_structure x y; specialize (H JMeq.JMeq_refl))
-    || (has_evar (x, y); fail 3)
-  | forall x : ?T, _ =>
-    match type of T with
-    | Prop => fail 1
-    | _ =>
-      let x' := fresh x in
-      evar (x' : T);
-      let x'' := eval unfold x' in x' in specialize (H x''); clear x';
-        instantiate_obvious1 H
-    end
-  end.
-
-Ltac instantiate_obvious H :=
-  match type of H with
-    | context[@eq string _  _] => idtac
-    | _ => repeat instantiate_obvious1 H
-  end.
-
-Ltac instantiate_obviouses :=
-  repeat match goal with
-         | [ H : _ |- _ ] => instantiate_obvious H
-         end.
-
-Ltac induct e := (inductN e || dependent induction e); instantiate_obviouses.
+Ltac induct e := (inductN e || dependent induction e).
 
 Ltac invert' H := inversion H; clear H; subst.
 
@@ -136,24 +61,6 @@ Ltac invert2 e := invert1 e || (invert e; [|]).
 
 Ltac propositional := intuition idtac.
 
-Ltac linear_arithmetic := intros;
-    repeat match goal with
-           | [ |- context[max ?a ?b] ] =>
-             let Heq := fresh "Heq" in destruct (Max.max_spec a b) as [[? Heq] | [? Heq]];
-               rewrite Heq in *; clear Heq
-           | [ _ : context[max ?a ?b] |- _ ] =>
-             let Heq := fresh "Heq" in destruct (Max.max_spec a b) as [[? Heq] | [? Heq]];
-               rewrite Heq in *; clear Heq
-           | [ |- context[min ?a ?b] ] =>
-             let Heq := fresh "Heq" in destruct (Min.min_spec a b) as [[? Heq] | [? Heq]];
-               rewrite Heq in *; clear Heq
-           | [ _ : context[min ?a ?b] |- _ ] =>
-             let Heq := fresh "Heq" in destruct (Min.min_spec a b) as [[? Heq] | [? Heq]];
-               rewrite Heq in *; clear Heq
-           end; lia.
-
-Ltac equality := intuition congruence.
-
 Ltac cases E :=
   ((is_var E; destruct E)
    || match type of E with
@@ -170,16 +77,13 @@ Global Opaque max min.
 Infix "==n" := eq_nat_dec (no associativity, at level 50).
 Infix "<=?" := le_lt_dec.
 
-(* Export Frap.Map. *)
-(* Ltac maps_equal := Frap.Map.M.maps_equal; simplify. *)
-
-(* Ltac first_order := firstorder idtac. *)
-
 Lemma eq_iff : forall P Q,
     P = Q
     -> (P <-> Q).
 Proof.
-  equality.
+  intuition congruence.
 Qed.
 
-Remove Hints absurd_eq_true trans_eq_bool.
+Remove Hints absurd_eq_true trans_eq_bool : core.
+
+Definition user_id              := nat.

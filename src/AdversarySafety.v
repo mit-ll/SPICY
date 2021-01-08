@@ -14,7 +14,6 @@ From Coq Require Import
 From SPICY Require Import
      MyPrelude
      Maps
-     Common
      Keys
      Tactics
      Messages
@@ -463,9 +462,11 @@ Section SingleAdversarySimulates.
         rewrite <- app_comm_cons; f_equal; eauto.
     Qed.
 
-    Hint Resolve clean_adv_msgs_keeps_honest_msg : core.
-
-
+    Hint Resolve
+         clean_adv_msgs_keeps_honest_msg 
+         honestly_signed_message_accepted_by_pattern_same_after_cleaning
+         message_not_accepted_by_pattern_same_after_cleaning
+      : core.
 
     Lemma honest_labeled_step_advuniv_implies_honest_step_origuniv' :
       forall {A B C} cs cs' lbl u_id suid (usrs usrs' : honest_users A) (adv adv' : user_data B)
@@ -799,6 +800,8 @@ Section SingleAdversarySimulates.
       destruct rec_u; eauto.
     Qed.
 
+    Hint Resolve accepted_safe_msg_pattern_replay_safe : core.
+    
     Lemma honest_cmd_implies_safe_action :
       forall {A B C} (usrs usrs' : honest_users A) (adv adv' : user_data B) cs cs' gks gks'
                 u_id suid bd bd' lbl a__r (cmd cmd' : user_cmd C)
@@ -2003,6 +2006,7 @@ Section SingleAdversarySimulates.
           Unshelve. eauto.
     Qed.
 
+    Hint Resolve not_accepted_ok : core.
 
     Lemma cleaned_universe_step_implies_orig_univ_step :
       forall {A B C} lbl__s suid bd bd',

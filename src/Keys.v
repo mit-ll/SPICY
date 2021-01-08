@@ -11,7 +11,6 @@ From Coq Require Import
 
 From SPICY Require Import
      MyPrelude
-     Common
      Maps
      Tactics.
 
