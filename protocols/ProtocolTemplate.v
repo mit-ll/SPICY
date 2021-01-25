@@ -135,12 +135,12 @@ Module MyProtocol.
   End RW.
 
   (* These are here to help the proof automation.  Don't change. *)
-  Hint Unfold
+  #[export] Hint Unfold
        real_univ_start
        ideal_univ_start
     : user_build.
 
-  Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
+  #[export] Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
     progress(autounfold with user_build; simpl).
   
 End MyProtocol.
@@ -167,8 +167,8 @@ Module MyProtocolSecure <: AutomatedSafeProtocolSS.
   Import Gen Tacs SetLemmas.
 
   (* These are here to help the proof automation.  Don't change. *)
-  Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start real_univ_start : core.
-  Hint Unfold
+  #[export] Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start real_univ_start : core.
+  #[export] Hint Unfold
        mkiU mkiUsr mkrU mkrUsr
        mkKeys
     : core.

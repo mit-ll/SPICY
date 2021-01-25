@@ -50,7 +50,7 @@ Module PGPProtocolSecure <: AutomatedSafeProtocol.
 
   Import Gen Tacs SetLemmas.
 
-  Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start real_univ_start : core.
+  #[export] Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start real_univ_start : core.
 
   Lemma next_key_natmap_exists :
     forall {V} (m : NatMap.t V),

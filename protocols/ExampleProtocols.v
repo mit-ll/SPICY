@@ -79,7 +79,7 @@ Section RealWorldDefs.
     |}.
 End RealWorldDefs.
 
-Hint Unfold mkrU mkrUsr : user_build.
+#[export] Hint Unfold mkrU mkrUsr : user_build.
 
 Module SignPingSendProtocol.
 
@@ -136,7 +136,7 @@ Module SignPingSendProtocol.
   
   End RW.
 
-  Hint Unfold
+  #[export] Hint Unfold
        A B KID1 KEY1 KEYS A__keys B__keys
        PERMS__a PERMS__b
        real_univ_start mkrU mkrUsr
@@ -144,16 +144,13 @@ Module SignPingSendProtocol.
   
   Import SimulationAutomation.
 
-  (* Hint Extern 0 (~^* _ _) => *)
-  (*   progress(autounfold with constants; simpl). *)
-
-  Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
+  #[export] Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
     progress(autounfold with constants; simpl) : core.
 
-  Hint Extern 1 (PERMS__a $? _ = _) => unfold PERMS__a : core.
-  Hint Extern 1 (PERMS__b $? _ = _) => unfold PERMS__b : core.
+  #[export] Hint Extern 1 (PERMS__a $? _ = _) => unfold PERMS__a : core.
+  #[export] Hint Extern 1 (PERMS__b $? _ = _) => unfold PERMS__b : core.
 
-  Hint Extern 1 (istepSilent ^* _ _) =>
+  #[export] Hint Extern 1 (istepSilent ^* _ _) =>
   autounfold with constants; simpl;
     repeat (ideal_single_silent_multistep A);
     repeat (ideal_single_silent_multistep B); solve_refl : core.
@@ -212,7 +209,7 @@ Module EncPingSendProtocol.
   
   End RW.
 
-  Hint Unfold
+  #[export] Hint Unfold
        A B KID__A KID__B KEY__A KEY__B KEYS A__keys B__keys
        PERMS__a PERMS__b
        real_univ_start mkrU mkrUsr
@@ -220,16 +217,13 @@ Module EncPingSendProtocol.
   
   Import SimulationAutomation.
 
-  (* Hint Extern 0 (~^* _ _) => *)
-  (*   progress(autounfold with constants; simpl). *)
-
-  Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
+  #[export] Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
     progress(autounfold with constants; simpl) : core.
 
-  Hint Extern 1 (PERMS__a $? _ = _) => unfold PERMS__a : core.
-  Hint Extern 1 (PERMS__b $? _ = _) => unfold PERMS__b : core.
+  #[export] Hint Extern 1 (PERMS__a $? _ = _) => unfold PERMS__a : core.
+  #[export] Hint Extern 1 (PERMS__b $? _ = _) => unfold PERMS__b : core.
 
-  Hint Extern 1 (istepSilent ^* _ _) =>
+  #[export] Hint Extern 1 (istepSilent ^* _ _) =>
   autounfold with constants; simpl;
     repeat (ideal_single_silent_multistep A);
     repeat (ideal_single_silent_multistep B); solve_refl : core.

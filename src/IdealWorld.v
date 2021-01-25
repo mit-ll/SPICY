@@ -212,7 +212,7 @@ Inductive lstep_user : forall A, user_id -> ilabel -> channels * cmd A * permiss
         (cv, Recv ch_id, ps)
         (cv, @Return (Message t) m, add_ps_to_set m ps).
 
-Hint Extern 1 (check_perm _ _ _) => unfold check_perm; clean_map_lookups : core.
+#[export] Hint Extern 1 (check_perm _ _ _) => unfold check_perm; clean_map_lookups : core.
 
 Lemma LStepRecv' : forall t (cv : channels) ch_d ps ps' (m : message t) uid ch_id b,
     cv #? ch_id = Some ch_d

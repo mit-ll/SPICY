@@ -239,7 +239,7 @@ End RealWorldDefs.
 Definition mkKeys (ks : list key) :=
   fold_left (fun ks k => ks $+ (k.(keyId),k)) ks $0.
 
-Hint Unfold
+#[export] Hint Unfold
      mkiU mkiUsr
      sharePerm getPerm
      mkrU mkrUsr
@@ -247,7 +247,7 @@ Hint Unfold
      mkKeys
      noAdv : user_build.
 
-Hint Unfold
+#[export] Hint Unfold
      mkiU mkiUsr
      sharePerm getPerm
      mkrU mkrUsr

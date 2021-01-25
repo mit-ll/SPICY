@@ -396,7 +396,7 @@ Proof.
   unfold updateSentNonce; clean_map_lookups; eauto.
 Qed.
 
-Hint Resolve
+#[export] Hint Resolve
      findKeysCrypto_addnl_cipher
      merge_findKeysCrypto_addnl_cipher
      updateTrackedNonce_addnl_cipher

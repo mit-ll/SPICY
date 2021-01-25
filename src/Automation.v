@@ -20,8 +20,8 @@ From SPICY Require Import
 
 Set Implicit Arguments.
 
-Hint Resolve in_eq in_cons : core.
-Remove Hints absurd_eq_true trans_eq_bool : core.
+#[export] Hint Resolve in_eq in_cons : core.
+#[export] Remove Hints absurd_eq_true trans_eq_bool : core.
 
 Ltac clean_context :=
   try discriminate;

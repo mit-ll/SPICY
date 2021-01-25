@@ -77,7 +77,7 @@ End SafeProtocol.
 Module AdversarySafeProtocol ( Proto : SafeProtocol ).
   Import Proto.
 
-  Hint Resolve
+  #[export] Hint Resolve
        R_silent_simulates
        R_loud_simulates
        R_honest_actions_safe
@@ -92,7 +92,7 @@ Module AdversarySafeProtocol ( Proto : SafeProtocol ).
     intuition eauto.
   Qed.
 
-  Hint Resolve proto_lamely_refines : core.
+  #[export] Hint Resolve proto_lamely_refines : core.
 
   Lemma proto_starts_ok : universe_starts_ok U__r.
   Proof.
@@ -103,7 +103,7 @@ Module AdversarySafeProtocol ( Proto : SafeProtocol ).
     intuition eauto.
   Qed.
 
-  Hint Resolve proto_starts_ok : core.
+  #[export] Hint Resolve proto_starts_ok : core.
 
   Theorem protocol_with_adversary_could_generate_spec :
     forall U__ra advcode acts__r,
@@ -355,7 +355,7 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
   Lemma returns_align_inv : invariantFor SYS returns_align.
   Proof. eapply invariant_weaken; [ apply safe_invariant | firstorder idtac]. Qed.
   
-  Hint Resolve safety_inv labels_align_inv returns_align_inv : core.
+  #[export] Hint Resolve safety_inv labels_align_inv returns_align_inv : core.
 
   Definition reachable_from := (fun ru iu ru' iu' b b' => SYS.(Step)^* (ru, iu, b) (ru', iu', b')).
   Definition reachable := (fun ru iu => reachable_from ru0 iu0 ru iu).
@@ -426,7 +426,7 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
     intros; eauto using always_lame'.
   Qed.
 
-  Hint Resolve always_lame : safe.
+  #[export] Hint Resolve always_lame : safe.
 
   Lemma lame_adv_no_impact_silent_step' :
     forall A B C u_id bd bd',
@@ -583,7 +583,7 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
     econstructor 1; eauto.
   Qed.
 
-  Hint Constructors action_matches : safe.
+  #[export] Hint Constructors action_matches : safe.
   
   Lemma action_matches_adv_change :
     forall {t1 t2} (U U' : RealWorld.universe t1 t2) a__r a__i,
@@ -684,7 +684,7 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
     ; eauto.
   Qed.
 
-  Hint Resolve honest_cmds_safe_adv_change : safe.
+  #[export] Hint Resolve honest_cmds_safe_adv_change : safe.
 
   Lemma simsafe : honest_actions_safe t__adv R.
   Proof.
@@ -699,7 +699,7 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
     unfold safety in *; eauto with safe.
   Qed.
 
-  Hint Resolve simsilent simlabeled sim_final simsafe : safe.
+  #[export] Hint Resolve simsilent simlabeled sim_final simsafe : safe.
 
   Lemma proto_lamely_refines :
     refines (lameAdv b) ru0 iu0.
@@ -713,13 +713,13 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
     assert ( (ru0,iu0,true) = (ru0,iu0,true) \/ False ) as ARG by eauto.
     specialize (H _ ARG); clear ARG.
 
-    Hint Constructors R : safe.
+    #[export] Hint Constructors R : safe.
 
     unfold simulates_silent_step, simulates_labeled_step;
       intuition eauto with safe.
   Qed.
 
-  Hint Resolve proto_lamely_refines : safe.
+  #[export] Hint Resolve proto_lamely_refines : safe.
 
   Lemma proto_starts_ok : universe_starts_ok ru0.
   Proof.
@@ -730,7 +730,7 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
     intuition eauto.
   Qed.
 
-  Hint Resolve proto_starts_ok : safe.
+  #[export] Hint Resolve proto_starts_ok : safe.
 
   Theorem protocol_with_adversary_could_generate_spec :
     forall U__ra advcode acts__r,

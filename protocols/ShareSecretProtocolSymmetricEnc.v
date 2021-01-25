@@ -151,13 +151,13 @@ Module ShareSecretSymmetricEncProtocol.
       mkrU (mkKeys KEYS) real_users.
   End RW.
 
-  Hint Unfold
+  #[export] Hint Unfold
        simple_univ_start
        ideal_univ_start
        real_univ_start
     : user_build.
 
-  Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
-    progress(autounfold with user_build; simpl).
+  #[export] Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
+    progress(autounfold with user_build; simpl) : core.
   
 End ShareSecretSymmetricEncProtocol.

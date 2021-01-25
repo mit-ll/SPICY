@@ -121,10 +121,11 @@ Proof.
       solve_simple_maps; eauto.
 Qed.
 
-Hint Resolve
+#[export] Hint Resolve
      add_key_perm_proper       add_key_perm_transpose
      add_key_perm_proper_Equal add_key_perm_transpose_Equal
   : core.
+
 
 Section KeyMergeTheorems.
   Variable all_keys : keys.
@@ -613,4 +614,4 @@ Ltac solve_greatest :=
     | [ |- context [ ?b || ?b ] ] => rewrite orb_diag
     end; trivial.
 
-Hint Extern 1 (_ = greatest_permission _ _) => solve_greatest : core.
+#[export] Hint Extern 1 (_ = greatest_permission _ _) => solve_greatest : core.

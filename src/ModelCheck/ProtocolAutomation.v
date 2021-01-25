@@ -49,7 +49,7 @@ Set Implicit Arguments.
 
 Module SimulationAutomation.
 
-  Hint Constructors RealWorld.msg_accepted_by_pattern : core.
+  #[export] Hint Constructors RealWorld.msg_accepted_by_pattern : core.
 
   Module T.
     Import RealWorld.
@@ -569,15 +569,15 @@ Module SimulationAutomation.
       end
     end.
 
-  Remove Hints TrcRefl TrcFront Trc3Refl Trc3Front : core.
-  Hint Extern 1 (_ ^* ?U ?U) => apply TrcRefl : core.
+  #[export] Remove Hints TrcRefl TrcFront Trc3Refl Trc3Front : core.
+  #[export] Hint Extern 1 (_ ^* ?U ?U) => apply TrcRefl : core.
 
-  Remove Hints
+  #[export] Remove Hints
          eq_sym (* includes_lookup *)
          trans_eq_bool mult_n_O plus_n_O eq_add_S f_equal_nat : core.
 
-  Hint Constructors action_matches : core.
-  Hint Resolve IdealWorld.LStepSend IdealWorld.LStepRecv' : core.
+  #[export] Hint Constructors action_matches : core.
+  #[export] Hint Resolve IdealWorld.LStepSend IdealWorld.LStepRecv' : core.
 
   Lemma TrcRefl' :
     forall {A} (R : A -> A -> Prop) x1 x2,
@@ -717,34 +717,34 @@ Module SimulationAutomation.
                            | reflexivity ]
     end.
 
-  Hint Extern 1 ((indexedIdealStep _ Silent) ^* _ _) =>
+  #[export] Hint Extern 1 ((indexedIdealStep _ Silent) ^* _ _) =>
     repeat solve_indexed_silent_multistep; solve_refl : core.
 
-  Hint Extern 1 (indexedIdealStep _ (Action _) _ _) => indexedIdealStep : core.
+  #[export] Hint Extern 1 (indexedIdealStep _ (Action _) _ _) => indexedIdealStep : core.
 
-  Hint Extern 1 (istepSilent ^* _ _) => ideal_silent_multistep : core.
+  #[export] Hint Extern 1 (istepSilent ^* _ _) => ideal_silent_multistep : core.
 
-  Hint Extern 1 ({| IdealWorld.channel_vector := _; IdealWorld.users := _ |} = _) => smash_universe; solve_concrete_maps : core.
-  Hint Extern 1 (_ = {| IdealWorld.channel_vector := _; IdealWorld.users := _ |}) => smash_universe; solve_concrete_maps : core.
+  #[export] Hint Extern 1 ({| IdealWorld.channel_vector := _; IdealWorld.users := _ |} = _) => smash_universe; solve_concrete_maps : core.
+  #[export] Hint Extern 1 (_ = {| IdealWorld.channel_vector := _; IdealWorld.users := _ |}) => smash_universe; solve_concrete_maps : core.
 
-  Hint Extern 1 (IdealWorld.lstep_universe _ _ _) => step_ideal_user : core.
+  #[export] Hint Extern 1 (IdealWorld.lstep_universe _ _ _) => step_ideal_user : core.
   
-  Hint Extern 1 (List.In _ _) => progress simpl : core.
-  Hint Extern 1 (~ In ?k ?m) =>
+  #[export] Hint Extern 1 (List.In _ _) => progress simpl : core.
+  #[export] Hint Extern 1 (~ In ?k ?m) =>
      solve_concrete_maps : core.
 
-  Hint Extern 1 (action_adversary_safe _ _ _ = _) => unfold action_adversary_safe; simpl : core.
-  Hint Extern 1 (IdealWorld.screen_msg _ _) => econstructor; progress simpl : core.
+  #[export] Hint Extern 1 (action_adversary_safe _ _ _ = _) => unfold action_adversary_safe; simpl : core.
+  #[export] Hint Extern 1 (IdealWorld.screen_msg _ _) => econstructor; progress simpl : core.
 
-  Hint Extern 1 (_ = RealWorld.addUserKeys _ _) => unfold RealWorld.addUserKeys, map; simpl : core.
+  #[export] Hint Extern 1 (_ = RealWorld.addUserKeys _ _) => unfold RealWorld.addUserKeys, map; simpl : core.
 
-  Hint Extern 1 (_ $+ (_,_) = _) =>
+  #[export] Hint Extern 1 (_ $+ (_,_) = _) =>
     reflexivity || (solve [ solve_concrete_maps ] ) || (progress m_equal) || (progress clean_map_lookups) : core.
-  Hint Extern 1 (_ $? _ = _) =>
+  #[export] Hint Extern 1 (_ $? _ = _) =>
     reflexivity || (solve [ solve_concrete_maps ] ) || (progress m_equal) || (progress clean_map_lookups) : core.
-  Hint Extern 1 (_ #+ (_,_) = _) =>
+  #[export] Hint Extern 1 (_ #+ (_,_) = _) =>
     reflexivity || (solve [ solve_concrete_maps ] ) || (progress ChMaps.m_equal) || (progress ChMaps.ChMap.clean_map_lookups) : core.
-  Hint Extern 1 (_ #? _ = _) =>
+  #[export] Hint Extern 1 (_ #? _ = _) =>
     reflexivity || (solve [ solve_concrete_maps ] ) || (progress ChMaps.m_equal) || (progress ChMaps.ChMap.clean_map_lookups) : core.
 
   Local Ltac merge_perms_helper :=
@@ -811,12 +811,12 @@ Module SimulationAutomation.
         )
     end; split_ex; simpl in *.
 
-  Hint Extern 1 (action_matches _ _ _ _) =>
+  #[export] Hint Extern 1 (action_matches _ _ _ _) =>
     repeat (solve_action_matches1)
   ; NatMap.clean_map_lookups
   ; ChMaps.ChMap.clean_map_lookups : core.
 
-  Hint Resolve
+  #[export] Hint Resolve
        findUserKeys_foldfn_proper
        findUserKeys_foldfn_transpose : core.
   
@@ -840,7 +840,7 @@ Module SimulationAutomation.
     forall A, @RealWorld.findUserKeys A $0 = $0.
   Proof. trivial. Qed.
   
-  Hint Constructors RealWorld.msg_pattern_safe : core.
+  #[export] Hint Constructors RealWorld.msg_pattern_safe : core.
 
   Lemma reduce_merge_perms :
     forall perms1 perms2 kid perm1 perm2,
@@ -1398,7 +1398,7 @@ Module Gen.
   Import
     SetLemmas.
 
-  Hint Unfold oneStepClosure oneStepClosure_current oneStepClosure_new : osc.
+  #[export] Hint Unfold oneStepClosure oneStepClosure_current oneStepClosure_new : osc.
 
   Lemma oneStepClosure_grow : forall state (sys : trsys state) (inv1 inv2 : state -> Prop),
       (forall st st', inv1 st -> sys.(Step) st st' -> inv2 st')
@@ -1428,8 +1428,7 @@ Module Gen.
   Lemma incl_empty_empty : (forall {t}, @incl t [] []).
   Proof. cbv; auto. Qed.
 
-  Hint Resolve
-       (* in_empty_map_contra *)
+  #[export] Hint Resolve
        incl_empty_empty : core.
 
   Ltac concrete_isteps :=

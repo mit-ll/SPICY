@@ -2672,7 +2672,7 @@ Inductive iCouldGenerate : forall {A},
     -> iCouldGenerate U (a :: acts)
 .
 
-Hint Constructors rCouldGenerate iCouldGenerate : core.
+#[export] Hint Constructors rCouldGenerate iCouldGenerate : core.
 
 Lemma ideal_multi_silent_stays_could_generate :
   forall {A} (U__i U__i' : IdealWorld.universe A),
@@ -2707,7 +2707,7 @@ Proof.
   eapply indexedIdealStep_ideal_step in H; eauto.
 Qed.
 
-Hint Resolve
+#[export] Hint Resolve
      ideal_multi_silent_stays_could_generate
      indexed_ideal_multi_silent_stays_could_generate : core.
 
@@ -2720,8 +2720,8 @@ Inductive traceMatches : list RealWorld.uaction -> list IdealWorld.action -> Pro
     -> traceMatches (a__r :: acts__r) (a__i :: acts__i)
 .
 
-Hint Constructors traceMatches : core.
-Hint Resolve
+#[export] Hint Constructors traceMatches : core.
+#[export] Hint Resolve
      silent_step_advuniv_implies_univ_ok
      labeled_step_adv_univ_implies_universe_ok
      action_adversary_safe_after_before_cleaning
@@ -2902,7 +2902,7 @@ Inductive iCouldGen : forall {A},
     -> iCouldGen U (iaction_inout a :: uids)
 .
 
-Hint Constructors rCouldGen iCouldGen : core.
+#[export] Hint Constructors rCouldGen iCouldGen : core.
 
 Lemma real_labeled_step_in_out :
   forall {A B C} lbl suid bd bd',

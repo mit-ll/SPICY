@@ -137,7 +137,7 @@ Section SafePatterns.
   
 End SafePatterns.
 
-Hint Immediate
+#[export] Hint Immediate
      accepted_safe_msg_pattern_honestly_signed
      accepted_safe_msg_pattern_to_this_user
   : core.

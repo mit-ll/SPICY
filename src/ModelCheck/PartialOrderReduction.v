@@ -1464,8 +1464,8 @@ Proof.
   destruct l; eauto.
 Qed.
 
-Hint Resolve adversary_remains_lame_step : core.
-Hint Constructors stepC nextStep : core.
+#[export] Hint Resolve adversary_remains_lame_step : core.
+#[export] Hint Constructors stepC nextStep : core.
 
 Lemma summarize_step_other :
   forall A B C suid lbl bd bd',
@@ -1617,7 +1617,7 @@ Proof.
     specialize (H5 _ _ s H6); simpl in *; eauto.
 Qed.
 
-Hint Resolve summarize_univ_step : core.
+#[export] Hint Resolve summarize_univ_step : core.
 
 Lemma max_element_some :
   forall V (m : NatMap.t V) k v,
@@ -1825,7 +1825,7 @@ Proof.
     econstructor 1; eauto.
 Qed.
 
-Hint Resolve user_step_implies_universe_step : core.
+#[export] Hint Resolve user_step_implies_universe_step : core.
 
 Lemma max_elt_upd_map_elements' :
   forall V (m : NatMap.t V) k v,
@@ -2036,9 +2036,7 @@ Proof.
   eauto using user_step_summaries_still_good'.
 Qed.
 
-
-Hint Resolve user_step_summaries_still_good : core.
-
+#[export] Hint Resolve user_step_summaries_still_good : core.
 
 (* COMMUTING COMMAND RUNS FIRST!! *)
 
@@ -2070,10 +2068,10 @@ Proof.
   eapply TrcFront; eauto.
 Qed.
 
-Hint Resolve indexedIdealSteps_ideal_steps : core.
+#[export] Hint Resolve indexedIdealSteps_ideal_steps : core.
 
-Hint Constructors indexedModelStep indexedIdealStep indexedRealStep : core.
-Hint Resolve action_matches_other_user_silent_step_inv : core.
+#[export] Hint Constructors indexedModelStep indexedIdealStep indexedRealStep : core.
+#[export] Hint Resolve action_matches_other_user_silent_step_inv : core.
 
 Lemma falsify_step :
   forall t__hon t__adv ru ru' iu iu' b b',
@@ -2633,7 +2631,7 @@ Proof.
   induct H; eauto.
 Qed.
 
-Hint Constructors indexedRealStep indexedIdealStep : core.
+#[export] Hint Constructors indexedRealStep indexedIdealStep : core.
 
 Lemma progress_predicates :
   forall t__hon t__adv uid st st' b ru summaries,
@@ -3035,7 +3033,7 @@ Proof.
       exists st; split; intros; eauto.
 Qed.
 
-Hint Resolve  goodness_preservation_step syntactically_safe_U_preservation_step : core.
+#[export] Hint Resolve  goodness_preservation_step syntactically_safe_U_preservation_step : core.
 
 Lemma many_steps_stays_lame :
   forall t__hon t__adv st st' b,
@@ -3075,7 +3073,7 @@ Proof.
     eauto.
 Qed.
 
-Hint Resolve many_steps_stays_lame many_steps_syntactically_safe many_steps_stays_good : core.
+#[export] Hint Resolve many_steps_stays_lame many_steps_syntactically_safe many_steps_stays_good : core.
 
 Theorem step_stepC' :
   forall {t__hon t__adv} (ru0 : RealWorld.universe t__hon t__adv) (iu0 : IdealWorld.universe t__hon) b n summaries,

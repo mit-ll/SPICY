@@ -248,7 +248,7 @@ Definition U_syntactically_safe {A B} (U : RealWorld.universe A B) :=
       -> exists t,
         syntactically_safe u_id uids ctx u.(protocol) t.
 
-Hint Constructors
+#[export] Hint Constructors
      HonestKey
      syntactically_safe
   : core.
@@ -282,7 +282,7 @@ Proof.
   all: eapply safe_typ_eq in H1; split_ands; subst; contradiction.
 Qed.
 
-Hint Resolve HonestKey_split_drop : core.
+#[export] Hint Resolve HonestKey_split_drop : core.
 
 Lemma HonestKey_skip :
   forall t (tv : <<t>>) styp k context key_rec,
@@ -303,7 +303,7 @@ Lemma HonestKey_augment_context :
   intros * H FOR; invert H; rewrite Forall_forall in FOR; intros; eauto.
 Qed.
 
-Hint Resolve
+#[export] Hint Resolve
      HonestKey_skip HonestKey_split
      HonestKey_augment_context
   : core.
@@ -322,7 +322,7 @@ Proof.
   intros; rewrite Forall_forall; intros; eauto.
 Qed.
 
-Hint Resolve
+#[export] Hint Resolve
      Forall_In_refl
      Forall_In_add
   : core.
@@ -446,13 +446,13 @@ Ltac process_ctx1 :=
 
 Ltac process_ctx := repeat process_ctx1.
 
-Hint Constructors
+#[export] Hint Constructors
      RealWorld.msg_accepted_by_pattern 
      RealWorld.msg_pattern_safe
   : core.
-Hint Extern 1 (List.In _ _) => progress simpl : core.
-Hint Extern 1 (_ $+ (_,_) $? _ = _) => progress clean_map_lookups : core.
-Hint Extern 1 (_ $+ (?k1,_) $? ?k2 = _) =>
+#[export] Hint Extern 1 (List.In _ _) => progress simpl : core.
+#[export] Hint Extern 1 (_ $+ (_,_) $? _ = _) => progress clean_map_lookups : core.
+#[export] Hint Extern 1 (_ $+ (?k1,_) $? ?k2 = _) =>
   solve [ destruct (k1 ==n k2); subst; clean_map_lookups; trivial ] : core.
 
 Lemma keys_mine_addln_keys :
@@ -484,8 +484,8 @@ Proof.
   destruct kp; eauto.
 Qed.
 
-Hint Resolve keys_mine_addln_keys keys_mine_new_honestk : core.
-Hint Resolve incl_appr incl_tl : core.
+#[export] Hint Resolve keys_mine_addln_keys keys_mine_new_honestk : core.
+#[export] Hint Resolve incl_appr incl_tl : core.
 
 Lemma syntactically_safe_honest_keys_preservation' :
   forall {A B C} suid lbl bd bd',
@@ -713,7 +713,7 @@ Proof.
     process_ctx; eauto.
 Qed.
 
-Hint Resolve typingcontext_sound_ok_nochange_usrs_ks_mycs : core.
+#[export] Hint Resolve typingcontext_sound_ok_nochange_usrs_ks_mycs : core.
 
 Lemma typingcontext_sound_other_user_step :
   forall {A B C} suid lbl bd bd',
@@ -1679,17 +1679,6 @@ Section PredicatePreservation.
       eapply adv_step_adv_goodness; eauto.
       eapply adv_step_adv_no_honest_keys_ss; eauto.
   Qed.
-
-  (* Lemma goodness_preservation_step : *)
-  (*   forall t__hon t__adv (st st' : universe t__hon t__adv * IdealWorld.universe t__hon) b, *)
-  (*     step st st' *)
-  (*     -> lameAdv b (fst st).(adversary) *)
-  (*     -> syntactically_safe_U (fst st) *)
-  (*     -> goodness_predicates (fst st) *)
-  (*     -> goodness_predicates (fst st'). *)
-  (* Proof. *)
-  (*   inversion 1; intros; subst; simpl in *; eapply goodness_preservation_stepU; eauto. *)
-  (* Qed. *)
 
   Lemma step_user_nochange_that_user_in_honest_users :
     forall {A B C} suid lbl bd bd',

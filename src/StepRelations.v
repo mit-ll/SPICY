@@ -38,4 +38,4 @@ Section trc_tri.
 
 End trc_tri.
 
-Hint Constructors trc3 : core.
+#[export] Hint Constructors trc3 : core.

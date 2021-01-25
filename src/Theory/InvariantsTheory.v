@@ -1764,13 +1764,7 @@ Section MessageQueuesOk.
 
 End MessageQueuesOk.
 
-Hint Extern 5 (honest_key _ _) => process_keys_messages : core.
-
-(* TODO
-  Hint Immediate
-       clean_users_no_change_honestk
-       clean_users_no_change_honestk' : core.
-*)
+#[export] Hint Extern 5 (honest_key _ _) => process_keys_messages : core.
 
 Ltac process_predicate :=
   repeat (

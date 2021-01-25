@@ -89,7 +89,7 @@ Inductive msg_accepted_by_pattern (cs : ciphers) (opt_uid_to : option user_id) (
     -> opt_uid_to = Some msg_to
     -> msg_accepted_by_pattern cs opt_uid_to froms (SignedEncrypted k__sign k__enc chk) (@SignedCiphertext t' c_id).
 
-Hint Extern 1 (~ In _ _) => rewrite not_find_in_iff : core.
+#[export] Hint Extern 1 (~ In _ _) => rewrite not_find_in_iff : core.
 
 Notation honest_key honk kid := (honk $? kid = Some true).
 

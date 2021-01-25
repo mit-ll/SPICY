@@ -29,7 +29,7 @@ Fixpoint content_eq {t__rw t__iw}
   | (RealWorld.message.Content c__rw, IdealWorld.message.Content c__iw) => c__rw = c__iw
   | (RealWorld.message.Permission (id, pk) , IdealWorld.message.Permission (IdealWorld.construct_access a _)) =>
     match (gks $? id) with
-    | Some (Keys.MkCryptoKey id _ Keys.SymKey) => a = (IdealWorld.construct_permission true true)
+    | Some (Keys.MkCryptoKey _ _ Keys.SymKey) => a = (IdealWorld.construct_permission true true)
     | Some (Keys.MkCryptoKey id Keys.Signing Keys.AsymKey) => a = (IdealWorld.construct_permission true pk)
     | Some (Keys.MkCryptoKey id Keys.Encryption Keys.AsymKey) => a = (IdealWorld.construct_permission pk true)
     | _ => False

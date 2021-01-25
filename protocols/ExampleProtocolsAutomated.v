@@ -55,7 +55,7 @@ Module SimplePingProtocolSecure <: AutomatedSafeProtocol.
 
   Import Gen Tacs SetLemmas.
 
-  Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start mkiU real_univ_start mkrU mkrUsr startAdv : core.
+  #[export] Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start mkiU real_univ_start mkrU mkrUsr startAdv : core.
 
   Section Test.
     Section RW.
@@ -241,7 +241,7 @@ Module SimpleEncProtocolSecure <: AutomatedSafeProtocol.
 
   Import Gen Tacs SetLemmas.
 
-  Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start mkiU real_univ_start mkrU : core.
+  #[export] Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start mkiU real_univ_start mkrU : core.
 
   Lemma safe_invariant :
     invariantFor

@@ -84,6 +84,6 @@ Proof.
   intuition congruence.
 Qed.
 
-Remove Hints absurd_eq_true trans_eq_bool : core.
+#[export] Remove Hints absurd_eq_true trans_eq_bool : core.
 
 Definition user_id              := nat.

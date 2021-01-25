@@ -98,13 +98,12 @@ Definition TrSS {t__hon t__adv} (ru0 : RealWorld.universe t__hon t__adv) (iu0 : 
   {| Initial := {(ru0, iu0, true)};
      Step    := @stepSS t__hon t__adv |}.
 
-Hint Resolve adversary_remains_lame_step : core.
-Hint Constructors stepSS nextStepSS : core.
+#[export] Hint Resolve adversary_remains_lame_step : core.
+#[export] Hint Constructors stepSS nextStepSS : core.
 
-Hint Resolve indexedIdealSteps_ideal_steps : core.
-Hint Constructors indexedModelStep indexedIdealStep indexedRealStep : core.
-Hint Resolve action_matches_other_user_silent_step_inv : core.
-
+#[export] Hint Resolve indexedIdealSteps_ideal_steps : core.
+#[export] Hint Constructors indexedModelStep indexedIdealStep indexedRealStep : core.
+#[export] Hint Resolve action_matches_other_user_silent_step_inv : core.
 
 Lemma step_then_step' :
   forall {A B C} suid lbl bd bd',
@@ -417,7 +416,7 @@ Lemma silent_step_na_commuting :
             @nextAction _ t cmd cmd__n
             /\ commutes cmd__n s.
 Proof.
-  Hint Constructors nextAction : core.
+  #[export] Hint Constructors nextAction : core.
   induction 1; inversion 1; inversion 1; intros; subst; simpl; try discriminate
   ; try solve [ (do 2 eexists); split; eauto; simpl; trivial ].
 
@@ -1115,7 +1114,7 @@ Proof.
 
 Qed.
 
-Hint Constructors indexedRealStep indexedIdealStep : core.
+#[export] Hint Constructors indexedRealStep indexedIdealStep : core.
 
 Lemma step_extra_user :
   forall A B C lbl suid bd bd',
@@ -1447,7 +1446,7 @@ Proof.
       exists st; split; intros; eauto.
 Qed.
 
-Hint Resolve  goodness_preservation_step syntactically_safe_U_preservation_step : core.
+#[export] Hint Resolve  goodness_preservation_step syntactically_safe_U_preservation_step : core.
 
 Lemma many_steps_stays_lame :
   forall t__hon t__adv st st' b,
@@ -1487,7 +1486,7 @@ Proof.
     eauto.
 Qed.
 
-Hint Resolve many_steps_stays_lame many_steps_syntactically_safe many_steps_stays_good : core.
+#[export] Hint Resolve many_steps_stays_lame many_steps_syntactically_safe many_steps_stays_good : core.
 
 Theorem step_stepSS' :
   forall {t__hon t__adv} (ru0 : RealWorld.universe t__hon t__adv) (iu0 : IdealWorld.universe t__hon) b n summaries,

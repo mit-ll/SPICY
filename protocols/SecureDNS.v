@@ -213,12 +213,12 @@ Module SecureDNSProtocol.
   End RW.
 
   (* These are here to help the proof automation.  Don't change. *)
-  Hint Unfold
+  #[export] Hint Unfold
        real_univ_start
        ideal_univ_start
     : user_build.
 
-  Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
-    progress(autounfold with user_build; simpl).
+  #[export] Hint Extern 0 (IdealWorld.lstep_universe _ _ _) =>
+    progress(autounfold with user_build; simpl) : core.
   
 End SecureDNSProtocol.

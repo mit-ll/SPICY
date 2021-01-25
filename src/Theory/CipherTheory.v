@@ -409,4 +409,4 @@ Proof.
   - rewrite !clean_ciphers_no_new_ciphers; auto.
 Qed.
 
-Hint Immediate clean_ciphers_nochange_cipher : core.
+#[export] Hint Immediate clean_ciphers_nochange_cipher : core.

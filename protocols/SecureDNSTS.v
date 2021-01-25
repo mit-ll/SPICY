@@ -60,8 +60,8 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocol.
   Import Gen Tacs SetLemmas.
 
   (* These are here to help the proof automation.  Don't change. *)
-  Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start real_univ_start : core.
-  Hint Unfold
+  #[export] Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start real_univ_start : core.
+  #[export] Hint Unfold
        mkiU mkiUsr mkrU mkrUsr
        mkKeys
     : core.

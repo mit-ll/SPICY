@@ -163,7 +163,7 @@ Ltac process_nonce_ok1 :=
   | [ H : _ \/ _ |- _ ] => destruct H
   end.
 
-Hint Extern 1 (message_queue_ok _ _ _ _) => eassumption || (msg_queue_prop; eassumption) : core.
+#[export] Hint Extern 1 (message_queue_ok _ _ _ _) => eassumption || (msg_queue_prop; eassumption) : core.
 
 Ltac process_message_queue :=
   repeat 

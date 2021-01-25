@@ -27,8 +27,8 @@ From SPICY Require Import
 
 Set Implicit Arguments.
 
-Hint Resolve in_eq in_cons : core.
-Remove Hints absurd_eq_true trans_eq_bool : core.
+#[export] Hint Resolve in_eq in_cons : core.
+#[export] Remove Hints absurd_eq_true trans_eq_bool : core.
 
 Module SafetyAutomation.
 
@@ -52,8 +52,6 @@ Module SafetyAutomation.
     | [ |- let (_,_) := ?x in _] => destruct x
     | [ H : context [ honest_keyb _ _ = _ ] |- _ ] => unfold honest_keyb in H
     | [ |- context [ honest_keyb _ _ ] ] => unfold honest_keyb
-    (* | [ H : honest_key _ _ |- _ ] => invert H *)
-    (* | [ |- honest_key _ _ ] => constructor *)
     | [ H : (if ?b then _ else _) = _ |- _ ] => is_var b; destruct b
     | [ H : (match ?honk $? ?k with _ => _ end) = _ |- _ ] => cases (honk $? k)
     | [ |- context [ if ?b then _ else _ ] ] => is_var b; destruct b
@@ -68,64 +66,8 @@ Module SafetyAutomation.
     clean_context;
     repeat solve_simple_maps1;
     try discriminate; try contradiction; context_map_rewrites.
-  
-  (* Lemma message_honestly_signed_msg_signing_key_honest : *)
-  (*   forall {t} (msg : crypto t) honestk cs, *)
-  (*     msg_honestly_signed honestk cs msg  = true *)
-  (*     -> exists k, *)
-  (*       msg_signing_key cs msg = Some k *)
-  (*       /\ honest_key honestk k. *)
-  (* Proof. *)
-  (*   intros. *)
-  (*   unfold msg_honestly_signed in *; destruct msg; try discriminate; *)
-  (*     repeat *)
-  (*       match goal with *)
-  (*       | [ H : (match ?m with _ => _ end) = _ |- _ ] => cases m; try discriminate; simpl in * *)
-  (*       | [ H : Some _ = Some _ |- _ ] => invert H *)
-  (*       | [ H : honest_keyb _ _ = true |- _] => rewrite <- honest_key_honest_keyb in H *)
-  (*       end; eauto. *)
-  (* Qed. *)
 
-  (* Lemma msg_honestly_signed_has_signing_key_cipher_id : *)
-  (*   forall {t} (msg : crypto t) honestk cs, *)
-  (*     msg_honestly_signed honestk cs msg = true *)
-  (*     -> (exists k, msg_signing_key cs msg = Some k) *)
-  (*       /\ (exists cid, msg_cipher_id msg = Some cid). *)
-  (* Proof. *)
-  (*   unfold msg_honestly_signed, msg_signing_key, msg_cipher_id; intros. *)
-  (*   destruct msg; try discriminate; repeat process_keys_messages; eauto. *)
-  (* Qed. *)
-
-  (* Lemma msg_honestly_signed_signing_key_honest : *)
-  (*   forall {t} (msg : crypto t) honestk cs k, *)
-  (*     msg_honestly_signed honestk cs msg = true *)
-  (*     -> msg_signing_key cs msg = Some k *)
-  (*     -> honest_key honestk k. *)
-  (* Proof. *)
-  (*   unfold msg_honestly_signed, msg_signing_key; intros. *)
-  (*   destruct msg; try discriminate; repeat process_keys_messages. constructor; *)
-  (*     clean_context; eauto. *)
-  (* Qed. *)
-
-  Hint Resolve msg_honestly_signed_signing_key_honest : core.
-
-  (* Ltac user_queue_lkup TAG := *)
-  (*   match goal with *)
-  (*   | [ H : user_queue ?usrs ?uid = Some ?qmsgs |- _ ] => *)
-  (*     assert (exists cmd mycs ks froms sents cur_n, *)
-  (*                usrs $? uid = Some {| key_heap := ks *)
-  (*                                    ; msg_heap := qmsgs *)
-  (*                                    ; protocol := cmd *)
-  (*                                    ; c_heap := mycs *)
-  (*                                    ; from_nons := froms *)
-  (*                                    ; sent_nons := sents *)
-  (*                                    ; cur_nonce := cur_n |}) *)
-  (*       as TAG by (unfold user_queue in H; *)
-  (*                  cases (usrs $? uid); try discriminate; *)
-  (*                  match goal with *)
-  (*                  | [ H1 : Some _ = Some _ |- exists t v w x y z, Some ?u = _ ] => invert H1; destruct u; repeat eexists; reflexivity *)
-  (*                  end) *)
-  (*   end. *)
+  #[export] Hint Resolve msg_honestly_signed_signing_key_honest : core.
 
   Ltac user_cipher_queue_lkup TAG :=
     match goal with
@@ -212,16 +154,6 @@ Module SafetyAutomation.
       permission_heaps_prop
     end.
 
-  (* Ltac encrypted_ciphers_prop := *)
-  (*   match goal with *)
-  (*   | [ H  : encrypted_ciphers_ok _ (?cs $+ (?cid,?c)) _ |- _ ] => generalize (Forall_natmap_in_prop_add H); intros *)
-  (*   | [ H1 : ?cs $? _ = Some _, H2 : encrypted_ciphers_ok _ ?cs _ |- _ ] => generalize (Forall_natmap_in_prop _ H2 H1); simpl; intros *)
-  (*   end; *)
-  (*   repeat match goal with *)
-  (*          | [ H : encrypted_cipher_ok _ _ _ _ |- _ ] => invert H *)
-  (*          | [ H : honest_keyb _ _ = true |- _] => apply honest_keyb_true_honestk_has_key in H *)
-  (*          end; try contradiction. *)
-
   Ltac refine_signed_messages :=
     repeat
       match goal with
@@ -238,7 +170,7 @@ Module SafetyAutomation.
         , H : if honest_keyb ?honk ?kid then _ else _ |- _ ] => rewrite COND in H
       end; split_ands.
 
-  Hint Resolve
+  #[export] Hint Resolve
        clean_honest_key_permissions_distributes
        adv_no_honest_key_honest_key
        honest_cipher_filter_fn_proper
@@ -270,16 +202,16 @@ Module SafetyAutomation.
       eapply merge_perms_split in H0; split_ors; eauto.
   Qed.
 
-  Hint Resolve users_permission_heaps_good_merged_permission_heaps_good : core.
+  #[export] Hint Resolve users_permission_heaps_good_merged_permission_heaps_good : core.
 
-  Hint Extern 1 (_ $+ (?k, _) $? _ = Some _) => progress (clean_map_lookups; trivial) : core.
-  Hint Extern 1 (honest_keyb _ _ = true) => rewrite <- honest_key_honest_keyb : core.
-  Hint Extern 1 (_ && _ = true) => rewrite andb_true_iff : core.
+  #[export] Hint Extern 1 (_ $+ (?k, _) $? _ = Some _) => progress (clean_map_lookups; trivial) : core.
+  #[export] Hint Extern 1 (honest_keyb _ _ = true) => rewrite <- honest_key_honest_keyb : core.
+  #[export] Hint Extern 1 (_ && _ = true) => rewrite andb_true_iff : core.
 
-  Hint Extern 1 (honest_key_filter_fn _ _ _ = _) => unfold honest_key_filter_fn; context_map_rewrites : core.
-  Hint Extern 1 (honest_perm_filter_fn _ _ _ = _) => unfold honest_perm_filter_fn; context_map_rewrites : core.
+  #[export] Hint Extern 1 (honest_key_filter_fn _ _ _ = _) => unfold honest_key_filter_fn; context_map_rewrites : core.
+  #[export] Hint Extern 1 (honest_perm_filter_fn _ _ _ = _) => unfold honest_perm_filter_fn; context_map_rewrites : core.
 
-  Hint Extern 1 (user_cipher_queue _ _ = _) => unfold user_cipher_queue; context_map_rewrites : core.
-  Hint Extern 1 (user_keys _ _ = Some _ ) => unfold user_keys; context_map_rewrites : core.
+  #[export] Hint Extern 1 (user_cipher_queue _ _ = _) => unfold user_cipher_queue; context_map_rewrites : core.
+  #[export] Hint Extern 1 (user_keys _ _ = Some _ ) => unfold user_keys; context_map_rewrites : core.
 
 End SafetyAutomation.
