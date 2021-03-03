@@ -50,6 +50,7 @@ Set Implicit Arguments.
 Module SimulationAutomation.
 
   #[export] Hint Constructors RealWorld.msg_accepted_by_pattern : core.
+  #[export] Hint Extern 1 (_ $k++ _ $? _ = Some _) => solve [ solve_perm_merges ] : core.
 
   Module T.
     Import RealWorld.
