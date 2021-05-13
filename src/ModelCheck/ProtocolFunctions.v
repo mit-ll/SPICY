@@ -119,8 +119,6 @@ Ltac equality1 :=
   || match goal with
     | [ H : List.In _ _ |- _ ] => progress (simpl in H); intuition idtac
 
-    (* | [ H : _ $+ (_,_) $? _ = _ |- _ ] => progress clean_map_lookups *)
-    (* | [ H : _ #+ (_,_) #? _ = _ |- _ ] => progress clean_map_lookups *)
     | [ H : _ $? _ = Some _ |- _ ] => progress (simpl in H)
     | [ H : _ #? _ = Some _ |- _ ] => progress (simpl in H)
 

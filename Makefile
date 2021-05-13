@@ -38,7 +38,7 @@ por: CoqMakefile
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
 test-protos: CoqMakefile
-	$(eval TS := "protocols/ExampleProtocolsAutomated.vo protocols/GenProto.vo protocols/GenProtoSS.vo")
+	$(eval TS := "protocols/ExampleProtocolsAutomated.vo protocols/GenProto.vo protocols/GenProtoSS.vo protocols/GenProtoTr.vo")
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
 sharesecret: CoqMakefile
@@ -51,6 +51,21 @@ sharesecretsym: CoqMakefile
 
 pgp: CoqMakefile
 	$(eval TS := "protocols/PGPTS.vo protocols/PGPSS.vo")
+	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
+
+tr: CoqMakefile
+	$(eval TS := "protocols/GenProtoTr.vo protocols/PGPTr.vo protocols/ShareSecretProtocolSymmetricEncTr.vo protocols/SecureDNSTr.vo protocols/AvgSalaryTr.vo protocols/P2PTr.vo")
+	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
+
+trsh: CoqMakefile
+	$(eval TS := "protocols/GenProtoTr.vo protocols/PGPTr.vo protocols/ShareSecretProtocolSymmetricEncTr.vo protocols/SecureDNSTr.vo")
+	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
+trsh2: CoqMakefile
+	$(eval TS := "protocols/AvgSalaryTr.vo")
+	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
+
+pgp2: CoqMakefile
+	$(eval TS := "protocols/PGPSS.vo protocols/PGPTr.vo")
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
 secdns: CoqMakefile

@@ -49,11 +49,15 @@ src/ModelCheck/SafeProtocol.v
 src/ModelCheck/SilentStepElimination.v
 src/ModelCheck/UniverseEqAutomation.v
 
+# Protocol Invariant Exploration (alternative to traditional model checking)
+src/ModelCheck/InvariantSearch.v
+
 # Test Protocols
 protocols/ExampleProtocols.v
 protocols/ExampleProtocolsAutomated.v
 protocols/GenProto.v
 protocols/GenProtoSS.v
+protocols/GenProtoTr.v
 protocols/ProtocolTemplate.v
 
 # First set of test protocols: simple Secret Sharing Protocols
@@ -66,19 +70,24 @@ protocols/ShareSecretProtocolSymmetricEnc.v
 protocols/ShareSecretProtocolSymmetricEncIWRefine.v
 protocols/ShareSecretProtocolSymmetricEncTS.v
 protocols/ShareSecretProtocolSymmetricEncSS.v
+protocols/ShareSecretProtocolSymmetricEncTr.v
 
 # PGP-like protocol
 protocols/PGP.v
 protocols/PGPTS.v
 protocols/PGPSS.v
+protocols/PGPTr.v
 
 # A protocol akin to DNSCurve
 protocols/SecureDNS.v
 protocols/SecureDNSTS.v
 protocols/SecureDNSSS.v
+protocols/SecureDNSTr.v
 
 # A network aggregation protocol
 protocols/AvgSalary.v
+protocols/AvgSalaryTr.v
 
 # A trusted third party network auth protocol
 protocols/P2P.v
+protocols/P2PTr.v
