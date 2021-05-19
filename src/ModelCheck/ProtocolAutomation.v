@@ -1573,6 +1573,7 @@ Module Gen.
 
   Ltac solve_real_step_stuff1 :=
     equality1
+    || (progress subst)
     || solve_merges1
     || match goal with
       | [ |- RealWorld.keys_mine _ _ ] =>
@@ -1589,8 +1590,9 @@ Module Gen.
         ; destruct (k1 ==n kid); subst; clean_map_lookups
       | [ |- context [ $0 $? _ ]] =>
         rewrite lookup_empty_none
-      | [ |- _ $? _ = _ ] =>
-        clean_map_lookups
+      (* | [ |- _ $? _ = _ ] => *)
+      | [ |- context [ _ $? _ = _ ] ] =>
+        progress clean_map_lookups
       | [ |- _ -> _ ] => intros
       | [ |- _ ] => ( progress simpl ) || ( progress hnf )
       end.

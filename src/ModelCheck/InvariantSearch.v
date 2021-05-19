@@ -96,6 +96,7 @@ Proof.
 Qed.
 
 Ltac ch := (repeat equality1); subst; rw_step1.
+(* Ltac ch := (repeat equality1); subst; rw_step1. *)
 Ltac chu := repeat ch.
 
 Ltac finish_honest_cmds_safe1 :=
@@ -168,8 +169,7 @@ Definition safety_inv :=
 #[export] Hint Opaque safety_inv.
 
 Definition can_con_map {V} (m : Map.t V) : Map.t V.
-  let f := constr:(fun (k : nat) (v : V) (acc : Map.t V) => acc $+ (k, v)) in
-  let m' := eval simpl in (fold f m $0)
+  let m' := eval simpl in (fold (fun k v acc => acc $+ (k, v)) m $0)
     in apply m'.
 Defined.
 
@@ -188,19 +188,17 @@ Qed.
 
 Ltac ccm m H :=
   replace m with (can_con_map m) in H by apply can_con_map_correct
-  ; repeat
-      match goal with
-      | [ H : context [ can_con_map ?cm ] |- _ ] =>
-        progress (unfold can_con_map,fold in H; simpl in H)
-      end.
+  ; try match goal with
+        | [ H : context [ can_con_map ?cm ] |- _ ] =>
+          (unfold can_con_map,fold in H; simpl in H)
+        end.
 
 Ltac ccmag m :=
   replace m with (can_con_map m) by apply can_con_map_correct
-  ; repeat
-      match goal with
-      | [ |- context [ can_con_map ?cm ] ] =>
-        progress (unfold can_con_map,fold)
-      end.
+  ; match goal with
+    | [ |- context [ can_con_map ?cm ] ] =>
+      (unfold can_con_map,fold); simpl
+    end.
 
 Ltac rwuf :=
   unfold RealWorld.buildUniverse, RealWorld.build_data_step
@@ -234,6 +232,76 @@ Tactic Notation "canonicalize" "context" :=
           end
       end.
 
+Tactic Notation "canonicalize" "ideal" "goal" :=
+  rwuf
+  ; match goal with
+    | [ |- context [{| IdealWorld.users := ?usrs |}]] => ccmag usrs
+    end.
+
+Ltac idealUnivSilentStep' uid :=
+  eapply IdealWorld.LStepUser with (u_id := uid)
+  ; simpl
+  ; [ solve [ clean_map_lookups; trivial ]
+    | solve [ idealUserSilentStep ]
+    ].
+
+Ltac step_ideal1' uid :=
+  idtac "stepping " uid
+  ; eapply TrcFront
+  ; [ idealUnivSilentStep' uid |].
+
+(* Ltac simpl_ideal_users_context := *)
+(*   simpl; *)
+(*   repeat *)
+(*     match goal with *)
+(*     | [ |- context [ {| IdealWorld.users := ?usrs |}] ] => progress canonicalize_map usrs *)
+(*     end. *)
+
+Ltac multistep_ideal' usrs :=
+  canonicalize ideal goal;
+  match usrs with
+  | ?us $+ (?uid,_) =>
+    idtac "multi stepping " uid
+    ; (repeat step_ideal1' uid)
+    ; multistep_ideal' us
+  | _ => eapply TrcRefl
+  end.
+
+Ltac run_ideal_silent_steps_to_end' :=
+  canonicalize ideal goal;
+  match goal with
+  | [ |- istepSilent ^* {| IdealWorld.users := ?usrs |} ?U ] =>
+    is_evar U
+    ; multistep_ideal' usrs
+  end.
+
+(* note the automation here creates a bunch of extra existentials while 
+ * doint the search for available steps.  This creates several nats
+ * that need to be resolved at the end of proofs that use it.  
+ * Should look at fixing this. *)
+Ltac find_step_or_solve' :=
+  simpl in *;
+  match goal with
+  | [ H1 : forall _ _ _, indexedRealStep _ _ ?ru _ -> False
+    , H2 : ?usrs $? _ = Some ?ur
+    , H3 : RealWorld.protocol ?ur = RealWorld.Return _ |- _ ] =>
+
+    ( assert (exists uid lbl ru', indexedRealStep uid lbl ru ru')
+      by (eexists ?[uid]; (do 2 eexists); find_indexed_real_step usrs ?uid)
+      ; split_ex; exfalso; eauto
+    )
+    || ( repeat solve_returns_align1
+        ; ( (do 3 eexists); simpl in *; (repeat eq1) 
+            ; subst
+            ; repeat simple apply conj
+            ; [ solve [ run_ideal_silent_steps_to_end' ]
+              | solve [ simpl; clean_map_lookups; trivial ]
+              | reflexivity
+              | reflexivity
+              ]
+      ))
+  end.
+
 Ltac finish_invariant :=
   rwuf
   ; try match goal with
@@ -245,9 +313,8 @@ Ltac finish_invariant :=
   ; [ finish_honest_cmds_safe; clean_map_lookups; eauto 8
     | trivial
     | unfold labels_align; intros; rstep; subst; solve_labels_align
-    | try solve [ intros; find_step_or_solve ]
+    | try solve [ intros; find_step_or_solve' ]
     ].
-
 
 Ltac invSS1 :=
   discriminate

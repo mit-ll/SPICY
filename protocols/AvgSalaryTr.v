@@ -229,6 +229,8 @@ Module AvgSalaryProtocolSecure <: AutomatedSafeProtocolSS.
        mkKeys
     : core.
 
+  Set Ltac Profiling.
+
   Lemma safe_invariant :
     invariantFor
       {| Initial := {(ru0, iu0, true)}; Step := @stepSS t__hon t__adv  |}
@@ -253,6 +255,8 @@ Module AvgSalaryProtocolSecure <: AutomatedSafeProtocolSS.
       all: exact 0 || contradiction || auto.
   Qed.
 
+  Show Ltac Profile.
+  
   Lemma U_good : @universe_starts_sane _ Unit b ru0.
   Proof.
     autounfold;
