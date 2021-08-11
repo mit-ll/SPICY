@@ -126,14 +126,24 @@ Ltac finish_honest_cmds_safe1 :=
     | [ H : RealWorld.findKeysMessage _ $? _ = _ |- _ ] =>
       unfold RealWorld.findKeysMessage in H; simpl in H
     | [ |- (_ -> _) ] => intros
-    | [ |- context [ _ $+ (_,_) $? _ ] ] => progress clean_map_lookups
+    | [ H : _ $+ (?id1,_) $? ?id2 = _ |- _ ] =>
+      ( progress (
+            repeat (
+                (rewrite add_neq_o in H by congruence)
+                || (rewrite add_eq_o in H by trivial)
+                || (rewrite lookup_empty_none in H)
+      )))
+      (* (progress clean_map_lookups) *)
+      || (is_var id2; destruct (id1 ==n id2); subst; clean_map_lookups)
+    (* | [ |- context [ _ $+ (_,_) $? _ ] ] => progress clean_map_lookups *)
     | [ |- context [ _ $+ (_,_) $? _ ] ] =>
-      progress (
+      ( progress clean_map_lookups )
+      || ( progress (
           repeat (
               (rewrite add_neq_o by solve_simple_ineq)
               || (rewrite add_eq_o by trivial)
               || (rewrite lookup_empty_none)
-        ))
+        )))
                
     | [ H : _ $k++ _ $? ?k = Some _ |- context [ _ $? ?k ]] => (*  *)
         apply merge_perms_split in H; destruct H
@@ -280,7 +290,7 @@ Ltac run_ideal_silent_steps_to_end' :=
  * that need to be resolved at the end of proofs that use it.  
  * Should look at fixing this. *)
 Ltac find_step_or_solve' :=
-  simpl in *;
+  (* simpl in *; *)
   match goal with
   | [ H1 : forall _ _ _, indexedRealStep _ _ ?ru _ -> False
     , H2 : ?usrs $? _ = Some ?ur
@@ -291,7 +301,7 @@ Ltac find_step_or_solve' :=
       ; split_ex; exfalso; eauto
     )
     || ( repeat solve_returns_align1
-        ; ( (do 3 eexists); simpl in *; (repeat eq1) 
+        ; ( (do 3 eexists); rwuf; (* simpl in *; *) (repeat eq1) 
             ; subst
             ; repeat simple apply conj
             ; [ solve [ run_ideal_silent_steps_to_end' ]
@@ -313,7 +323,7 @@ Ltac finish_invariant :=
   ; [ finish_honest_cmds_safe; clean_map_lookups; eauto 8
     | trivial
     | unfold labels_align; intros; rstep; subst; solve_labels_align
-    | try solve [ intros; find_step_or_solve' ]
+    | try solve [ simpl; intros; find_step_or_solve' ]
     ].
 
 Ltac invSS1 :=
