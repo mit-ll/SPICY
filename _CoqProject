@@ -52,42 +52,52 @@ src/ModelCheck/UniverseEqAutomation.v
 # Protocol Invariant Exploration (alternative to traditional model checking)
 src/ModelCheck/InvariantSearch.v
 
-# Test Protocols
-protocols/ExampleProtocols.v
-protocols/ExampleProtocolsAutomated.v
-protocols/GenProto.v
-protocols/GenProtoSS.v
-protocols/GenProtoTr.v
+#############################################################################
+##  Protocol Verification
+#############################################################################
+
 protocols/ProtocolTemplate.v
+
+## Test Protocols
+protocols/ExampleProtocols.v
+protocols/Verification/ExampleProtocolsAutomated.v
+
+protocols/GenProto.v
+protocols/Verification/GenProtoSecure.v
+
+## Protocols from the paper
+## "Secret Sharing Protocol" from example section
+protocols/ShareSecretProtocolSymmetricEnc.v
+protocols/ShareSecretProtocolSymmetricEncIWRefine.v
+protocols/Verification/ShareSecretProtocolSymmetricEncSecure.v
+
+protocols/PGP.v
+protocols/Verification/PGPSecure.v
+
+protocols/SecureDNS.v
+protocols/Verification/SecureDNSSecure.v
+
+protocols/AvgSalary.v
+protocols/Verification/AvgSalarySecure.v
+
+protocols/NetAuth.v
+protocols/Verification/NetAuthSecure.v
 
 # First set of test protocols: simple Secret Sharing Protocols
 protocols/ShareSecretProtocol.v
 protocols/ShareSecretProtocolTS.v
 protocols/ShareSecretProtocolSS.v
 
-# Protocol from example section of paper
-protocols/ShareSecretProtocolSymmetricEnc.v
-protocols/ShareSecretProtocolSymmetricEncIWRefine.v
-protocols/ShareSecretProtocolSymmetricEncTS.v
-protocols/ShareSecretProtocolSymmetricEncSS.v
-protocols/ShareSecretProtocolSymmetricEncTr.v
+protocols/LegacyVerification/GenProtoSS.v
 
-# PGP-like protocol
-protocols/PGP.v
-protocols/PGPTS.v
-protocols/PGPSS.v
-protocols/PGPTr.v
+protocols/LegacyVerification/ShareSecretProtocolSymmetricEncTS.v
+protocols/LegacyVerification/ShareSecretProtocolSymmetricEncSS.v
 
-# A protocol akin to DNSCurve
-protocols/SecureDNS.v
-protocols/SecureDNSTS.v
-protocols/SecureDNSSS.v
-protocols/SecureDNSTr.v
+protocols/LegacyVerification/PGPTS.v
+protocols/LegacyVerification/PGPSS.v
 
-# A network aggregation protocol
-protocols/AvgSalary.v
-protocols/AvgSalaryTr.v
+protocols/LegacyVerification/SecureDNSTS.v
+protocols/LegacyVerification/SecureDNSSS.v
 
-# A trusted third party network auth protocol
-protocols/P2P.v
-protocols/P2PTr.v
+protocols/LegacyVerification/AvgSalarySS.v
+protocols/LegacyVerification/NetAuthSS.v

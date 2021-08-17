@@ -5,7 +5,7 @@
 # 
 
 # KNOWNTARGETS will not be passed along to CoqMakefile
-KNOWNTARGETS := CoqMakefile all lib por test-protos share-secret pgp secdns aggregate p2p paper-fast
+KNOWNTARGETS := CoqMakefile #all lib por test-protos share-secret pgp secdns aggregate p2p paper-fast
 
 # KNOWNFILES will not get implicit targets from the final rule, and so
 # depending on them won't invoke the submake
@@ -37,9 +37,26 @@ por: CoqMakefile
 	$(eval TS := src/ModelCheck/PartialOrderReduction.vo)
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
-test-protos: CoqMakefile
-	$(eval TS := "protocols/ExampleProtocolsAutomated.vo protocols/GenProto.vo protocols/GenProtoSS.vo protocols/GenProtoTr.vo")
+test-protos: lib
+	$(eval TS := "protocols/Verification/ExampleProtocolsAutomated.vo protocols/Verification/GenProtoSecure.vo")
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
+
+paper-fast: lib
+	$(eval TS :="protocols/Verification/ShareSecretProtocolSymmetricEncSecure.vo protocols/Verification/PGPSecure.vo protocols/Verification/SecureDNSSecure.vo")
+	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
+
+paper-all: lib
+	$(eval TS :="protocols/Verification/ShareSecretProtocolSymmetricEncSecure.vo protocols/Verification/PGPSecure.vo protocols/Verification/SecureDNSSecure.vo protocols/Verification/AvgSalarySecure.vo protocols/Verification/NetAuthSecure.vo")
+	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
+
+naive-modelcheck: lib
+	$(eval TS :="protocols/LegacyVerification/PGPTS.vo protocols/LegacyVerification/ShareSecretProtocolSymmetricEncTS.vo protocols/LegacyVerification/SecureDNSTS.vo")
+	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
+
+modelcheck-ss: lib
+	$(eval TS :="protocols/LegacyVerification/GenProtoSS.vo protocols/LegacyVerification/PGPSS.vo protocols/LegacyVerification/ShareSecretProtocolSymmetricEncSS.vo protocols/LegacyVerification/SecureDNSSS.vo protocols/LegacyVerification/AvgSalarySS.vo protocols/LegacyVerification/NetAuthSS.vo")
+	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
+
 
 sharesecret: CoqMakefile
 	$(eval TS := "protocols/ShareSecretProtocolTS.vo protocols/ShareSecretProtocolSS.vo")
@@ -48,42 +65,6 @@ sharesecret: CoqMakefile
 sharesecretsym: CoqMakefile
 	$(eval TS := "protocols/ShareSecretProtocolSymmetricEncTS.vo protocols/ShareSecretProtocolSymmetricEncSS.vo")
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
-
-pgp: CoqMakefile
-	$(eval TS := "protocols/PGPTS.vo protocols/PGPSS.vo")
-	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
-
-tr: CoqMakefile
-	$(eval TS := "protocols/GenProtoTr.vo protocols/PGPTr.vo protocols/ShareSecretProtocolSymmetricEncTr.vo protocols/SecureDNSTr.vo protocols/AvgSalaryTr.vo protocols/P2PTr.vo")
-	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
-
-trsh: CoqMakefile
-	$(eval TS := "protocols/GenProtoTr.vo protocols/PGPTr.vo protocols/ShareSecretProtocolSymmetricEncTr.vo protocols/SecureDNSTr.vo")
-	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
-trsh2: CoqMakefile
-	$(eval TS := "protocols/AvgSalaryTr.vo")
-	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
-
-pgp2: CoqMakefile
-	$(eval TS := "protocols/PGPSS.vo protocols/PGPTr.vo")
-	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
-
-secdns: CoqMakefile
-	$(eval TS := "protocols/SecureDNSTS.vo protocols/SecureDNSSS.vo")
-	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
-
-aggregate: CoqMakefile
-	$(eval TS := "protocols/AvgSalary.vo")
-	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
-
-p2p: CoqMakefile
-	$(eval TS := "protocols/P2P.vo")
-	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
-
-paper-fast: CoqMakefile
-	$(eval TS :="protocols/ShareSecretProtocolSS.vo protocols/ShareSecretProtocolSymmetricEncSS.vo protocols/PGPSS.vo protocols/SecureDNSSS.vo")
-	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
-
 
 # This should be the last rule, to handle any targets not declared above
 %: invoke-coqmakefile
