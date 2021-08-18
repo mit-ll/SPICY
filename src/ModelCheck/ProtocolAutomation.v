@@ -169,6 +169,8 @@ Module SimulationAutomation.
       | Sign _ _ _ => apply step_user_inv_sign in H
       | Verify _ _ => apply step_user_inv_verify in H
       | GenerateKey _ _ => apply step_user_inv_genkey in H
+      | realServer 0 _ _ => rewrite realserver_done in H
+      | realServer _ _ _ => erewrite unroll_realserver_step in H by reflexivity
       | _ => idtac "***Missing inversion: " cmd; invert H
       end; split_ex; subst.
 
@@ -701,6 +703,12 @@ Module SimulationAutomation.
 
   Ltac ideal_user_labeled_step :=
     simpl
+    ; (try match goal with
+           | [ |- IdealWorld.lstep_user _ (Action _) (_,idealServer 0 _ _,_) _ ] =>
+             rewrite idealserver_done
+           | [ |- IdealWorld.lstep_user _ (Action _) (_,idealServer _ _ _,_) _ ] =>
+             erewrite unroll_idealserver_step by reflexivity
+           end)
     ; repeat unBindi
     ; match goal with
       | [ |- IdealWorld.lstep_user _ (Action _) (_,IdealWorld.Recv _,_) _ ] =>
@@ -1444,6 +1452,10 @@ Module Gen.
       concrete iuniv u; invert H
     | [H : IdealWorld.lstep_universe ?u _ _ |- _] =>
       concrete iuniv u; invert H
+    | [H : IdealWorld.lstep_user _ _ (_, idealServer 0 _ _, _) _ |- _] =>
+      rewrite idealserver_done in H by reflexivity
+    | [H : IdealWorld.lstep_user _ _ (_, idealServer _ _ _, _) _ |- _] =>
+      erewrite unroll_idealserver_step in H by reflexivity
     | [H : IdealWorld.lstep_user _ _ (_, ?p, _) _ |- _] =>
       concrete iproc p; invert H
     end.

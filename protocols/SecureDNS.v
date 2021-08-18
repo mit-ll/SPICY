@@ -72,12 +72,6 @@ Module SecureDNSProtocol.
     Notation PERMS2 := ($0 $+ (pCH12, reader) $+ (pCH21, writer) $+ (pCH23, writer) $+ (pCH32, reader)).
     Notation PERMS3 := ($0 $+ (pCH23, reader) $+ (pCH32, writer)).
 
-    Fixpoint idealServer (n : nat) {t} (r : << t >>) (c : cmd t) : cmd t :=
-      match n with
-      | 0   => @Return t r
-      | S i => (r' <- c ; idealServer i r' c)
-      end.
-
     (* Fill in the users' protocol specifications here, adding additional users as needed.
      * Note that all users must return an element of the same type, and that type needs to 
      * be one of: ...
@@ -153,12 +147,6 @@ Module SecureDNSProtocol.
                         $+ (KID3, true) $+ (KID4, true)
                         $+ (KID5, false) $+ (KID6, false)).
     Notation KEYS3 := ($0 $+ (KID3, false) $+ (KID4, false) $+ (KID5, true) $+ (KID6, true)).
-
-    Fixpoint realServer (n : nat) {t} (r : << t >>) (c : user_cmd t) : user_cmd t :=
-      match n with
-      | 0   => @Return t r
-      | S i => (r' <- c ; realServer i r' c)
-      end.
 
     Notation real_users :=
       [

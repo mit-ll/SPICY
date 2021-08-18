@@ -68,11 +68,12 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocolSS.
        mkKeys
     : core.
 
+  Opaque realServer.
+
   Lemma safe_invariant :
     invariantFor
       {| Initial := {(ru0, iu0, true)}; Step := @stepSS t__hon t__adv  |}
       (@safety_inv t__hon t__adv).
-      (* (fun st => safety st /\ alignment st /\ returns_align st). *)
   Proof.
     unfold invariantFor
     ; unfold Initial, Step
@@ -80,14 +81,16 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocolSS.
     ; sets_invert.
 
     invert H0.
-    - finish_invariant.
+    - autounfold.
+      finish_invariant.
+      
     - autounfold in H
       ; unfold fold_left, fst, snd in *.
 
       time (
           repeat transition_system_step
         ).
-
+      
       Unshelve.
       all: exact 0 || auto.
   Qed.

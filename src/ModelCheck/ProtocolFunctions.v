@@ -184,6 +184,30 @@ Section IdealWorldDefs.
   Definition getPerm (m : message Access) : perm_id :=
     ch_id (extractPermission m).
     
+  Fixpoint idealServer (n : nat) {t} (r : << t >>) (c : cmd t) : cmd t :=
+    match n with
+    | 0   => @Return t r
+    | S i => (r' <- c ; idealServer i r c)
+    end.
+
+  Lemma unroll_idealserver_step : forall n i t r (c : cmd t),
+      n = S i
+      -> idealServer n r c = IdealWorld.Bind c (fun _ => (idealServer i r c)).
+  Proof.
+    induct n; intros; try discriminate.
+    inversion H; subst.
+    unfold idealServer at 1; simpl.
+    fold idealServer; eauto.
+  Qed.
+
+  Lemma idealserver_done : forall t r (c : cmd t),
+      idealServer 0 r c = IdealWorld.Return r.
+  Proof.
+    eauto.
+  Qed.
+
+  #[global] Opaque idealServer.
+
 End IdealWorldDefs.
 
 Section RealWorldDefs.
@@ -231,6 +255,30 @@ Section RealWorldDefs.
 
   Definition getKey (m : message Access) : key_identifier :=
     fst (extractPermission m).
+
+  Fixpoint realServer (n : nat) {t} (r : << t >>) (c : user_cmd t) : user_cmd t :=
+    match n with
+    | 0   => @Return t r
+    | S i => (r' <- c ; realServer i r c)
+    end.
+
+  Lemma unroll_realserver_step : forall n i t r (c : user_cmd t),
+      n = S i
+      -> realServer n r c = RealWorld.Bind c (fun _ => (realServer i r c)).
+  Proof.
+    induct n; intros; try discriminate.
+    inversion H; subst.
+    unfold realServer at 1; simpl.
+    fold realServer; eauto.
+  Qed.
+
+  Lemma realserver_done : forall t r (c : user_cmd t),
+      realServer 0 r c = RealWorld.Return r.
+  Proof.
+    eauto.
+  Qed.
+
+  #[global] Opaque realServer.
 
 End RealWorldDefs.
 
@@ -553,61 +601,6 @@ Section InversionPrinciples.
     invert H; intuition eauto 12.
   Qed.
 
-  (* Lemma step_user_inv_gensym : *)
-  (*   forall {A B} (usrs usrs' : honest_users A) (adv adv' : user_data B) usage *)
-  (*     lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' tos tos' cur_n cur_n' cmd, *)
-  (*     step_user lbl *)
-  (*               u_id *)
-  (*               (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cur_n, GenerateSymKey usage) *)
-  (*               (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cur_n', cmd) *)
-  (*     -> usrs = usrs' *)
-  (*       /\ adv = adv' *)
-  (*       /\ cs = cs' *)
-  (*       /\ qmsgs = qmsgs' *)
-  (*       /\ mycs = mycs' *)
-  (*       /\ froms = froms' *)
-  (*       /\ tos = tos' *)
-  (*       /\ cur_n = cur_n' *)
-  (*       /\ lbl = Silent *)
-  (*       /\ exists k_id k, *)
-  (*           gks $? k_id = None *)
-  (*           /\ k = MkCryptoKey k_id usage SymKey *)
-  (*           /\ gks' = gks $+ (k_id, k) *)
-  (*           /\ ks' = add_key_perm k_id true ks *)
-  (*           /\ cmd = @Return (Base Access) (k_id,true). *)
-  (* Proof. *)
-  (*   intros * H. *)
-  (*   invert H; intuition eauto 12. *)
-  (* Qed. *)
-
-  
-  (* Lemma step_user_inv_genasym : *)
-  (*   forall {A B} (usrs usrs' : honest_users A) (adv adv' : user_data B) usage *)
-  (*     lbl u_id cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' tos tos' cur_n cur_n' cmd, *)
-  (*     step_user lbl *)
-  (*               u_id *)
-  (*               (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, tos, cur_n, GenerateAsymKey usage) *)
-  (*               (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', tos', cur_n', cmd) *)
-  (*     -> usrs = usrs' *)
-  (*       /\ adv = adv' *)
-  (*       /\ cs = cs' *)
-  (*       /\ qmsgs = qmsgs' *)
-  (*       /\ mycs = mycs' *)
-  (*       /\ froms = froms' *)
-  (*       /\ tos = tos' *)
-  (*       /\ cur_n = cur_n' *)
-  (*       /\ lbl = Silent *)
-  (*       /\ exists k_id k, *)
-  (*           gks $? k_id = None *)
-  (*           /\ k = MkCryptoKey k_id usage AsymKey *)
-  (*           /\ gks' = gks $+ (k_id, k) *)
-  (*           /\ ks' = add_key_perm k_id true ks *)
-  (*           /\ cmd = @Return (Base Access) (k_id,true). *)
-  (* Proof. *)
-  (*   intros * H. *)
-  (*   invert H; intuition eauto 12. *)
-  (* Qed. *)
-
   Lemma adv_no_step :
     forall {A B} (usrs usrs' : honest_users A) (adv adv' : user_data B) b
       lbl cs cs' qmsgs qmsgs' gks gks' ks ks' mycs mycs' froms froms' tos tos' cur_n cur_n' cmd,
@@ -652,6 +645,8 @@ Ltac step_usr_id uid :=
     | GenerateKey _ _ => apply step_user_inv_genkey in H
     (* | GenerateSymKey _ => apply step_user_inv_gensym in H *)
     (* | GenerateAsymKey _ => apply step_user_inv_genasym in H *)
+    | realServer 0 _ _ => rewrite realserver_done in H
+    | realServer _ _ _ => erewrite unroll_realserver_step in H by reflexivity
     | _ => idtac "***Missing inversion: " cmd; invert H
     end
   end; split_ex; split_ors; split_ex; subst.

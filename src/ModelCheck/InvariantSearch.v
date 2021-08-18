@@ -80,6 +80,9 @@ Ltac eq1 :=
     | [ H: {| IdealWorld.read := _ |} = _ |- _ ] => injection H
 
     | [ H : keyId _ = _ |- _] => inversion H; clear H
+
+    | [ H : realServer 0 _ _ = _ |- _ ] => rewrite realserver_done in H
+    | [ H : realServer _ _ _ = _ |- _ ] => erewrite unroll_realserver_step in H by reflexivity
     end.
 
 Lemma lookup_in_merge_perm :
@@ -117,8 +120,13 @@ Ltac finish_honest_cmds_safe1 :=
     | [ |- next_cmd_safe _ _ _ _ _ _ ] => unfold next_cmd_safe; intros
     | [ H : _ $+ (?id1,_) $? ?id2 = _ |- _ ] =>
       is_var id2; destruct (id1 ==n id2); subst; clean_map_lookups
+    | [ H : nextAction (RealWorld.protocol _) _ |- _ ] =>
+      unfold RealWorld.protocol in H
+    | [ H : nextAction (realServer 0 _ _) _ |- _ ] =>
+      rewrite realserver_done in H
+    | [ H : nextAction (realServer _ _ _) _ |- _ ] =>
+      erewrite unroll_realserver_step in H by reflexivity
     | [ H : nextAction _ _ |- _ ] => invert H
-
     | [ H : mkKeys _ $? _ = _ |- _ ] => unfold mkKeys in H; simpl in H
     (* | [ |- context [ RealWorld.findUserKeys ?usrs ] ] => canonicalize_map usrs *)
     | [ |- context [ RealWorld.findUserKeys _ ] ] =>
@@ -285,6 +293,15 @@ Ltac run_ideal_silent_steps_to_end' :=
     ; multistep_ideal' usrs
   end.
 
+Ltac discharge_ideal_proto_equality :=
+  repeat
+    match goal with
+    | [ |- context [ IdealWorld.protocol _ = _ ] ] => unfold IdealWorld.protocol
+    | [ |- idealServer 0 _ _ = _ ] => rewrite idealserver_done
+    | [ |- idealServer _ _ _ = _ ] => erewrite unroll_idealserver_step by reflexivity
+    | [ |- _ = _ ] => reflexivity
+    end.
+
 (* note the automation here creates a bunch of extra existentials while 
  * doint the search for available steps.  This creates several nats
  * that need to be resolved at the end of proofs that use it.  
@@ -306,7 +323,7 @@ Ltac find_step_or_solve' :=
             ; repeat simple apply conj
             ; [ solve [ run_ideal_silent_steps_to_end' ]
               | solve [ simpl; clean_map_lookups; trivial ]
-              | reflexivity
+              | solve [ discharge_ideal_proto_equality ]
               | reflexivity
               ]
       ))
