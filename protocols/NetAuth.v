@@ -101,7 +101,6 @@ Module NetAuthProtocol.
       mkiUsr USR2 PERMS2
                ( _ <- Send (Content USR1) CH2s
                  ; m <- @Recv (TPair Access Access) CH__s2
-                 ; n <- Gen
                  ; let ch := getPerm (msgSnd m)
                    in  m <- @Recv Nat (pCH1 #& ch)
                  ; @Return (Base Nat) (extractContent m)

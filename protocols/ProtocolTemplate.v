@@ -12,18 +12,18 @@ From SPICY Require Import
      Maps
      ChMaps
      Messages
-     ModelCheck
      Keys
      Automation
      Tactics
      Simulation
      AdversaryUniverse
 
-     ModelCheck.UniverseEqAutomation
      ModelCheck.ProtocolAutomation
      ModelCheck.SafeProtocol
+     ModelCheck.ModelCheck
      ModelCheck.ProtocolFunctions
      ModelCheck.SilentStepElimination
+     ModelCheck.InvariantSearch
 .
 
 From SPICY Require IdealWorld RealWorld.
@@ -176,36 +176,24 @@ Module MyProtocolSecure <: AutomatedSafeProtocolSS.
   Lemma safe_invariant :
     invariantFor
       {| Initial := {(ru0, iu0, true)}; Step := @stepSS t__hon t__adv  |}
-      (fun st => safety st /\ alignment st /\ returns_align st).
+      (@safety_inv t__hon t__adv).
   Proof.
-    eapply invariant_weaken.
+    unfold invariantFor
+    ; unfold Initial, Step
+    ; intros
+    ; sets_invert.
 
-    - eapply multiStepClosure_ok; simpl.
-      autounfold in *.
-      (* Calls to gen1 will need to be addded here until the model checking terminates. *)
-      gen1.
-      gen1.
-      
-    (* The remaining parts of the proof script shouldn't need to change. *)
-    - intros.
-      unfold iu0, ideal_univ_start, mkiU in *
-      ; simpl in *.
+    invert H0.
+    - autounfold; finish_invariant.
+    - autounfold in H
+      ; unfold fold_left, fst, snd in *.
 
-
-      sets_invert; split_ex
-      ; simpl in *; autounfold with core
-      ; subst; simpl
-      ; unfold safety, alignment, returns_align
-      ; ( repeat simple apply conj
-          ; [ solve_honest_actions_safe; clean_map_lookups; eauto 8
-            | trivial
-            | unfold labels_align; intros; rstep; subst; solve_labels_align
-            | try solve [ intros; find_step_or_solve ] 
-        ]).
+      time (
+          repeat transition_system_step
+        ).
 
       Unshelve.
-      all: exact 0 || auto.
-
+      all: exact 0  || auto.
   Qed.
   
   Lemma U_good : @universe_starts_sane _ Unit b ru0.
