@@ -48,6 +48,8 @@ Module SecureDNSProtocol.
   Notation USR2 := 1.
   Notation USR3 := 2.
 
+  Notation loopN := 10.
+
   Parameter names : NatMap.t nat.
   
   Section IW.
@@ -81,7 +83,7 @@ Module SecureDNSProtocol.
         (* Authorative DNS Server Specification *)
         mkiUsr USR1 PERMS1
                (
-                 @idealServer 1 (Base Nat) 1
+                 @idealServer loopN (Base Nat) 1
                               (
                                 m <- @Recv Nat CH21
                                 ; let ip := match names $? extractContent m with
@@ -153,7 +155,7 @@ Module SecureDNSProtocol.
         (* Authoritative DNS server implementation *)
         MkRUserSpec USR1 KEYS1
                     (
-                      @realServer 1 (Base Nat) 1
+                      @realServer loopN (Base Nat) 1
                                   ( c <- @Recv Nat (SignedEncrypted KID3 KID2 true)
                                     ; m <- Decrypt c
                                     ; let ip := match names $? (extractContent m) with
