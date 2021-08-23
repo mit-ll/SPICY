@@ -17,6 +17,8 @@ From SPICY Require Import
      Tactics
      Simulation
 
+     Theory.KeysTheory
+
      ModelCheck.UniverseEqAutomation
      ModelCheck.ProtocolAutomation
      ModelCheck.SafeProtocol

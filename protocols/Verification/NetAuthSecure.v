@@ -101,7 +101,7 @@ Module NetAuthProtocolSecure <: AutomatedSafeProtocolSS.
     autounfold;
       unfold universe_starts_sane; simpl.
     repeat (apply conj); intros; eauto.
-    - solve_perm_merges; eauto.
+    - focus_user; auto.
     - econstructor.
     - unfold AdversarySafety.keys_honest; rewrite Forall_natmap_forall; intros.
       unfold mkrUsr; simpl.
@@ -152,7 +152,7 @@ Module NetAuthProtocolSecure <: AutomatedSafeProtocolSS.
           rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty;
           eauto;
           simpl in *;
-          solve_perm_merges;
+          solve_concrete_perm_merges;
           solve_concrete_maps;
           solve_simple_maps;
           eauto.

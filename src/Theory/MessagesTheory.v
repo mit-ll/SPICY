@@ -26,6 +26,7 @@ From SPICY Require Import
      Simulation
 
      Theory.CipherTheory
+     Theory.KeysTheory
 .
 
 Set Implicit Arguments.

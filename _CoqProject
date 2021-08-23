@@ -4,9 +4,9 @@
 # SPDX-License-Identifier: MIT
 # 
 
--Q src/ SPICY
+-R src/ SPICY
 -R Frap/ Frap
--Q protocols/ protocols
+-R protocols/ protocols
 
 # Frap Library Dependency
 Frap/Invariant.v
