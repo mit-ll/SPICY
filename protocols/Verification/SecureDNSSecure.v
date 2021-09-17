@@ -69,6 +69,7 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocolSS.
     : core.
 
   Opaque realServer.
+  Set Ltac Profiling.
 
   Lemma safe_invariant :
     invariantFor
@@ -95,7 +96,7 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocolSS.
       all: exact 0 || auto.
   Qed.
 
-  (* Show Ltac Profile. *)
+  Show Ltac Profile.
   (* Show Ltac Profile "churn2". *)
   
   Lemma U_good : @universe_starts_sane _ Unit b ru0.

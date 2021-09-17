@@ -69,7 +69,7 @@ Module PGPProtocolSecure <: AutomatedSafeProtocolSS.
     exists (next_key_nat m); eauto using next_key_not_in.
   Qed.
 
-  (* Set Ltac Profiling. *)
+  Set Ltac Profiling.
 
   Lemma safe_invariant :
     invariantFor
@@ -89,6 +89,9 @@ Module PGPProtocolSecure <: AutomatedSafeProtocolSS.
 
       unfold real_users, ideal_users, mkrUsr, userProto, userKeys, userId, mkiUsr in *; uf; rwuf.
 
+      match goal with
+      end.
+      
       time (
           repeat transition_system_step
         ).
@@ -97,7 +100,7 @@ Module PGPProtocolSecure <: AutomatedSafeProtocolSS.
       all: eauto.
   Qed.
 
-  (* Show Ltac Profile. *)
+  Show Ltac Profile.
       
   Lemma U_good : @universe_starts_sane _ Unit b ru0.
   Proof.

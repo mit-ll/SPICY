@@ -30,8 +30,7 @@ invoke-coqmakefile: CoqMakefile
 
 lib: CoqMakefile
 	$(MAKE) -f CoqMakefile src/AdversarySafety.vo \
-			       src/ModelCheck/PartialOrderReduction.vo \
-			       src/ModelCheck/ProtocolAutomation.vo
+			       src/ModelCheck/InvariantSearch.vo
 
 por: CoqMakefile
 	$(eval TS := src/ModelCheck/PartialOrderReduction.vo)

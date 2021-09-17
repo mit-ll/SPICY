@@ -1722,22 +1722,49 @@ Module Gen.
     eapply H; eauto.
   Qed.
 
-  Lemma sstep_inv_silent :
-    forall A B (U U' : RealWorld.universe A B) uid U__i b st',
-      indexedRealStep uid Silent U U'
-      -> (forall uid' U', uid' > uid -> ~ indexedRealStep uid' Silent U U')
-      -> stepSS (U,U__i,b) st'
-      -> exists U__r,
-          indexedModelStep uid (U,U__i,b) (U__r,U__i,b)
-          /\ indexedRealStep uid Silent U U__r
-          /\ st' = (U__r,U__i,b).
+  Lemma sstep_inv_silent' :
+    forall A B st st',
+      (@stepSS A B) ^* st st'
+      -> forall (U U' : RealWorld.universe A B) uid U__i b,
+        st = (U,U__i,b)
+        -> indexedRealStep uid Silent U U'
+        -> (forall uid' U', uid' > uid -> ~ indexedRealStep uid' Silent U U')
+        -> exists U__r,
+            indexedModelStep uid (U,U__i,b) (U__r,U__i,b)
+            /\ indexedRealStep uid Silent U U__r
+            /\ (  st' = (U,U__i,b)
+              \/ (st' = (U__r,U__i,b) /\ exists st'', (stepSS (t__adv := B) ^* st' st''))
+              ) 
+          (* /\ (forall uid' U__r', uid' > uid -> ~ indexedRealStep uid' Silent U__r U__r') *)
+  .
   Proof.
-    intros.
-    invert H1; repeat equality1.
+    induct 1; intros.
+    - eexists; eauto 8.
+    - subst.
+      invert H; repeat equality1.
+      invert H0.
+      admit.
+      
+
+      
+      generalize H2; eapply IHtrc in H2; eauto.
+      invert H; repeat equality1.
+      invert H1.
+      
+      eexists; eauto 8.
+      
+      eapply IHtr in 
+      
+      eauto.
+      eauto.
+      right; eauto 8.
+    
     destruct (u_id ==n uid); subst.
     - invert H2; clear_mislabeled_steps; clean_map_lookups.
       invert H5; clear_mislabeled_steps.
       eexists; eauto 8.
+      (* eexists; repeat simple apply conj; eauto. *)
+
     - invert H2.
       + invert H5; try solve [ clear_mislabeled_steps ].
         apply not_eq in n; split_ors.
@@ -1747,6 +1774,69 @@ Module Gen.
           specialize (H0 _ ru' GT); contradiction.
       + eapply H3 in H; contradiction.
   Qed.
+  Lemma sstep_inv_silent :
+    forall A B (U U' : RealWorld.universe A B) uid U__i b st',
+      (stepSS (t__adv := B)) ^* (U,U__i,b) st'
+      -> indexedRealStep uid Silent U U'
+      -> (forall uid' U', uid' > uid -> ~ indexedRealStep uid' Silent U U')
+      -> exists U__r,
+          indexedModelStep uid (U,U__i,b) (U__r,U__i,b)
+          /\ indexedRealStep uid Silent U U__r
+          /\ (  st' = (U,U__i,b)
+            \/ (st' = (U__r,U__i,b) /\ exists st'', (stepSS (t__adv := B) ^* st' st''))
+            ) 
+          (* /\ (forall uid' U__r', uid' > uid -> ~ indexedRealStep uid' Silent U__r U__r') *)
+  .
+  Proof.
+    induct 1; intros; repeat equality1.
+    - eexists; eauto 8.
+    - 
+      eexists; repeat simple apply conj.
+      eauto.
+      eauto.
+      right; eauto 8.
+    
+    destruct (u_id ==n uid); subst.
+    - invert H2; clear_mislabeled_steps; clean_map_lookups.
+      invert H5; clear_mislabeled_steps.
+      eexists; eauto 8.
+      (* eexists; repeat simple apply conj; eauto. *)
+
+    - invert H2.
+      + invert H5; try solve [ clear_mislabeled_steps ].
+        apply not_eq in n; split_ors.
+        * assert (uid > u_id) as GT by lia.
+          specialize (H4 _ U' GT); contradiction.
+        * assert (u_id > uid) as GT by lia.
+          specialize (H0 _ ru' GT); contradiction.
+      + eapply H3 in H; contradiction.
+  Qed.
+
+  (* Lemma sstep_inv_silent : *)
+  (*   forall A B (U U' : RealWorld.universe A B) uid U__i b st', *)
+  (*     indexedRealStep uid Silent U U' *)
+  (*     -> (forall uid' U', uid' > uid -> ~ indexedRealStep uid' Silent U U') *)
+  (*     -> stepSS (U,U__i,b) st' *)
+  (*     -> exists U__r, *)
+  (*         indexedModelStep uid (U,U__i,b) (U__r,U__i,b) *)
+  (*         /\ indexedRealStep uid Silent U U__r *)
+  (*         /\ st' = (U__r,U__i,b). *)
+  (* Proof. *)
+  (*   intros. *)
+  (*   invert H1; repeat equality1. *)
+  (*   destruct (u_id ==n uid); subst. *)
+  (*   - invert H2; clear_mislabeled_steps; clean_map_lookups. *)
+  (*     invert H5; clear_mislabeled_steps. *)
+  (*     eexists; eauto 8. *)
+  (*   - invert H2. *)
+  (*     + invert H5; try solve [ clear_mislabeled_steps ]. *)
+  (*       apply not_eq in n; split_ors. *)
+  (*       * assert (uid > u_id) as GT by lia. *)
+  (*         specialize (H4 _ U' GT); contradiction. *)
+  (*       * assert (u_id > uid) as GT by lia. *)
+  (*         specialize (H0 _ ru' GT); contradiction. *)
+  (*     + eapply H3 in H; contradiction. *)
+  (* Qed. *)
 
   Lemma sstep_inv_labeled :
     forall A B st st' ru,

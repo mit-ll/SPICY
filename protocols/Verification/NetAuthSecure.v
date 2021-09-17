@@ -73,6 +73,8 @@ Module NetAuthProtocolSecure <: AutomatedSafeProtocolSS.
        mkKeys
     : core.
 
+  Set Ltac Profiling.
+
   Lemma safe_invariant :
     invariantFor
       {| Initial := {(ru0, iu0, true)}; Step := @stepSS t__hon t__adv  |}
@@ -95,6 +97,8 @@ Module NetAuthProtocolSecure <: AutomatedSafeProtocolSS.
       Unshelve.
       all: exact 0  || auto.
   Qed.
+
+  Show Ltac Profile.
 
   Lemma U_good : @universe_starts_sane _ Unit b ru0.
   Proof.

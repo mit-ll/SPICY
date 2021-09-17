@@ -348,7 +348,7 @@ Ltac finish_invariant :=
 Ltac invSS1 :=
   discriminate
   || match goal with
-    | [ STEP : stepSS (?U,_,_) _
+    | [ STEP : (stepSS (t__adv := _)) ^* (?U,_,_) _
       , IRS : indexedRealStep ?uid Silent ?U _
       , P : (forall _ _, _ > ?uid -> _)
         |- _ ] =>
@@ -358,13 +358,13 @@ Ltac invSS1 :=
       ; split_ex
       ; subst
 
-    | [ STEP : stepSS (?ru,?iu,?b) _
+    | [ STEP : (stepSS (t__adv := _)) ^* (?ru,?iu,?b) _
       , P : (forall _ _, ~ indexedRealStep _ Silent _  _)
         |- _ ] =>
 
       progress ( unfold not in P )
 
-    | [ STEP : stepSS (?ru,?iu,?b) (_,_,_)
+    | [ STEP : (stepSS (t__adv := _)) ^* (?ru,?iu,?b) (_,_,_)
       , P : (forall _ _, indexedRealStep _ Silent _ _ -> False)
         |- _ ] =>
 
@@ -380,7 +380,7 @@ Ltac invSS1 :=
           ; assert (labels_align (ru,iu,b)) by ((repeat prove_alignment1); eauto)
         end
 
-    | [ STEP : stepSS ?st ?st'
+    | [ STEP : (stepSS (t__adv := _)) ^* ?st ?st'
       , P : (forall _ _, indexedRealStep _ Silent _ _ -> False)
         |- _ ] =>
 
@@ -393,11 +393,62 @@ Ltac invSS1 :=
         | _ => destruct st' as [[?ru' ?iu'] ?b']
         end
 
-    | [ H : stepSS (?U,_,_) _ |- _ ] =>
+    | [ H : (stepSS (t__adv := _)) ^* (?U,_,_) _ |- _ ] =>
       match U with
       | {| RealWorld.users := ?usrs |} =>
         find_silent U usrs
       end
+
+    (* | [ STEP : stepSS (?U,_,_) _ *)
+    (*   , IRS : indexedRealStep ?uid Silent ?U _ *)
+    (*   , P : (forall _ _, _ > ?uid -> _) *)
+    (*     |- _ ] => *)
+
+    (*   pose proof (sstep_inv_silent IRS P STEP) *)
+    (*   ; clear STEP IRS P *)
+    (*   ; split_ex *)
+    (*   ; subst *)
+
+    (* | [ STEP : stepSS (?ru,?iu,?b) _ *)
+    (*   , P : (forall _ _, ~ indexedRealStep _ Silent _  _) *)
+    (*     |- _ ] => *)
+
+    (*   progress ( unfold not in P ) *)
+
+    (* | [ STEP : stepSS (?ru,?iu,?b) (_,_,_) *)
+    (*   , P : (forall _ _, indexedRealStep _ Silent _ _ -> False) *)
+    (*     |- _ ] => *)
+
+    (*   concrete ru *)
+    (*   ; match goal with *)
+    (*     | [ LA : labels_align (?ru,?iu,?b) |- _ ] => *)
+    (*       pose proof (sstep_inv_labeled P STEP LA eq_refl eq_refl ) *)
+    (*       ; split_ex; subst *)
+    (*       ; clear STEP P LA *)
+
+    (*     | _ => *)
+    (*       idtac "proving alignment 4" *)
+    (*       ; assert (labels_align (ru,iu,b)) by ((repeat prove_alignment1); eauto) *)
+    (*     end *)
+
+    (* | [ STEP : stepSS ?st ?st' *)
+    (*   , P : (forall _ _, indexedRealStep _ Silent _ _ -> False) *)
+    (*     |- _ ] => *)
+
+    (*   match st with *)
+    (*   | (_,_,_) => idtac *)
+    (*   | _ => destruct st as [[?ru ?iu] ?b] *)
+    (*   end *)
+    (*   ; match st' with *)
+    (*     | (_,_,_) => idtac *)
+    (*     | _ => destruct st' as [[?ru' ?iu'] ?b'] *)
+    (*     end *)
+
+    (* | [ H : stepSS (?U,_,_) _ |- _ ] => *)
+    (*   match U with *)
+    (*   | {| RealWorld.users := ?usrs |} => *)
+    (*     find_silent U usrs *)
+    (*   end *)
         
     | [ IMS : indexedModelStep ?uid (?U,_,_) _
       , IRS : indexedRealStep ?uid _ ?U _
