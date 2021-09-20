@@ -29,6 +29,7 @@ From SPICY Require Import
      ModelCheck.UniverseEqAutomation
      ModelCheck.ProtocolFunctions
      ModelCheck.PartialOrderReduction
+     ModelCheck.RealWorldStepLemmas
      ModelCheck.SilentStepElimination
 .
 
@@ -160,7 +161,8 @@ Module SimulationAutomation.
     Ltac step_usr_hyp H cmd :=
       match cmd with
       | Return _ => apply step_user_inv_ret in H; contradiction
-      | Bind _ _ => apply step_user_inv_bind in H; split_ands; split_ors; split_ands; subst; try discriminate
+      (* | Bind _ _ => apply step_user_inv_bind in H; split_ands; split_ors; split_ands; subst; try discriminate *)
+      | Bind _ _ => apply step_user_inv_bind in H; destruct H; split_ex; subst; try discriminate
       | Gen => apply step_user_inv_gen in H
       | Send _ _ => apply step_user_inv_send in H
       | Recv _ => apply step_user_inv_recv in H; split_ex; subst; process_message_queue
@@ -1722,6 +1724,23 @@ Module Gen.
     eapply H; eauto.
   Qed.
 
+  Inductive NoSilent {A B} (uid : user_id) (U : RealWorld.universe A B) : Prop :=
+  | Stuck : forall U',
+      ~ indexedRealStep uid Silent U U'
+      -> NoSilent uid U.
+
+  Set Implicit Arguments.
+
+  Lemma indexedModelStep_user_step :
+    forall t__hon t__adv uid ru ru' iu iu' b b',
+      @indexedModelStep t__hon t__adv uid (ru,iu,b) (ru',iu',b')
+      -> (indexedRealStep uid Silent ru ru' /\ iu = iu' /\ b = b')
+        \/ (exists a, indexedRealStep uid (Action a) ru ru')
+  .
+  Proof.
+    induct 1; eauto 8.
+  Qed.
+
   Lemma ssteps_inv_silent :
     forall A B st st',
       (@stepSS A B) ^* st st'
@@ -1730,10 +1749,10 @@ Module Gen.
         -> indexedRealStep uid Silent U U'
         -> (forall uid' U', uid' > uid -> ~ indexedRealStep uid' Silent U U')
         -> exists U__r,
-            indexedModelStep uid (U,U__i,b) (U__r,U__i,b)
-            /\ indexedRealStep uid Silent U U__r
+            indexedRealStep uid Silent U U__r
+            /\ indexedModelStep uid (U,U__i,b) (U__r,U__i,b)
             /\ (  st' = (U,U__i,b)
-              \/  exists st'', (stepSS (t__adv := B) ^* st'' st')
+              \/  (stepSS (t__adv := B) ^* (U__r,U__i,b) st')
               )
           (* /\ (forall uid' U__r', uid' > uid -> ~ indexedRealStep uid' Silent U__r U__r') *)
   .
@@ -1742,16 +1761,95 @@ Module Gen.
     subst; invert H.
     - eexists; eauto 8.
     - invert H0; repeat equality1.
-      invert H.
-      + destruct (le_gt_dec u_id uid).
-        * destruct ( uid ==n u_id ); subst.
-          clear H1.
-          eexists; repeat simple apply conj; eauto.
 
+      invert H.
+      + apply indexedModelStep_user_step in H6; split_ex; split_ors; subst.
+        * destruct ( uid ==n u_id ); subst.
+          clear H1 H4.
+          
+          eexists; repeat simple apply conj; eauto.
+          exfalso.
+
+          destruct (le_gt_dec u_id uid).
           assert (uid > u_id) by lia.
-          specialize (H5 _ _ H H1); contradiction.
-        * specialize (H2 _ _ g H4); contradiction.
+          eapply H5; eauto.
+          eapply H2; eauto.
+          
+        * invert H; invert H4.
+          exfalso.
+          clean_map_lookups
+          ; pose proof (user_step_label_deterministic _ _ _ _ _ _ _ _ _ H7 H8); discriminate.
+
       + eapply H4 in H1; contradiction.
+  Qed.
+
+  Lemma ssteps_inv_silent' :
+    forall A B st st',
+      (@stepSS A B) ^* st st'
+      -> forall (U U' : RealWorld.universe A B) uid U__i b,
+        st = (U,U__i,b)
+        -> indexedRealStep uid Silent U U'
+        -> (forall uid' U', uid' > uid -> ~ indexedRealStep uid' Silent U U')
+        -> exists U__r,
+            indexedRealStep uid Silent U U__r
+            /\ (  st' = (U,U__i,b)
+              \/  (stepSS (t__adv := B) ^* (U__r,U__i,b) st')
+              )
+          (* /\ (forall uid' U__r', uid' > uid -> ~ indexedRealStep uid' Silent U__r U__r') *)
+  .
+  Proof.
+    intros.
+    subst; invert H.
+    - eexists; eauto 8.
+    - invert H0; repeat equality1.
+
+      invert H.
+      + apply indexedModelStep_user_step in H6; split_ex; split_ors; subst.
+        * destruct ( uid ==n u_id ); subst.
+          clear H1 H4.
+          
+          eexists; repeat simple apply conj; eauto.
+          exfalso.
+
+          destruct (le_gt_dec u_id uid).
+          assert (uid > u_id) by lia.
+          eapply H5; eauto.
+          eapply H2; eauto.
+          
+        * invert H; invert H4.
+          exfalso.
+          clean_map_lookups
+          ; pose proof (user_step_label_deterministic _ _ _ _ _ _ _ _ _ H7 H8); discriminate.
+
+      + eapply H4 in H1; contradiction.
+  Qed.
+
+  Lemma ssteps_inv_labeled :
+    forall A B st st' ru,
+      (forall uid U', ~ @indexedRealStep A B uid Silent ru U')
+      -> (@stepSS A B) ^* st st'
+      -> labels_align st
+      -> forall iu b,
+          st = (ru,iu,b)
+          (* -> st' = (ru',iu',b') *)
+          -> st = st'
+          \/ exists uid ru' iu0 iu' ra ia,
+              indexedRealStep uid (Action ra) ru ru'
+              /\ (indexedIdealStep uid Silent) ^* iu iu0
+              /\ indexedIdealStep uid (Action ia) iu0 iu'
+              /\ action_matches (RealWorld.all_ciphers ru) (RealWorld.all_keys ru) (uid,ra) ia
+              /\ (@stepSS A B) ^* (ru',iu',b) st'.
+  Proof.
+    intros; subst.
+    invert H0; clear_mislabeled_steps; eauto.
+    right.
+
+    invert H2; repeat equality1.
+    invert H0.
+    - exfalso; eapply H; eauto.
+    - invert H6; try contradiction.
+      clear_mislabeled_steps.
+      eauto 12.
   Qed.
 
   Lemma sstep_inv_silent :
@@ -1876,6 +1974,12 @@ Module Gen.
 
   Ltac inv_stepSS1 :=
     match goal with
+    | [ H : stepSS (?U,_,_) _ |- _ ] =>
+      match U with
+      | {| RealWorld.users := ?usrs |} =>
+        find_silent U usrs
+      end
+
     | [ STEP : stepSS (?U,_,_) _
       , IRS : indexedRealStep ?uid Silent ?U _
       , P : (forall _ _, _ > ?uid -> _)

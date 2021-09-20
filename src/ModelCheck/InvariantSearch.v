@@ -186,7 +186,7 @@ Ltac finish_honest_cmds_safe :=
 Definition safety_inv :=
   fun t__hon t__adv st => @safety t__hon t__adv st /\ alignment st /\ @returns_align t__hon t__adv st.
 
-#[export] Hint Opaque safety_inv.
+#[export] Hint Opaque safety_inv : core.
 
 Definition can_con_map {V} (m : Map.t V) : Map.t V.
   let m' := eval simpl in (fold (fun k v acc => acc $+ (k, v)) m $0)
@@ -331,152 +331,87 @@ Ltac find_step_or_solve' :=
       ))
   end.
 
-Ltac finish_invariant :=
-  rwuf
-  ; try match goal with
-    | [ |- context [{| RealWorld.users := ?users |} ]] =>
-      ccmag users
-    end
-  ; unfold safety_inv, safety, alignment, returns_align
-  ; repeat simple apply conj
-  ; [ finish_honest_cmds_safe; clean_map_lookups; eauto 8
-    | trivial
-    | unfold labels_align; intros; rstep; subst; solve_labels_align
-    | try solve [ simpl; intros; find_step_or_solve' ]
-    ].
+(* Ltac invSS1 := *)
+(*   discriminate *)
+(*   || match goal with *)
+(*     | [ STEP : stepSS (?U,_,_) _ *)
+(*       , IRS : indexedRealStep ?uid Silent ?U _ *)
+(*       , P : (forall _ _, _ > ?uid -> _) *)
+(*         |- _ ] => *)
 
-Ltac invSS1 :=
-  discriminate
-  || match goal with
-    | [ STEP : (stepSS (t__adv := _)) ^* (?U,_,_) _
-      , IRS : indexedRealStep ?uid Silent ?U _
-      , P : (forall _ _, _ > ?uid -> _)
-        |- _ ] =>
+(*       pose proof (sstep_inv_silent IRS P STEP) *)
+(*       ; clear STEP IRS P *)
+(*       ; split_ex *)
+(*       ; subst *)
 
-      pose proof (sstep_inv_silent IRS P STEP)
-      ; clear STEP IRS P
-      ; split_ex
-      ; subst
+(*     | [ STEP : stepSS (?ru,?iu,?b) _ *)
+(*       , P : (forall _ _, ~ indexedRealStep _ Silent _  _) *)
+(*         |- _ ] => *)
 
-    | [ STEP : (stepSS (t__adv := _)) ^* (?ru,?iu,?b) _
-      , P : (forall _ _, ~ indexedRealStep _ Silent _  _)
-        |- _ ] =>
+(*       progress ( unfold not in P ) *)
 
-      progress ( unfold not in P )
+(*     | [ STEP : stepSS (?ru,?iu,?b) (_,_,_) *)
+(*       , P : (forall _ _, indexedRealStep _ Silent _ _ -> False) *)
+(*         |- _ ] => *)
 
-    | [ STEP : (stepSS (t__adv := _)) ^* (?ru,?iu,?b) (_,_,_)
-      , P : (forall _ _, indexedRealStep _ Silent _ _ -> False)
-        |- _ ] =>
+(*       concrete ru *)
+(*       ; match goal with *)
+(*         | [ LA : labels_align (?ru,?iu,?b) |- _ ] => *)
+(*           pose proof (sstep_inv_labeled P STEP LA eq_refl eq_refl ) *)
+(*           ; split_ex; subst *)
+(*           ; clear STEP P LA *)
 
-      concrete ru
-      ; match goal with
-        | [ LA : labels_align (?ru,?iu,?b) |- _ ] =>
-          pose proof (sstep_inv_labeled P STEP LA eq_refl eq_refl )
-          ; split_ex; subst
-          ; clear STEP P LA
+(*         | _ => *)
+(*           idtac "proving alignment 4" *)
+(*           ; assert (labels_align (ru,iu,b)) by ((repeat prove_alignment1); eauto) *)
+(*         end *)
 
-        | _ =>
-          idtac "proving alignment 4"
-          ; assert (labels_align (ru,iu,b)) by ((repeat prove_alignment1); eauto)
-        end
+(*     | [ STEP : stepSS ?st ?st' *)
+(*       , P : (forall _ _, indexedRealStep _ Silent _ _ -> False) *)
+(*         |- _ ] => *)
 
-    | [ STEP : (stepSS (t__adv := _)) ^* ?st ?st'
-      , P : (forall _ _, indexedRealStep _ Silent _ _ -> False)
-        |- _ ] =>
+(*       match st with *)
+(*       | (_,_,_) => idtac *)
+(*       | _ => destruct st as [[?ru ?iu] ?b] *)
+(*       end *)
+(*       ; match st' with *)
+(*         | (_,_,_) => idtac *)
+(*         | _ => destruct st' as [[?ru' ?iu'] ?b'] *)
+(*         end *)
 
-      match st with
-      | (_,_,_) => idtac
-      | _ => destruct st as [[?ru ?iu] ?b]
-      end
-      ; match st' with
-        | (_,_,_) => idtac
-        | _ => destruct st' as [[?ru' ?iu'] ?b']
-        end
-
-    | [ H : (stepSS (t__adv := _)) ^* (?U,_,_) _ |- _ ] =>
-      match U with
-      | {| RealWorld.users := ?usrs |} =>
-        find_silent U usrs
-      end
-
-    (* | [ STEP : stepSS (?U,_,_) _ *)
-    (*   , IRS : indexedRealStep ?uid Silent ?U _ *)
-    (*   , P : (forall _ _, _ > ?uid -> _) *)
-    (*     |- _ ] => *)
-
-    (*   pose proof (sstep_inv_silent IRS P STEP) *)
-    (*   ; clear STEP IRS P *)
-    (*   ; split_ex *)
-    (*   ; subst *)
-
-    (* | [ STEP : stepSS (?ru,?iu,?b) _ *)
-    (*   , P : (forall _ _, ~ indexedRealStep _ Silent _  _) *)
-    (*     |- _ ] => *)
-
-    (*   progress ( unfold not in P ) *)
-
-    (* | [ STEP : stepSS (?ru,?iu,?b) (_,_,_) *)
-    (*   , P : (forall _ _, indexedRealStep _ Silent _ _ -> False) *)
-    (*     |- _ ] => *)
-
-    (*   concrete ru *)
-    (*   ; match goal with *)
-    (*     | [ LA : labels_align (?ru,?iu,?b) |- _ ] => *)
-    (*       pose proof (sstep_inv_labeled P STEP LA eq_refl eq_refl ) *)
-    (*       ; split_ex; subst *)
-    (*       ; clear STEP P LA *)
-
-    (*     | _ => *)
-    (*       idtac "proving alignment 4" *)
-    (*       ; assert (labels_align (ru,iu,b)) by ((repeat prove_alignment1); eauto) *)
-    (*     end *)
-
-    (* | [ STEP : stepSS ?st ?st' *)
-    (*   , P : (forall _ _, indexedRealStep _ Silent _ _ -> False) *)
-    (*     |- _ ] => *)
-
-    (*   match st with *)
-    (*   | (_,_,_) => idtac *)
-    (*   | _ => destruct st as [[?ru ?iu] ?b] *)
-    (*   end *)
-    (*   ; match st' with *)
-    (*     | (_,_,_) => idtac *)
-    (*     | _ => destruct st' as [[?ru' ?iu'] ?b'] *)
-    (*     end *)
-
-    (* | [ H : stepSS (?U,_,_) _ |- _ ] => *)
-    (*   match U with *)
-    (*   | {| RealWorld.users := ?usrs |} => *)
-    (*     find_silent U usrs *)
-    (*   end *)
+(*     | [ H : stepSS (?U,_,_) _ |- _ ] => *)
+(*       match U with *)
+(*       | {| RealWorld.users := ?usrs |} => *)
+(*         find_silent U usrs *)
+(*       end *)
         
-    | [ IMS : indexedModelStep ?uid (?U,_,_) _
-      , IRS : indexedRealStep ?uid _ ?U _
-        |- _ ] => clear IMS
+(*     | [ IMS : indexedModelStep ?uid (?U,_,_) _ *)
+(*       , IRS : indexedRealStep ?uid _ ?U _ *)
+(*         |- _ ] => clear IMS *)
 
-    | [ H : action_matches _ _ _ _ |- _] => invert H
-    | [ H : forall _ _ _, _ -> _ -> _ -> _ <-> _ |- _ ] => clear H
-    | [ H : forall _ _ _ _, _ -> _ -> _ -> _ -> _ <-> _ |- _ ] => clear H
-    | [ H : (forall _ _ _, indexedRealStep _ _ ?ru _ ->
-                      exists _ _ _, (indexedIdealStep _ _) ^* ?iu _ /\ _) |- _ ] =>
-      clear H
+(*     | [ H : action_matches _ _ _ _ |- _] => invert H *)
+(*     | [ H : forall _ _ _, _ -> _ -> _ -> _ <-> _ |- _ ] => clear H *)
+(*     | [ H : forall _ _ _ _, _ -> _ -> _ -> _ -> _ <-> _ |- _ ] => clear H *)
+(*     | [ H : (forall _ _ _, indexedRealStep _ _ ?ru _ -> *)
+(*                       exists _ _ _, (indexedIdealStep _ _) ^* ?iu _ /\ _) |- _ ] => *)
+(*       clear H *)
 
-    | [H : indexedRealStep _ _ _ _ |- _ ] =>
-      invert H
-    | [H : RealWorld.step_universe _ ?u _ _ |- _] =>
-      concrete u; chu
-    | [H : RealWorld.step_user _ None _ _ |- _] =>
-      invert H
-    | [H : RealWorld.step_user _ _ ?u _ |- _] =>
-      concrete u; chu
+(*     | [H : indexedRealStep _ _ _ _ |- _ ] => *)
+(*       invert H *)
+(*     | [H : RealWorld.step_universe _ ?u _ _ |- _] => *)
+(*       concrete u; chu *)
+(*     | [H : RealWorld.step_user _ None _ _ |- _] => *)
+(*       invert H *)
+(*     | [H : RealWorld.step_user _ _ ?u _ |- _] => *)
+(*       concrete u; chu *)
 
-    | [ H : indexedIdealStep _ _ _ _ |- _ ] => istep (* run _after_ real steps *)
+(*     | [ H : indexedIdealStep _ _ _ _ |- _ ] => istep (* run _after_ real steps *) *)
                     
-    | [ H : _ ^* (?ru,?iu,_) _ |- _ ] => concrete ru; concrete iu; invert H
+(*     | [ H : _ ^* (?ru,?iu,_) _ |- _ ] => concrete ru; concrete iu; invert H *)
 
-    | [ |- safety_inv (?ru,_,_) ] =>
-      concrete ru; solve [ finish_invariant ]
-    end.
+(*     | [ |- safety_inv (?ru,_,_) ] => *)
+(*       concrete ru; solve [ finish_invariant ] *)
+(*     end. *)
 
 Ltac cleanup1 :=
   match goal with
@@ -525,7 +460,7 @@ Ltac cleanup1 :=
   | [ H : match ?acc with _ => _ end |- _ ] =>
     match type of acc with
     | IdealWorld.IW_message.access => destruct acc
-    | _ => fail 2
+    | _ => fail 1
     end
       
   | [ H : context [ _ #+ (?k,_) #? ?k ] |- _ ] =>
@@ -552,8 +487,8 @@ Ltac cleanup1 :=
   | [ H : context [$0 $k++ _] |- _] => rewrite merge_perms_left_identity in H
   | [ H : context [_ $k++ $0] |- _] => rewrite merge_perms_right_identity in H
   | [ H : context [_ $k++ _ $? _] |- _ ] => rewrite lookup_in_merge_perm in H
-  | [ H : context [_ $k++ _]  |- _] =>
-    erewrite reduce_merge_perms in H by (clean_map_lookups; eauto)
+  (* | [ H : context [_ $k++ _]  |- _] => *)
+  (*   erewrite reduce_merge_perms in H by (clean_map_lookups; eauto) *)
   (* | [ H : context [_ $k++ _]  |- _] => *)
   (*   unfold merge_perms, add_key_perm, fold in H; clean_map_lookups *)
 
@@ -569,6 +504,174 @@ Ltac cleanup1 :=
   | [ H : context [[] ++ _] |- _ ] => rewrite !app_nil_l in H
   | [ H : context [_ ++ []] |- _ ] => rewrite !app_nil_r in H
   end || discriminate || eq1.
+
+Inductive NoSilent {A B} (uid : user_id) (U : RealWorld.universe A B) : Prop :=
+| Stuck :
+    (forall U', ~ indexedRealStep uid Silent U U')
+    -> NoSilent uid U.
+
+    Ltac prove_gt_pred :=
+      intros
+      ; simpl in *
+      ; repeat 
+          match goal with
+          | [ H : context [ _ $+ (_,_) $- _ ] |- _ ] =>
+            repeat (
+                (rewrite map_add_remove_neq in H by congruence)
+                || (rewrite map_add_remove_eq in H by trivial)
+                || (rewrite remove_empty in H)
+              )
+          | [ H : _ $+ (?uid,_) $? ?uid' = Some _ |- _ ] =>
+            destruct (uid ==n uid'); subst; clean_map_lookups; try lia
+          | [ H : NoSilent ?uid ?U |- ~ indexedRealStep ?uid _ ?U _ ] => admit (* unfold not; intros; rstep *)
+          end.
+
+    Ltac assert_gt_pred U uid :=
+      let P := fresh "P"
+      in assert (forall uid' ud' U', U.(RealWorld.users) $? uid' = Some ud'
+                                -> uid' > uid
+                                -> ~ indexedRealStep uid' Silent U U') as P by prove_gt_pred
+         ; pose proof (upper_users_cant_step_rewrite P); clear P
+    .
+
+    Ltac assert_no_silents U :=
+      let P := fresh "P"
+      in assert (forall uid U', ~ indexedRealStep uid Silent U U') as P by prove_gt_pred
+    .
+
+    Ltac getNextAction p :=
+      match p with
+      | RealWorld.Bind ?n _ => getNextAction n
+      | ?n                  => idtac n
+      end.
+
+    Ltac assertNotSilent uid U p :=
+      match p with
+      | RealWorld.Bind ?n _ => assertNotSilent uid U n
+      | RealWorld.Send _ _  => assert (NoSilent uid U) by admit
+      | RealWorld.Recv _    => assert (NoSilent uid U) by admit
+      | ?n                  => fail 1
+      end.
+
+    Ltac find_silent U us :=
+      let MAX := fresh "MEQ"
+      in  remember (O.max_elt us) eqn:MAX
+          ; unfold O.max_elt in MAX
+          ; simpl in MAX
+          ; match type of MAX with
+            | _ = Some (?uid,?u) =>
+              let p := (eval simpl in u.(RealWorld.protocol))
+              in ( ( assertNotSilent uid U; find_silent U (us $- uid) )
+                   || assert (exists U', indexedRealStep uid Silent U U') by solve_indexedRealStep
+                   ; idtac uid
+                   ; assert_gt_pred U uid
+                 ) || assert_no_silents U
+              (* ( ( assert (exists U', indexedRealStep uid Silent U U') by solve_indexedRealStep *)
+              (*     ; assert_gt_pred U uid) *)
+              (*   || find_silent U (us $- uid) *)
+              (* ) || assert_no_silents U *)
+            end
+          ; subst; split_ex
+    .
+
+Ltac finish_invariant :=
+  rwuf
+  ; try match goal with
+    | [ |- context [{| RealWorld.users := ?users |} ]] =>
+      ccmag users
+    end
+  ; unfold safety_inv, safety, alignment, returns_align
+  ; repeat simple apply conj
+  ; [ finish_honest_cmds_safe; clean_map_lookups; eauto 8
+    | trivial
+    | unfold labels_align; intros; rstep; subst; solve_labels_align
+    | try solve [ simpl; intros; find_step_or_solve' ]
+    ].
+
+Ltac invSS1 :=
+  discriminate
+  || match goal with
+    | [ STEP : (stepSS (t__adv := _)) ^* (?U,_,_) _
+               , IRS : indexedRealStep ?uid Silent ?U ?RU
+                       , P : (forall _ _, _ > ?uid -> _)
+        |- _ ] =>
+
+      pose proof (ssteps_inv_silent' STEP eq_refl IRS P)
+      ; clear STEP IRS P RU
+      ; split_ex
+
+    | [ STEP : (stepSS (t__adv := _)) ^* (?ru,?iu,?b) _
+               , P : (forall _ _, ~ indexedRealStep _ Silent _  _)
+        |- _ ] =>
+
+      progress ( unfold not in P )
+
+    | [ STEP : (stepSS (t__adv := _)) ^* (?ru,?iu,?b) (_,_,_)
+               , P : (forall _ _, indexedRealStep _ Silent _ _ -> False)
+        |- _ ] =>
+
+      concrete ru
+      ; match goal with
+        | [ LA : labels_align (?ru,?iu,?b) |- _ ] =>
+          let PROOF := fresh "PROOF" in
+          pose proof (ssteps_inv_labeled P STEP LA eq_refl ) as PROOF
+          ; clear STEP P LA
+          ; destruct PROOF
+          ; split_ex
+          ; subst
+
+        | _ =>
+          idtac "proving alignment 4"
+          ; assert (labels_align (ru,iu,b)) by ((repeat prove_alignment1); eauto)
+        end
+    | [ STEP : (stepSS (t__adv := _)) ^* ?st ?st'
+               , P : (forall _ _, indexedRealStep _ Silent _ _ -> False)
+        |- _ ] =>
+
+      match st with
+      | (_,_,_) => idtac
+      | _ => destruct st as [[?ru ?iu] ?b]
+      end
+      ; match st' with
+        | (_,_,_) => idtac
+        | _ => destruct st' as [[?ru' ?iu'] ?b']
+        end
+
+    | [ H : (stepSS (t__adv := _)) ^* (?U,_,_) _ |- _ ] =>
+      match U with
+      | {| RealWorld.users := ?usrs |} =>
+        find_silent U usrs
+      end
+
+    (* | [ IMS : indexedModelStep ?uid (?U,_,_) _ *)
+    (*           , IRS : indexedRealStep ?uid _ ?U _ *)
+    (*     |- _ ] => clear IMS *)
+
+    | [ H : action_matches _ _ _ _ |- _] => invert H
+    | [ H : forall _ _ _, _ -> _ -> _ -> _ <-> _ |- _ ] => clear H
+    | [ H : forall _ _ _ _, _ -> _ -> _ -> _ -> _ <-> _ |- _ ] => clear H
+    | [ H : (forall _ _ _, indexedRealStep _ _ ?ru _ ->
+                      exists _ _ _, (indexedIdealStep _ _) ^* ?iu _ /\ _) |- _ ] =>
+      clear H
+
+    | [H : indexedRealStep _ _ _ _ |- _ ] =>
+      invert H
+    | [H : RealWorld.step_universe _ ?u _ _ |- _] =>
+      concrete u; chu
+    | [H : RealWorld.step_user _ None _ _ |- _] =>
+      invert H
+    | [H : RealWorld.step_user _ _ ?u _ |- _] =>
+      concrete u; chu
+
+    | [ H : indexedIdealStep _ _ _ _ |- _ ] => istep (* run _after_ real steps *)
+                                               
+    (* | [ H : _ ^* (?ru,?iu,_) _ |- _ ] => concrete ru; concrete iu; invert H *)
+
+    | [ |- safety_inv (?ru,_,_) ] =>
+      concrete ru; solve [ finish_invariant ]
+
+    | [ H : _ \/ _ |- _ ] => destruct H; split_ex; subst
+    end.
 
 (* Ltac t := (repeat eq1); try invSS1. *)
 (* Ltac u := (repeat cleanup1); invSS1(* ; istep *); (repeat cleanup1). *)

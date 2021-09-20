@@ -36,6 +36,10 @@ por: CoqMakefile
 	$(eval TS := src/ModelCheck/PartialOrderReduction.vo)
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
+test: lib
+	$(eval TS := "protocols/Verification/PGPSecure.vo")
+	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
+
 test-protos: lib
 	$(eval TS := "protocols/Verification/ExampleProtocolsAutomated.vo protocols/Verification/GenProtoSecure.vo")
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
