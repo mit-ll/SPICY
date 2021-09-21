@@ -87,14 +87,13 @@ Module NetAuthProtocolSecure <: AutomatedSafeProtocolSS.
 
     autounfold in H0
     ; unfold fold_left, fst, snd in *.
-    unfold real_users, ideal_users, mkrUsr, userProto, userKeys, userId, mkiUsr in *; uf; rwuf.
 
     time (
         repeat transition_system_step
       ).
 
-      Unshelve.
-      all: exact 0  || auto.
+    Unshelve.
+    all: exact 0  || auto.
   Qed.
 
   Show Ltac Profile.

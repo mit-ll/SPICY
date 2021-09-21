@@ -87,9 +87,9 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocolSS.
     time (
         repeat transition_system_step
       ).
-      
-      Unshelve.
-      all: exact 0 || auto.
+    
+    Unshelve.
+    all: exact 0 || auto.
   Qed.
 
   Show Ltac Profile.

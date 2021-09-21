@@ -705,9 +705,16 @@ Ltac invSS1 :=
         end
 
     | [ H : (stepSS (t__adv := _)) ^* (?U,_,_) _ |- _ ] =>
+
       match U with
       | {| RealWorld.users := ?usrs |} =>
-        find_silent_step U usrs
+        match usrs with
+        | context [ {| RealWorld.protocol := realServer 0 _ _ |} ] =>
+          idtac "rewriting server done"; rewrite realserver_done in H
+        | context [ {| RealWorld.protocol := realServer _ _ _ |} ] =>
+          idtac "unrolling server"; erewrite unroll_realserver_step in H by reflexivity
+        | _ => find_silent_step U usrs
+        end
       end
 
     (* | [ IMS : indexedModelStep ?uid (?U,_,_) _ *)
@@ -731,7 +738,7 @@ Ltac invSS1 :=
 
 (* Ltac t := (repeat eq1); try invSS1. *)
 (* Ltac u := (repeat cleanup1); invSS1(* ; istep *); (repeat cleanup1). *)
-Ltac do_trsys_step := invSS1; (repeat cleanup1).
+Ltac do_trsys_step := invSS1; (repeat cleanup1); subst.
 
 Ltac transition_system_step :=
   rwuf; do_trsys_step; canonicalize context.

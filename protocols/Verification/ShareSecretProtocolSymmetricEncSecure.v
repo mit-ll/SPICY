@@ -93,12 +93,12 @@ Module ShareSecretProtocolSecureSS <: AutomatedSafeProtocolSS.
     autounfold in H0
     ; unfold fold_left, fst, snd in *.
 
-      time (
-          repeat transition_system_step
-        ).
+    time (
+        repeat transition_system_step
+      ).
 
-      Unshelve.
-      all: exact 0 || auto.
+    Unshelve.
+    all: exact 0 || auto.
   Qed.
 
   Show Ltac Profile.
