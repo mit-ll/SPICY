@@ -644,12 +644,12 @@ Ltac invSS1 :=
       ; clear STEP IRS P RU
       ; repeat
           match goal with
-          | [ H : NoSilent ?uid _ |- _ ] => idtac "asserting nosilent " uid
-                                          ; assert (NoSilent uid RU) by admit
-                                          ; clear H
+          | [ H : NoSilent ?uid _ |- _ ] =>
+            idtac "asserting nosilent " uid
+            ; assert (NoSilent uid RU) by admit
+            ; clear H
           end
       ; split_ex
-
 
     | [ H : action_matches _ _ _ _ |- _] => invert H
     | [H : indexedRealStep _ _ _ _ |- _ ] =>
@@ -660,9 +660,7 @@ Ltac invSS1 :=
       invert H
     | [H : RealWorld.step_user _ _ ?u _ |- _] =>
       concrete u; chu
-
     | [ H : indexedIdealStep _ _ _ _ |- _ ] => istep (* run _after_ real steps *)
-
 
     | [ STEP : (stepSS (t__adv := _)) ^* (?ru,?iu,?b) _
       , P : (forall _ _, ~ indexedRealStep _ Silent _  _)
@@ -682,12 +680,11 @@ Ltac invSS1 :=
           ; clear STEP P LA
           ; repeat
               match goal with
-              | [ H : NoSilent _ _ |- _ ] => idtac "clearing nosilent"; clear H
+              | [ H : NoSilent _ _ |- _ ] => clear H
               end
           ; destruct PROOF
           ; split_ex
           ; subst
-          ; idtac "prepared labeled step"
 
         | _ =>
           idtac "proving alignment 4"
