@@ -86,10 +86,10 @@ Module AvgSalaryProtocolSecure <: AutomatedSafeProtocolSS.
     ; intros
     ; sets_invert.
 
-    invert H0.
-    - finish_invariant.
-    - autounfold in H
-      ; unfold fold_left, fst, snd in *.
+    (* invert H0. *)
+    (* - finish_invariant. *)
+    (* - autounfold in H *)
+    (*   ; unfold fold_left, fst, snd in *. *)
 
       time (
           repeat transition_system_step

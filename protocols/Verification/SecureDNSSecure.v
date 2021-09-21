@@ -81,16 +81,12 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocolSS.
     ; intros
     ; sets_invert.
 
-    invert H0.
-    - autounfold.
-      finish_invariant.
-      
-    - autounfold in H
-      ; unfold fold_left, fst, snd in *.
+    autounfold in *
+    ; unfold fold_left, fst, snd in *.
 
-      time (
-          repeat transition_system_step
-        ).
+    time (
+        repeat transition_system_step
+      ).
       
       Unshelve.
       all: exact 0 || auto.

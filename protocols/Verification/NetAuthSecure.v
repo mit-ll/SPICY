@@ -85,14 +85,13 @@ Module NetAuthProtocolSecure <: AutomatedSafeProtocolSS.
     ; intros
     ; sets_invert.
 
-    invert H0.
-    - finish_invariant.
-    - autounfold in H
-      ; unfold fold_left, fst, snd in *.
+    autounfold in H0
+    ; unfold fold_left, fst, snd in *.
+    unfold real_users, ideal_users, mkrUsr, userProto, userKeys, userId, mkiUsr in *; uf; rwuf.
 
-      time (
-          repeat transition_system_step
-        ).
+    time (
+        repeat transition_system_step
+      ).
 
       Unshelve.
       all: exact 0  || auto.
