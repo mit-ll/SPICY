@@ -510,69 +510,113 @@ Inductive NoSilent {A B} (uid : user_id) (U : RealWorld.universe A B) : Prop :=
     (forall U', ~ indexedRealStep uid Silent U U')
     -> NoSilent uid U.
 
-    Ltac prove_gt_pred :=
-      intros
-      ; simpl in *
-      ; repeat 
-          match goal with
-          | [ H : context [ _ $+ (_,_) $- _ ] |- _ ] =>
-            repeat (
-                (rewrite map_add_remove_neq in H by congruence)
-                || (rewrite map_add_remove_eq in H by trivial)
-                || (rewrite remove_empty in H)
-              )
-          | [ H : _ $+ (?uid,_) $? ?uid' = Some _ |- _ ] =>
-            destruct (uid ==n uid'); subst; clean_map_lookups; try lia
-          | [ H : NoSilent ?uid ?U |- ~ indexedRealStep ?uid _ ?U _ ] => admit (* unfold not; intros; rstep *)
-          end.
+Lemma NoSilent_no_indexed_silent_step :
+  forall A B uid (U : RealWorld.universe A B), 
+    NoSilent uid U
+    -> forall U',
+      ~ indexedRealStep uid Silent U U'.
+Proof.
+  invert 1; intros; eauto.
+Qed.
 
-    Ltac assert_gt_pred U uid :=
-      let P := fresh "P"
-      in assert (forall uid' ud' U', U.(RealWorld.users) $? uid' = Some ud'
-                                -> uid' > uid
-                                -> ~ indexedRealStep uid' Silent U U') as P by prove_gt_pred
-         ; pose proof (upper_users_cant_step_rewrite P); clear P
-    .
+Lemma all_users_NoSilent_no_indexed_silent_step :
+  forall A B uid (U : RealWorld.universe A B),
+    (forall uid ud, U.(RealWorld.users) $? uid = Some ud -> NoSilent uid U)
+    -> forall U',
+      ~ indexedRealStep uid Silent U U'.
+Proof.
+  intros.
+  unfold not; intros.
+  generalize H0; invert H0.
+  apply H in H1.
+  eapply NoSilent_no_indexed_silent_step; eauto.
+Qed.
 
-    Ltac assert_no_silents U :=
-      let P := fresh "P"
-      in assert (forall uid U', ~ indexedRealStep uid Silent U U') as P by prove_gt_pred
-    .
+Ltac print_nosilents :=
+  repeat
+    match goal with
+    | [ H : NoSilent ?uidA _ |- _ ] => idtac "NoSilent ready for assert: " uidA; fail
+    end.
 
-    Ltac getNextAction p :=
-      match p with
-      | RealWorld.Bind ?n _ => getNextAction n
-      | ?n                  => idtac n
+Ltac prove_gt_pred :=
+  intros
+  ; simpl in *
+  ; repeat 
+      match goal with
+      | [ H : context [ _ $+ (_,_) $- _ ] |- _ ] =>
+        repeat (
+            (rewrite map_add_remove_neq in H by congruence)
+            || (rewrite map_add_remove_eq in H by trivial)
+            || (rewrite remove_empty in H)
+          )
+      | [ H : _ $+ (?uid,_) $? ?uid' = Some _ |- _ ] =>
+        destruct (uid ==n uid'); subst; clean_map_lookups; try lia
+      | [ H : NoSilent ?uid _ |- ~ indexedRealStep ?uid _ _ _ ] =>
+        eapply NoSilent_no_indexed_silent_step
+        ; eauto 2
       end.
 
-    Ltac assertNotSilent uid U p :=
-      match p with
-      | RealWorld.Bind ?n _ => assertNotSilent uid U n
-      | RealWorld.Send _ _  => assert (NoSilent uid U) by admit
-      | RealWorld.Recv _    => assert (NoSilent uid U) by admit
-      | ?n                  => fail 1
-      end.
+Ltac assert_gt_pred U uid :=
+  let P := fresh "P"
+  in assert (forall uid' ud' U', U.(RealWorld.users) $? uid' = Some ud'
+                            -> uid' > uid
+                            -> ~ indexedRealStep uid' Silent U U') as P by prove_gt_pred
+     ; pose proof (upper_users_cant_step_rewrite P); clear P
+.
 
-    Ltac find_silent U us :=
-      let MAX := fresh "MEQ"
-      in  remember (O.max_elt us) eqn:MAX
-          ; unfold O.max_elt in MAX
-          ; simpl in MAX
-          ; match type of MAX with
-            | _ = Some (?uid,?u) =>
-              let p := (eval simpl in u.(RealWorld.protocol))
-              in ( ( assertNotSilent uid U; find_silent U (us $- uid) )
-                   || assert (exists U', indexedRealStep uid Silent U U') by solve_indexedRealStep
-                   ; idtac uid
-                   ; assert_gt_pred U uid
-                 ) || assert_no_silents U
-              (* ( ( assert (exists U', indexedRealStep uid Silent U U') by solve_indexedRealStep *)
-              (*     ; assert_gt_pred U uid) *)
-              (*   || find_silent U (us $- uid) *)
-              (* ) || assert_no_silents U *)
-            end
-          ; subst; split_ex
-    .
+Ltac solve_all_users_no_silent :=
+  repeat
+    lazymatch goal with
+    | [ |- _ -> _ ] => intros
+    | [ |- ~ indexedRealStep ?uid _ _ _ ] => eapply all_users_NoSilent_no_indexed_silent_step
+    | [ H : RealWorld.users _ $? _ = Some _ |- _ ] => unfold RealWorld.users in H
+    | [ H : _ $+ (?conUid,_) $? ?uid = Some _ |- NoSilent ?uid _ ] =>
+      destruct (conUid ==n uid); subst; clean_map_lookups
+    | [ H : NoSilent ?uid _  |- NoSilent ?uid _ ] => exact H
+    end.
+
+Ltac assert_no_silents U :=
+  let P := fresh "P"
+  in assert (forall uid U', ~ indexedRealStep uid Silent U U') as P by solve_all_users_no_silent
+.
+
+Ltac getNextAction p :=
+  match p with
+  | RealWorld.Bind ?n _ => getNextAction n
+  | ?n                  => idtac n
+  end.
+
+Ltac assertSilentStatus uid U p :=
+  let rec assertSilentStatus' pr :=
+      lazymatch pr with
+      | RealWorld.Bind ?n _ => assertSilentStatus' n
+      | RealWorld.Send _ _  => assert (NoSilent uid U) by (econstructor; unfold not; intros; rstep)
+      | RealWorld.Recv _    => assert (NoSilent uid U) by (econstructor; unfold not; intros; rstep)
+      | ?n                  => assert (exists U', indexedRealStep uid Silent U U') by solve_indexedRealStep
+      end
+  in lazymatch p with
+     | RealWorld.Return _  => assert (NoSilent uid U) by (econstructor; unfold not; intros; rstep)
+     | _                   => assertSilentStatus' p
+     end.
+
+Ltac find_silent_step U us :=
+  let MAX := fresh "MEQ"
+  in  remember (O.max_elt us) eqn:MAX
+      ; unfold O.max_elt in MAX
+      ; simpl in MAX
+      ; lazymatch type of MAX with
+        | _ = Some (?uid,?u) =>
+          let p := (eval cbn in u.(RealWorld.protocol))
+          in  assertSilentStatus uid U p
+              ; subst; split_ex
+              ; lazymatch goal with
+                | [ H : NoSilent uid _ |- _ ] => find_silent_step U (us $- uid)
+                | [ H : indexedRealStep uid Silent _ _ |- _ ] => assert_gt_pred U uid
+                end
+        | _ => assert_no_silents U
+        end
+      (* ; clear MAX *)
+.
 
 Ltac finish_invariant :=
   rwuf
@@ -592,22 +636,42 @@ Ltac invSS1 :=
   discriminate
   || match goal with
     | [ STEP : (stepSS (t__adv := _)) ^* (?U,_,_) _
-               , IRS : indexedRealStep ?uid Silent ?U ?RU
-                       , P : (forall _ _, _ > ?uid -> _)
+      , IRS : indexedRealStep ?uid Silent ?U ?RU
+      , P : (forall _ _, _ > ?uid -> _)
         |- _ ] =>
 
       pose proof (ssteps_inv_silent' STEP eq_refl IRS P)
       ; clear STEP IRS P RU
+      ; repeat
+          match goal with
+          | [ H : NoSilent ?uid _ |- _ ] => idtac "asserting nosilent " uid
+                                          ; assert (NoSilent uid RU) by admit
+                                          ; clear H
+          end
       ; split_ex
 
+
+    | [ H : action_matches _ _ _ _ |- _] => invert H
+    | [H : indexedRealStep _ _ _ _ |- _ ] =>
+      invert H
+    | [H : RealWorld.step_universe _ ?u _ _ |- _] =>
+      concrete u; chu
+    | [H : RealWorld.step_user _ None _ _ |- _] =>
+      invert H
+    | [H : RealWorld.step_user _ _ ?u _ |- _] =>
+      concrete u; chu
+
+    | [ H : indexedIdealStep _ _ _ _ |- _ ] => istep (* run _after_ real steps *)
+
+
     | [ STEP : (stepSS (t__adv := _)) ^* (?ru,?iu,?b) _
-               , P : (forall _ _, ~ indexedRealStep _ Silent _  _)
+      , P : (forall _ _, ~ indexedRealStep _ Silent _  _)
         |- _ ] =>
 
       progress ( unfold not in P )
 
     | [ STEP : (stepSS (t__adv := _)) ^* (?ru,?iu,?b) (_,_,_)
-               , P : (forall _ _, indexedRealStep _ Silent _ _ -> False)
+      , P : (forall _ _, indexedRealStep _ Silent _ _ -> False)
         |- _ ] =>
 
       concrete ru
@@ -616,16 +680,22 @@ Ltac invSS1 :=
           let PROOF := fresh "PROOF" in
           pose proof (ssteps_inv_labeled P STEP LA eq_refl ) as PROOF
           ; clear STEP P LA
+          ; repeat
+              match goal with
+              | [ H : NoSilent _ _ |- _ ] => idtac "clearing nosilent"; clear H
+              end
           ; destruct PROOF
           ; split_ex
           ; subst
+          ; idtac "prepared labeled step"
 
         | _ =>
           idtac "proving alignment 4"
           ; assert (labels_align (ru,iu,b)) by ((repeat prove_alignment1); eauto)
         end
+
     | [ STEP : (stepSS (t__adv := _)) ^* ?st ?st'
-               , P : (forall _ _, indexedRealStep _ Silent _ _ -> False)
+      , P : (forall _ _, indexedRealStep _ Silent _ _ -> False)
         |- _ ] =>
 
       match st with
@@ -640,30 +710,19 @@ Ltac invSS1 :=
     | [ H : (stepSS (t__adv := _)) ^* (?U,_,_) _ |- _ ] =>
       match U with
       | {| RealWorld.users := ?usrs |} =>
-        find_silent U usrs
+        find_silent_step U usrs
       end
 
     (* | [ IMS : indexedModelStep ?uid (?U,_,_) _ *)
     (*           , IRS : indexedRealStep ?uid _ ?U _ *)
     (*     |- _ ] => clear IMS *)
 
-    | [ H : action_matches _ _ _ _ |- _] => invert H
     | [ H : forall _ _ _, _ -> _ -> _ -> _ <-> _ |- _ ] => clear H
     | [ H : forall _ _ _ _, _ -> _ -> _ -> _ -> _ <-> _ |- _ ] => clear H
     | [ H : (forall _ _ _, indexedRealStep _ _ ?ru _ ->
                       exists _ _ _, (indexedIdealStep _ _) ^* ?iu _ /\ _) |- _ ] =>
       clear H
 
-    | [H : indexedRealStep _ _ _ _ |- _ ] =>
-      invert H
-    | [H : RealWorld.step_universe _ ?u _ _ |- _] =>
-      concrete u; chu
-    | [H : RealWorld.step_user _ None _ _ |- _] =>
-      invert H
-    | [H : RealWorld.step_user _ _ ?u _ |- _] =>
-      concrete u; chu
-
-    | [ H : indexedIdealStep _ _ _ _ |- _ ] => istep (* run _after_ real steps *)
                                                
     (* | [ H : _ ^* (?ru,?iu,_) _ |- _ ] => concrete ru; concrete iu; invert H *)
 

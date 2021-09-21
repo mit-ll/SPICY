@@ -1724,13 +1724,6 @@ Module Gen.
     eapply H; eauto.
   Qed.
 
-  Inductive NoSilent {A B} (uid : user_id) (U : RealWorld.universe A B) : Prop :=
-  | Stuck : forall U',
-      ~ indexedRealStep uid Silent U U'
-      -> NoSilent uid U.
-
-  Set Implicit Arguments.
-
   Lemma indexedModelStep_user_step :
     forall t__hon t__adv uid ru ru' iu iu' b b',
       @indexedModelStep t__hon t__adv uid (ru,iu,b) (ru',iu',b')
