@@ -113,9 +113,30 @@ Section OtherInvLemmas.
 
 End OtherInvLemmas.
 
+Ltac simple_clean_maps1 :=
+  match goal with
+  | [ H : None = Some _ |- _ ] => discriminate H
+  | [ H : Some _ = Some _ |- _ ] => apply some_eq_inv in H; subst
+  | [ H : _ $+ (_,_) $? _ = _ |- _ ] =>
+    progress (
+      repeat ( (rewrite add_eq_o in H by trivial)           
+             || (rewrite add_neq_o in H by congruence)
+             || (rewrite lookup_empty_none in H) ))
+  | [ H : $0 $? _ = _ |- _ ] => rewrite lookup_empty_none in H
+  | [ |- _ $+ (_,_) $? _ = _ ] =>
+    progress (
+      repeat ( (rewrite add_eq_o by trivial)           
+             || (rewrite add_neq_o by congruence)
+             || (rewrite lookup_empty_none) ))
+  | [ |- $0 $? _ = _ ] =>
+    rewrite lookup_empty_none
+  end.
+
+Ltac simple_clean_maps := repeat simple_clean_maps1.
+
 Ltac equality1 :=
   invert_base_equalities1
-  || clean_map_lookups1
+  || simple_clean_maps1
   || match goal with
     | [ H : List.In _ _ |- _ ] => progress (simpl in H); (* intuition idtac *) split_ors
 

@@ -47,6 +47,7 @@ src/ModelCheck/ProtocolFunctions.v
 src/ModelCheck/RealWorldStepLemmas.v
 src/ModelCheck/SafeProtocol.v
 src/ModelCheck/SilentStepElimination.v
+src/ModelCheck/SteppingTactics.v
 src/ModelCheck/UniverseEqAutomation.v
 
 # Protocol Invariant Exploration (alternative to traditional model checking)
