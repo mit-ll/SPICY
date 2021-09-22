@@ -445,7 +445,8 @@ Module SimulationAutomation.
   Ltac solve_concrete_maps := repeat solve_concrete_maps1.
 
   Ltac churn2 :=
-    (repeat equality1); subst; rw_step1; intuition idtac; split_ex; intuition idtac; subst; try discriminate; solve_concrete_maps.
+    (repeat equality1); subst; split_ors; try contradiction; rw_step1.
+    (* (repeat equality1); subst; rw_step1; intuition idtac; split_ex; intuition idtac; subst; try discriminate; solve_concrete_maps. *)
 
   Ltac churn :=
     repeat churn2.
@@ -1161,10 +1162,10 @@ Module SimulationAutomation.
 
   Ltac solve_labels_align :=
     (do 3 eexists); repeat (simple apply conj);
-    [ solve [ eauto ]
+    [ solve [ eauto 3 ]
     | indexedIdealStep; simpl
     | subst; repeat solve_action_matches1; clean_map_lookups; ChMaps.ChMap.clean_map_lookups
-    ]; eauto; simpl; eauto.
+    ]; eauto 3; simpl; eauto.
 
 End SimulationAutomation.
 

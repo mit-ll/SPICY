@@ -117,7 +117,7 @@ Ltac equality1 :=
   invert_base_equalities1
   || clean_map_lookups1
   || match goal with
-    | [ H : List.In _ _ |- _ ] => progress (simpl in H); intuition idtac
+    | [ H : List.In _ _ |- _ ] => progress (simpl in H); (* intuition idtac *) split_ors
 
     | [ H : _ $? _ = Some _ |- _ ] => progress (simpl in H)
     | [ H : _ #? _ = Some _ |- _ ] => progress (simpl in H)
@@ -125,10 +125,10 @@ Ltac equality1 :=
     | [ H : _ $+ (_,_) $? _ = Some ?UD |- _ ] =>
       match type of UD with
       | RealWorld.user_data _ => apply lookup_some_implies_in in H; simpl in H
-      | _ => apply lookup_split in H; intuition idtac
+      | _ => apply lookup_split in H; (* intuition idtac *) split_ors
       end
     | [ H : _ #+ (_,_) #? _ = Some ?UD |- _ ] =>
-      apply ChMaps.ChMap.lookup_split in H; intuition idtac
+      apply ChMaps.ChMap.lookup_split in H; (* intuition idtac *) split_ors
 
     | [ H : _ = {| RealWorld.users := _ |} |- _ ]
       => apply split_real_univ_fields in H; split_ex; subst

@@ -5,6 +5,7 @@
  * 
  *)
 From Coq Require Import
+     Eqdep
      List
      Lia.
 

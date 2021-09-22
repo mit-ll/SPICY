@@ -41,16 +41,16 @@ Open Scope protocol_scope.
 Ltac eq1 :=
   invert_base_equalities1
   || match goal with
-    | [ H : List.In _ _ |- _ ] => unfold List.In in H; intuition idtac
+    | [ H : List.In _ _ |- _ ] => unfold List.In in H; (* intuition idtac *) split_ors
 
     | [ H : _ $+ (_,_) $? _ = Some ?UD |- _ ] =>
       match type of UD with
       | RealWorld.user_data _ =>
         apply lookup_some_implies_in in H; (* unfold List.In in H; intuition idtac *) simpl in H
-      | _ => apply lookup_split in H; intuition idtac
+      | _ => apply lookup_split in H; (* intuition idtac *) split_ors
       end
     | [ H : _ #+ (_,_) #? _ = Some ?UD |- _ ] =>
-      apply ChMaps.ChMap.lookup_split in H; intuition idtac
+      apply ChMaps.ChMap.lookup_split in H; (* intuition idtac *) split_ors
 
     | [ H : _ = {| RealWorld.users := _ |} |- _ ]
       => apply split_real_univ_fields in H; split_ex; subst
@@ -104,6 +104,67 @@ Ltac ch := (repeat equality1); subst; rw_step1.
 (* Ltac ch := (repeat equality1); subst; rw_step1. *)
 Ltac chu := repeat ch.
 
+Section RW.
+  Import RealWorld.
+
+
+  Fixpoint compute_na {t} (cmd: user_cmd t) : sigT user_cmd :=
+    match cmd with
+    | Bind c _ => compute_na c
+    | c => existT _ _ c
+    end.
+
+  Lemma compute_na_correct :
+    forall t (cmd : user_cmd t) t__n (cmd__n : user_cmd t__n),
+      compute_na cmd = existT _ _ cmd__n
+      -> nextAction cmd cmd__n.
+  Proof.
+    induct cmd
+    ; try solve [ unfold compute_na; simpl; intros; invert H; econstructor; eauto ].
+
+    intros.
+    constructor.
+    simpl in H0; eauto.
+  Qed.
+
+  Lemma invert_na :
+    forall t (cmd : user_cmd t) t__n (cmd__n : user_cmd t__n),
+      nextAction cmd cmd__n
+      -> compute_na cmd = existT _ _ cmd__n.
+  Proof.
+    induct cmd
+    ; try solve [ intros; unfold compute_na; invert H; split; reflexivity ].
+
+    intros; induct H; eauto.
+    intros; invert H0; eauto.
+  Qed.
+
+  Lemma invert_na' :
+    forall t (cmd : user_cmd t) t__n (cmd__n : user_cmd t__n),
+      nextAction cmd cmd__n
+      -> compute_na cmd = existT _ _ cmd__n
+        /\ projT1 (compute_na cmd) = t__n.
+  Proof.
+
+    induct cmd
+    ; try solve [ intros; unfold compute_na; invert H; split; eauto ].
+
+    intros; induct H; eauto.
+    intros; invert H0; eauto.
+  Qed.
+
+End RW.
+
+Ltac process_map_in_H H :=
+  repeat ( (rewrite add_eq_o in H by trivial)           
+         || (rewrite add_neq_o in H by congruence)
+         || (rewrite lookup_empty_none in H) )
+  ; repeat
+      match goal with
+      | [ H : Some _ = Some _ |- _ ] => apply some_eq_inv in H; subst
+      | [ H : None = Some _ |- _ ] => discriminate H
+      end.
+
 Ltac finish_honest_cmds_safe1 :=
     (* (progress solve_concrete_perm_merges) || *)
     match goal with
@@ -116,39 +177,49 @@ Ltac finish_honest_cmds_safe1 :=
     | [ H : _ = {| RealWorld.users := _;
                    RealWorld.adversary := _;
                    RealWorld.all_ciphers := _;
-                   RealWorld.all_keys := _ |} |- _ ] => invert H
-
+                   RealWorld.all_keys := _ |} |- _ ] => 
+      time ( let to := type of H in idtac "Universe Invert: " to; invert H )
+      
     | [ |- honest_cmds_safe _ ] => unfold honest_cmds_safe; intros; simpl in *
     | [ |- next_cmd_safe _ _ _ _ _ _ ] => unfold next_cmd_safe; intros
-    | [ H : _ $+ (?id1,_) $? ?id2 = _ |- _ ] =>
-      is_var id2; destruct (id1 ==n id2); subst; clean_map_lookups
+    | [ H : _ $+ (?id1,_) $? ?id2 = Some ?ud |- context [ ?id2 ] ] =>
+      match type of ud with
+      | RealWorld.user_data _ =>
+        is_var id2; destruct (id1 ==n id2); subst
+        ; process_map_in_H H
+        (* ; repeat ( discriminate H *)
+        (*          || (rewrite add_eq_o in H by trivial) *)
+        (*          || (rewrite add_neq_o in H by congruence) *)
+        (*          || (rewrite lookup_empty_none in H) ) *)
+        (* clean_map_lookups *)
+      end
     | [ H : nextAction (RealWorld.protocol _) _ |- _ ] =>
       unfold RealWorld.protocol in H
     | [ H : nextAction (realServer 0 _ _) _ |- _ ] =>
       rewrite realserver_done in H
     | [ H : nextAction (realServer _ _ _) _ |- _ ] =>
       erewrite unroll_realserver_step in H by reflexivity
-    | [ H : nextAction _ _ |- _ ] => invert H
+    | [ H : nextAction _ _ |- _ ] =>
+      apply invert_na' in H; cbn in H; destruct H; subst; invert_base_equalities1; subst
     | [ H : mkKeys _ $? _ = _ |- _ ] => unfold mkKeys in H; simpl in H
-    (* | [ |- context [ RealWorld.findUserKeys ?usrs ] ] => canonicalize_map usrs *)
     | [ |- context [ RealWorld.findUserKeys _ ] ] =>
       rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty by eauto
     | [ H : RealWorld.findKeysMessage _ $? _ = _ |- _ ] =>
       unfold RealWorld.findKeysMessage in H; simpl in H
     | [ |- (_ -> _) ] => intros
-    | [ H : _ $+ (?id1,_) $? ?id2 = _ |- _ ] =>
-      ( progress (
-            repeat (
-                (rewrite add_neq_o in H by congruence)
-                || (rewrite add_eq_o in H by trivial)
-                || (rewrite lookup_empty_none in H)
-      )))
-      (* (progress clean_map_lookups) *)
-      || (is_var id2; destruct (id1 ==n id2); subst; clean_map_lookups)
-    (* | [ |- context [ _ $+ (_,_) $? _ ] ] => progress clean_map_lookups *)
+    | [ H : _ $+ (?id1,_) $? ?id2 = _ |- context [ _ $? ?id2 ] ] =>
+      progress (process_map_in_H H)
+      (* ( progress ( *)
+      (*       repeat ( *)
+      (*           (rewrite add_neq_o in H by congruence) *)
+      (*           || (rewrite add_eq_o in H by trivial) *)
+      (*           || (rewrite lookup_empty_none in H) *)
+      (* ))) *)
+      || (is_var id2; destruct (id1 ==n id2); subst; process_map_in_H H)
+      (* || (let to := type of H in idtac "Map inverting :" to; is_var id2; destruct (id1 ==n id2); subst; clean_map_lookups) *)
     | [ |- context [ _ $+ (_,_) $? _ ] ] =>
-      ( progress clean_map_lookups )
-      || ( progress (
+      (* ( progress clean_map_lookups ) *)
+      ( progress (
           repeat (
               (rewrite add_neq_o by solve_simple_ineq)
               || (rewrite add_eq_o by trivial)
