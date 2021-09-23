@@ -18,12 +18,12 @@ From SPICY Require Import
      Simulation
      AdversaryUniverse
 
-     ModelCheck.ProtocolAutomation
-     ModelCheck.SafeProtocol
+     ModelCheck.InvariantSearch
      ModelCheck.ModelCheck
      ModelCheck.ProtocolFunctions
+     ModelCheck.SafeProtocol
      ModelCheck.SilentStepElimination
-     ModelCheck.InvariantSearch
+     ModelCheck.SteppingTactics
 .
 
 From protocols Require Import
@@ -64,7 +64,7 @@ Module AvgSalaryProtocolSecure <: AutomatedSafeProtocolSS.
   Definition iu0  := ideal_univ_start.
   Definition ru0  := real_univ_start.
 
-  Import Gen Tacs SetLemmas.
+  Import Gen Tacs.
 
   (* These are here to help the proof automation.  Don't change. *)
   #[export] Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start real_univ_start : core.
@@ -84,7 +84,10 @@ Module AvgSalaryProtocolSecure <: AutomatedSafeProtocolSS.
     unfold invariantFor
     ; unfold Initial, Step
     ; intros
-    ; sets_invert.
+    ; simpl in *
+    ; split_ors
+    ; try contradiction
+    ; subst.
 
     autounfold in H0
     ; unfold fold_left, fst, snd in *.

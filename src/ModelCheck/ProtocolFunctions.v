@@ -115,6 +115,7 @@ End OtherInvLemmas.
 
 Ltac simple_clean_maps1 :=
   match goal with
+  | [ H : Some _ = None |- _ ] => discriminate H
   | [ H : None = Some _ |- _ ] => discriminate H
   | [ H : Some _ = Some _ |- _ ] => apply some_eq_inv in H; subst
   | [ H : _ $+ (_,_) $? _ = _ |- _ ] =>

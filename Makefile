@@ -48,6 +48,10 @@ paper-fast: lib
 	$(eval TS :="protocols/Verification/ShareSecretProtocolSymmetricEncSecure.vo protocols/Verification/PGPSecure.vo protocols/Verification/SecureDNSSecure.vo")
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
+netauth: lib
+	$(eval TS :="protocols/Verification/NetAuthSecure.vo")
+	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
+
 paper-all: lib
 	$(eval TS :="protocols/Verification/ShareSecretProtocolSymmetricEncSecure.vo protocols/Verification/PGPSecure.vo protocols/Verification/SecureDNSSecure.vo protocols/Verification/AvgSalarySecure.vo protocols/Verification/NetAuthSecure.vo")
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)

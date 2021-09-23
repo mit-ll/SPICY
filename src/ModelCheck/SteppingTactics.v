@@ -360,7 +360,8 @@ Module SimulationAutomation.
       end.
 
   Ltac solve_concrete_maps1 :=
-    clean_map_lookups1
+    (* clean_map_lookups1 *)
+    simple_clean_maps1
     || ChMaps.ChMap.clean_map_lookups1
     || match goal with
       | [ H : mkKeys _ $? _ = _ |- _ ] => unfold mkKeys in H; simpl in H
@@ -369,13 +370,11 @@ Module SimulationAutomation.
       | [ H : ?m #? _ = _ |- _ ] => progress (unfold m in H)
       | [ |- context [ ?m $? _ ] ] => progress (unfold m)
       | [ |- context [ ?m #? _ ] ] => progress (unfold m)
-                                             
-      | [ H : ?m $+ (?k1,_) $? ?k2 = _ |- _ ] =>
-        progress ( repeat ( rewrite add_neq_o in H by solve_simple_ineq ) )
+
       | [ H : ?m #+ (?k1,_) #? ?k2 = _ |- _ ] =>
         progress ( repeat ( rewrite ChMaps.ChMap.F.add_neq_o in H by solve_simple_ineq ) )
-      | [ |- context [ _ $+ (?kid2,_) $? ?kid1 ] ] =>
-        progress ( repeat ( rewrite add_neq_o by solve_simple_ineq ) )
+      (* | [ |- context [ _ $+ (?kid2,_) $? ?kid1 ] ] => *)
+      (*   progress ( repeat ( rewrite add_neq_o by solve_simple_ineq ) ) *)
       | [ |- context [ _ #+ (?kid2,_) #? ?kid1 ] ] =>
         progress ( repeat ( rewrite ChMaps.ChMap.F.add_neq_o by solve_simple_ineq ) )
 
@@ -1130,7 +1129,7 @@ Module Gen.
   Ltac idealUnivSilentStep uid :=
     eapply IdealWorld.LStepUser with (u_id := uid)
     ; simpl
-    ; [ solve [ clean_map_lookups; trivial ]
+    ; [ solve [ simple_clean_maps; trivial ]
       | solve [ idealUserSilentStep ]
       ].
 
@@ -1173,40 +1172,45 @@ Module Gen.
         ; trivial
       | [ H : _ $+ (?k1,_) $? ?kid = Some _  |- context [ ?kid ] ] =>
         is_var kid
-        ; destruct (k1 ==n kid); subst; clean_map_lookups
+        ; destruct (k1 ==n kid); subst; simple_clean_maps
       | [ |- context [ $0 $? _ ]] =>
         rewrite lookup_empty_none
       (* | [ |- _ $? _ = _ ] => *)
       | [ |- context [ _ $? _ = _ ] ] =>
-        progress clean_map_lookups
+        (* progress clean_map_lookups *)
+        progress simple_clean_maps
       | [ |- _ -> _ ] => intros
       | [ |- _ ] => ( progress simpl ) || ( progress hnf )
+      end.
+
+  Ltac doRealStep :=
+    repeat 
+      match goal with
+      | [ |- RealWorld.step_user _ _ (_,RealWorld.Bind (RealWorld.Return _) _) _ ] =>
+        apply RealWorld.StepBindProceed
+      | [ |- RealWorld.step_user _ _ (_,RealWorld.Bind _ _) _ ] =>
+        apply RealWorld.StepBindRecur
+      | [ |- RealWorld.step_user _ _ (_,_,?cs,?gks,_,_,_,_,_,_,?cmd) _ ] =>
+        match cmd with
+        | RealWorld.SignEncrypt _ _ _ _ =>
+          eapply RealWorld.StepEncrypt with (c_id := next_key cs)
+        | RealWorld.Sign _ _ _ =>
+          eapply RealWorld.StepSign with (c_id := next_key cs)
+        | RealWorld.GenerateKey _ _ => 
+          eapply RealWorld.StepGenerateKey with (k_id := next_key gks)
+        | _ => econstructor
+        end
       end.
   
   Ltac solve_indexedRealStep :=
     repeat (match goal with [ |- exists _ , _ ] => eexists end)
     ; econstructor; [
-      solve [ simpl; clean_map_lookups; trivial ]
-    | autounfold; unfold RealWorld.build_data_step; simpl;
-      repeat ( match goal with
-               | [ |- RealWorld.step_user _ _ _ _ ] => solve [ eapply RealWorld.StepBindProceed; eauto ]
-               | [ |- RealWorld.step_user _ _ _ _ ] => eapply RealWorld.StepBindRecur; eauto
-               | [ |- RealWorld.step_user _ _ (_,_,?cs,?gks,_,_,_,_,_,_,?cmd) _ ] =>
-                 match cmd with
-                 | RealWorld.SignEncrypt _ _ _ _ =>
-                   eapply RealWorld.StepEncrypt with (c_id := next_key cs)
-                 | RealWorld.Sign _ _ _ =>
-                   eapply RealWorld.StepSign with (c_id := next_key cs)
-                 | RealWorld.GenerateKey _ _ => 
-                   eapply RealWorld.StepGenerateKey with (k_id := next_key gks)
-                 | _ => econstructor
-                 end
-               end
-             )
-      ; trivial (* take a first pass to get the simple stuff *)
-      ; repeat (solve_real_step_stuff1; trivial)
-      ; eauto
-
+      solve [ simpl; simple_clean_maps; trivial ]
+    | solve [ autounfold; unfold RealWorld.build_data_step; simpl
+              ; doRealStep
+              ; trivial (* take a first pass to get the simple stuff *)
+              ; repeat (solve_real_step_stuff1; trivial)
+              ; eauto ]
     | reflexivity ].
 
   Ltac find_indexed_real_step usrs uid :=

@@ -20,12 +20,12 @@ From SPICY Require Import
      Simulation
      AdversaryUniverse
 
-     ModelCheck.ProtocolAutomation
-     ModelCheck.SafeProtocol
+     ModelCheck.InvariantSearch
      ModelCheck.ModelCheck
      ModelCheck.ProtocolFunctions
+     ModelCheck.SafeProtocol
      ModelCheck.SilentStepElimination
-     ModelCheck.InvariantSearch
+     ModelCheck.SteppingTactics
 .
 
 From protocols Require Import
@@ -82,11 +82,14 @@ Module PGPProtocolSecure <: AutomatedSafeProtocolSS.
     unfold invariantFor
     ; unfold Initial, Step
     ; intros
-    ; sets_invert.
+    ; simpl in *
+    ; split_ors
+    ; try contradiction
+    ; subst.
 
     autounfold in H0
     ; unfold fold_left, fst, snd in *.
-    unfold real_users, ideal_users, mkrUsr, userProto, userKeys, userId, mkiUsr in *; uf; rwuf.
+    unfold real_users, ideal_users, mkrUsr, userProto, userKeys, userId, mkiUsr in *; rwuf.
 
     time (
         repeat transition_system_step
