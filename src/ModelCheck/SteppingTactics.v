@@ -1177,8 +1177,11 @@ Module Gen.
         rewrite lookup_empty_none
       (* | [ |- _ $? _ = _ ] => *)
       | [ |- context [ _ $? _ = _ ] ] =>
-        (* progress clean_map_lookups *)
-        progress simple_clean_maps
+        progress (
+            repeat ( (rewrite add_eq_o by trivial)           
+                     || (rewrite add_neq_o by congruence)
+                     || (rewrite lookup_empty_none) ))
+        (* progress simple_clean_maps *)
       | [ |- _ -> _ ] => intros
       | [ |- _ ] => ( progress simpl ) || ( progress hnf )
       end.

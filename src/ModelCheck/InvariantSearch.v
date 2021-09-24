@@ -691,6 +691,14 @@ Ltac forward_nosilents :=
       ; intros
     end.
 
+Ltac clear_nosilents :=
+  idtac "Clearing NoSilents"
+  ; repeat
+      match goal with
+      | [ H : NoSilent _ _ |- _ ] => clear H
+      | [ H : propNoSilent _ _ |- _ ] => clear H
+      end.
+
 Ltac invSS1 :=
   discriminate
   || match goal with
@@ -732,12 +740,7 @@ Ltac invSS1 :=
           let PROOF := fresh "PROOF" in
           pose proof (ssteps_inv_labeled P STEP LA eq_refl) as PROOF
           ; clear STEP P LA
-          ; idtac "Clearing NoSilents"
-          ; repeat
-              match goal with
-              | [ H : NoSilent _ _ |- _ ] => clear H
-              | [ H : propNoSilent _ _ |- _ ] => clear H
-              end
+          ; clear_nosilents
           ; destruct PROOF
           ; split_ex
           ; subst
@@ -783,7 +786,7 @@ Ltac invSS1 :=
       clear H
 
     | [ |- safety_inv (?ru,_,_) ] =>
-      concrete ru; solve [ finish_invariant ]
+      concrete ru; clear_nosilents; solve [ finish_invariant ]
 
     | [ H : _ \/ _ |- _ ] => destruct H; split_ex; subst
     end.

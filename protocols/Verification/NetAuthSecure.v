@@ -90,7 +90,7 @@ Module NetAuthProtocolSecure <: AutomatedSafeProtocolSS.
 
     autounfold in H0
     ; unfold fold_left, fst, snd in *.
-
+    
     time (
         repeat transition_system_step
       ).
