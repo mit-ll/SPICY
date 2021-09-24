@@ -131,6 +131,9 @@ Ltac simple_clean_maps1 :=
              || (rewrite lookup_empty_none) ))
   | [ |- $0 $? _ = _ ] =>
     rewrite lookup_empty_none
+  | [ H : ~ In _ _ |- _ ] => rewrite not_find_in_iff in H
+  | [ H : _ $+ (?k1,_) $? ?k2 = None |- _ ] =>
+    destruct (k1 ==n k2); subst
   end.
 
 Ltac simple_clean_maps := repeat simple_clean_maps1.

@@ -20,9 +20,9 @@ From SPICY Require Import
      Theory.KeysTheory
 
      ModelCheck.UniverseEqAutomation
-     (* ModelCheck.ProtocolAutomation *)
      ModelCheck.SafeProtocol
      ModelCheck.ProtocolFunctions
+     ModelCheck.RealWorldStepLemmas
      ModelCheck.SilentStepElimination
      ModelCheck.SteppingTactics
 .
@@ -301,30 +301,6 @@ Ltac rwuf :=
   , RealWorld.users, RealWorld.adversary
   in *.
 
-Tactic Notation "canonicalize" "context" :=
-  rwuf
-  ; try
-      match goal with
-      | [ H : stepSS (?ru,?iu,_) _ |- _ ] =>
-        match ru with
-        | context [{| RealWorld.users := ?usrs |}] =>
-          ccm usrs H
-        end
-        ; match iu with
-          | context [{| IdealWorld.users := ?usrs |}] => 
-            ccm usrs H
-          end
-      | [ H : (stepSS (t__adv:=_)) ^* (?ru,?iu,_) _ |- _ ] =>
-        match ru with
-        | context [{| RealWorld.users := ?usrs |}] =>
-          ccm usrs H
-        end
-        ; match iu with
-          | context [{| IdealWorld.users := ?usrs |}] => 
-            ccm usrs H
-          end
-      end.
-
 Tactic Notation "canonicalize" "ideal" "goal" :=
   rwuf
   ; match goal with
@@ -342,13 +318,6 @@ Ltac step_ideal1' uid :=
   idtac "stepping " uid
   ; eapply TrcFront
   ; [ idealUnivSilentStep' uid |].
-
-(* Ltac simpl_ideal_users_context := *)
-(*   simpl; *)
-(*   repeat *)
-(*     match goal with *)
-(*     | [ |- context [ {| IdealWorld.users := ?usrs |}] ] => progress canonicalize_map usrs *)
-(*     end. *)
 
 Ltac multistep_ideal' usrs :=
   canonicalize ideal goal;
@@ -511,6 +480,85 @@ Proof.
   invert 1; intros; eauto.
 Qed.
 
+Definition propNoSilent {A B} (U U' : RealWorld.universe A B) :=
+  forall uid, NoSilent uid U -> NoSilent uid U'.
+
+Lemma propNoSilent_silent_step :
+  forall A B (U U': RealWorld.universe A B) uid,
+    indexedRealStep uid Silent U U'
+    -> propNoSilent U U'.
+Proof.
+Admitted.
+
+Lemma ssteps_inv_silent' :
+  forall A B st st',
+    (@stepSS A B) ^* st st'
+    -> forall (U U' : RealWorld.universe A B) uid U__i b,
+      st = (U,U__i,b)
+      -> indexedRealStep uid Silent U U'
+      -> (forall uid' U', uid' > uid -> ~ indexedRealStep uid' Silent U U')
+      -> exists U__r,
+          indexedRealStep uid Silent U U__r
+          /\ (  st' = (U,U__i,b)
+               \/  (stepSS (t__adv := B) ^* (U__r,U__i,b) st')
+            )
+          /\ propNoSilent U U__r.
+Proof.
+  intros.
+  subst; invert H.
+  - eexists; eauto 8 using propNoSilent_silent_step.
+  - invert H0; repeat equality1.
+
+    invert H.
+    + apply indexedModelStep_user_step in H6; split_ex; split_ors; subst.
+      * destruct ( uid ==n u_id ); subst.
+        clear H1 H4.
+        
+        eexists; repeat simple apply conj; eauto using propNoSilent_silent_step.
+        exfalso.
+
+        destruct (le_gt_dec u_id uid).
+        assert (uid > u_id) by lia.
+        eapply H5; eauto.
+        eapply H2; eauto.
+        
+      * invert H; invert H4.
+        exfalso.
+        clean_map_lookups
+        ; pose proof (user_step_label_deterministic _ _ _ _ _ _ _ _ _ H7 H8); discriminate.
+
+    + eapply H4 in H1; contradiction.
+Qed.
+
+Lemma ssteps_inv_labeled :
+  forall A B st st' ru,
+    (forall uid U', ~ @indexedRealStep A B uid Silent ru U')
+    -> (@stepSS A B) ^* st st'
+    -> labels_align st
+    -> forall iu b,
+        st = (ru,iu,b)
+        (* -> st' = (ru',iu',b') *)
+        -> st = st'
+          \/ exists uid ru' iu0 iu' ra ia,
+            indexedRealStep uid (Action ra) ru ru'
+            /\ (indexedIdealStep uid Silent) ^* iu iu0
+            /\ indexedIdealStep uid (Action ia) iu0 iu'
+            /\ action_matches (RealWorld.all_ciphers ru) (RealWorld.all_keys ru) (uid,ra) ia
+            /\ (@stepSS A B) ^* (ru',iu',b) st'.
+Proof.
+  intros; subst.
+  invert H0; clear_mislabeled_steps; eauto.
+  right.
+
+  invert H2; repeat equality1.
+  invert H0.
+  - exfalso; eapply H; eauto.
+  - invert H6; try contradiction.
+    clear_mislabeled_steps.
+    eauto 12.
+Qed.
+
+
 Lemma all_users_NoSilent_no_indexed_silent_step :
   forall A B uid (U : RealWorld.universe A B),
     (forall uid ud, U.(RealWorld.users) $? uid = Some ud -> NoSilent uid U)
@@ -598,16 +646,20 @@ Ltac find_silent_step U us :=
       ; simpl in MAX
       ; lazymatch type of MAX with
         | _ = Some (?uid,?u) =>
-          let p := (eval cbn in u.(RealWorld.protocol))
-          in  assertSilentStatus uid U p
-              ; subst; split_ex
-              ; lazymatch goal with
-                | [ H : NoSilent uid _ |- _ ] => find_silent_step U (us $- uid)
-                | [ H : indexedRealStep uid Silent _ _ |- _ ] => assert_gt_pred U uid
-                end
+          match goal with
+          | [ H : NoSilent uid U |- _ ] => idtac "already have it"; find_silent_step U (us $- uid)
+          | _ => 
+            let p := (eval cbn in u.(RealWorld.protocol))
+            in  assertSilentStatus uid U p
+                ; subst; split_ex
+                ; lazymatch goal with
+                  | [ H : NoSilent uid _ |- _ ] => find_silent_step U (us $- uid)
+                  | [ H : indexedRealStep uid Silent _ _ |- _ ] => assert_gt_pred U uid
+                  end
+          end
         | _ => assert_no_silents U
         end
-      (* ; clear MAX *)
+(* ; clear MAX *)
 .
 
 Ltac finish_invariant :=
@@ -624,6 +676,21 @@ Ltac finish_invariant :=
     | try solve [ simpl; intros; find_step_or_solve' ]
     ].
 
+Ltac forward_nosilents :=
+  try 
+    match goal with
+    | [ PROPNS : propNoSilent _ _ |- _ ] =>
+      repeat 
+        match goal with
+        | [ NS : NoSilent ?uid _ |- _ ] =>
+          idtac "asserting nosilent " uid
+          ; generalize (PROPNS _ NS)
+          ; clear NS
+        end
+      ; clear PROPNS
+      ; intros
+    end.
+
 Ltac invSS1 :=
   discriminate
   || match goal with
@@ -634,14 +701,9 @@ Ltac invSS1 :=
 
       pose proof (ssteps_inv_silent' STEP eq_refl IRS P)
       ; clear STEP IRS P RU
-      ; repeat
-          match goal with
-          | [ H : NoSilent ?uid _ |- _ ] =>
-            idtac "asserting nosilent " uid
-            ; assert (NoSilent uid RU) by admit
-            ; clear H
-          end
+      ; forward_nosilents
       ; split_ex
+      ; idtac "Found silents"
 
     | [ H : action_matches _ _ _ _ |- _] => invert H
     | [H : indexedRealStep _ _ _ _ |- _ ] =>
@@ -668,11 +730,13 @@ Ltac invSS1 :=
       ; match goal with
         | [ LA : labels_align (?ru,?iu,?b) |- _ ] =>
           let PROOF := fresh "PROOF" in
-          pose proof (ssteps_inv_labeled P STEP LA eq_refl ) as PROOF
+          pose proof (ssteps_inv_labeled P STEP LA eq_refl) as PROOF
           ; clear STEP P LA
+          ; idtac "Clearing NoSilents"
           ; repeat
               match goal with
               | [ H : NoSilent _ _ |- _ ] => clear H
+              | [ H : propNoSilent _ _ |- _ ] => clear H
               end
           ; destruct PROOF
           ; split_ex
@@ -705,13 +769,12 @@ Ltac invSS1 :=
           idtac "rewriting server done"; rewrite realserver_done in H
         | context [ {| RealWorld.protocol := realServer _ _ _ |} ] =>
           idtac "unrolling server"; erewrite unroll_realserver_step in H by reflexivity
-        | _ => find_silent_step U usrs
+        | _ =>
+          idtac "finding silent steps..."
+          ; forward_nosilents
+          ; find_silent_step U usrs
         end
       end
-
-    (* | [ IMS : indexedModelStep ?uid (?U,_,_) _ *)
-    (*           , IRS : indexedRealStep ?uid _ ?U _ *)
-    (*     |- _ ] => clear IMS *)
 
     | [ H : forall _ _ _, _ -> _ -> _ -> _ <-> _ |- _ ] => clear H
     | [ H : forall _ _ _ _, _ -> _ -> _ -> _ -> _ <-> _ |- _ ] => clear H
@@ -719,14 +782,43 @@ Ltac invSS1 :=
                       exists _ _ _, (indexedIdealStep _ _) ^* ?iu _ /\ _) |- _ ] =>
       clear H
 
-                                               
-    (* | [ H : _ ^* (?ru,?iu,_) _ |- _ ] => concrete ru; concrete iu; invert H *)
-
     | [ |- safety_inv (?ru,_,_) ] =>
       concrete ru; solve [ finish_invariant ]
 
     | [ H : _ \/ _ |- _ ] => destruct H; split_ex; subst
     end.
+
+Tactic Notation "canonicalize" "context" :=
+  rwuf
+  ; try
+      match goal with
+      | [ H : stepSS (?ru,?iu,_) _ |- _ ] =>
+        match ru with
+        | context [{| RealWorld.users := ?usrs |}] =>
+          ccm usrs H
+        end
+        ; match iu with
+          | context [{| IdealWorld.users := ?usrs |}] => 
+            ccm usrs H
+          end
+      | [ H : (stepSS (t__adv:=_)) ^* (?ru,?iu,_) _ |- _ ] =>
+        match ru with
+        | context [{| RealWorld.users := ?usrs |}] =>
+          ccm usrs H
+        end
+        ; match iu with
+          | context [{| IdealWorld.users := ?usrs |}] => 
+            ccm usrs H
+          end
+      end
+  ; try
+      match goal with
+      | [ H : propNoSilent _ ?ru |- _ ] =>
+        match ru with
+        | context [{| RealWorld.users := ?usrs |}] =>
+          ccm usrs H
+        end
+      end.
 
 (* Ltac t := (repeat eq1); try invSS1. *)
 (* Ltac u := (repeat cleanup1); invSS1(* ; istep *); (repeat cleanup1). *)

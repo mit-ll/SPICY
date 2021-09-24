@@ -90,7 +90,7 @@ Module AvgSalaryProtocolSecure <: AutomatedSafeProtocolSS.
     ; subst.
 
     autounfold in H0
-    ; unfold fold_left, fst, snd in *.
+    ; unfold fold_left, fst, snd in *; rwuf; simpl in H0.
 
     time (
         repeat transition_system_step
