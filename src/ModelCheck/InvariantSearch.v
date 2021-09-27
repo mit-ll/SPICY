@@ -138,7 +138,7 @@ Ltac finish_honest_cmds_safe1 :=
     | [ H : nextAction (realServer _ _ _) _ |- _ ] =>
       erewrite unroll_realserver_step in H by reflexivity
     | [ H : nextAction _ _ |- _ ] =>
-      apply invert_na' in H; cbn in H; destruct H; subst; invert_base_equalities1; subst
+      apply invert_na in H; cbn in H; destruct H; subst; invert_base_equalities1; subst
     | [ H : mkKeys _ $? _ = _ |- _ ] => unfold mkKeys in H; simpl in H
     | [ |- context [ RealWorld.findUserKeys _ ] ] =>
       rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty by eauto
@@ -507,20 +507,72 @@ Ltac finish_invariant :=
     | try solve [ simpl; intros; find_step_or_solve' ]
     ].
 
-Ltac forward_nosilents :=
-  try 
+Ltac prove_honest_heaps_sane :=
+  repeat
     match goal with
-    | [ PROPNS : propNoSilent _ _ |- _ ] =>
-      repeat 
-        match goal with
-        | [ NS : NoSilent ?uid _ |- _ ] =>
-          idtac "asserting nosilent " uid
-          ; generalize (PROPNS _ NS)
-          ; clear NS
+    | [ H : _ |- _ ] => clear H
+    end
+  ; unfold InvariantSearchLemmas.honest_heaps_sane
+  ; intros
+  ; match goal with
+    | [ USRS : _ $+ (_,_) $? _ = Some _ |- _ ] =>
+      repeat
+        match type of USRS with
+        | _ $+ (?uid1,_) $? ?uid2 = Some _ => destruct (uid1 ==n uid2); subst; simple_clean_maps
         end
-      ; clear PROPNS
-      ; intros
-    end.
+    end
+  ; unfold RealWorld.c_heap, RealWorld.key_heap, List.In
+  ; split
+  ; intros
+  ; repeat
+      match goal with
+      | [ |- In ?kid2 _ ] =>
+        rewrite in_find_iff; unfold not; intros
+      | [ H : _ \/ _ |- _ ] => destruct H
+      | [ H : _ $+ (?kid1,_) $? ?kid2 = None |- False ] =>
+        destruct (kid1 ==n kid2); subst; simple_clean_maps
+      | [ H : _ $k++ _ $? _ = Some _ |- False ] =>
+        apply KeysTheory.merge_perms_split in H; destruct H; solve_concrete_maps
+      end
+  ; trivial.
+
+Ltac forward_nosilents :=
+  lazymatch goal with
+  | [ XX : NoSilent _ _ |- _ ] =>
+    match goal with
+    | [ H : honest_heaps_sane ?usrs ?cs ?gks -> propNoSilent _ _ |- _ ] =>
+      ( let HHS := fresh "HHS" in
+        assert (InvariantSearchLemmas.honest_heaps_sane usrs cs gks) as HHS by prove_honest_heaps_sane
+        ; apply H in HHS
+        ; clear H
+        ; repeat
+            match goal with
+            | [ NS : NoSilent ?uid _ |- _ ] =>
+              idtac "asserting nosilent " uid
+              ; generalize (HHS _ NS)
+              ; clear NS
+            end
+        ; clear HHS
+        ; intros
+      ) || fail 3
+    end
+  | [ H : honest_heaps_sane _ _ _ ->  _ |- _ ] =>
+    clear H
+  | _ => idtac
+  end.
+  (* try  *)
+  (*   match goal with *)
+  (*   | [ PROPNS : propNoSilent _ _ |- _ ] => *)
+  (*     repeat  *)
+  (*       match goal with *)
+  (*       | [ NS : NoSilent ?uid _ |- _ ] => *)
+  (*         idtac "asserting nosilent " uid *)
+  (*         ; generalize (PROPNS _ NS) *)
+  (*         ; clear NS *)
+  (*       end *)
+  (*     ; clear PROPNS *)
+  (*     ; intros *)
+  (*   end. *)
 
 Ltac clear_nosilents :=
   idtac "Clearing NoSilents"
@@ -528,6 +580,7 @@ Ltac clear_nosilents :=
       match goal with
       | [ H : NoSilent _ _ |- _ ] => clear H
       | [ H : propNoSilent _ _ |- _ ] => clear H
+      | [ H : honest_heaps_sane _ _ _ ->  _ |- _ ] => clear H
       end.
 
 Ltac invSS1 :=
@@ -538,11 +591,15 @@ Ltac invSS1 :=
       , P : (forall _ _, _ > ?uid -> _)
         |- _ ] =>
 
-      pose proof (ssteps_inv_silent' STEP eq_refl IRS P)
-      ; clear STEP IRS P RU
-      ; forward_nosilents
-      ; split_ex
-      ; idtac "Found silents"
+      ( let PROOF := fresh "PROOF" in 
+        pose proof (InvariantSearchLemmas.ssteps_inv_silent STEP eq_refl IRS P) as PROOF
+        ; clear STEP IRS P RU
+        ; unfold RealWorld.users, RealWorld.all_ciphers, RealWorld.all_keys in PROOF
+        ; split_ex
+        ; clear_nosilents
+        (* ; forward_nosilents *)
+        ; idtac "Found silents"
+      ) || fail 1
 
     | [ H : action_matches _ _ _ _ |- _] => invert H
     | [H : indexedRealStep _ _ _ _ |- _ ] =>
@@ -605,8 +662,9 @@ Ltac invSS1 :=
           idtac "unrolling server"; erewrite unroll_realserver_step in H by reflexivity
         | _ =>
           idtac "finding silent steps..."
-          ; forward_nosilents
+          (* ; forward_nosilents *)
           ; find_silent_step U usrs
+          ; clear_nosilents
         end
       end
 
@@ -647,7 +705,7 @@ Tactic Notation "canonicalize" "context" :=
       end
   ; try
       match goal with
-      | [ H : propNoSilent _ ?ru |- _ ] =>
+      | [ H : _ -> propNoSilent _ ?ru |- _ ] =>
         match ru with
         | context [{| RealWorld.users := ?usrs |}] =>
           ccm usrs H

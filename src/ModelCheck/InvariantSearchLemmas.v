@@ -71,18 +71,6 @@ Section RW.
   Lemma invert_na :
     forall t (cmd : user_cmd t) t__n (cmd__n : user_cmd t__n),
       nextAction cmd cmd__n
-      -> compute_na cmd = existT _ _ cmd__n.
-  Proof.
-    induct cmd
-    ; try solve [ intros; unfold compute_na; invert H; split; reflexivity ].
-
-    intros; induct H; eauto.
-    intros; invert H0; eauto.
-  Qed.
-
-  Lemma invert_na' :
-    forall t (cmd : user_cmd t) t__n (cmd__n : user_cmd t__n),
-      nextAction cmd cmd__n
       -> compute_na cmd = existT _ _ cmd__n
         /\ projT1 (compute_na cmd) = t__n.
   Proof.
@@ -100,6 +88,13 @@ Inductive NoSilent {A B} (uid : user_id) (U : RealWorld.universe A B) : Prop :=
 | Stuck :
     (forall U', ~ indexedRealStep uid Silent U U')
     -> NoSilent uid U.
+
+Definition honest_heaps_sane {A} (usrs : honest_users A) (cs : ciphers) (gks : keys) :=
+  forall uid u,
+    usrs $? uid = Some u
+    -> (forall cid, List.In cid u.(c_heap) -> In cid cs)
+    /\ (forall kid kp, u.(key_heap) $? kid = Some kp -> In kid gks)
+. 
 
 Lemma step_didnt_appear :
   forall {A B C} suid lbl bd bd',
@@ -133,13 +128,28 @@ Lemma step_didnt_appear :
           -> (forall cid c, cs $? cid = Some c -> cs'' $? cid = Some c \/ cs'' $? cid = None)
           -> (forall kid k, gks $? kid = Some k -> gks'' $? kid = Some k \/ gks'' $? kid = None)
           -> (forall kid k, gks'' $? kid = Some k -> gks $? kid = Some k)
-          -> keys_and_permissions_good gks'' usrs'' adv''.(key_heap)
-          -> user_cipher_queues_ok cs'' (findUserKeys usrs'') usrs''
+          -> honest_heaps_sane usrs'' cs'' gks''
           -> exists bd'',
               step_user Silent suid
                         (usrs'', adv'', cs'', gks'', ks, qmsgs, mycs, froms, sents, cur_n, cmd)
                         bd''.
 Proof.
+  Local Ltac process_stuff :=
+    repeat
+      match goal with
+      | [ H : honest_heaps_sane ?usrs ?cs ?gks, USR : ?usrs $? _ = Some _ |- _ ] =>
+        specialize (H _ _ USR)
+        ; simpl in H
+        ; destruct H
+      | [ H : ?m $? _ = Some _, FN : (forall _ _, ?m $? _ = Some _ -> _) |- _ ] =>
+        apply FN in H
+      | [ H : List.In _ ?l, FN : (forall _, List.In _ ?l -> _) |- _ ] =>
+        apply FN in H
+      end
+    ; split_ors
+    ; clean_map_lookups
+    ; trivial.
+  
   induction 1; inversion 1; inversion 1
   ; intros
   ; subst
@@ -151,27 +161,18 @@ Proof.
     split_ex; eauto.
     dt x.
     eexists; econstructor; eauto.
-  - keys_and_permissions_prop.
-    generalize (H12 _ _ H1); generalize (H12 _ _ H2); intros; split_ex.
-    destruct x0; destruct x; clean_map_lookups.
-    apply H41 in H; apply H41 in H0; split_ors; clean_map_lookups.
-    eexists; eapply StepEncrypt with (c_id0 := next_key cs''); eauto using Maps.next_key_not_in.
-  - user_cipher_queues_prop.
-    keys_and_permissions_prop.
-    generalize (H13 _ _ H2); generalize (H13 _ _ H3); intros; split_ex.
-    apply H38 in H; split_ors; clean_map_lookups.
-    eapply H39 in H0; eapply H39 in H1; split_ors; clean_map_lookups.
-    eexists; econstructor; eauto.
-  - keys_and_permissions_prop.
-    apply H39 in H.
-    specialize (H10 _ _ H0); split_ors; clean_map_lookups.
-    eexists; eapply StepSign with (c_id0 := next_key cs''); eauto using Maps.next_key_not_in.
-  - user_cipher_queues_prop.
-    keys_and_permissions_prop.
-    generalize (H11 _ _ H0); intros; split_ex.
-    apply H34 in H; split_ors; clean_map_lookups.
-    eapply H33 in H1; split_ors; clean_map_lookups.
-    eexists; econstructor; eauto.
+  - eexists; eapply StepEncrypt with (c_id0 := next_key cs''); eauto using Maps.next_key_not_in
+    ; process_stuff.
+    
+  - eexists; econstructor; trivial.
+    process_stuff; split_ors; clean_map_lookups; eauto.
+    process_stuff; split_ors; clean_map_lookups; eauto.
+    process_stuff; split_ors; clean_map_lookups; eauto.
+    all: eauto.
+  - eexists; eapply StepSign with (c_id0 := next_key cs''); eauto using Maps.next_key_not_in
+    ; process_stuff.
+  - eexists; econstructor; eauto
+    ; process_stuff.
   - eexists; eapply StepGenerateKey with (k_id0 := next_key gks''); eauto using Maps.next_key_not_in.
 
     Unshelve.
@@ -220,8 +221,7 @@ Lemma silent_step_then_silent_step_inv :
                                         from_nons := froms';
                                         sent_nons := sents';
                                         cur_nonce := cur_n' |})
-          -> keys_and_permissions_good gks usrs adv.(key_heap)
-          -> user_cipher_queues_ok cs (findUserKeys usrs) usrs
+          -> honest_heaps_sane usrs cs gks
           -> exists bd2'',
               step_user Silent (Some uid2) bd2 bd2''
 .
@@ -332,78 +332,76 @@ Qed.
 Lemma propNoSilent_silent_step :
   forall A B (U U': RealWorld.universe A B) uid,
     indexedRealStep uid Silent U U'
-    -> keys_and_permissions_good U.(all_keys) U.(users) U.(adversary).(key_heap)
-    -> user_cipher_queues_ok U.(all_ciphers) (findUserKeys U.(users)) U.(users)
+    -> honest_heaps_sane U.(users) U.(all_ciphers) U.(all_keys)
     -> propNoSilent U U'.
 Proof.
   unfold propNoSilent; intros.
-  invert H2.
+  invert H1.
   constructor; unfold not; intros.
 
   destruct (uid ==n uid0); subst.
 
-  apply H3 in H; auto.
+  apply H2 in H; auto.
 
-  invert H; invert H2.
+  invert H; invert H1.
   destruct U, userData, userData0.
   unfold build_data_step, buildUniverse in *; simpl in *; clean_map_lookups.
 
-  pose proof (silent_step_then_silent_step_inv H5).
-  pose proof (silent_step_nochange_other_user_inv H5).
+  pose proof (silent_step_then_silent_step_inv H4).
+  pose proof (silent_step_nochange_other_user_inv H4).
 
-  specialize (H7 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ eq_refl eq_refl eq_refl).
-  specialize (H7 _ _ _ _ eq_refl n H4 H).
+  specialize (H6 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ eq_refl eq_refl eq_refl).
+  specialize (H6 _ _ _ _ eq_refl n H3 H).
   
-  specialize (H2 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ eq_refl eq_refl eq_refl eq_refl H4).
-  specialize (H2 _ _ _ _ _ _ _ _ _ _ _ _ _ H6 n H7 eq_refl H eq_refl).
+  specialize (H1 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ eq_refl eq_refl eq_refl eq_refl H3).
+  specialize (H1 _ _ _ _ _ _ _ _ _ _ _ _ _ H5 n H6 eq_refl H eq_refl).
 
-  specialize (H2 H0 H1).
+  specialize (H1 H0).
 
   split_ex.
   dt x.
-  eapply H3.
+  eapply H2.
   econstructor; simpl; eauto.
 Qed.
 
-Lemma ssteps_inv_silent' :
+Lemma ssteps_inv_silent :
   forall A B st st',
     (@stepSS A B) ^* st st'
     -> forall (U U' : RealWorld.universe A B) uid U__i b,
       st = (U,U__i,b)
       -> indexedRealStep uid Silent U U'
       -> (forall uid' U', uid' > uid -> ~ indexedRealStep uid' Silent U U')
-      -> keys_and_permissions_good U.(all_keys) U.(users) U.(adversary).(key_heap)
-      -> user_cipher_queues_ok U.(all_ciphers) (findUserKeys U.(users)) U.(users)
       -> exists U__r,
           indexedRealStep uid Silent U U__r
           /\ (  st' = (U,U__i,b)
                \/  (stepSS (t__adv := B) ^* (U__r,U__i,b) st')
             )
-          /\ propNoSilent U U__r.
+          /\ ( honest_heaps_sane U.(users) U.(all_ciphers) U.(all_keys)
+            -> propNoSilent U U__r ).
 Proof.
   intros.
   subst; invert H.
   - eexists; eauto 8 using propNoSilent_silent_step.
   - invert H0; repeat equality1.
     invert H.
-    + apply indexedModelStep_user_step in H8; split_ex; split_ors; subst.
+    + apply indexedModelStep_user_step in H6; split_ex; split_ors; subst.
       * destruct ( uid ==n u_id ); subst.
-        clear H1 H6.
+        clear H1 H4.
         
         eexists; repeat simple apply conj; eauto using propNoSilent_silent_step.
         exfalso.
 
         destruct (le_gt_dec u_id uid).
         assert (uid > u_id) by lia.
-        eapply H7; eauto.
+        eapply H5; eauto.
         eapply H2; eauto.
         
-      * invert H; invert H6.
+      * invert H; invert H4.
         exfalso.
         clean_map_lookups
-        ; pose proof (user_step_label_deterministic _ _ _ _ _ _ _ _ _ H9 H10); discriminate.
+        ; pose proof (user_step_label_deterministic _ _ _ _ _ _ _ _ _ H7 H8); discriminate.
 
-    + eapply H6 in H1; contradiction.
+    + eapply H4 in H1; contradiction.
 Qed.
 
 Lemma ssteps_inv_labeled :
@@ -413,7 +411,6 @@ Lemma ssteps_inv_labeled :
     -> labels_align st
     -> forall iu b,
         st = (ru,iu,b)
-        (* -> st' = (ru',iu',b') *)
         -> st = st'
           \/ exists uid ru' iu0 iu' ra ia,
             indexedRealStep uid (Action ra) ru ru'
