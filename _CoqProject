@@ -52,6 +52,7 @@ src/ModelCheck/UniverseEqAutomation.v
 
 # Protocol Invariant Exploration (alternative to traditional model checking)
 src/ModelCheck/InvariantSearch.v
+src/ModelCheck/InvariantSearchLemmas.v
 
 #############################################################################
 ##  Protocol Verification
