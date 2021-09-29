@@ -18,7 +18,7 @@ From SPICY Require Import
      Tactics
      Simulation
      AdversaryUniverse
-     UniverseEqAutomation
+     ModelCheck.UniverseEqAutomation
      SafeProtocol.
 
 From SPICY Require

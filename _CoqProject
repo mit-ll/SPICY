@@ -4,9 +4,9 @@
 # SPDX-License-Identifier: MIT
 # 
 
--R src/ SPICY
+-Q src/ SPICY
 -R Frap/ Frap
--R protocols/ protocols
+-Q protocols/ protocols
 
 # Frap Library Dependency
 Frap/Invariant.v
@@ -38,10 +38,11 @@ src/Theory/MessagesTheory.v
 src/Theory/NonceTracking.v
 src/Theory/UsersTheory.v
 
+src/ModelCheck/Commutation.v
 src/ModelCheck/LabelsAlign.v
 src/ModelCheck/ModelCheck.v
 src/ModelCheck/NoResends.v
-src/ModelCheck/PartialOrderReduction.v
+# src/ModelCheck/PartialOrderReduction.v
 src/ModelCheck/ProtocolAutomation.v
 src/ModelCheck/ProtocolFunctions.v
 src/ModelCheck/RealWorldStepLemmas.v

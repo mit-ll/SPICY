@@ -19,10 +19,9 @@ From SPICY Require Import
      Simulation
      AdversaryUniverse
 
-     ModelCheck.UniverseEqAutomation
-     ModelCheck.ProtocolAutomation
-     ModelCheck.SafeProtocol
+     (* ModelCheck.InvariantSearch *)
      ModelCheck.ProtocolFunctions
+     ModelCheck.SteppingTactics
 .
 
 From SPICY Require IdealWorld RealWorld.

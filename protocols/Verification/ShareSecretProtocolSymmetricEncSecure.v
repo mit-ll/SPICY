@@ -18,12 +18,10 @@ From SPICY Require Import
      Simulation
      AdversaryUniverse
 
-     ModelCheck.ModelCheck
-     ModelCheck.UniverseEqAutomation
-     ModelCheck.ProtocolAutomation
      ModelCheck.SafeProtocol
      ModelCheck.ProtocolFunctions
      ModelCheck.SilentStepElimination
+     ModelCheck.SteppingTactics
      ModelCheck.InvariantSearch
 .
 
@@ -57,25 +55,9 @@ Module ShareSecretProtocolSecureSS <: AutomatedSafeProtocolSS.
   Definition iu0  := ideal_univ_start.
   Definition ru0  := real_univ_start.
 
-  Import Gen Tacs SetLemmas.
+  Import Gen Tacs.
 
   #[export] Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start real_univ_start : core.
-
-  Lemma next_key_natmap_exists :
-    forall {V} (m : NatMap.t V),
-    exists k, m $? k = None.
-  Proof.
-    intros.
-    exists (next_key m); eauto using Maps.next_key_not_in.
-  Qed.
-
-  Lemma next_key_chmap_exists :
-    forall {V} (m : ChMap.t V),
-    exists k, m #? (# k) = None.
-  Proof.
-    intros.
-    exists (next_key_nat m); eauto using next_key_not_in.
-  Qed.
 
   Set Ltac Profiling.
 
@@ -88,7 +70,10 @@ Module ShareSecretProtocolSecureSS <: AutomatedSafeProtocolSS.
     unfold invariantFor
     ; unfold Initial, Step
     ; intros
-    ; sets_invert.
+    ; simpl in *
+    ; split_ors
+    ; try contradiction
+    ; subst.
 
     autounfold in H0
     ; unfold fold_left, fst, snd in *.

@@ -19,11 +19,11 @@ From SPICY Require Import
      Simulation
      AdversaryUniverse
 
-     ModelCheck.ProtocolAutomation
      ModelCheck.SafeProtocol
      ModelCheck.ModelCheck
      ModelCheck.ProtocolFunctions
      ModelCheck.SilentStepElimination
+     ModelCheck.SteppingTactics
      ModelCheck.InvariantSearch
 .
 
@@ -65,7 +65,7 @@ Module MyProtocolSecure <: AutomatedSafeProtocolSS.
   Definition iu0  := ideal_univ_start.
   Definition ru0  := real_univ_start.
 
-  Import Gen Tacs SetLemmas.
+  Import Gen Tacs.
 
   (* These are here to help the proof automation.  Don't change. *)
   #[export] Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start real_univ_start : core.
@@ -85,16 +85,17 @@ Module MyProtocolSecure <: AutomatedSafeProtocolSS.
     unfold invariantFor
     ; unfold Initial, Step
     ; intros
-    ; sets_invert.
+    ; simpl in *
+    ; split_ors
+    ; try contradiction
+    ; subst.
 
-    invert H0.
-    - finish_invariant.
-    - autounfold in H
-      ; unfold fold_left, fst, snd in *.
+    autounfold in H0
+    ; unfold fold_left, fst, snd in *.
 
-      repeat transition_system_step.
-
-      (* Show Ltac Profile. *)
+    time (
+        repeat transition_system_step
+      ).
 
       Unshelve.
       all: exact 0 || auto.

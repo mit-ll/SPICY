@@ -19,17 +19,13 @@ From SPICY Require Import
      Simulation
      AdversaryUniverse
 
-     ModelCheck.UniverseEqAutomation
-     ModelCheck.ProtocolAutomation
-     ModelCheck.SafeProtocol
      ModelCheck.ProtocolFunctions
 .
 
 From SPICY Require IdealWorld RealWorld.
 
 Import IdealWorld.IdealNotations
-       RealWorld.RealWorldNotations
-       SimulationAutomation.
+       RealWorld.RealWorldNotations.
 
 From Frap Require Sets.
 

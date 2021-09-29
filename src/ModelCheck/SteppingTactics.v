@@ -24,7 +24,6 @@ From SPICY Require Import
 
      Theory.KeysTheory
 
-     ModelCheck.ModelCheck
      ModelCheck.SafeProtocol
      ModelCheck.UniverseEqAutomation
      ModelCheck.ProtocolFunctions
@@ -1455,8 +1454,6 @@ Module Gen.
         |- _ ] => clear IMS
 
     end.
-
-  Ltac s := simpl in *.
 
   Ltac cleanup :=
     repeat (

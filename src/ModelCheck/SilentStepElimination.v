@@ -33,11 +33,11 @@ From SPICY Require Import
      Theory.MessageEqTheory
      Theory.UsersTheory
 
+     ModelCheck.Commutation
      ModelCheck.LabelsAlign
      ModelCheck.ModelCheck
      ModelCheck.NoResends
      ModelCheck.ProtocolFunctions
-     ModelCheck.PartialOrderReduction
      ModelCheck.RealWorldStepLemmas
      ModelCheck.SafeProtocol
 .
@@ -101,7 +101,7 @@ Definition TrSS {t__hon t__adv} (ru0 : RealWorld.universe t__hon t__adv) (iu0 : 
 #[export] Hint Resolve adversary_remains_lame_step : core.
 #[export] Hint Constructors stepSS nextStepSS : core.
 
-#[export] Hint Resolve indexedIdealSteps_ideal_steps : core.
+(* #[export] Hint Resolve indexedIdealSteps_ideal_steps : core. *)
 #[export] Hint Constructors indexedModelStep indexedIdealStep indexedRealStep : core.
 #[export] Hint Resolve action_matches_other_user_silent_step_inv : core.
 
@@ -655,14 +655,6 @@ Proof.
     intros; destruct (uid1 ==n uid); subst; clean_map_lookups; eauto.
     intros; destruct (c_id ==n cid); subst; clean_map_lookups; eauto.
 Qed.
-
-(* Lemma silent_steps_still_stuck_after_other_step : *)
-(*   forall A B uid1 U, *)
-(*     (forall uid' U', uid' > uid1 -> ~ @indexedRealStep A B uid' Silent U U') *)
-(*     -> forall uid2 lbl U', indexedRealStep uid2 lbl U U' *)
-(*     -> uid2 <> uid1  *)
-(*     (forall uid' U', uid' > uid -> ~ indexedRealStep uid' Silent (fst (fst st)) U') *)
-
 
 Lemma silent_step_commutes_noblock :
   forall t__hon t__adv (usrs usrs' : honest_users t__hon) (adv adv' : user_data t__adv) cs cs' gks gks'
@@ -1349,7 +1341,7 @@ Proof.
     assert (SSU : syntactically_safe_U (fst (fst st'0))) by eauto using syntactically_safe_U_preservation_step.
     assert (GOODNESS : goodness_predicates (fst (fst st'0))) by eauto using goodness_preservation_step.
 
-    eapply IHn in H9; eauto.
+    eapply IHn in H9; eauto using summarize_univ_step.
     repeat match goal with
            | [ H : goodness_predicates _ |- _ ] => clear H
            | [ H : syntactically_safe_U _ |- _ ] => clear H
@@ -1385,7 +1377,6 @@ Proof.
 
     + econstructor; eauto.
       econstructor 2; eauto.
-
 Qed.
 
 Lemma complete_trace :

@@ -18,12 +18,10 @@ From SPICY Require Import
      Simulation
      AdversaryUniverse
 
-     ModelCheck.ModelCheck
-     ModelCheck.UniverseEqAutomation
-     ModelCheck.ProtocolAutomation
      ModelCheck.SafeProtocol
      ModelCheck.ProtocolFunctions
      ModelCheck.SilentStepElimination
+     ModelCheck.SteppingTactics
      ModelCheck.InvariantSearch
 .
 
@@ -59,7 +57,7 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocolSS.
   Definition iu0  := ideal_univ_start.
   Definition ru0  := real_univ_start.
 
-  Import Gen Tacs SetLemmas.
+  Import Gen Tacs.
 
   (* These are here to help the proof automation.  Don't change. *)
   #[export] Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start real_univ_start : core.
@@ -79,7 +77,10 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocolSS.
     unfold invariantFor
     ; unfold Initial, Step
     ; intros
-    ; sets_invert.
+    ; simpl in *
+    ; split_ors
+    ; try contradiction
+    ; subst.
 
     autounfold in H0
     ; unfold fold_left, fst, snd in *.
@@ -87,7 +88,7 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocolSS.
     time (
         repeat transition_system_step
       ).
-    
+
     Unshelve.
     all: exact 0 || auto.
   Qed.
