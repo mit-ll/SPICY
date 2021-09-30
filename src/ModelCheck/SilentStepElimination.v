@@ -33,14 +33,15 @@ From SPICY Require Import
      Theory.MessageEqTheory
      Theory.UsersTheory
 
+     ModelCheck.ModelCheck
      ModelCheck.Commutation
      ModelCheck.LabelsAlign
-     ModelCheck.ModelCheck
      ModelCheck.NoResends
-     ModelCheck.ProtocolFunctions
      ModelCheck.RealWorldStepLemmas
-     ModelCheck.SafeProtocol
 .
+
+From Frap Require Import
+     Invariant.
 
 From Frap Require
      Sets.
@@ -1681,6 +1682,21 @@ Proof.
 
   - eapply H11 in H4; split_ex.
     eapply H in H4; eauto.
+Qed.
+
+Lemma indexedModelStep_step :
+  forall t__hon t__adv uid st st',
+    @indexedModelStep t__hon t__adv uid st st'
+    -> step st st'.
+Proof.
+  intros.
+  invert H; [
+    econstructor 1
+  | econstructor 2
+  | econstructor 3
+  | econstructor 4 ]; eauto.
+
+  invert H0; econstructor; eauto.
 Qed.
 
 Theorem step_stepSS :

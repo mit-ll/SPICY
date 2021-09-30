@@ -18,11 +18,12 @@ From SPICY Require Import
      Simulation
      AdversaryUniverse
 
-     ModelCheck.SafeProtocol
+     ModelCheck.ModelCheck
      ModelCheck.ProtocolFunctions
      ModelCheck.SilentStepElimination
      ModelCheck.SteppingTactics
      ModelCheck.InvariantSearch
+     ModelCheck.UniverseInversionLemmas
 .
 
 From protocols Require Import

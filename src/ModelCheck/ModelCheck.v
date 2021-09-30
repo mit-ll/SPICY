@@ -4,128 +4,137 @@
  * SPDX-License-Identifier: MIT
  * 
  *)
+From Coq Require Import
+     Classical
+     Lists.List.
+
 From SPICY Require Import
-     MyPrelude.
+     MyPrelude
+     Maps
+     Keys
+     Messages
+     MessageEq
+     Tactics
+     Simulation
+     RealWorld
+     AdversarySafety.
+
+From SPICY Require
+     IdealWorld.
 
 From Frap Require Import
-     Sets
      Invariant
 .
 
-From Frap Require Export Invariant.
+From Frap Require Sets.
+Module Foo <: Sets.EMPTY.
+End Foo.
+Module Import SN := Sets.SetNotations(Foo).
+
+Import RealWorld.RealWorldNotations.
 
 Set Implicit Arguments.
 
-Module Foo <: EMPTY.
-End Foo.
-Module Import SN := SetNotations(Foo).
+Definition adversary_is_lame {B : type} (b : << Base B >>) (adv : user_data B) : Prop :=
+    adv.(key_heap) = $0
+  /\ adv.(msg_heap) = []
+  /\ adv.(c_heap) = []
+  /\ lameAdv b adv.
 
-Definition oneStepClosure_current {state} (sys : trsys state)
-           (invariant1 invariant2 : state -> Prop) :=
-  forall st, invariant1 st
-             -> invariant2 st.
+Definition universe_starts_sane {A B : type} (b : << Base B >>) (U : universe A B) : Prop :=
+  let honestk := findUserKeys U.(users)
+  in  (forall u_id u, U.(users) $? u_id = Some u -> u.(RealWorld.msg_heap) = [])
+      /\ ciphers_honestly_signed honestk U.(RealWorld.all_ciphers)
+      /\ keys_honest honestk U.(RealWorld.all_keys)
+      /\ adversary_is_lame b U.(adversary).
 
-Definition oneStepClosure_new {state} (sys : trsys state)
-           (invariant1 invariant2 : state -> Prop) :=
-  forall st st', invariant1 st
-                 -> sys.(Step) st st'
-                 -> invariant2 st'.
+Definition ModelState {t__hon t__adv : type} := (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon * bool)%type.
 
-Definition oneStepClosure {state} (sys : trsys state)
-           (invariant1 invariant2 : state -> Prop) :=
-  oneStepClosure_current sys invariant1 invariant2
-  /\ oneStepClosure_new sys invariant1 invariant2.
+Definition safety {t__hon t__adv} (st : @ModelState t__hon t__adv) : Prop :=
+  let '(ru, iu, b) := st
+  in  honest_cmds_safe ru.
 
-Theorem prove_oneStepClosure : forall state (sys : trsys state) (inv1 inv2 : state -> Prop),
-  (forall st, inv1 st -> inv2 st)
-  -> (forall st st', inv1 st -> sys.(Step) st st' -> inv2 st')
-  -> oneStepClosure sys inv1 inv2.
-Proof.
-  unfold oneStepClosure; tauto.
-Qed.
+Definition labels_align {t__hon t__adv} (st : @ModelState t__hon t__adv) : Prop :=
+  let '(ru, iu, b) := st
+  in  forall uid ru' ra,
+      indexedRealStep uid (Action ra) ru ru'
+      -> exists ia iu' iu'',
+        (indexedIdealStep uid Silent) ^* iu iu'
+        /\ indexedIdealStep uid (Action ia) iu' iu''
+        /\ action_matches ru.(RealWorld.all_ciphers) ru.(RealWorld.all_keys) (uid,ra) ia.
 
-Theorem oneStepClosure_done : forall state (sys : trsys state) (invariant : state -> Prop),
-  (forall st, sys.(Initial) st -> invariant st)
-  -> oneStepClosure sys invariant invariant
-  -> invariantFor sys invariant.
-Proof.
-  unfold oneStepClosure, oneStepClosure_current, oneStepClosure_new.
-  intuition eauto using invariant_induction.
-Qed.
+Definition returns_align {t__hon t__adv} (st : @ModelState t__hon t__adv) : Prop :=
+  let '(ru, iu, b) := st
+  in (forall uid lbl ru', indexedRealStep uid lbl ru ru' -> False)
+     -> forall uid ud__r r__r,
+      ru.(RealWorld.users) $? uid = Some ud__r
+      -> ud__r.(RealWorld.protocol) = RealWorld.Return r__r
+      -> exists (iu' : IdealWorld.universe t__hon) ud__i r__i,
+          istepSilent ^* iu iu'
+          /\ iu'.(IdealWorld.users) $? uid = Some ud__i
+          /\ ud__i.(IdealWorld.protocol) = IdealWorld.Return r__i
+          /\ Rret_val_to_val r__r = Iret_val_to_val r__i.
 
-Inductive multiStepClosure {state} (sys : trsys state)
-  : (state -> Prop) -> (state -> Prop) -> (state -> Prop) -> Prop :=
-| MscDone : forall inv,
-    (* oneStepClosure sys inv inv *)
-    multiStepClosure sys inv ({ }) inv (* enforce worklist is empty and delete premise *)
-| MscStep : forall inv worklist inv' inv'',
-    oneStepClosure sys worklist inv'
-    (* -> (forall st st', (inv \setminus worklist) st -> sys.(Step) st st' -> inv' st') *)
-    -> multiStepClosure sys (inv \cup inv') (inv' \setminus inv) inv''
-    -> multiStepClosure sys inv worklist inv''.
+Inductive step {t__hon t__adv : type} :
+    @ModelState t__hon t__adv 
+  -> @ModelState t__hon t__adv
+  -> Prop :=
+| RealSilent : forall ru ru' suid iu b,
+    RealWorld.step_universe suid ru Silent ru'
+    -> step (ru, iu, b) (ru', iu, b)
+| BothLoud : forall uid ru ru' iu iu' iu'' ra ia b,
+    indexedRealStep uid (Action ra) ru ru'
+    -> (indexedIdealStep uid Silent) ^* iu iu'
+    -> indexedIdealStep uid (Action ia) iu' iu''
+    -> action_matches ru.(all_ciphers) ru.(all_keys) (uid,ra) ia
+    -> labels_align (ru, iu, b)
+    -> step (ru, iu, b) (ru', iu'', b)
+| MisalignedCanStep : forall uid ru ru' iu iu' iu'' ra ia b,
+    indexedRealStep uid (Action ra) ru ru'
+    -> (indexedIdealStep uid Silent) ^* iu iu'
+    -> indexedIdealStep uid (Action ia) iu' iu''
+    -> ~ labels_align (ru, iu, b)
+    -> step (ru, iu, b) (ru', iu'', false)
+| MisalignedCantStep : forall uid ru ru' iu iu' ra b,
+    indexedRealStep uid (Action ra) ru ru'
+    -> (indexedIdealStep uid Silent) ^* iu iu'
+    -> (forall lbl iu'', indexedIdealStep uid lbl iu' iu'' -> False)
+    -> ~ labels_align (ru, iu, b)
+    -> step (ru, iu, b) (ru', iu, false)
+.
 
-(* add extra hypothesis that says : (inv \ wl) o step \incl inv *)
-Lemma multiStepClosure_ok' : forall state (sys : trsys state) (inv worklist inv' : state -> Prop),
-    multiStepClosure sys inv worklist inv'
-    -> forall wl,
-        (forall st, sys.(Initial) st -> inv st)
-      -> wl = worklist
-      -> (forall st st', (inv \setminus wl) st -> sys.(Step) st st' -> inv st')
-      -> invariantFor sys inv'.
-Proof.
-  induction 1; simpl; intros.
-  - eapply invariant_induction; subst; sets idtac; eauto.
-  - subst.
-    eapply IHmultiStepClosure; intros; eauto.
-    + apply H1 in H2; sets idtac.
-    + assert (inv st) by (sets idtac).
-      unfold oneStepClosure, oneStepClosure_current, oneStepClosure_new in H; destruct H.
-      sets idtac.
-      * assert (worklist st \/ ~ worklist st) as WL by sets idtac; destruct WL; eauto.
-      * assert (worklist st \/ ~ worklist st) as WL by sets idtac; destruct WL; eauto.
-Qed.
+Inductive indexedModelStep {t__hon t__adv : type} (uid : user_id) :
+    @ModelState t__hon t__adv 
+  -> @ModelState t__hon t__adv
+  -> Prop :=
+| RealSilenti : forall ru ru' iu b,
+    indexedRealStep uid Silent ru ru'
+    -> indexedModelStep uid (ru, iu, b) (ru', iu, b)
+| BothLoudi : forall ru ru' iu iu' iu'' ra ia b,
+    indexedRealStep uid (Action ra) ru ru'
+    -> (indexedIdealStep uid Silent) ^* iu iu'
+    -> indexedIdealStep uid (Action ia) iu' iu''
+    -> action_matches ru.(all_ciphers) ru.(all_keys) (uid,ra) ia
+    -> labels_align (ru, iu, b)
+    -> indexedModelStep uid (ru, iu, b) (ru', iu'', b)
+| MisalignedCanStepi : forall ru ru' iu iu' iu'' ra ia b,
+    indexedRealStep uid (Action ra) ru ru'
+    -> (indexedIdealStep uid Silent) ^* iu iu'
+    -> indexedIdealStep uid (Action ia) iu' iu''
+    -> ~ labels_align (ru, iu, b)
+    -> indexedModelStep uid (ru, iu, b) (ru', iu'', false)
+| MisalignedCantStepi : forall ru ru' iu iu' ra b,
+    indexedRealStep uid (Action ra) ru ru'
+    -> (indexedIdealStep uid Silent) ^* iu iu'
+    -> (forall lbl iu'', indexedIdealStep uid lbl iu' iu'' -> False)
+    -> ~ labels_align (ru, iu, b)
+    -> indexedModelStep uid (ru, iu, b) (ru', iu, false)
+.
 
-Theorem multiStepClosure_ok : forall state (sys : trsys state) (inv : state -> Prop),
-  multiStepClosure sys sys.(Initial) sys.(Initial) inv
-  -> invariantFor sys inv.
-Proof.
-  intros.
-  eapply multiStepClosure_ok'; eauto.
-  intros.
-  sets idtac.
-Qed.
+Definition alignment {t__hon t__adv} (st : @ModelState t__hon t__adv) : Prop :=
+  snd st = true
+  /\ labels_align st.
 
-Theorem oneStepClosure_empty : forall state (sys : trsys state),
-  oneStepClosure sys (constant nil) (constant nil).
-Proof.
-  unfold oneStepClosure, oneStepClosure_current, oneStepClosure_new; intuition.
-Qed.
-
-Theorem oneStepClosure_split : forall state (sys : trsys state) st sts (inv1 inv2 : state -> Prop),
-  (forall st', sys.(Step) st st' -> inv1 st')
-  -> oneStepClosure sys (constant sts) inv2
-  -> oneStepClosure sys (constant (st :: sts)) (constant (st :: nil) \cup inv1 \cup inv2).
-Proof.
-  unfold oneStepClosure, oneStepClosure_current, oneStepClosure_new; intuition.
-
-  inversion H0; subst.
-  unfold union; simpl; tauto.
-
-  unfold union; simpl; eauto.
-
-  unfold union in *; simpl in *.
-  intuition (subst; eauto).
-Qed.
-
-Theorem singleton_in : forall {A} (x : A) rest,
-  (constant (x :: nil) \cup rest) x.
-Proof.
-  unfold union; simpl; auto.
-Qed.
-
-Theorem singleton_in_other : forall {A} (x : A) (s1 s2 : set A),
-  s2 x
-  -> (s1 \cup s2) x.
-Proof.
-  unfold union; simpl; auto.
-Qed.
+Definition TrS {t__hon t__adv} (ru0 : RealWorld.universe t__hon t__adv) (iu0 : IdealWorld.universe t__hon) :=
+  {| Initial := {(ru0, iu0, true)};
+     Step    := @step t__hon t__adv |}.

@@ -20,7 +20,6 @@ From SPICY Require Import
      AdversaryUniverse
 
      ModelCheck.SafeProtocol
-     ModelCheck.ModelCheck
      ModelCheck.ProtocolFunctions
      ModelCheck.SilentStepElimination
      ModelCheck.SteppingTactics

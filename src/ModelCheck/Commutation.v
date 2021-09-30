@@ -35,10 +35,11 @@ From SPICY Require Import
      Theory.UsersTheory
 
      ModelCheck.RealWorldStepLemmas
-     ModelCheck.ProtocolFunctions
+     ModelCheck.ModelCheck
      ModelCheck.SafeProtocol
      ModelCheck.LabelsAlign
      ModelCheck.NoResends
+     ModelCheck.SteppingTactics
 .
 
 From SPICY Require
@@ -240,6 +241,7 @@ Section CommutationLemmas.
         eapply StepBindRecur; eauto 12.
   Qed.
 
+  Import SimulationAutomation.
 
   Definition buildUniverse_step {A B} (ds : data_step0 A B (Base A)) (uid : user_id) : universe A B  :=
     let '(usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd) := ds
@@ -399,22 +401,32 @@ Section CommutationLemmas.
       end.
     
     all: try solve [ (do 10 eexists); (repeat simple apply conj); repeat solver1; eauto; repeat solver1; eauto ].
+ 
+    - (do 10 eexists); (repeat simple apply conj); repeat solver1; eauto; repeat solver1; eauto.
+      rewrite Forall_forall in H21 |- *; intros * LIN.
+      specialize(H21 _ LIN).
+      assert (List.In x7 (x0 ++ existT crypto t0 x :: x1)) by eauto using in_or_app.
+      specialize (H0 _ H5); split_ex.
+      destruct x7; intros.
+      unfold not in H21 |- *; intros.
+      apply H21.
+      invert H6; repeat invert_base_equalities1; subst; econstructor; eauto.
+      destruct (c_id ==n x2); subst; clean_map_lookups; eauto.
+      destruct (c_id ==n x2); subst; clean_map_lookups; eauto; subst.
+      specialize (H6 _ eq_refl); contradiction.
 
     - (do 10 eexists); (repeat simple apply conj); repeat solver1; eauto; repeat solver1; eauto.
-      split_ors.
       rewrite Forall_forall in H21 |- *; intros * LIN.
-      destruct x7.
-      assert (List.In (existT _ x7 c) (x0 ++ existT _ t0 x :: x1)) as LINQ by eauto using in_or_app.
-      eapply H21 in LIN; split_ex.
-      eapply H0 in LINQ; split_ex; eauto.
-
-    - (do 10 eexists); (repeat simple apply conj); repeat solver1; eauto; repeat solver1; eauto.
-
-      rewrite Forall_forall in H21 |- *; intros * LIN.
-      destruct x5.
-      assert (List.In (existT _ x5 c) (x0 ++ existT _ t0 x :: x1)) as LINQ by eauto using in_or_app.
-      eapply H21 in LIN; split_ex.
-      eapply H0 in LINQ; split_ex; eauto.
+      specialize(H21 _ LIN).
+      assert (List.In x5 (x0 ++ existT crypto t0 x :: x1)) by eauto using in_or_app.
+      specialize (H0 _ H5); split_ex.
+      destruct x5; intros.
+      unfold not in H21 |- *; intros.
+      apply H21.
+      invert H6; repeat invert_base_equalities1; subst; econstructor; eauto.
+      destruct (c_id ==n x2); subst; clean_map_lookups; eauto.
+      specialize (H6 _ eq_refl); contradiction.
+      destruct (c_id ==n x2); subst; clean_map_lookups; eauto; subst.
   Qed.
 
   Lemma commutes_sound_send :
@@ -657,16 +669,9 @@ Section CommutationLemmas.
     - (do 6 eexists); split; [ | econstructor]; eauto.
     - (do 6 eexists); split; [ | econstructor]; eauto.
     - (do 6 eexists); split; [ | econstructor]; eauto.
-      (* Step Recv Drop *)
-    (* - (do 6 eexists); split; [ | econstructor]; eauto. *)
-    (*   autorewrite with find_user_keys; trivial. *)
     - destruct (u_id2 ==n rec_u_id); subst; clean_map_lookups; simpl in *.
       (do 6 eexists); split; [ | econstructor]; try congruence; eauto.
-      simpl; rewrite !map_add_eq; trivial.
-
       (do 6 eexists); split; [ | econstructor]; try congruence; eauto.
-      maps_equal; clean_map_lookups; trivial.
-
     - (do 6 eexists); split; [ | econstructor]; eauto.
     - (do 6 eexists); split; [ | econstructor]; eauto.
     - (do 6 eexists); split; [ | econstructor]; eauto.
@@ -1474,6 +1479,7 @@ Proof.
 Qed.
 
 #[local] Hint Resolve summarize_univ_step : core.
+Import SimulationAutomation.
 
 Lemma commutes_noblock' :
   forall t t__n2 (cmdc2 : user_cmd t) (cmd__n2 : user_cmd t__n2),
@@ -2000,6 +2006,8 @@ Proof.
   
 Qed.
 
+#[local] Hint Constructors indexedRealStep : core.
+
 Lemma translate_trace_commute :
   forall t__hon t__adv i st st' b,
     @stepsi t__hon t__adv (1 + i) st st'
@@ -2064,7 +2072,6 @@ Proof.
         exfalso; split_ex; eapply H4; eauto.
         econstructor; eauto.
         econstructor; eauto.
-        clean_map_lookups; trivial.
 
       * eapply labeled_action_never_commutes in H9; eauto; contradiction.
 
@@ -2249,6 +2256,7 @@ Proof.
       econstructor; eauto.
       econstructor 1; eauto.
       econstructor 1; eauto.
+      symmetry; eauto.
 
     + destruct (uid ==n uid0); subst; clean_map_lookups.
 
@@ -2305,6 +2313,8 @@ Proof.
         econstructor 1; eauto.
         econstructor; eauto.
         econstructor 2; eauto; simpl in *.
+        econstructor; eauto.
+        symmetry; assumption.
         
         unfold goodness_predicates in *; split_ex; simpl in *.
         specialize (H2 _ _ _ H0 eq_refl); split_ex.
@@ -2371,6 +2381,8 @@ Proof.
       econstructor 1; eauto.
       econstructor; eauto.
       econstructor 3; eauto.
+      econstructor; eauto.
+      symmetry; assumption.
       eauto.
       eauto.
 
@@ -2421,8 +2433,8 @@ Proof.
       econstructor 1; eauto.
       econstructor; eauto.
       econstructor 4; eauto.
-      (* econstructor; eauto. *)
-      (* symmetry; trivial. *)
+      econstructor; eauto.
+      symmetry; trivial.
       eapply silent_step_labels_still_misaligned with (b := b0) (b' := b0) in H14; eauto.
       eauto.
       eauto.

@@ -24,7 +24,7 @@ From SPICY Require Import
 
      Theory.KeysTheory
 
-     ModelCheck.ModelCheck
+     ModelCheck.ClosureStepLemmas
      ModelCheck.SafeProtocol
      ModelCheck.UniverseEqAutomation
      ModelCheck.ProtocolFunctions

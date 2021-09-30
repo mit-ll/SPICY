@@ -19,14 +19,16 @@ From SPICY Require Import
      SafetyAutomation
      Simulation
 
+     Theory.InvariantsTheory
+     Theory.KeysTheory
+
+     ModelCheck.ModelCheck
      ModelCheck.LabelsAlign
      ModelCheck.ProtocolFunctions
      ModelCheck.RealWorldStepLemmas
      ModelCheck.SilentStepElimination
      ModelCheck.SteppingTactics
-
-     Theory.InvariantsTheory
-     Theory.KeysTheory
+     ModelCheck.UniverseInversionLemmas
 .
 
 Import SafetyAutomation Gen.

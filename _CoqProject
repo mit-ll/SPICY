@@ -38,18 +38,22 @@ src/Theory/MessagesTheory.v
 src/Theory/NonceTracking.v
 src/Theory/UsersTheory.v
 
+src/ModelCheck/ModelCheck.v
+src/ModelCheck/UniverseInversionLemmas.v
+
 src/ModelCheck/Commutation.v
 src/ModelCheck/LabelsAlign.v
-src/ModelCheck/ModelCheck.v
 src/ModelCheck/NoResends.v
-# src/ModelCheck/PartialOrderReduction.v
-src/ModelCheck/ProtocolAutomation.v
 src/ModelCheck/ProtocolFunctions.v
 src/ModelCheck/RealWorldStepLemmas.v
 src/ModelCheck/SafeProtocol.v
 src/ModelCheck/SilentStepElimination.v
 src/ModelCheck/SteppingTactics.v
-src/ModelCheck/UniverseEqAutomation.v
+
+# Model Check search with set tracking
+# src/ModelCheck/ClosureStepLemmas.v
+# src/ModelCheck/ProtocolAutomation.v
+# src/ModelCheck/PartialOrderReduction.v
 
 # Protocol Invariant Exploration (alternative to traditional model checking)
 src/ModelCheck/InvariantSearch.v
@@ -87,9 +91,9 @@ protocols/NetAuth.v
 protocols/Verification/NetAuthSecure.v
 
 # First set of test protocols: simple Secret Sharing Protocols
-protocols/ShareSecretProtocol.v
-protocols/ShareSecretProtocolTS.v
-protocols/ShareSecretProtocolSS.v
+# protocols/ShareSecretProtocol.v
+# protocols/ShareSecretProtocolTS.v
+# protocols/ShareSecretProtocolSS.v
 
 protocols/LegacyVerification/GenProtoSS.v
 

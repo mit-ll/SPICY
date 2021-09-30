@@ -24,8 +24,7 @@ From SPICY Require Import
      SyntacticallySafe
      AdversarySafety
 
-     ModelCheck.ProtocolFunctions
-     ModelCheck.SafeProtocol
+     ModelCheck.ModelCheck
      ModelCheck.RealWorldStepLemmas
 .
 

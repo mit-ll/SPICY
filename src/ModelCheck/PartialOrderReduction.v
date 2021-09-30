@@ -34,8 +34,8 @@ From SPICY Require Import
      Theory.NonceTracking
      Theory.UsersTheory
 
+     ModelCheck.ClosureStepLemmas
      ModelCheck.RealWorldStepLemmas
-     ModelCheck.ModelCheck
      ModelCheck.ProtocolFunctions
      ModelCheck.SafeProtocol
      ModelCheck.LabelsAlign

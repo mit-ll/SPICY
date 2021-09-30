@@ -12,7 +12,6 @@ From SPICY Require Import
      Maps
      ChMaps
      Messages
-     ModelCheck
      Keys
      Automation
      Tactics

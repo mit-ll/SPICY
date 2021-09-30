@@ -19,16 +19,18 @@ From SPICY Require Import
 
      Theory.KeysTheory
 
+     ModelCheck.ModelCheck
      ModelCheck.InvariantSearchLemmas
      ModelCheck.ProtocolFunctions
      ModelCheck.RealWorldStepLemmas
      ModelCheck.SafeProtocol
      ModelCheck.SilentStepElimination
      ModelCheck.SteppingTactics
-     ModelCheck.UniverseEqAutomation
+     ModelCheck.UniverseInversionLemmas
 .
 
 From SPICY Require IdealWorld RealWorld.
+From Frap Require Export Invariant.
 
 Import IdealWorld.IdealNotations
        RealWorld.RealWorldNotations
