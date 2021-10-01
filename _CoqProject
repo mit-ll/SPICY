@@ -97,6 +97,8 @@ protocols/NetAuth.v
 protocols/Verification/NetAuthSecure.v
 protocols/Verification/NetAuthSecure2.v
 
+protocols/Verification/PaperProtocolsAssumptions.v
+
 # First set of test protocols: simple Secret Sharing Protocols
 # protocols/ShareSecretProtocol.v
 # protocols/ShareSecretProtocolTS.v
