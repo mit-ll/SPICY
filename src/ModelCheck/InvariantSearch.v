@@ -781,6 +781,16 @@ Proof.
   ; eauto.
 Qed.
 
+Lemma findKeysMessage_getKey_verify_pr_compatible :
+  forall (m : bool * RealWorld.message.message Access),
+  exists kp, RealWorld.findKeysMessage (snd m) $? getKey (snd m) = Some kp.
+Proof.
+  intros.
+  destruct m.
+  dependent destruction m; unfold getKey; simpl.
+  eauto.
+Qed.
+
 Lemma findKeysMessage_getKey_pr_compatible1 :
   forall t (m : RealWorld.message.message (TPair Access t)),
   exists kp,
@@ -823,6 +833,9 @@ Ltac typechecks1 :=
     | [ H : _ $k++ _ $? _ = Some _ |- _ ] =>
       apply merge_perms_split in H; split_ors
     | [ |- HonestKey _ (fst ?k) ] => destruct k; simpl; eapply HonestPermission
+    | [ |- HonestKey _ (getKey (snd ?m)) ] => 
+      pose proof (findKeysMessage_getKey_verify_pr_compatible m); split_ex
+      ; eapply HonestKeyFromMsgVerify with (v := m); eauto 2
     | [ |- HonestKey _ (getKey (RealWorld.message.msgFst ?m)) ] => 
       pose proof (findKeysMessage_getKey_pr_compatible1 m); split_ex
       ; eapply HonestFromMsg with (msg := m); eauto 2
@@ -833,6 +846,7 @@ Ltac typechecks1 :=
       pose proof (findKeysMessage_getKey_compatible m); split_ex
       ; eapply HonestFromMsg with (msg := m); eauto 2
     | [ |- HonestKey _ _ ] => eapply HonestPermission
+    | [ |- HonestKey _ _ /\ _ ] => split; trivial
     | [ |- List.In _ _ ] => progress simpl
     | [ |- _ \/ _ ] => (left; reflexivity) || right
     | [ |- List.In _ ?l ] => is_evar l; eauto 2

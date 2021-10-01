@@ -67,6 +67,18 @@ Inductive HonestKey (context : list safe_typ) : key_identifier -> Prop :=
     List.In {| cmd_type := RealWorld.Message t ; cmd_val := msg ; safetyTy := TyRecvMsg |} context
     -> findKeysMessage msg $? k = Some kp
     -> HonestKey context k
+| HonestKeyFromMsgVerify : forall t (v : bool * message t) k kp,
+    List.In {| cmd_type := UPair (Base Bool) (Message t) ;
+               cmd_val := v ;
+               safetyTy := TyRecvMsg |}
+            context
+    -> findKeysMessage (snd v) $? k = Some kp
+    -> HonestKey context k
+(* | HonestKeyFromMsgVerify : forall (v : bool * message Access), *)
+(*     List.In {| cmd_type := UPair (Base Bool) (Message Access) ; *)
+(*                cmd_val := v ; *)
+(*                safetyTy := TyRecvMsg |} *)
+(*             context *)
 (* | HonestFromMsg : forall k kp t (msg : RealWorld.message.message t), *)
 (*     findKeysMessage msg $? k = Some kp *)
 (*     -> HonestKey context k. *)
@@ -269,8 +281,10 @@ Lemma HonestKey_split :
                                 cmd_val  := msg ;
                                 safetyTy := TyRecvMsg |}
                    /\ findKeysMessage msg $? k = Some kp)
-            (* /\ k = fst (extractPermission v)) *)
-        
+    \/ (exists t bool_msg kp, key_rec  = {| cmd_type := UPair (Base Bool) (Message t) ;
+                                      cmd_val := bool_msg ;
+                                      safetyTy := TyRecvMsg |}
+                        /\ findKeysMessage (snd bool_msg) $? k = Some kp)
     (* \/ (exists v, key_rec  = {| cmd_type := (Message Access) ; *)
     (*                       cmd_val  := v ; *)
     (*                       safetyTy := TyRecvMsg |} *)
@@ -589,6 +603,14 @@ Proof.
 
     user_cipher_queues_prop; encrypted_ciphers_prop.
     apply H25 in H9; clean_map_lookups; eauto.
+
+  - split_ex; eexists; process_ctx; repeat simple apply conj; swap 1 4; intros; eauto;
+      repeat (progress (process_ctx; eauto))
+      ; clean_map_lookups
+      ; simpl in *.
+
+    user_cipher_queues_prop; encrypted_ciphers_prop.
+    apply H20 in H4; clean_map_lookups; eauto.
 Qed.
 
 Lemma syntactically_safe_honest_keys_preservation :

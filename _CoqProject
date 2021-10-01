@@ -59,7 +59,7 @@ src/ModelCheck/SteppingTactics.v
 src/ModelCheck/InvariantSearch.v
 src/ModelCheck/InvariantSearchLemmas.v
 
-protocols/TypecheckingTest.v
+# protocols/TypecheckingTest.v
 
 #############################################################################
 ##  Protocol Verification
@@ -102,16 +102,16 @@ protocols/Verification/NetAuthSecure2.v
 # protocols/ShareSecretProtocolTS.v
 # protocols/ShareSecretProtocolSS.v
 
-protocols/LegacyVerification/GenProtoSS.v
+# protocols/LegacyVerification/GenProtoSS.v
 
-protocols/LegacyVerification/ShareSecretProtocolSymmetricEncTS.v
-protocols/LegacyVerification/ShareSecretProtocolSymmetricEncSS.v
+# protocols/LegacyVerification/ShareSecretProtocolSymmetricEncTS.v
+# protocols/LegacyVerification/ShareSecretProtocolSymmetricEncSS.v
 
-protocols/LegacyVerification/PGPTS.v
-protocols/LegacyVerification/PGPSS.v
+# protocols/LegacyVerification/PGPTS.v
+# protocols/LegacyVerification/PGPSS.v
 
-protocols/LegacyVerification/SecureDNSTS.v
-protocols/LegacyVerification/SecureDNSSS.v
+# protocols/LegacyVerification/SecureDNSTS.v
+# protocols/LegacyVerification/SecureDNSSS.v
 
-protocols/LegacyVerification/AvgSalarySS.v
-protocols/LegacyVerification/NetAuthSS.v
+# protocols/LegacyVerification/AvgSalarySS.v
+# protocols/LegacyVerification/NetAuthSS.v
