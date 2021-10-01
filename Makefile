@@ -53,7 +53,7 @@ paper-all: lib
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
 paper-new: lib
-	$(eval TS :="protocols/Verification/ShareSecretProtocolSymmetricEncSecure2.vo protocols/Verification/PGPSecure2.vo  protocols/Verification/AvgSalarySecure2.vo protocols/Verification/NetAuthSecure2.vo")
+	$(eval TS :="protocols/Verification/ShareSecretProtocolSymmetricEncSecure2.vo protocols/Verification/PGPSecure2.vo protocols/Verification/SecureDNSSecure2.vo protocols/Verification/AvgSalarySecure2.vo protocols/Verification/NetAuthSecure2.vo")
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
 naive-modelcheck: lib
