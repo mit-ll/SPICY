@@ -38,6 +38,7 @@ From SPICY Require Import
      ModelCheck.LabelsAlign
      ModelCheck.NoResends
      ModelCheck.RealWorldStepLemmas
+     ModelCheck.SafeProtocol
 .
 
 From Frap Require Import
@@ -1480,6 +1481,8 @@ Qed.
 
 #[export] Hint Resolve many_steps_stays_lame many_steps_syntactically_safe many_steps_stays_good : core.
 
+Locate safety.
+
 Theorem step_stepSS' :
   forall {t__hon t__adv} (ru0 : RealWorld.universe t__hon t__adv) (iu0 : IdealWorld.universe t__hon) b n summaries,
     runningTimeMeasure ru0 n
@@ -1791,5 +1794,98 @@ Module Type AutomatedSafeProtocolSS.
 
 End AutomatedSafeProtocolSS.
 
+Module Type AutomatedSafeProtocolSS'.
+  Parameter t__hon : type.
+  Parameter t__adv : type.
+  Parameter b : << Base t__adv >>.
+  Parameter iu0 : IdealWorld.universe t__hon.
+  Parameter ru0 : RealWorld.universe t__hon t__adv.
+  (* Parameter runTime : nat. *)
+  (* Parameter summaries : NatMap.t summary. *)
 
-Print Assumptions step_stepSS'.
+  Notation SYS := (TrSS ru0 iu0).
+
+  Axiom U_good : universe_starts_sane b ru0.
+  Axiom universe_starts_safe : universe_ok ru0.
+
+  Axiom finitelyRuns : exists n, runningTimeMeasure ru0 n.
+  (* Axiom finitelyRuns : runningTimeMeasure ru0 runTime. *)
+  Axiom typechecks : syntactically_safe_U ru0.
+  Axiom summarizable : exists summaries, summarize_univ ru0 summaries.
+  (* Axiom summarizable : summarize_univ ru0 summaries. *)
+  Axiom lameness : lameAdv b (adversary ru0).
+
+  Axiom safe_invariant : invariantFor
+                           SYS
+                           (fun st => no_resends_U (fst (fst st)) /\ alignment st /\ returns_align st).
+End AutomatedSafeProtocolSS'.
+
+Module SSProtocolSimulates (Proto : AutomatedSafeProtocolSS').
+  Import Proto Simulation.
+
+  Module SSAutomatedSafeProtocol <: AutomatedSafeProtocol.
+    Definition t__hon := t__hon.
+    Definition t__adv := t__adv.
+    Definition b := b.
+    Definition iu0 := iu0.
+    Definition ru0 := ru0.
+
+    Lemma U_good : universe_starts_sane b ru0.
+    Proof. exact U_good. Qed.
+      
+    Lemma universe_starts_safe : universe_ok ru0.
+    Proof. exact universe_starts_safe. Qed.
+
+    Lemma goodness_predicates_ok : goodness_predicates ru0.
+    Proof. pose proof universe_starts_safe; unfold universe_ok, goodness_predicates, adv_goodness in *
+           ; intuition idtac.
+           
+           unfold adv_message_queue_ok in H4
+           ; rewrite Forall_forall in H4 |- *
+           ; intros * LIN
+           ; apply H4 in LIN.
+
+           - destruct x; split_ex; split; eauto.
+             intros.
+             apply H11 in H12; split_ex; eauto.
+           - unfold adv_cipher_queue_ok in H3
+             ; rewrite Forall_forall in H3 |- *
+             ; intros * LIN
+             ; apply H3 in LIN
+             ; split_ex
+             ; eauto.
+    Qed.
+
+    #[local] Hint Resolve goodness_predicates_ok : core.
+    #[local] Hint Resolve typechecks lameness Proto.safe_invariant : core.
+
+    Lemma safe_invariant :
+      invariantFor
+        (TrS ru0 iu0)
+        (fun st => safety st /\ alignment st /\ returns_align st).
+    Proof.
+      pose proof (@step_stepSS Proto.t__hon Proto.t__adv).
+      pose proof finitelyRuns.
+      pose proof summarizable.
+      split_ex.
+      eapply H; eauto.
+
+      pose proof (@step_stepSS' Proto.t__hon Proto.t__adv); eauto.
+    Qed.
+
+  End SSAutomatedSafeProtocol.
+
+  Module Import SSSimulates := ProtocolSimulates ( SSAutomatedSafeProtocol ).
+      
+  Lemma protocol_with_adversary_could_generate_spec :
+    forall U__ra advcode acts__r,
+      U__ra = add_adversary ru0 advcode
+      -> rCouldGenerate U__ra acts__r
+      -> exists acts__i,
+          iCouldGenerate iu0 acts__i
+          /\ traceMatches acts__r acts__i.
+  Proof.
+    eauto using SSSimulates.protocol_with_adversary_could_generate_spec.
+  Qed.
+
+End SSProtocolSimulates.

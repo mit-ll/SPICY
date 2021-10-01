@@ -5,9 +5,7 @@
  * 
  *)
 From Coq Require Import
-     Eqdep
-     List
-     Lia.
+     List.
 
 From SPICY Require Import
      MyPrelude
@@ -18,20 +16,18 @@ From SPICY Require Import
      Automation
      Tactics
      Simulation
-     SyntacticallySafe
      AdversaryUniverse
 
-     ModelCheck.Commutation
-     ModelCheck.InvariantSearch
-     ModelCheck.ProtocolFunctions
      ModelCheck.ModelCheck
+     ModelCheck.ProtocolFunctions
      ModelCheck.SilentStepElimination
      ModelCheck.SteppingTactics
+     ModelCheck.InvariantSearch
      ModelCheck.UniverseInversionLemmas
 .
 
 From protocols Require Import
-     PGP.
+     SecureDNS.
 
 From SPICY Require IdealWorld RealWorld.
 
@@ -43,27 +39,41 @@ Set Implicit Arguments.
 
 Open Scope protocol_scope.
 
-Module PGPProtocolSecure <: AutomatedSafeProtocolSS.
+Module SecureDNSProtocolSecure <: AutomatedSafeProtocolSS.
 
-  Import PGPProtocol.
+  Import SecureDNSProtocol.
 
+  (* Some things may need to change here.  t__hon is where we place the 
+   * type that the protocol computes.  It is set to Nat now, because we
+   * return a natual number.
+   *)
   Definition t__hon := Nat.
   Definition t__adv := Unit.
-  Definition b := tt.
+  Definition b    := tt.
+
+  (* These two variables hook up the starting points for both specification and
+   * implementation universes.  If you followed the template above, this shouldn't
+   * need to be changed.
+   *)
   Definition iu0  := ideal_univ_start.
   Definition ru0  := real_univ_start.
 
   Import Gen Tacs.
 
+  (* These are here to help the proof automation.  Don't change. *)
   #[export] Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start real_univ_start : core.
+  #[export] Hint Unfold
+       mkiU mkiUsr mkrU mkrUsr
+       mkKeys
+    : core.
 
+  Opaque realServer.
   Set Ltac Profiling.
 
   Lemma safe_invariant :
     invariantFor
       {| Initial := {(ru0, iu0, true)}; Step := @stepSS t__hon t__adv  |}
       (@safety_inv t__hon t__adv).
-      (* (fun st => safety st /\ alignment st /\ returns_align st). *)
   Proof.
     unfold invariantFor
     ; unfold Initial, Step
@@ -75,18 +85,18 @@ Module PGPProtocolSecure <: AutomatedSafeProtocolSS.
 
     autounfold in H0
     ; unfold fold_left, fst, snd in *.
-    unfold real_users, ideal_users, mkrUsr, userProto, userKeys, userId, mkiUsr in *; rwuf.
 
     time (
         repeat transition_system_step
       ).
 
     Unshelve.
-    all: eauto.
+    all: exact 0 || auto.
   Qed.
 
   Show Ltac Profile.
-      
+  (* Show Ltac Profile "churn2". *)
+  
   Lemma U_good : @universe_starts_sane _ Unit b ru0.
   Proof.
     autounfold;
@@ -96,7 +106,7 @@ Module PGPProtocolSecure <: AutomatedSafeProtocolSS.
     - econstructor.
     - unfold AdversarySafety.keys_honest; rewrite Forall_natmap_forall; intros.
       unfold mkrUsr; simpl.
-      rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty; eauto.
+      rewrite !findUserKeys_add_reduce, findUserKeys_empty_is_empty; simpl in *; eauto.
     - unfold lameAdv; simpl; eauto.
   Qed.
 
@@ -149,4 +159,4 @@ Module PGPProtocolSecure <: AutomatedSafeProtocolSS.
           eauto.
   Qed.
 
-End PGPProtocolSecure.
+End SecureDNSProtocolSecure.

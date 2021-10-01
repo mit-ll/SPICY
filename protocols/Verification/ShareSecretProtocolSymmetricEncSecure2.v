@@ -5,9 +5,7 @@
  * 
  *)
 From Coq Require Import
-     Eqdep
-     List
-     Lia.
+     List.
 
 From SPICY Require Import
      MyPrelude
@@ -18,20 +16,19 @@ From SPICY Require Import
      Automation
      Tactics
      Simulation
-     SyntacticallySafe
      AdversaryUniverse
 
-     ModelCheck.Commutation
-     ModelCheck.InvariantSearch
-     ModelCheck.ProtocolFunctions
      ModelCheck.ModelCheck
+     ModelCheck.ProtocolFunctions
      ModelCheck.SilentStepElimination
      ModelCheck.SteppingTactics
+     ModelCheck.InvariantSearch
      ModelCheck.UniverseInversionLemmas
 .
 
 From protocols Require Import
-     PGP.
+     ShareSecretProtocolSymmetricEnc
+.
 
 From SPICY Require IdealWorld RealWorld.
 
@@ -39,13 +36,19 @@ Import IdealWorld.IdealNotations
        RealWorld.RealWorldNotations
        SimulationAutomation.
 
+From Frap Require Import Sets.
+
+Module Foo <: Sets.EMPTY.
+End Foo.
+Module Import SN := Sets.SetNotations(Foo).
+
 Set Implicit Arguments.
 
 Open Scope protocol_scope.
 
-Module PGPProtocolSecure <: AutomatedSafeProtocolSS.
+Module ShareSecretProtocolSecureSS <: AutomatedSafeProtocolSS.
 
-  Import PGPProtocol.
+  Import ShareSecretSymmetricEncProtocol.
 
   Definition t__hon := Nat.
   Definition t__adv := Unit.
@@ -63,7 +66,7 @@ Module PGPProtocolSecure <: AutomatedSafeProtocolSS.
     invariantFor
       {| Initial := {(ru0, iu0, true)}; Step := @stepSS t__hon t__adv  |}
       (@safety_inv t__hon t__adv).
-      (* (fun st => safety st /\ alignment st /\ returns_align st). *)
+      (* (fun st => safety st /\ alignment st /\ returns_align st ). *)
   Proof.
     unfold invariantFor
     ; unfold Initial, Step
@@ -75,18 +78,17 @@ Module PGPProtocolSecure <: AutomatedSafeProtocolSS.
 
     autounfold in H0
     ; unfold fold_left, fst, snd in *.
-    unfold real_users, ideal_users, mkrUsr, userProto, userKeys, userId, mkiUsr in *; rwuf.
 
     time (
         repeat transition_system_step
       ).
 
     Unshelve.
-    all: eauto.
+    all: exact 0 || auto.
   Qed.
 
   Show Ltac Profile.
-      
+  
   Lemma U_good : @universe_starts_sane _ Unit b ru0.
   Proof.
     autounfold;
@@ -148,5 +150,6 @@ Module PGPProtocolSecure <: AutomatedSafeProtocolSS.
           solve_simple_maps;
           eauto.
   Qed.
+  
 
-End PGPProtocolSecure.
+End ShareSecretProtocolSecureSS.

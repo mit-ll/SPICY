@@ -13,8 +13,6 @@ From SPICY Require Import
      ChMaps
      Messages
      Keys
-     (* Automation *)
-     (* Tactics *)
      Simulation
      AdversaryUniverse
 

@@ -6,7 +6,8 @@
  *)
 From Coq Require Import
      List
-     Lia.
+     Lia
+     Program.Equality.
 
 From SPICY Require Import
      MyPrelude
@@ -16,10 +17,12 @@ From SPICY Require Import
      Keys
      Tactics
      Simulation
+     SyntacticallySafe
 
      Theory.KeysTheory
 
      ModelCheck.ModelCheck
+     ModelCheck.Commutation
      ModelCheck.InvariantSearchLemmas
      ModelCheck.ProtocolFunctions
      ModelCheck.RealWorldStepLemmas
@@ -27,6 +30,7 @@ From SPICY Require Import
      ModelCheck.SilentStepElimination
      ModelCheck.SteppingTactics
      ModelCheck.UniverseInversionLemmas
+     ModelCheck.NoResends
 .
 
 From SPICY Require IdealWorld RealWorld.
@@ -197,6 +201,9 @@ Ltac finish_honest_cmds_safe :=
 
 Definition safety_inv :=
   fun t__hon t__adv st => @safety t__hon t__adv st /\ alignment st /\ @returns_align t__hon t__adv st.
+
+Definition noresends_inv :=
+  fun t__hon t__adv st => no_resends_U (fst (fst st)) /\ alignment st /\ @returns_align t__hon t__adv st.
 
 #[export] Hint Opaque safety_inv : core.
 
@@ -495,6 +502,34 @@ Ltac find_silent_step U us :=
 (* ; clear MAX *)
 .
 
+Ltac solve_noresends :=
+  unfold NoResends.no_resends_U, fst, RealWorld.users
+  ; rewrite Forall_natmap_forall; intros
+  ; focus_user; simpl
+  ; unfold NoResends.no_resends
+  ; repeat
+      match goal with
+      | [ |- NoDup [] ] => apply NoDup_nil
+      | [ |- NoDup (_ :: _) ] => apply NoDup_cons
+      | [ |- ~ List.In _ _ ] =>
+        unfold not; simpl; intros; split_ors; repeat invert_base_equalities1; try contradiction
+      end
+  ; eauto.
+
+Ltac finish_noresends_invariant :=
+  rwuf
+  ; try match goal with
+        | [ |- context [{| RealWorld.users := ?users |} ]] =>
+          ccmag users
+        end
+  ; unfold noresends_inv, safety, alignment, returns_align
+  ; repeat simple apply conj
+  ; [ solve_noresends
+    | trivial
+    | unfold labels_align; intros; rstep; subst; solve_labels_align
+    | try solve [ simpl; intros; find_step_or_solve' ]
+    ].
+
 Ltac finish_invariant :=
   rwuf
   ; try match goal with
@@ -679,6 +714,9 @@ Ltac invSS1 :=
     | [ |- safety_inv (?ru,_,_) ] =>
       concrete ru; clear_nosilents; solve [ finish_invariant ]
 
+    | [ |- noresends_inv (?ru,_,_) ] =>
+      concrete ru; clear_nosilents; solve [ finish_noresends_invariant ]
+
     | [ H : _ \/ _ |- _ ] => destruct H; split_ex; subst
     end.
 
@@ -713,6 +751,113 @@ Tactic Notation "canonicalize" "context" :=
           ccm usrs H
         end
       end.
+
+Ltac find_runtime :=
+  repeat 
+    match goal with
+    | [ |- boundRunningTimeUniv (_ $+ (?usr,_)) _ ] =>
+      eapply BrtRecur with (uid := usr); eauto 2; simpl
+    | [ |- boundRunningTime _ _ ] => econstructor; eauto 2
+    | [ |- _ -> _ ] => intros
+    | [ |- boundRunningTimeUniv (_ $+ (?usr,_) $- _) _ ] =>
+      repeat 
+        (rewrite map_add_remove_neq by congruence)
+      || (rewrite map_add_remove_eq by trivial)
+      || (rewrite remove_empty)
+    | [ |- boundRunningTimeUniv $0 _ ] => apply BrtEmpty
+    | [ |- queues_size _ = _ ] => unfold queues_size, fold; trivial
+    end.
+
+Lemma findKeysMessage_getKey_compatible :
+  forall (m : RealWorld.message.message Access),
+  exists kp,
+    RealWorld.findKeysMessage m $? getKey m = Some kp.
+Proof.
+  intros.
+  dependent destruction m.
+  unfold getKey; simpl.
+  destruct acc
+  ; simpl
+  ; eauto.
+Qed.
+
+Lemma findKeysMessage_getKey_pr_compatible1 :
+  forall t (m : RealWorld.message.message (TPair Access t)),
+  exists kp,
+    RealWorld.findKeysMessage m $? getKey (RealWorld.message.msgFst m) = Some kp.
+Proof.
+  intros.
+  induct m; simpl.
+  clear IHm1 IHm2.
+  pose proof (findKeysMessage_getKey_compatible m1); split_ex.
+  cases (RealWorld.findKeysMessage m2 $? getKey m1)
+  ; eexists
+  ; eauto.
+Qed.
+
+Lemma findKeysMessage_getKey_pr_compatible2 :
+  forall t (m : RealWorld.message.message (TPair t Access)),
+  exists kp,
+    RealWorld.findKeysMessage m $? getKey (RealWorld.message.msgSnd m) = Some kp.
+Proof.
+  intros.
+  induct m; simpl.
+  clear IHm1 IHm2.
+  pose proof (findKeysMessage_getKey_compatible m2); split_ex.
+  cases (RealWorld.findKeysMessage m1 $? getKey m2)
+  ; eexists
+  ; eauto.
+Qed.
+
+Ltac typechecks1 :=
+  simple_clean_maps1
+  || match goal with
+    | [ |- syntactically_safe _ _ _ (RealWorld.Return _) _ ] =>
+      solve [ eapply SafeReturn; repeat typechecks1 ] || apply SafeReturnUntyped
+    | [ |- syntactically_safe _ _ _ _ _ ] =>
+      econstructor
+    | [ |- _ -> _ ] => intros
+    | [ H : RealWorld.findKeysMessage _ $? _ = Some _ |- _ ] => progress (simpl in H)
+    | [ H : _ $+ (?k1,_) $? ?k2 = Some _ |- _ ] =>
+      destruct (k1 ==n k2); subst
+    | [ H : _ $k++ _ $? _ = Some _ |- _ ] =>
+      apply merge_perms_split in H; split_ors
+    | [ |- HonestKey _ (fst ?k) ] => destruct k; simpl; eapply HonestPermission
+    | [ |- HonestKey _ (getKey (RealWorld.message.msgFst ?m)) ] => 
+      pose proof (findKeysMessage_getKey_pr_compatible1 m); split_ex
+      ; eapply HonestFromMsg with (msg := m); eauto 2
+    | [ |- HonestKey _ (getKey (RealWorld.message.msgSnd ?m)) ] => 
+      pose proof (findKeysMessage_getKey_pr_compatible2 m); split_ex
+      ; eapply HonestFromMsg with (msg := m); eauto 2
+    | [ |- HonestKey _ (getKey ?m) ] => 
+      pose proof (findKeysMessage_getKey_compatible m); split_ex
+      ; eapply HonestFromMsg with (msg := m); eauto 2
+    | [ |- HonestKey _ _ ] => eapply HonestPermission
+    | [ |- List.In _ _ ] => progress simpl
+    | [ |- _ \/ _ ] => (left; reflexivity) || right
+    | [ |- List.In _ ?l ] => is_evar l; eauto 2
+    | [ |- _ <> _ ] => congruence
+    end.
+
+Ltac verify_context_soundness :=
+  match goal with
+  | [ |- typingcontext_sound _ _ _ _ ] =>
+    unfold typingcontext_sound
+    ; repeat simple apply conj; intros; simpl
+  | [ H : HonestKey _ ?kid |- RealWorld.findUserKeys _ $? ?kid = Some true ] =>
+    unfold RealWorld.findUserKeys,fold; simpl; invert H
+  | [ H : List.In _ _ |- _ ] => simpl in H; split_ors; try contradiction
+  | [ H : {| cmd_type := _ |} = _ |- _ ] => apply safe_typ_eq in H; split_ex; subst; try discriminate
+  | [ H : JMeq.JMeq _ _ |- _ ] => invert H
+  | [ |- _ $k++ _ $? _ = Some true ] => KeysTheory.solve_perm_merges
+  end || invert_base_equalities1.
+
+Ltac build_summary :=
+  repeat
+    match goal with
+    | [ |- _ $+ (?k1,_) $? ?k2 = Some _ ] => rewrite add_neq_o by congruence
+    | [ |- _ $? ?k2 = Some _ ] => rewrite add_eq_o by reflexivity
+    end.
 
 (* Ltac t := (repeat eq1); try invSS1. *)
 (* Ltac u := (repeat cleanup1); invSS1(* ; istep *); (repeat cleanup1). *)

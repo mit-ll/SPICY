@@ -90,10 +90,10 @@ Section CommutationLemmas.
   .
 
   Definition summarize_univ {A B} (U : universe A B) (summaries : NatMap.t summary) : Prop :=
-    forall u_id u_d s,
+    forall u_id u_d,
       U.(users) $? u_id = Some u_d
-      -> summaries $? u_id = Some s
-        /\ summarize u_d.(protocol) s.
+      -> exists s, summaries $? u_id = Some s
+           /\ summarize u_d.(protocol) s.
 
   Definition commutes {t} (cmd : user_cmd t) (s : summary) : Prop :=
     match cmd with
@@ -1406,9 +1406,9 @@ Lemma summarize_univ_user_step :
 Proof.
   unfold summarize_univ; intros.
   destruct (uid ==n u_id); subst; clean_map_lookups.
-  - specialize (H1 _ _ s H0); split_ex; split; eauto.
+  - specialize (H1 _ _ H0); split_ex.
     dt bd.
-    simpl in H2; clean_map_lookups; simpl.
+    simpl in *; clean_map_lookups. simpl; eexists; split; eauto.
     eapply summarize_user_step; eauto.
 
   - unfold build_data_step, buildUniverse_step, buildUniverse in *;
@@ -1416,8 +1416,8 @@ Proof.
 
     eapply step_back_into_other_user with (u_id2 := u_id) in H; eauto.
     split_ors; clean_map_lookups.
-    specialize (H1 _ _ s H); split_ex; simpl in *; split; eauto.
-    specialize (H1 _ _ s H3); split_ex; simpl in *; split; eauto.
+    specialize (H1 _ _ H); split_ex; simpl in *; eexists; split; eauto.
+    specialize (H1 _ _ H3); split_ex; simpl in *; eexists; split; eauto.
 Qed.
 
 Lemma summarize_univ_step :
@@ -1435,47 +1435,47 @@ Proof.
 
   - unfold buildUniverse in H3; simpl in H3.
     destruct (u_id ==n u_id0); subst; clean_map_lookups.
-    specialize (H2 _ _ s H4); split_ex.
-    split; simpl; eauto using summarize_user_step.
+    specialize (H2 _ _ H4); split_ex.
+    eexists; split; simpl; eauto using summarize_user_step.
 
     destruct ru, userData, u_d; unfold build_data_step in *; simpl in *.
     eapply step_back_into_other_user with (u_id2 := u_id) in H5; eauto.
     split_ors; clean_map_lookups; eauto.
-    specialize (H2 _ _ s H0); simpl in *; eauto.
-    specialize (H2 _ _ s H5); simpl in *; eauto.
+    specialize (H2 _ _ H0); simpl in *; eauto.
+    specialize (H2 _ _ H5); simpl in *; eauto.
 
   - unfold buildUniverse in *; simpl in *.
     destruct (u_id ==n uid); subst; clean_map_lookups.
-    specialize (H6 _ _ s H8); split_ex.
-    split; simpl; eauto using summarize_user_step.
+    specialize (H6 _ _ H8); split_ex.
+    eexists; split; simpl; eauto using summarize_user_step.
 
     destruct ru, userData, u_d; unfold build_data_step in *; simpl in *.
     eapply step_back_into_other_user with (u_id2 := u_id) in H7; eauto.
     split_ors; clean_map_lookups; eauto.
-    specialize (H6 _ _ s H0); simpl in *; eauto.
-    specialize (H6 _ _ s H7); simpl in *; eauto.
+    specialize (H6 _ _ H0); simpl in *; eauto.
+    specialize (H6 _ _ H7); simpl in *; eauto.
 
   - unfold buildUniverse in *; simpl in *.
     destruct (u_id ==n uid); subst; clean_map_lookups.
-    specialize (H5 _ _ s H7); split_ex.
-    split; simpl; eauto using summarize_user_step.
+    specialize (H5 _ _ H7); split_ex.
+    eexists; split; simpl; eauto using summarize_user_step.
 
     destruct ru, userData, u_d; unfold build_data_step in *; simpl in *.
     eapply step_back_into_other_user with (u_id2 := u_id) in H6; eauto.
     split_ors; clean_map_lookups; eauto.
-    specialize (H5 _ _ s H0); simpl in *; eauto.
-    specialize (H5 _ _ s H6); simpl in *; eauto.
+    specialize (H5 _ _ H0); simpl in *; eauto.
+    specialize (H5 _ _ H6); simpl in *; eauto.
 
   - unfold buildUniverse in *; simpl in *.
     destruct (u_id ==n uid); subst; clean_map_lookups.
-    specialize (H5 _ _ s H7); split_ex.
-    split; simpl; eauto using summarize_user_step.
+    specialize (H5 _ _ H7); split_ex.
+    eexists; split; simpl; eauto using summarize_user_step.
 
     destruct ru, userData, u_d; unfold build_data_step in *; simpl in *.
     eapply step_back_into_other_user with (u_id2 := u_id) in H6; eauto.
     split_ors; clean_map_lookups; eauto.
-    specialize (H5 _ _ s H0); simpl in *; eauto.
-    specialize (H5 _ _ s H6); simpl in *; eauto.
+    specialize (H5 _ _ H0); simpl in *; eauto.
+    specialize (H5 _ _ H6); simpl in *; eauto.
 Qed.
 
 #[local] Hint Resolve summarize_univ_step : core.
@@ -2060,7 +2060,7 @@ Proof.
       eapply H8 in LK; eauto; split_ex.
       destruct userData, ud; unfold build_data_step in *; simpl in *.
       
-      specialize (H5 _ _ x H); split_ex.
+      specialize (H5 _ _ H); split_ex.
       dt bd; unfold buildUniverse in H4.
 
       destruct lbl.
@@ -2088,7 +2088,7 @@ Proof.
       eapply H8 in LK; eauto; split_ex.
       destruct userData, ud; unfold build_data_step in *; simpl in *.
       
-      specialize (H5 _ _ x H); split_ex.
+      specialize (H5 _ _ H); split_ex.
       dt bd; unfold buildUniverse in H4.
 
       destruct lbl.
@@ -2119,7 +2119,7 @@ Proof.
       eapply H8 in LK; eauto; split_ex.
       destruct userData, ud; unfold build_data_step in *; simpl in *.
       
-      specialize (H5 _ _ x H); split_ex.
+      specialize (H5 _ _ H); split_ex.
       dt bd; unfold buildUniverse in H4.
 
       destruct lbl.
@@ -2150,7 +2150,7 @@ Proof.
       eapply H8 in LK; eauto; split_ex.
       destruct userData, ud; unfold build_data_step in *; simpl in *.
       
-      specialize (H5 _ _ x H); split_ex.
+      specialize (H5 _ _ H); split_ex.
       dt bd; unfold buildUniverse in H4.
 
       destruct lbl.
@@ -2210,7 +2210,7 @@ Proof.
       eapply H8 in LK; eauto; split_ex.
 
       destruct userData; unfold buildUniverse, build_data_step in *; simpl in *.
-      specialize (H5 _ _ x H); split_ex.
+      specialize (H5 _ _ H); split_ex.
 
       generalize H6; intros MAX;
         eapply max_elt_non_stepped_user with (uid := uid) (uid' := uid0) in MAX; eauto; split_ex.
@@ -2249,7 +2249,7 @@ Proof.
       split_ex; subst.
 
       unfold build_data_step in H21; destruct ru; simpl in *.
-      dt x13; dt x14; destruct x15; simpl in *.
+      dt x14; dt x15; destruct x16; simpl in *.
 
       (do 2 eexists); repeat simple apply conj; eauto.
       econstructor 1; eauto.
@@ -2270,7 +2270,7 @@ Proof.
       eapply H8 in LK; eauto; split_ex.
 
       destruct userData; unfold buildUniverse, build_data_step in *; simpl in *.
-      specialize (H5 _ _ x H); split_ex.
+      specialize (H5 _ _ H); split_ex.
 
       generalize H6; intros MAX;
         eapply max_elt_non_stepped_user with (uid := uid) (uid' := uid0) in MAX; eauto; split_ex.
@@ -2297,7 +2297,7 @@ Proof.
       split_ex; subst.
 
       unfold build_data_step in H25; destruct ru; simpl in *.
-      dt x13; dt x14; destruct x15; simpl in *.
+      dt x14; dt x15; destruct x16; simpl in *.
       
       destruct (classic (labels_align (buildUniverse usrs2 adv2 cs2 gks2 uid
                 {|
@@ -2320,7 +2320,7 @@ Proof.
         specialize (H2 _ _ _ H0 eq_refl); split_ex.
         eapply action_matches_other_user_silent_step; eauto.
 
-      * destruct x12 as [[ru1 iu1] b1].
+      * destruct x13 as [[ru1 iu1] b1].
         (do 2 eexists); repeat simple apply conj;
           [ solve [ econstructor 1; eauto ]
           | econstructor
@@ -2344,7 +2344,7 @@ Proof.
       eapply H8 in LK; eauto; split_ex.
 
       destruct userData; unfold buildUniverse, build_data_step in *; simpl in *.
-      specialize (H5 _ _ x H); split_ex.
+      specialize (H5 _ _ H); split_ex.
 
       generalize H6; intros MAX;
         eapply max_elt_non_stepped_user with (uid := uid) (uid' := uid0) in MAX; eauto; split_ex.
@@ -2371,11 +2371,11 @@ Proof.
       split_ex; subst.
 
       unfold build_data_step in H24; destruct ru; simpl in *.
-      dt x13; dt x14; destruct x15; simpl in *.
+      dt x14; dt x15; destruct x16; simpl in *.
 
       eapply silent_step_labels_still_misaligned with (b := b0) (b' := b0) in H14; eauto.
 
-      destruct x12 as [[ru1 iu1] b1].
+      destruct x13 as [[ru1 iu1] b1].
       simpl in *.
       (do 2 eexists); repeat simple apply conj.
       econstructor 1; eauto.
@@ -2398,7 +2398,7 @@ Proof.
       eapply H8 in LK; eauto; split_ex.
 
       destruct userData; unfold buildUniverse, build_data_step in *; simpl in *.
-      specialize (H5 _ _ x H); split_ex.
+      specialize (H5 _ _ H); split_ex.
 
       generalize H6; intros MAX;
         eapply max_elt_non_stepped_user with (uid := uid) (uid' := uid0) in MAX; eauto; split_ex.
@@ -2425,9 +2425,9 @@ Proof.
       split_ex; subst.
 
       unfold build_data_step in H24; destruct ru; simpl in *.
-      dt x13; dt x14; destruct x15; simpl in *.
+      dt x14; dt x15; destruct x16; simpl in *.
 
-      destruct x12 as [[ru1 iu1] b1].
+      destruct x13 as [[ru1 iu1] b1].
       simpl in *.
       (do 2 eexists); repeat simple apply conj.
       econstructor 1; eauto.

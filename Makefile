@@ -33,7 +33,7 @@ lib: CoqMakefile
 			       src/ModelCheck/InvariantSearch.vo
 
 test: lib
-	$(eval TS := "protocols/Verification/PGPSecure.vo")
+	$(eval TS := "protocols/Verification/PGPSecure.vo protocols/Verification/PGPSecure2.vo")
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
 test-protos: lib
@@ -50,6 +50,10 @@ netauth: lib
 
 paper-all: lib
 	$(eval TS :="protocols/Verification/ShareSecretProtocolSymmetricEncSecure.vo protocols/Verification/PGPSecure.vo protocols/Verification/SecureDNSSecure.vo protocols/Verification/AvgSalarySecure.vo protocols/Verification/NetAuthSecure.vo")
+	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
+
+paper-new: lib
+	$(eval TS :="protocols/Verification/PGPSecure2.vo  protocols/Verification/AvgSalarySecure2.vo protocols/Verification/NetAuthSecure2.vo")
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
 naive-modelcheck: lib
