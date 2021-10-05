@@ -10,11 +10,11 @@ From SPICY Require Import
 .
 
 From protocols Require Import
-     Verification.ShareSecretProtocolSymmetricEncSecure2
-     Verification.PGPSecure2
-     Verification.SecureDNSSecure2
-     Verification.AvgSalarySecure2
-     Verification.NetAuthSecure2
+     Verification.ShareSecretProtocolSymmetricEncSecure
+     Verification.PGPSecure
+     Verification.SecureDNSSecure
+     Verification.AvgSalarySecure
+     Verification.NetAuthSecure
 .
 
 Set Implicit Arguments.

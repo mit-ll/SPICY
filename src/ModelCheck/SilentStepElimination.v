@@ -1776,25 +1776,6 @@ Proof.
 Qed.
 
 Module Type AutomatedSafeProtocolSS.
-
-  Parameter t__hon : type.
-  Parameter t__adv : type.
-  Parameter b : << Base t__adv >>.
-  Parameter iu0 : IdealWorld.universe t__hon.
-  Parameter ru0 : RealWorld.universe t__hon t__adv.
-
-  Notation SYS := (TrSS ru0 iu0).
-
-  Axiom U_good : universe_starts_sane b ru0.
-  Axiom universe_starts_safe : universe_ok ru0.
-
-  Axiom safe_invariant : invariantFor
-                           SYS
-                           (fun st => safety st /\ alignment st /\ returns_align st).
-
-End AutomatedSafeProtocolSS.
-
-Module Type AutomatedSafeProtocolSS'.
   Parameter t__hon : type.
   Parameter t__adv : type.
   Parameter b : << Base t__adv >>.
@@ -1818,9 +1799,9 @@ Module Type AutomatedSafeProtocolSS'.
   Axiom safe_invariant : invariantFor
                            SYS
                            (fun st => no_resends_U (fst (fst st)) /\ alignment st /\ returns_align st).
-End AutomatedSafeProtocolSS'.
+End AutomatedSafeProtocolSS.
 
-Module SSProtocolSimulates (Proto : AutomatedSafeProtocolSS').
+Module SSProtocolSimulates (Proto : AutomatedSafeProtocolSS).
   Import Proto Simulation.
 
   Module SSAutomatedSafeProtocol <: AutomatedSafeProtocol.

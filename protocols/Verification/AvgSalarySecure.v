@@ -16,8 +16,10 @@ From SPICY Require Import
      Automation
      Tactics
      Simulation
+     SyntacticallySafe
      AdversaryUniverse
 
+     ModelCheck.Commutation
      ModelCheck.InvariantSearch
      ModelCheck.ProtocolFunctions
      ModelCheck.ModelCheck
@@ -73,12 +75,58 @@ Module AvgSalaryProtocolSecure <: AutomatedSafeProtocolSS.
        mkKeys
     : core.
 
+  Lemma finitelyRuns : exists n, runningTimeMeasure ru0 n.
+  Proof.
+    autounfold; simpl.
+    eexists.
+    econstructor; simpl; find_runtime.
+
+    Unshelve.
+    all: exact 0.
+  Qed.
+
+  Lemma typechecks : syntactically_safe_U ru0.
+  Proof.
+    unfold syntactically_safe_U; intros.
+    autounfold
+    ; subst
+    ; simpl in *.
+
+    unfold compute_ids; simpl.
+    
+    focus_user; simpl
+    ; try solve [ do 2 eexists; split
+                  ; [ unshelve (repeat typechecks1)
+                      ; match goal with
+                        | [ |- bool ] => exact true
+                        | [ |- list safe_typ ] => exact []
+                        end
+                    | repeat verify_context_soundness ] ].
+
+    Unshelve.
+    all : exact TyDontCare.
+  Qed.
+    
+  Lemma summarizable : exists summaries, summarize_univ ru0 summaries.
+  Proof.
+    autounfold; unfold summarize_univ; simpl; intros.
+    unshelve (
+        eexists; intros; focus_user; simpl
+        ; (exists useless_summary; split; [ build_summary |]; eauto using useless_summary_summarizes)
+      ) ; exact $0.
+  Qed.
+    
+  Lemma lameness : @lameAdv t__adv b (RealWorld.adversary ru0).
+  Proof.
+    unfold lameAdv; autounfold; simpl; eauto.
+  Qed.
+
   Set Ltac Profiling.
 
   Lemma safe_invariant :
     invariantFor
       {| Initial := {(ru0, iu0, true)}; Step := @stepSS t__hon t__adv  |}
-      (@safety_inv t__hon t__adv).
+      (@noresends_inv t__hon t__adv).
       (* (fun st => safety st /\ alignment st /\ returns_align st). *)
   Proof.
     unfold invariantFor

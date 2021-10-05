@@ -79,23 +79,18 @@ protocols/Verification/GenProtoSecure.v
 protocols/ShareSecretProtocolSymmetricEnc.v
 protocols/ShareSecretProtocolSymmetricEncIWRefine.v
 protocols/Verification/ShareSecretProtocolSymmetricEncSecure.v
-protocols/Verification/ShareSecretProtocolSymmetricEncSecure2.v
 
 protocols/PGP.v
 protocols/Verification/PGPSecure.v
-protocols/Verification/PGPSecure2.v
 
 protocols/SecureDNS.v
 protocols/Verification/SecureDNSSecure.v
-protocols/Verification/SecureDNSSecure2.v
 
 protocols/AvgSalary.v
 protocols/Verification/AvgSalarySecure.v
-protocols/Verification/AvgSalarySecure2.v
 
 protocols/NetAuth.v
 protocols/Verification/NetAuthSecure.v
-protocols/Verification/NetAuthSecure2.v
 
 protocols/Verification/PaperProtocolsAssumptions.v
 
