@@ -30,7 +30,7 @@ Using the above library code, we have verified several exemplar protocols.
 * protocols/PGP.v (protocol impl) and protocols/Verification/PGPSecure.v (correctness proof) -- describes a secret sharing protocol inspired by the PGP protocol.
 * protocols/SecureDNS.v (protocol impl) and protocols/Verification/SecureDNSSecure.v (correctness proof) -- describes a protocol similar in spirit to (but much simplified) Daniel Bernstein's DNSCurve for encrypted DNS.
 * protocols/AvgSalary.v and protocols/Verification/AvgSalarySecure.v -- describes a simple aggregation service, interesting because it involves more than two parties.
-* protocols/P2P.v and protocols/Verification/P2PSecure.v -- describes a network authentication protocol by a trusted third party showing an alternative way of bootstrapping trusted keys
+* protocols/NetAuth.v and protocols/Verification/NetAuthSecure.v -- describes a network authentication protocol by a trusted third party showing an alternative way of bootstrapping trusted keys
 
 ## Setup
 
