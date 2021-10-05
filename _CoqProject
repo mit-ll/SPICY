@@ -59,8 +59,6 @@ src/ModelCheck/SteppingTactics.v
 src/ModelCheck/InvariantSearch.v
 src/ModelCheck/InvariantSearchLemmas.v
 
-# protocols/TypecheckingTest.v
-
 #############################################################################
 ##  Protocol Verification
 #############################################################################
@@ -93,22 +91,3 @@ protocols/NetAuth.v
 protocols/Verification/NetAuthSecure.v
 
 protocols/Verification/PaperProtocolsAssumptions.v
-
-# First set of test protocols: simple Secret Sharing Protocols
-# protocols/ShareSecretProtocol.v
-# protocols/ShareSecretProtocolTS.v
-# protocols/ShareSecretProtocolSS.v
-
-# protocols/LegacyVerification/GenProtoSS.v
-
-# protocols/LegacyVerification/ShareSecretProtocolSymmetricEncTS.v
-# protocols/LegacyVerification/ShareSecretProtocolSymmetricEncSS.v
-
-# protocols/LegacyVerification/PGPTS.v
-# protocols/LegacyVerification/PGPSS.v
-
-# protocols/LegacyVerification/SecureDNSTS.v
-# protocols/LegacyVerification/SecureDNSSS.v
-
-# protocols/LegacyVerification/AvgSalarySS.v
-# protocols/LegacyVerification/NetAuthSS.v
