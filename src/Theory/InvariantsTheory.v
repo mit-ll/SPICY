@@ -1232,6 +1232,7 @@ Proof.
   destruct (k_id ==n k); subst; clean_map_lookups; intuition auto.
 Qed.
 
+#[local]
 Hint Immediate
      message_no_adv_private_new_keys
      message_no_adv_private_new_honestk

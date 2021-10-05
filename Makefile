@@ -30,11 +30,10 @@ invoke-coqmakefile: CoqMakefile
 
 lib: CoqMakefile
 	$(MAKE) -f CoqMakefile src/AdversarySafety.vo \
-			       src/ModelCheck/PartialOrderReduction.vo \
-			       src/ModelCheck/ProtocolAutomation.vo
+			       src/ModelCheck/InvariantSearch.vo
 
-por: CoqMakefile
-	$(eval TS := src/ModelCheck/PartialOrderReduction.vo)
+test: lib
+	$(eval TS := "protocols/Verification/PGPSecure.vo protocols/Verification/PGPSecure2.vo")
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
 test-protos: lib
@@ -49,6 +48,10 @@ paper-all: lib
 	$(eval TS :="protocols/Verification/ShareSecretProtocolSymmetricEncSecure.vo protocols/Verification/PGPSecure.vo protocols/Verification/SecureDNSSecure.vo protocols/Verification/AvgSalarySecure.vo protocols/Verification/NetAuthSecure.vo")
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
+paper-assumptions: lib
+	$(eval TS :="protocols/Verification/PaperProtocolsAssumptions.vo")
+	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
+
 naive-modelcheck: lib
 	$(eval TS :="protocols/LegacyVerification/PGPTS.vo protocols/LegacyVerification/ShareSecretProtocolSymmetricEncTS.vo protocols/LegacyVerification/SecureDNSTS.vo")
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
@@ -56,7 +59,6 @@ naive-modelcheck: lib
 modelcheck-ss: lib
 	$(eval TS :="protocols/LegacyVerification/GenProtoSS.vo protocols/LegacyVerification/PGPSS.vo protocols/LegacyVerification/ShareSecretProtocolSymmetricEncSS.vo protocols/LegacyVerification/SecureDNSSS.vo protocols/LegacyVerification/AvgSalarySS.vo protocols/LegacyVerification/NetAuthSS.vo")
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
-
 
 sharesecret: CoqMakefile
 	$(eval TS := "protocols/ShareSecretProtocolTS.vo protocols/ShareSecretProtocolSS.vo")

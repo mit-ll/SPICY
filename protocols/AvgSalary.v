@@ -12,24 +12,19 @@ From SPICY Require Import
      Maps
      ChMaps
      Messages
-     ModelCheck
      Keys
      Automation
      Tactics
      Simulation
      AdversaryUniverse
 
-     ModelCheck.UniverseEqAutomation
-     ModelCheck.ProtocolAutomation
-     ModelCheck.SafeProtocol
      ModelCheck.ProtocolFunctions
 .
 
 From SPICY Require IdealWorld RealWorld.
 
 Import IdealWorld.IdealNotations
-       RealWorld.RealWorldNotations
-       SimulationAutomation.
+       RealWorld.RealWorldNotations.
 
 From Frap Require Import Sets.
 

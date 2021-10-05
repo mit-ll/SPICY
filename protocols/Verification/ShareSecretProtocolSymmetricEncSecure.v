@@ -16,15 +16,16 @@ From SPICY Require Import
      Automation
      Tactics
      Simulation
+     SyntacticallySafe
      AdversaryUniverse
 
+     ModelCheck.Commutation
      ModelCheck.ModelCheck
-     ModelCheck.UniverseEqAutomation
-     ModelCheck.ProtocolAutomation
-     ModelCheck.SafeProtocol
      ModelCheck.ProtocolFunctions
      ModelCheck.SilentStepElimination
+     ModelCheck.SteppingTactics
      ModelCheck.InvariantSearch
+     ModelCheck.UniverseInversionLemmas
 .
 
 From protocols Require Import
@@ -57,49 +58,83 @@ Module ShareSecretProtocolSecureSS <: AutomatedSafeProtocolSS.
   Definition iu0  := ideal_univ_start.
   Definition ru0  := real_univ_start.
 
-  Import Gen Tacs SetLemmas.
+  Import Gen Tacs.
 
   #[export] Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start real_univ_start : core.
 
-  Lemma next_key_natmap_exists :
-    forall {V} (m : NatMap.t V),
-    exists k, m $? k = None.
+  Lemma finitelyRuns : exists n, runningTimeMeasure ru0 n.
   Proof.
-    intros.
-    exists (next_key m); eauto using Maps.next_key_not_in.
+    autounfold; simpl.
+    eexists.
+    econstructor; simpl; find_runtime.
+
+    Unshelve.
+    all: exact 0.
   Qed.
 
-  Lemma next_key_chmap_exists :
-    forall {V} (m : ChMap.t V),
-    exists k, m #? (# k) = None.
+  Lemma typechecks : syntactically_safe_U ru0.
   Proof.
-    intros.
-    exists (next_key_nat m); eauto using next_key_not_in.
+    unfold syntactically_safe_U; intros.
+    autounfold
+    ; subst
+    ; simpl in *.
+
+    unfold compute_ids; simpl.
+    
+    focus_user; simpl
+    ; try solve [ do 2 eexists; split
+                  ; [ unshelve (repeat typechecks1)
+                      ; match goal with
+                        | [ |- bool ] => exact true
+                        | [ |- list safe_typ ] => exact []
+                        end
+                    | repeat verify_context_soundness ] ].
+
+    Unshelve.
+    all : exact TyDontCare.
   Qed.
+    
+  Lemma summarizable : exists summaries, summarize_univ ru0 summaries.
+  Proof.
+    autounfold; unfold summarize_univ; simpl; intros.
+    unshelve (
+        eexists; intros; focus_user; simpl
+        ; (exists useless_summary; split; [ build_summary |]; eauto using useless_summary_summarizes)
+      ) ; exact $0.
+  Qed.
+    
+  Lemma lameness : @lameAdv t__adv b (RealWorld.adversary ru0).
+  Proof.
+    unfold lameAdv; autounfold; simpl; eauto.
+  Qed.
+
+  Set Ltac Profiling.
 
   Lemma safe_invariant :
     invariantFor
       {| Initial := {(ru0, iu0, true)}; Step := @stepSS t__hon t__adv  |}
-      (@safety_inv t__hon t__adv).
-      (* (fun st => safety st /\ alignment st /\ returns_align st ). *)
+      (@noresends_inv t__hon t__adv).
   Proof.
     unfold invariantFor
     ; unfold Initial, Step
     ; intros
-    ; sets_invert.
+    ; simpl in *
+    ; split_ors
+    ; try contradiction
+    ; subst.
 
-    invert H0.
-    - finish_invariant.
-    - autounfold in H
-      ; unfold fold_left, fst, snd in *.
+    autounfold in H0
+    ; unfold fold_left, fst, snd in *.
 
-      time (
-          repeat transition_system_step
-        ).
+    time (
+        repeat transition_system_step
+      ).
 
-      Unshelve.
-      all: exact 0 || auto.
+    Unshelve.
+    all: exact 0 || auto.
   Qed.
+
+  Show Ltac Profile.
   
   Lemma U_good : @universe_starts_sane _ Unit b ru0.
   Proof.

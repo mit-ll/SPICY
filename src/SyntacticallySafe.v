@@ -63,12 +63,31 @@ Inductive HonestKey (context : list safe_typ) : key_identifier -> Prop :=
 | HonestPermission : forall k tf,
     List.In {| cmd_type := Base Access ; cmd_val := (k,tf) ; safetyTy := TyHonestKey |} context
     -> HonestKey context k
-| HonestKeyFromMsgVerify : forall (v : bool * message Access),
-    List.In {| cmd_type := UPair (Base Bool) (Message Access) ;
+| HonestFromMsg : forall t (msg : RealWorld.message.message t) k kp,
+    List.In {| cmd_type := RealWorld.Message t ; cmd_val := msg ; safetyTy := TyRecvMsg |} context
+    -> findKeysMessage msg $? k = Some kp
+    -> HonestKey context k
+| HonestKeyFromMsgVerify : forall t (v : bool * message t) k kp,
+    List.In {| cmd_type := UPair (Base Bool) (Message t) ;
                cmd_val := v ;
                safetyTy := TyRecvMsg |}
             context
-    -> HonestKey context (fst (extractPermission (snd v)))
+    -> findKeysMessage (snd v) $? k = Some kp
+    -> HonestKey context k
+(* | HonestKeyFromMsgVerify : forall (v : bool * message Access), *)
+(*     List.In {| cmd_type := UPair (Base Bool) (Message Access) ; *)
+(*                cmd_val := v ; *)
+(*                safetyTy := TyRecvMsg |} *)
+(*             context *)
+(* | HonestFromMsg : forall k kp t (msg : RealWorld.message.message t), *)
+(*     findKeysMessage msg $? k = Some kp *)
+(*     -> HonestKey context k. *)
+(* | HonestKeyFromMsgVerify : forall (v : bool * message Access), *)
+(*     List.In {| cmd_type := UPair (Base Bool) (Message Access) ; *)
+(*                cmd_val := v ; *)
+(*                safetyTy := TyRecvMsg |} *)
+(*             context *)
+(*     -> HonestKey context (fst (extractPermission (snd v))) *)
 .
 
 Fixpoint init_context (ks : list key_permission) : list safe_typ :=
@@ -258,10 +277,22 @@ Lemma HonestKey_split :
     key_rec = {| cmd_type := t ; cmd_val := tv ; safetyTy := styp |}
     -> HonestKey (key_rec :: context) k
     -> (exists tf, key_rec = {| cmd_type := Base Access ; cmd_val := (k,tf) ; safetyTy := TyHonestKey |})
-    \/ (exists v, key_rec  = {| cmd_type := UPair (Base Bool) (Message Access) ;
-                          cmd_val := v ;
-                          safetyTy := TyRecvMsg |}
-            /\ k = fst (extractPermission (snd v)))
+    \/ (exists t msg kp, key_rec = {| cmd_type := (Message t) ;
+                                cmd_val  := msg ;
+                                safetyTy := TyRecvMsg |}
+                   /\ findKeysMessage msg $? k = Some kp)
+    \/ (exists t bool_msg kp, key_rec  = {| cmd_type := UPair (Base Bool) (Message t) ;
+                                      cmd_val := bool_msg ;
+                                      safetyTy := TyRecvMsg |}
+                        /\ findKeysMessage (snd bool_msg) $? k = Some kp)
+    (* \/ (exists v, key_rec  = {| cmd_type := (Message Access) ; *)
+    (*                       cmd_val  := v ; *)
+    (*                       safetyTy := TyRecvMsg |} *)
+    (*         /\ k = fst (extractPermission v)) *)
+    (* \/ (exists v, key_rec  = {| cmd_type := UPair (Base Bool) (Message Access) ; *)
+    (*                       cmd_val := v ; *)
+    (*                       safetyTy := TyRecvMsg |} *)
+    (*         /\ k = fst (extractPermission (snd v))) *)
     \/ HonestKey context k
 .
 Proof.
@@ -346,7 +377,7 @@ Proof.
     
   - econstructor; intros; eauto.
   - econstructor; intros; eauto.
-    eapply H0 in H4; split_ands; subst; eauto.
+    apply H0 in H4; split_ex; subst; eauto.
 Qed.
 
 Definition typingcontext_sound (ctx : list safe_typ)
@@ -514,6 +545,7 @@ Lemma syntactically_safe_honest_keys_preservation' :
           -> honestk  = findUserKeys usrs
           -> message_queue_ok honestk cs qmsgs gks
           -> encrypted_ciphers_ok honestk cs gks
+          -> user_cipher_queues_ok cs honestk usrs
           -> honest_users_only_honest_keys usrs
           -> usrs'' = usrs' $+ (u_id, {| key_heap := ks';
                                         protocol := cmdc';
@@ -562,12 +594,23 @@ Proof.
       process_ctx; eauto.
     
   - split_ex; eexists; process_ctx; repeat simple apply conj; swap 1 4; intros; eauto;
-      repeat (progress (process_ctx; eauto)).
+      repeat (progress (process_ctx; eauto))
+      ; invert H8
+      ; clean_map_lookups.
 
-    simpl; specialize (H10 _ _ H5 _ _ H0); encrypted_ciphers_prop.
-    dependent destruction msg; simpl in *.
-    specialize (H17 (fst acc) (snd acc)); rewrite add_eq_o in H17 by eauto.
-    specialize (H17 eq_refl); split_ands; eauto.
+    user_cipher_queues_prop; encrypted_ciphers_prop.
+    apply H25 in H9; clean_map_lookups; eauto.
+
+    user_cipher_queues_prop; encrypted_ciphers_prop.
+    apply H25 in H9; clean_map_lookups; eauto.
+
+  - split_ex; eexists; process_ctx; repeat simple apply conj; swap 1 4; intros; eauto;
+      repeat (progress (process_ctx; eauto))
+      ; clean_map_lookups
+      ; simpl in *.
+
+    user_cipher_queues_prop; encrypted_ciphers_prop.
+    apply H20 in H4; clean_map_lookups; eauto.
 Qed.
 
 Lemma syntactically_safe_honest_keys_preservation :
@@ -597,6 +640,7 @@ Lemma syntactically_safe_honest_keys_preservation :
           -> honestk  = findUserKeys usrs
           -> message_queue_ok honestk cs qmsgs gks
           -> encrypted_ciphers_ok honestk cs gks
+          -> user_cipher_queues_ok cs honestk usrs
           -> honest_users_only_honest_keys usrs
           -> usrs'' = usrs' $+ (u_id, {| key_heap := ks';
                                         protocol := cmd';

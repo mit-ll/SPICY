@@ -16,15 +16,16 @@ From SPICY Require Import
      Automation
      Tactics
      Simulation
+     SyntacticallySafe
      AdversaryUniverse
 
+     ModelCheck.Commutation
      ModelCheck.ModelCheck
-     ModelCheck.UniverseEqAutomation
-     ModelCheck.ProtocolAutomation
-     ModelCheck.SafeProtocol
      ModelCheck.ProtocolFunctions
      ModelCheck.SilentStepElimination
+     ModelCheck.SteppingTactics
      ModelCheck.InvariantSearch
+     ModelCheck.UniverseInversionLemmas
 .
 
 From protocols Require Import
@@ -59,7 +60,7 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocolSS.
   Definition iu0  := ideal_univ_start.
   Definition ru0  := real_univ_start.
 
-  Import Gen Tacs SetLemmas.
+  Import Gen Tacs.
 
   (* These are here to help the proof automation.  Don't change. *)
   #[export] Hint Unfold t__hon t__adv b ru0 iu0 ideal_univ_start real_univ_start : core.
@@ -68,34 +69,158 @@ Module SecureDNSProtocolSecure <: AutomatedSafeProtocolSS.
        mkKeys
     : core.
 
-  Opaque realServer.
+  Lemma realServerbrt_bodybrt :
+    forall t n (cmd : RealWorld.user_cmd t),
+      boundRunningTime cmd n
+      -> forall (tv : RealWorld.denote t) n__iter,
+        exists n__server, boundRunningTime (realServer n__iter tv cmd) n__server.
+  Proof.
+    induction n__iter; intros.
+    - rewrite realserver_done.
+      eexists; find_runtime.
+    - erewrite unroll_realserver_step; eauto.
+      split_ex.
+      eexists; find_runtime.
+      
+      Unshelve.
+      exact 0.
+  Qed.
+
+  Lemma finitelyRuns : exists n, runningTimeMeasure ru0 n.
+  Proof.
+    autounfold; simpl.
+    repeat 
+      match goal with
+      | [ |- context [realServer _ _ ?cmd] ] =>
+        match goal with
+        | [ H : exists _, boundRunningTime cmd _ |- _ ] => fail 1
+        | _ => let BRT := fresh "BRT" in
+              assert (exists n, boundRunningTime cmd n) as BRT by (eexists; simpl; find_runtime)
+        end
+      end
+    ; split_ex
+    ; repeat
+        match goal with
+        | [ H : boundRunningTime ?cmd _ |- context [ realServer ?n ?dv ?cmd ] ] =>
+          pose proof (realServerbrt_bodybrt H dv n); clear H
+        end
+    ; split_ex.
+    
+    eexists; econstructor; simpl; find_runtime; eauto.
+
+    Unshelve.
+    all: exact 0.
+  Qed.
+
+  Lemma realServerss_bodyss :
+    forall t uid uids ctx (cmd : RealWorld.user_cmd (RealWorld.Base t)) cs (usrs : RealWorld.honest_users t) sty,
+      syntactically_safe uid uids ctx cmd sty
+      -> typingcontext_sound ctx usrs cs uid
+      -> forall tv n,
+          exists sty__s ctx__s,
+            List.Forall (fun styp => List.In styp ctx__s) ctx
+            /\ syntactically_safe uid uids ctx__s (realServer n tv cmd) sty__s
+            /\ typingcontext_sound ctx__s usrs cs uid.
+  Proof.
+    induct n; intros.
+    - rewrite realserver_done.
+      (do 2 eexists); eauto.
+    - erewrite unroll_realserver_step; eauto.
+      split_ex.
+      (do 2 eexists); repeat simple apply conj; eauto.
+      econstructor; intros; eauto using syntactically_safe_add_ctx.
+  Qed.
+
+  Lemma typechecks : syntactically_safe_U ru0.
+  Proof.
+    unfold syntactically_safe_U; intros.
+    autounfold
+    ; subst
+    ; simpl in *.
+
+    unfold compute_ids; simpl.
+    
+    focus_user; simpl
+    ; try solve [ do 2 eexists; split
+                  ; [ unshelve (repeat typechecks1)
+                      ; match goal with
+                        | [ |- bool ] => exact true
+                        | [ |- list safe_typ ] => exact []
+                        end
+                    | repeat verify_context_soundness ] ].
+
+    match goal with
+    | [ |- exists _ _, syntactically_safe ?uid ?uids _ (realServer ?n ?tv ?cmd) _
+               /\ typingcontext_sound _ ?usrs ?cs ?uid ] =>
+      assert (exists sty ctx, syntactically_safe uid uids ctx cmd sty
+                         /\ typingcontext_sound ctx usrs cs uid)
+    end.
+
+    do 2 eexists; split
+    ; [ unshelve (repeat typechecks1)
+        ; match goal with
+          | [ |- bool ] => exact true
+          | [ |- list safe_typ ] => exact []
+          end
+      | repeat verify_context_soundness ].
+
+    split_ex.
+
+    match goal with
+    | [ SS : syntactically_safe _ _ _ ?cmd _, TCS : typingcontext_sound _ _ _ _
+        |- context [ realServer ?n ?tv ?cmd ] 
+      ] =>
+      pose proof ( realServerss_bodyss SS TCS tv n)
+      ; clear SS TCS
+      ; split_ex
+    end
+    ; (do 2 eexists); split; eauto.
+
+    Unshelve.
+    all: exact true.
+  Qed.
+    
+  Lemma summarizable : exists summaries, summarize_univ ru0 summaries.
+  Proof.
+    autounfold; unfold summarize_univ; simpl; intros.
+    unshelve (
+        eexists; intros; focus_user; simpl
+        ; (exists useless_summary; split; [ build_summary |]; eauto using useless_summary_summarizes)
+      ) ; exact $0.
+  Qed.
+    
+  Lemma lameness : @lameAdv t__adv b (RealWorld.adversary ru0).
+  Proof.
+    unfold lameAdv; autounfold; simpl; eauto.
+  Qed.
+
+  Set Ltac Profiling.
 
   Lemma safe_invariant :
     invariantFor
       {| Initial := {(ru0, iu0, true)}; Step := @stepSS t__hon t__adv  |}
-      (@safety_inv t__hon t__adv).
+      (@noresends_inv t__hon t__adv).
   Proof.
     unfold invariantFor
     ; unfold Initial, Step
     ; intros
-    ; sets_invert.
+    ; simpl in *
+    ; split_ors
+    ; try contradiction
+    ; subst.
 
-    invert H0.
-    - autounfold.
-      finish_invariant.
-      
-    - autounfold in H
-      ; unfold fold_left, fst, snd in *.
+    autounfold in H0
+    ; unfold fold_left, fst, snd in *.
 
-      time (
-          repeat transition_system_step
-        ).
-      
-      Unshelve.
-      all: exact 0 || auto.
+    time (
+        repeat transition_system_step
+      ).
+
+    Unshelve.
+    all: exact 0 || auto.
   Qed.
 
-  (* Show Ltac Profile. *)
+  Show Ltac Profile.
   (* Show Ltac Profile "churn2". *)
   
   Lemma U_good : @universe_starts_sane _ Unit b ru0.

@@ -4,9 +4,9 @@
 # SPDX-License-Identifier: MIT
 # 
 
--R src/ SPICY
+-Q src/ SPICY
 -R Frap/ Frap
--R protocols/ protocols
+-Q protocols/ protocols
 
 # Frap Library Dependency
 Frap/Invariant.v
@@ -38,19 +38,28 @@ src/Theory/MessagesTheory.v
 src/Theory/NonceTracking.v
 src/Theory/UsersTheory.v
 
-src/ModelCheck/LabelsAlign.v
 src/ModelCheck/ModelCheck.v
+src/ModelCheck/UniverseInversionLemmas.v
+
+src/ModelCheck/Commutation.v
+src/ModelCheck/LabelsAlign.v
 src/ModelCheck/NoResends.v
-src/ModelCheck/PartialOrderReduction.v
-src/ModelCheck/ProtocolAutomation.v
 src/ModelCheck/ProtocolFunctions.v
 src/ModelCheck/RealWorldStepLemmas.v
 src/ModelCheck/SafeProtocol.v
 src/ModelCheck/SilentStepElimination.v
-src/ModelCheck/UniverseEqAutomation.v
+src/ModelCheck/SteppingTactics.v
+
+# Model Check search with set tracking
+# src/ModelCheck/ClosureStepLemmas.v
+# src/ModelCheck/ProtocolAutomation.v
+# src/ModelCheck/PartialOrderReduction.v
 
 # Protocol Invariant Exploration (alternative to traditional model checking)
 src/ModelCheck/InvariantSearch.v
+src/ModelCheck/InvariantSearchLemmas.v
+
+# protocols/TypecheckingTest.v
 
 #############################################################################
 ##  Protocol Verification
@@ -83,21 +92,23 @@ protocols/Verification/AvgSalarySecure.v
 protocols/NetAuth.v
 protocols/Verification/NetAuthSecure.v
 
+protocols/Verification/PaperProtocolsAssumptions.v
+
 # First set of test protocols: simple Secret Sharing Protocols
-protocols/ShareSecretProtocol.v
-protocols/ShareSecretProtocolTS.v
-protocols/ShareSecretProtocolSS.v
+# protocols/ShareSecretProtocol.v
+# protocols/ShareSecretProtocolTS.v
+# protocols/ShareSecretProtocolSS.v
 
-protocols/LegacyVerification/GenProtoSS.v
+# protocols/LegacyVerification/GenProtoSS.v
 
-protocols/LegacyVerification/ShareSecretProtocolSymmetricEncTS.v
-protocols/LegacyVerification/ShareSecretProtocolSymmetricEncSS.v
+# protocols/LegacyVerification/ShareSecretProtocolSymmetricEncTS.v
+# protocols/LegacyVerification/ShareSecretProtocolSymmetricEncSS.v
 
-protocols/LegacyVerification/PGPTS.v
-protocols/LegacyVerification/PGPSS.v
+# protocols/LegacyVerification/PGPTS.v
+# protocols/LegacyVerification/PGPSS.v
 
-protocols/LegacyVerification/SecureDNSTS.v
-protocols/LegacyVerification/SecureDNSSS.v
+# protocols/LegacyVerification/SecureDNSTS.v
+# protocols/LegacyVerification/SecureDNSSS.v
 
-protocols/LegacyVerification/AvgSalarySS.v
-protocols/LegacyVerification/NetAuthSS.v
+# protocols/LegacyVerification/AvgSalarySS.v
+# protocols/LegacyVerification/NetAuthSS.v

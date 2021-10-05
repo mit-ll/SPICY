@@ -25,8 +25,8 @@ From SPICY Require Import
      Theory.MessagesTheory
      Theory.NonceTracking
 
+     ModelCheck.ModelCheck
      ModelCheck.ProtocolFunctions
-     ModelCheck.SafeProtocol
 .
 
 From SPICY Require
@@ -259,6 +259,7 @@ Lemma silent_step_nochange_other_user :
 Proof.
   intros; subst; eapply silent_step_nochange_other_user'; eauto.
 Qed.
+
 
 (* need to know that msg, if cipher, is in cs *)
 Lemma findKeysCrypto_addnl_cipher :
@@ -536,6 +537,116 @@ Lemma step_limited_change_other_user :
 .
 Proof.
   intros; subst; eapply step_limited_change_other_user'; eauto.
+Qed.
+
+Lemma silent_step_then_labeled_step :
+  forall {A B C} suid lbl bd bd',
+
+    step_user lbl suid bd bd'
+    -> forall cs cs' (usrs usrs': honest_users A) (adv adv' : user_data B) gks gks'
+        (cmd cmd' : user_cmd C) uid1 ks ks' qmsgs qmsgs' mycs mycs'
+        froms froms' sents sents' cur_n cur_n' ra cmdc,
+
+      bd = (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+      -> bd' = (usrs', adv', cs', gks', ks', qmsgs', mycs', froms', sents', cur_n', cmd')
+      -> lbl = Action ra
+      -> suid = Some uid1
+      -> usrs $? uid1 = Some {| key_heap := ks;
+                               protocol := cmdc;
+                               msg_heap := qmsgs;
+                               c_heap   := mycs;
+                               from_nons := froms;
+                               sent_nons := sents;
+                               cur_nonce := cur_n |}
+      -> forall ctx styp, syntactically_safe uid1 (compute_ids usrs) ctx cmd styp
+      -> typingcontext_sound ctx usrs cs uid1
+      -> message_queues_ok cs usrs gks
+      -> forall uid2 bd2 bd2',
+          step_user Silent (Some uid2) bd2 bd2'
+
+          -> forall usrs'' adv'' cs'' gks'' cmd2 cmd2' ks2 ks2' qmsgs2 qmsgs2' mycs2 mycs2'
+              froms2 froms2' sents2 sents2' cur_n2 cur_n2' usrs''',
+
+            bd2 = (usrs, adv, cs, gks, ks2, qmsgs2, mycs2, froms2, sents2, cur_n2, cmd2)
+            -> bd2' = (usrs'', adv'', cs'', gks'', ks2', qmsgs2', mycs2', froms2', sents2', cur_n2', cmd2')
+            -> uid1 <> uid2
+            -> usrs $? uid2 = Some {| key_heap := ks2;
+                                     protocol := cmd2;
+                                     msg_heap := qmsgs2;
+                                     c_heap   := mycs2;
+                                     from_nons := froms2;
+                                     sent_nons := sents2;
+                                     cur_nonce := cur_n2 |}
+            -> usrs''' = usrs'' $+ (uid2, {| key_heap := ks2';
+                                            protocol := cmd2';
+                                            msg_heap := qmsgs2';
+                                            c_heap   := mycs2';
+                                            from_nons := froms2';
+                                            sent_nons := sents2';
+                                            cur_nonce := cur_n2' |})
+            -> exists bd2'',
+                step_user (Action ra) (Some uid1)
+                          (usrs''', adv'', cs'', gks'', ks, qmsgs, mycs, froms, sents, cur_n, cmd)
+                          bd2''
+.
+Proof.
+  induction 1; inversion 1; inversion 1; intros; subst; try discriminate; eauto; clean_context.
+  - invert H27.
+    eapply IHstep_user in H33; eauto.
+    split_ex.
+    dt x.
+    eexists; econstructor; eauto.
+  - generalize H38; intros STEP; eapply silent_step_nochange_other_user with (u_id2 := uid1) in H38; eauto.
+    eapply step_limited_change_other_user with (u_id2 := uid1) in STEP; eauto; split_ex.
+    clear H1.
+    eexists; econstructor; eauto.
+    invert H6; [
+      econstructor 1
+    | econstructor 2
+    | econstructor 3]; eauto.
+
+    rewrite Forall_forall in H7 |- *; intros * LIN.
+    destruct x.
+    assert (List.In (existT _ x c) (msgs__front ++ existT _ t0 msg :: msgs__back))
+      as LINMSGS by eauto using in_or_app.
+    eapply H7 in LIN.
+
+    unfold message_queues_ok in H37
+    ; rewrite Forall_natmap_forall in H37
+    ; specialize (H37 _ _ H34)
+    ; simpl in H37
+    ; unfold message_queue_ok in H37
+    ; rewrite Forall_forall in H37
+    ; assert (List.In (existT _ t0 msg) (msgs__front ++ existT _ t0 msg :: msgs__back)) as LIN2 by eauto using in_elt
+    ; apply H37 in LINMSGS
+    ; apply H37 in LIN2
+    ; split_ex.
+    
+    unfold not; intros.
+    eapply LIN; clear LIN.
+    invert H9; econstructor; eauto.
+    eapply H0 in H11; split_ors; eauto.
+    specialize (H5 _ eq_refl); contradiction.
+    eapply H0 in H11; split_ors; eauto.
+    specialize (H5 _ eq_refl); contradiction.
+
+  - generalize H37; intros STEP; eapply silent_step_nochange_other_user with (u_id2 := uid1) in H37; eauto.
+    (* eapply step_limited_change_other_user in STEP; eauto; split_ex. *)
+    destruct (uid2 ==n rec_u_id); subst; clean_map_lookups;
+      eexists; econstructor; eauto.
+    2: unfold not; intros INV; invert INV; contradiction.
+    4: unfold not; intros INV; invert INV; contradiction.
+    3: eapply silent_step_nochange_other_user with (u_id2 := rec_u_id) in STEP; eauto; split_ex.
+
+    eapply step_limited_change_other_user with (u_id2 := uid1) in STEP; eauto; split_ex.
+    clear H4.
+    unfold typingcontext_sound in *; invert H34; split_ex; process_ctx.
+    specialize (H3 _ _ H8); context_map_rewrites; eauto.
+
+    eapply step_limited_change_other_user with (u_id2 := uid1) in STEP; eauto; split_ex.
+    clear H4.
+    unfold typingcontext_sound in *; invert H34; split_ex; process_ctx.
+    specialize (H3 _ _ H8); context_map_rewrites; eauto.
 Qed.
 
 Section MessageEqLemmas.
@@ -1209,7 +1320,7 @@ Section ActionMatches.
       eapply output_action_na in H46; eauto; split_ex; subst.
       eapply syntactically_safe_na in H8; eauto; split_ex.
       invert H5; unfold typingcontext_sound in *; split_ex; process_ctx.
-      repeat equality1; subst; clean_map_lookups.
+      invert H7; subst; clean_map_lookups.
       
     - action_matches_solver; eauto.
 
@@ -1227,7 +1338,7 @@ Section ActionMatches.
 
       eapply syntactically_safe_na in H6; eauto; split_ex.
       invert H3; unfold typingcontext_sound in *; split_ex; process_ctx.
-      repeat equality1; clean_map_lookups.
+      invert H7; clean_map_lookups.
 
     - action_matches_solver; eauto.
 
@@ -1268,7 +1379,7 @@ Section ActionMatches.
             ; rewrite <- honest_key_honest_keyb in MHS
             ; invert MHS
           end;
-        repeat equality1;
+        repeat match goal with | [ H : SignedCiphertext _ = _ |- _ ] => invert H end;
         clean_map_lookups;
         eapply message_content_eq_addnl_key_inv; eauto.
       

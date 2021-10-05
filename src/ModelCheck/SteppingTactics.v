@@ -24,13 +24,10 @@ From SPICY Require Import
 
      Theory.KeysTheory
 
-     ModelCheck.ClosureStepLemmas
-     ModelCheck.SafeProtocol
-     ModelCheck.UniverseEqAutomation
+     ModelCheck.ModelCheck
      ModelCheck.ProtocolFunctions
-     ModelCheck.PartialOrderReduction
      ModelCheck.RealWorldStepLemmas
-     ModelCheck.SilentStepElimination
+     ModelCheck.UniverseInversionLemmas
 .
 
 From SPICY Require
@@ -39,14 +36,89 @@ From SPICY Require
      ChMaps
 .
 
-From Frap Require 
-     Sets
-.
-
 Import ChMaps.ChMapNotation
        ChMaps.ChNotation.
 
 Set Implicit Arguments.
+
+Ltac simple_clean_maps1 :=
+  match goal with
+  | [ H : Some _ = None |- _ ] => discriminate H
+  | [ H : None = Some _ |- _ ] => discriminate H
+  | [ H : Some _ = Some _ |- _ ] => apply some_eq_inv in H; subst
+  | [ H : _ $+ (_,_) $? _ = _ |- _ ] =>
+    progress (
+      repeat ( (rewrite add_eq_o in H by trivial)           
+             || (rewrite add_neq_o in H by congruence)
+             || (rewrite lookup_empty_none in H) ))
+  | [ H : $0 $? _ = _ |- _ ] => rewrite lookup_empty_none in H
+  | [ |- _ $+ (_,_) $? _ = _ ] =>
+    progress (
+      repeat ( (rewrite add_eq_o by trivial)           
+             || (rewrite add_neq_o by congruence)
+             || (rewrite lookup_empty_none) ))
+  | [ |- $0 $? _ = _ ] =>
+    rewrite lookup_empty_none
+  | [ H : ~ In _ _ |- _ ] => rewrite not_find_in_iff in H
+  | [ H : _ $+ (?k1,_) $? ?k2 = None |- _ ] =>
+    destruct (k1 ==n k2); subst
+  end.
+
+Ltac simple_clean_maps := repeat simple_clean_maps1.
+
+Ltac equality1 :=
+  invert_base_equalities1
+  || simple_clean_maps1
+  || match goal with
+    | [ H : List.In _ _ |- _ ] => progress (simpl in H); (* intuition idtac *) split_ors
+
+    | [ H : _ $? _ = Some _ |- _ ] => progress (simpl in H)
+    | [ H : _ #? _ = Some _ |- _ ] => progress (simpl in H)
+
+    | [ H : _ $+ (_,_) $? _ = Some ?UD |- _ ] =>
+      match type of UD with
+      | RealWorld.user_data _ => apply lookup_some_implies_in in H; simpl in H
+      | _ => apply lookup_split in H; (* intuition idtac *) split_ors
+      end
+    | [ H : _ #+ (_,_) #? _ = Some ?UD |- _ ] =>
+      apply ChMaps.ChMap.lookup_split in H; (* intuition idtac *) split_ors
+
+    | [ H : _ = {| RealWorld.users := _ |} |- _ ]
+      => apply split_real_univ_fields in H; split_ex; subst
+    | [ |- RealWorld.protocol (RealWorld.adversary _) = RealWorld.Return _ ] => simpl
+    | [ H : lameAdv _ ?adv |- RealWorld.protocol ?adv = _ ] => unfold lameAdv in H; eassumption
+
+    | [ H : RealWorld.users _ $? _ = Some _ |- _ ] => progress (simpl in H)
+
+    | [ H : _ = RealWorld.mkUserData _ _ _ |- _ ] => inversion H; clear H
+
+    | [ H : Action _ = Action _ |- _ ] =>
+      injection H; subst
+      (* apply action_eq_inv in H; subst *)
+    (* | [ H : Silent = Action _ |- _ ] => discriminate H *)
+    (* | [ H : Action _ = Silent |- _ ] => discriminate H *)
+    | [ H : RealWorld.Return _ = RealWorld.Return _ |- _ ] => apply invert_return in H
+
+    | [ H: RealWorld.SignedCiphertext _ = RealWorld.SignedCiphertext _ |- _ ] =>
+      injection H; subst
+      (* apply ct_eq_inv in H; split_ex; subst *)
+    | [ H: RealWorld.SigCipher _ _ _ _ = RealWorld.SigCipher _ _ _ _ |- _ ] =>
+      injection H; subst
+      (* apply sigcphr_eq_inv in H; split_ex; subst *)
+    | [ H: RealWorld.SigEncCipher _ _ _ _ _ = RealWorld.SigEncCipher _ _ _ _ _ |- _ ] =>
+      injection H; subst
+      (* apply enccphr_eq_inv in H; split_ex; subst *)
+    | [ H : _ = RealWorld.Output _ _ _ _ |- _ ] => apply output_act_eq_inv in H; split_ex; subst
+    | [ H : RealWorld.Output _ _ _ _ = _ |- _ ] => apply output_act_eq_inv in H; split_ex; subst
+    | [ H : _ = RealWorld.Input _ _ _ |- _ ] => apply input_act_eq_inv in H; split_ex; subst
+    | [ H : RealWorld.Input _ _ _ = _ |- _ ] => apply input_act_eq_inv in H; split_ex; subst
+    | [ H : MkCryptoKey _ _ _ = _ |- _ ] => apply key_eq_inv in H; split_ex; subst
+
+    | [ H: _ = {| IdealWorld.read := _ |} |- _ ] => injection H
+    | [ H: {| IdealWorld.read := _ |} = _ |- _ ] => injection H
+
+    | [ H : keyId _ = _ |- _] => inversion H; clear H
+    end.
 
 Module SimulationAutomation.
 
@@ -55,66 +127,6 @@ Module SimulationAutomation.
 
   Module T.
     Import RealWorld.
-
-    Lemma message_match_not_match_pattern_different :
-      forall t1 t2 (msg1 : crypto t1) (msg2 : crypto t2) cs suid froms pat,
-        ~ msg_accepted_by_pattern cs suid froms pat msg1
-        -> msg_accepted_by_pattern cs suid froms pat msg2
-        -> existT _ _ msg1 <> existT _ _ msg2.
-    Proof.
-      intros.
-      unfold not; intros.
-      generalize (projT1_eq H1); intros EQ; simpl in EQ; subst.
-      eapply inj_pair2 in H1; subst.
-      contradiction.
-    Qed.
-
-    Lemma message_queue_split_head :
-      forall t1 t2 (msg1 : crypto t1) (msg2 : crypto t2) qmsgs qmsgs1 qmsgs2
-        cs suid froms pat,
-
-        existT _ _ msg2 :: qmsgs = qmsgs1 ++ existT _ _ msg1 :: qmsgs2
-        -> msg_accepted_by_pattern cs suid froms pat msg1
-        -> ~ msg_accepted_by_pattern cs suid froms pat msg2
-        -> Forall (fun '(existT _ _ msg') => ~ msg_accepted_by_pattern cs suid froms pat msg') qmsgs1
-        -> exists qmsgs1',
-            qmsgs1 = (existT _ _ msg2) :: qmsgs1'.
-    Proof.
-      intros.
-      destruct qmsgs1.
-      - rewrite app_nil_l in H.
-        eapply message_match_not_match_pattern_different in H0; eauto.
-        invert H; contradiction.
-
-      - rewrite <- app_comm_cons in H.
-        invert H; eauto.
-    Qed.
-
-    Lemma message_queue_solve_head :
-      forall t1 t2 (msg1 : crypto t1) (msg2 : crypto t2) qmsgs qmsgs1 qmsgs2
-        cs suid froms pat,
-
-        existT _ _ msg2 :: qmsgs = qmsgs1 ++ existT _ _ msg1 :: qmsgs2
-        -> msg_accepted_by_pattern cs suid froms pat msg1
-        -> msg_accepted_by_pattern cs suid froms pat msg2
-        -> Forall (fun '(existT _ _ msg') => ~ msg_accepted_by_pattern cs suid froms pat msg') qmsgs1
-        -> qmsgs1 = []
-          /\ qmsgs2 = qmsgs
-          /\ existT _ _ msg1 = existT _ _ msg2.
-    Proof.
-      intros.
-      subst.
-      destruct qmsgs1.
-
-      rewrite app_nil_l in H
-      ; invert H
-      ; eauto.
-
-      exfalso.
-      rewrite <- app_comm_cons in H.
-      invert H; eauto.
-      invert H2; contradiction.
-    Qed.
 
     Ltac pr_message cs uid froms pat msg :=
       (assert (msg_accepted_by_pattern cs uid froms pat msg)
@@ -165,7 +177,8 @@ Module SimulationAutomation.
       | Bind _ _ => apply step_user_inv_bind in H; destruct H; split_ex; subst; try discriminate
       | Gen => apply step_user_inv_gen in H
       | Send _ _ => apply step_user_inv_send in H
-      | Recv _ => apply step_user_inv_recv in H; split_ex; subst; process_message_queue
+      | Recv _ => apply step_user_inv_recv in H; split_ex; subst
+                 ; try (process_message_queue; idtac "processed message quque")
       | SignEncrypt _ _ _ _ => apply step_user_inv_enc in H
       | Decrypt _ => apply step_user_inv_dec in H
       | Sign _ _ _ => apply step_user_inv_sign in H
@@ -176,63 +189,11 @@ Module SimulationAutomation.
       | _ => idtac "***Missing inversion: " cmd; invert H
       end; split_ex; subst.
 
-    Lemma inv_univ_silent_step :
-      forall t__hon t__adv ru ru' suid b,
-        lameAdv b ru.(RealWorld.adversary)
-        -> @RealWorld.step_universe t__hon t__adv suid ru Silent ru'
-        -> exists uid ud usrs adv cs gks ks qmsgs mycs froms sents cur_n cmd,
-            ru.(RealWorld.users) $? uid = Some ud
-            /\ step_user Silent (Some uid)
-                        (build_data_step ru ud)
-                        (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
-            /\ ru' = buildUniverse usrs adv cs gks uid {| key_heap    := ks
-                                                         ; msg_heap  := qmsgs
-                                                         ; protocol  := cmd
-                                                         ; c_heap    := mycs
-                                                         ; from_nons := froms
-                                                         ; sent_nons := sents
-                                                         ; cur_nonce := cur_n |}.
-    Proof.
-      intros * LAME STEP
-      ; invert STEP.
-
-      - unfold mkULbl in H2
-        ; destruct lbl
-        ; try discriminate
-        ; eauto 20.
-
-      - unfold lameAdv in LAME.
-        unfold build_data_step in H
-        ; rewrite LAME in H
-        ; invert H.
-    Qed.
-
-    Lemma inv_univ_labeled_step :
-      forall t__hon t__adv ru ru' suid uid a,
-        @RealWorld.step_universe t__hon t__adv suid ru (Action (uid,a)) ru'
-        -> exists ud usrs adv cs gks ks qmsgs mycs froms sents cur_n cmd,
-          ru.(RealWorld.users) $? uid = Some ud
-          /\ suid = Some uid
-          /\ step_user (@Action RealWorld.action a) (Some uid)
-                      (build_data_step ru ud)
-                      (usrs, adv, cs, gks, ks, qmsgs, mycs, froms, sents, cur_n, cmd)
-          /\ ru' = buildUniverse usrs adv cs gks uid {| key_heap    := ks
-                                                       ; msg_heap  := qmsgs
-                                                       ; protocol  := cmd
-                                                       ; c_heap    := mycs
-                                                       ; from_nons := froms
-                                                       ; sent_nons := sents
-                                                       ; cur_nonce := cur_n |}.
-    Proof.
-      intros * STEP
-      ; invert STEP.
-
-      unfold mkULbl in H2
-      ; destruct lbl
-      ; try discriminate.
-
-      invert H2; eauto 20.
-    Qed.
+    Ltac step_usr_id uid :=
+      match goal with
+      | [ H : RealWorld.step_user _ (Some uid) (_,_,_,_,_,_,_,_,_,_,?cmd) _ |- _ ] =>
+        step_usr_hyp H cmd
+      end; split_ors; split_ex; subst.
 
     Ltac rw_step1 :=
       match goal with
@@ -279,7 +240,6 @@ Module SimulationAutomation.
       | [ H : indexedRealStep _ _ _ _ |- _ ] => invert H
       | [ H : users _ $? _ = Some _ |- _ ] =>
         progress (autounfold in H; simpl in H)
-      (* | [ H : _ $+ (_,_) $? _ = Some _ |- _ ] => progress clean_map_lookups *)
       | [ H : _ $+ (?k1,_) $? ?k2 = Some _ |- _ ] => destruct (k1 ==n k2); subst
       | [ H : step_user (Action _) (Some ?uid) _ _ |- _ ] =>
         progress (autounfold in H; unfold RealWorld.build_data_step in H; simpl in H)
@@ -288,62 +248,6 @@ Module SimulationAutomation.
         step_usr_hyp H cmd
       | [ |- exists _ _ _, _ ] => simpl; (do 3 eexists); repeat simple apply conj
       end.
-      (* || equality1. *)
-    
-    Lemma label_align_step_split :
-      forall t__hon t__adv st st',
-        @step t__hon t__adv st st'
-        -> labels_align st
-        -> forall ru ru' iu iu' b b' a,
-            st = (ru,iu,b)
-            -> st' = (ru',iu',b')
-            -> lameAdv a ru.(adversary)
-            -> b = b'
-              /\ exists uid,
-                ( indexedRealStep uid Silent ru ru' /\ iu = iu' )
-                \/ exists iu0 ra ia, 
-                  indexedRealStep uid (Action ra) ru ru'
-                  /\ (indexedIdealStep uid Silent) ^* iu iu0
-                  /\ indexedIdealStep uid (Action ia) iu0 iu'
-                  /\ action_matches (all_ciphers ru) (all_keys ru) (uid,ra) ia.
-    Proof.
-      intros.
-      subst; invert H; try contradiction.
-
-      - invert H2;
-          try 
-            match goal with
-            | [ H : Silent = mkULbl ?lbl _ |- _ ] => unfold mkULbl in H; destruct lbl; try discriminate
-            end;
-          split; eexists; left; eauto.
-        unfold build_data_step in *; unfold lameAdv in H3; rewrite H3 in *.
-        invert H.
-      - split; eexists; right; eauto 10.
-
-        Unshelve.
-        auto.
-    Qed.
-
-    Lemma label_align_indexedModelStep_split :
-      forall t__hon t__adv st st' uid,
-        @indexedModelStep t__hon t__adv uid st st'
-        -> labels_align st
-        -> forall ru ru' iu iu' b b' a,
-            st = (ru,iu,b)
-            -> st' = (ru',iu',b')
-            -> lameAdv a ru.(adversary)
-            -> b = b'
-              /\ ( (indexedRealStep uid Silent ru ru' /\ iu = iu')
-                \/ (exists iu0 ra ia, 
-                  indexedRealStep uid (Action ra) ru ru'
-                  /\ (indexedIdealStep uid Silent) ^* iu iu0
-                  /\ indexedIdealStep uid (Action ia) iu0 iu'
-                  /\ action_matches (all_ciphers ru) (all_keys ru) (uid,ra) ia)).
-    Proof.
-      intros;
-        subst; invert H; try contradiction; eauto 12.
-    Qed.
-
 
   End T.
 
@@ -368,25 +272,21 @@ Module SimulationAutomation.
       end.
 
   Ltac solve_concrete_maps1 :=
-    clean_map_lookups1
+    (* clean_map_lookups1 *)
+    simple_clean_maps1
     || ChMaps.ChMap.clean_map_lookups1
     || match goal with
-      (* | [ H : Some _ = Some _ |- _ ] => invert H *)
-      (* | [ H : Some _ = None |- _ ] => discriminate *)
-      (* | [ H : None = Some _ |- _ ] => discriminate *)
       | [ H : mkKeys _ $? _ = _ |- _ ] => unfold mkKeys in H; simpl in H
 
       | [ H : ?m $? _ = _ |- _ ] => progress (unfold m in H)
       | [ H : ?m #? _ = _ |- _ ] => progress (unfold m in H)
       | [ |- context [ ?m $? _ ] ] => progress (unfold m)
       | [ |- context [ ?m #? _ ] ] => progress (unfold m)
-                                             
-      | [ H : ?m $+ (?k1,_) $? ?k2 = _ |- _ ] =>
-        progress ( repeat ( rewrite add_neq_o in H by solve_simple_ineq ) )
+
       | [ H : ?m #+ (?k1,_) #? ?k2 = _ |- _ ] =>
         progress ( repeat ( rewrite ChMaps.ChMap.F.add_neq_o in H by solve_simple_ineq ) )
-      | [ |- context [ _ $+ (?kid2,_) $? ?kid1 ] ] =>
-        progress ( repeat ( rewrite add_neq_o by solve_simple_ineq ) )
+      (* | [ |- context [ _ $+ (?kid2,_) $? ?kid1 ] ] => *)
+      (*   progress ( repeat ( rewrite add_neq_o by solve_simple_ineq ) ) *)
       | [ |- context [ _ #+ (?kid2,_) #? ?kid1 ] ] =>
         progress ( repeat ( rewrite ChMaps.ChMap.F.add_neq_o by solve_simple_ineq ) )
 
@@ -460,7 +360,6 @@ Module SimulationAutomation.
   Ltac r_single_silent_step :=
       eapply RealWorld.StepBindProceed
     || eapply RealWorld.StepGen
-    (* || eapply RealWorld.StepRecvDrop *)
     || eapply RealWorld.StepEncrypt
     || eapply RealWorld.StepDecrypt
     || eapply RealWorld.StepSign
@@ -482,6 +381,20 @@ Module SimulationAutomation.
   Ltac rw H :=
     (rewrite ChMaps.ChMap.F.add_neq_o in H by congruence)
     || (rewrite ChMaps.ChMap.F.add_eq_o in H by congruence).
+
+  Ltac smash_universe :=
+  unfold RealWorld.buildUniverse;
+  repeat (match goal with
+          | [ |- {| RealWorld.users := _
+                 ; RealWorld.adversary := _
+                 ; RealWorld.all_ciphers := _
+                 ; RealWorld.all_keys := _ |} = _
+            ] => eapply real_univ_eq_fields_eq
+          | [ |- {| IdealWorld.users := _;
+                   IdealWorld.channel_vector := _ |} = _
+            ] => eapply ideal_univ_eq_fields_eq
+          | [ |- _ = _ ] => reflexivity
+          end).
 
   Ltac solve_ideal_step_stuff1 :=
     match goal with
@@ -585,31 +498,10 @@ Module SimulationAutomation.
   #[export] Hint Constructors action_matches : core.
   #[export] Hint Resolve IdealWorld.LStepSend IdealWorld.LStepRecv' : core.
 
-  Lemma TrcRefl' :
-    forall {A} (R : A -> A -> Prop) x1 x2,
-      x1 = x2 ->
-      trc R x1 x2.
-  Proof.
-    intros. subst. apply TrcRefl.
-  Qed.
-
-  Lemma Trc3Refl' :
-    forall {A B} (R : A -> B -> A -> Prop) x1 x2 P,
-      x1 = x2 ->
-      trc3 R P x1 x2.
-  Proof.
-    intros. subst. apply Trc3Refl.
-  Qed.
-  
   Ltac solve_refl :=
     solve [
         eapply TrcRefl
       | eapply TrcRefl'; simpl; eauto ].
-
-  Ltac solve_refl3 :=
-    solve [
-        eapply Trc3Refl
-      | eapply Trc3Refl'; simpl; smash_universe; solve_concrete_maps ].
 
   Ltac simpl_real_users_context :=
     simpl;
@@ -617,7 +509,6 @@ Module SimulationAutomation.
       match goal with
       | [ |- context [ RealWorld.buildUniverse ] ] => progress (unfold RealWorld.buildUniverse; simpl)
       | [ |- context [ {| RealWorld.users := ?usrs |}] ] => progress canonicalize_map usrs
-      (* | [ |- context [ RealWorld.mkUniverse ?usrs _ _ _] ] => canonicalize_map usrs *)
       end.
 
   Ltac simpl_ideal_users_context :=
@@ -626,8 +517,6 @@ Module SimulationAutomation.
       match goal with
       | [ |- context [ {| IdealWorld.users := ?usrs |}] ] => progress canonicalize_map usrs
       end.
-
-  Ltac rss_clean uid := real_single_silent_multistep uid; [ solve [eauto 3] .. |].
 
   Ltac ideal_silent_multistep :=
     simpl_ideal_users_context;
@@ -825,33 +714,9 @@ Module SimulationAutomation.
 
   #[export] Hint Extern 1 (action_matches _ _ _ _) =>
     repeat (solve_action_matches1)
-  ; NatMap.clean_map_lookups
+  ; clean_map_lookups
   ; ChMaps.ChMap.clean_map_lookups : core.
 
-  #[export] Hint Resolve
-       findUserKeys_foldfn_proper
-       findUserKeys_foldfn_transpose : core.
-  
-  Lemma findUserKeys_add_reduce :
-    forall {A} (usrs : RealWorld.honest_users A) u_id ks p qmsgs mycs froms sents cur_n,
-      ~ In u_id usrs
-      -> RealWorld.findUserKeys (usrs $+ (u_id, {| RealWorld.key_heap := ks;
-                                      RealWorld.protocol := p;
-                                      RealWorld.msg_heap := qmsgs;
-                                      RealWorld.c_heap := mycs;
-                                      RealWorld.from_nons := froms;
-                                      RealWorld.sent_nons := sents;
-                                      RealWorld.cur_nonce := cur_n |})) = RealWorld.findUserKeys usrs $k++ ks.
-  Proof.
-    intros.
-    unfold RealWorld.findUserKeys.
-    rewrite fold_add; eauto.
-  Qed.
-
-  Lemma findUserKeys_empty_is_empty :
-    forall A, @RealWorld.findUserKeys A $0 = $0.
-  Proof. trivial. Qed.
-  
   #[export] Hint Constructors RealWorld.msg_pattern_safe : core.
 
   Lemma reduce_merge_perms :
@@ -891,183 +756,6 @@ Module SimulationAutomation.
          , RealWorld.honest_keyb
          , RealWorld.cipher_nonce
          , add_key_perm.
-
-  Ltac assert_lkp ks k tac :=
-    let ev' := fresh "ev"
-    in  evar (ev' : option bool);
-        let ev := eval unfold ev' in ev'
-          in (clear ev'
-              ; match ks with
-                | ?ks1 $k++ ?ks2 => assert (ks $? k = ev) by tac
-                | _ => assert (ks $? k = ev) by tac
-                end).
-
-  Ltac bldLkup ks k tac :=
-    match goal with
-    | [ H : ks $? k = ?ans |- _ ] => idtac (* idtac "done with: " ks *)
-    | _ => 
-      match ks with
-      | ?ks1 $k++ ?ks2 => (* idtac "splitting: " ks1 " and " ks2; *) bldLkup ks1 k tac; bldLkup ks2 k tac
-      | _ => idtac (* "will build: " ks *)
-      end; assert_lkp ks k tac
-    end.
-
-  Ltac prove_lookup :=
-    solve [
-        repeat
-          match goal with
-          | [ |- None = _ ] => reflexivity
-          | [ |- Some _ = _ ] => reflexivity
-          | [ |- $0 $? _ = _ ] => rewrite lookup_empty_none
-          | [ |- ?ks $+ (?k1,_) $? ?k2 = _ ] =>
-            (rewrite add_eq_o by trivial)
-            || (rewrite add_neq_o by auto 2)
-            || fail 2
-          | [ |- ?m $? _ = _ ] => progress (unfold m)
-          | [ H1 : ?ks1 $? ?kid = Some _
-                   , H2 : ?ks2 $? ?kid = Some _ |- ?ks1 $k++ ?ks2 $? ?kid = _ ]
-            => rewrite (merge_perms_chooses_greatest _ _ H1 H2) by trivial; unfold greatest_permission; simpl
-          | [ H1 : ?ks1 $? ?kid = Some _
-                   , H2 : ?ks2 $? ?kid = None |- ?ks1 $k++ ?ks2 $? ?kid = _ ]
-            => rewrite (merge_perms_adds_ks1 _ _ _ H1 H2) by trivial
-          | [ H1 : ?ks1 $? ?kid = None
-                   , H2 : ?ks2 $? ?kid = Some _ |- ?ks1 $k++ ?ks2 $? ?kid = _ ]
-            => rewrite (merge_perms_adds_ks2 _ _ _ H1 H2) by trivial
-          | [ H1 : ?ks1 $? ?kid = None
-                   , H2 : ?ks2 $? ?kid = None |- ?ks1 $k++ ?ks2 $? ?kid = _ ]
-            => rewrite (merge_perms_adds_no_new_perms _ _ _ H1 H2) by trivial
-          | [ H : ?ks1 $? ?kid = _ |- ?ks1 $k++ ?ks2 $? ?kid = _ ] =>
-            assert_lkp ks2 kid prove_lookup
-          | [ H : ?ks2 $? ?kid = _ |- ?ks1 $k++ ?ks2 $? ?kid = _ ] =>
-            assert_lkp ks1 kid prove_lookup
-          | [ |- ?ks1 $k++ ?ks2 $? ?kid = _ ] =>
-            assert_lkp ks1 kid prove_lookup
-            ; assert_lkp ks2 kid prove_lookup
-          end
-      ].
-
-  Ltac solve_merges :=
-    repeat
-      match goal with
-      | [ |- context [true || _]  ] => rewrite orb_true_l
-      | [ |- context [_ || true]  ] => rewrite orb_true_r
-      | [ |- context [ _ $k++ $0 ] ] => rewrite merge_perms_right_identity
-      | [ |- context [ $0 $k++ _ ] ] => rewrite merge_perms_left_identity
-      | [ RW : ?ks $? ?k = _ |- context [ ?ks $? ?k ] ] => rewrite RW
-      | [ |- context [ ?ks $? ?k ] ] => (* idtac "building: " ks; *) bldLkup ks k prove_lookup
-      end; trivial.
-
-  Lemma reduce_merge_perms_r :
-    forall perms1 perms2 kid p2,
-      perms1 $? kid = None
-      -> perms1 $k++ (perms2 $+ (kid,p2)) = perms1 $+ (kid,p2) $k++ (perms2 $- kid).
-  Proof.
-    intros.
-    eapply map_eq_Equal; unfold Equal; intros.
-    cases (perms1 $? y);
-      cases (perms2 $? y);
-      destruct (kid ==n y); subst;
-        clean_map_lookups.
-
-    - erewrite !merge_perms_chooses_greatest; try reflexivity; clean_map_lookups; eauto.
-
-    - erewrite merge_perms_adds_ks1 with (ks1 := perms1) (ks2 := perms2 $+ (kid, p2)); eauto.
-      erewrite merge_perms_adds_ks1 with (ks1 := perms1 $+ (kid, p2)) (ks2 := perms2 $- kid); eauto.
-
-    - erewrite merge_perms_adds_ks2 with (ks1 := perms1) (ks2 := perms2 $+ (y, p2)); eauto.
-      erewrite merge_perms_adds_ks1 with (ks1 := perms1 $+ (y, p2)) (ks2 := perms2 $- y); eauto.
-
-    - erewrite merge_perms_adds_ks2 with (ks1 := perms1) (ks2 := perms2 $+ (kid, p2) ); eauto.
-      erewrite merge_perms_adds_ks2 with (ks1 := perms1 $+ (kid, p2)) (ks2 := perms2 $- kid); eauto.
-
-    - erewrite merge_perms_adds_ks2 with (ks1 := perms1); eauto; clean_map_lookups; try reflexivity.
-      erewrite merge_perms_adds_ks1 with (ks1 := perms1 $+ (y, p2)) (ks2 := perms2 $- y); eauto.
-
-    - rewrite !merge_perms_adds_no_new_perms; eauto.
-
-  Qed.
-
-  Lemma reduce_merge_perms_both :
-    forall perms1 perms2 kid p1 p2,
-      perms1 $? kid = Some p1
-      -> perms1 $k++ (perms2 $+ (kid,p2)) = perms1 $+ (kid,greatest_permission p1 p2) $k++ (perms2 $- kid).
-  Proof.
-    intros.
-    eapply map_eq_Equal; unfold Equal; intros.
-    cases (perms1 $? y);
-      cases (perms2 $? y);
-      destruct (kid ==n y); subst;
-        clean_map_lookups.
-
-    - erewrite merge_perms_chooses_greatest; eauto; clean_map_lookups; try reflexivity.
-      erewrite merge_perms_adds_ks1 with (ks1 := perms1 $+ (y, greatest_permission b p2)) (ks2 := perms2 $- y); eauto.
-
-    - erewrite !merge_perms_chooses_greatest; try reflexivity; clean_map_lookups; trivial.
-
-    - erewrite merge_perms_chooses_greatest; eauto; clean_map_lookups; try reflexivity.
-      erewrite merge_perms_adds_ks1 with (ks1 := perms1 $+ (y, greatest_permission b p2)) (ks2 := perms2 $- y); eauto.
-
-    - erewrite merge_perms_adds_ks1 with (ks1 := perms1) (ks2 := perms2 $+ (kid, p2)); eauto.
-      erewrite merge_perms_adds_ks1 with (ks1 := perms1 $+ (kid, greatest_permission p1 p2)) (ks2 := perms2 $- kid); eauto.
-
-    - erewrite merge_perms_adds_ks2 with (ks1 := perms1) (ks2 := perms2 $+ (kid, p2)); eauto.
-      erewrite merge_perms_adds_ks2 with (ks1 := perms1 $+ (kid, greatest_permission p1 p2)) (ks2 := perms2 $- kid); eauto.
-
-    - rewrite !merge_perms_adds_no_new_perms; eauto.
-
-  Qed.
-
-  Ltac xx := clean_map_lookups;
-             try match goal with
-                 | [ |- $0 $? _ = _ ] => rewrite lookup_empty_none
-                 end;
-             eauto.
-
-  Ltac find_merge_rewrite ks1 ks2 :=
-    match ks1 with
-    | ?ks1' $k++ ?ks2' =>
-      find_merge_rewrite ks1' ks2'
-    | _ => match ks2 with
-          | ?ks $+ (?k,?p) =>
-            assert_lkp ks1 k xx
-            ; match goal with
-              | [ H : ks1 $? k = ?opt |- _ ] =>
-                match opt with
-                | Some ?p' =>
-                  rewrite reduce_merge_perms_both with (perms1 := ks1) (perms2 := ks) (kid := k) (p1 := p') (p2 := p)
-                | None =>
-                  rewrite reduce_merge_perms_r with (perms1 := ks1) (perms2 := ks) (kid := k) (p2 := p)
-                end
-              end
-          end
-    end.
-
-  Lemma remove_empty :
-    forall k V, (@empty V) $- k = $0.
-  Proof.
-    intros.
-    eapply map_eq_Equal; unfold Equal; intros; eauto.
-  Qed.
-
-  Ltac elim_removes1 :=
-    (rewrite !map_add_remove_eq by trivial)
-    || (rewrite !map_add_remove_neq by eauto)
-    || (rewrite !remove_empty).
-
-  Ltac elim_removes := repeat elim_removes.
-
-  Ltac reduce_merges :=
-    repeat
-      match goal with
-      | [ |- context [true || _]  ] => rewrite orb_true_l
-      | [ |- context [_ || true]  ] => rewrite orb_true_r
-      | [ |- context [ _ $k++ $0 ] ] => rewrite merge_perms_right_identity
-      | [ |- context [ $0 $k++ _ ] ] => rewrite merge_perms_left_identity
-      | [ |- context [ _ $- _ ]] => elim_removes1
-      | [ |- context [ ?ks1 $k++ ?ks2 ]] =>
-        find_merge_rewrite ks1 ks2
-      | [ RW : ?ks $? ?k = _ |- context [ ?ks $? ?k ] ] => rewrite RW
-      end; trivial.
 
   Ltac has_key ks k :=
     match ks with
@@ -1146,8 +834,6 @@ Module SimulationAutomation.
     | [ |- context [ _ $+ (_,_) $? _ ] ] => progress clean_map_lookups
     | [ |- RealWorld.msg_pattern_safe _ _ ] => econstructor
     | [ |- RealWorld.honest_key _ _ ] => econstructor
-    (* | [ |- context [_ $k++ _ ] ] => progress reduce_merges *)
-    (* | [ |- context [_ $k++ _ $? _ ] ] => progress solve_merges *)
     | [ |- context [ ?m $? _ ] ] => unfold m
     | [ |- Forall _ _ ] => econstructor
     | [ |- exists x y, (_ /\ _)] => (do 2 eexists); repeat simple apply conj; eauto 2
@@ -1169,10 +855,7 @@ Module SimulationAutomation.
 
 End SimulationAutomation.
 
-Import SimulationAutomation Sets.
-Module Foo <: EMPTY.
-End Foo.
-Module Import SN := SetNotations(Foo).
+Import SimulationAutomation.
 
 Ltac univ_equality1 :=
   match goal with
@@ -1187,170 +870,7 @@ Ltac univ_equality1 :=
 
 Ltac univ_equality := progress (repeat univ_equality1).
 
-Ltac sets0 := Sets.sets ltac:(simpl in *
-                              ; intuition (subst; auto; try congruence; try univ_equality; try lia)).
-Ltac sets' :=
-  propositional;
-  try match goal with
-      | [ |- @eq (?T -> Prop) _ _ ] =>
-        change (T -> Prop) with (set T)
-      end;
-  try match goal with
-      | [ |- @eq (set _) _ _ ] =>
-        let x := fresh "x" in
-        apply sets_equal; intro x;
-        repeat match goal with
-               | [ H : @eq (set _) _ _ |- _ ] => apply (f_equal (fun f => f x)) in H;
-                                               apply eq_iff in H
-               end
-      end; sets0;
-  try match goal with
-      | [ H : @eq (set ?T) _ _, x : ?T |- _ ] =>
-        repeat match goal with
-               | [ H : @eq (set T) _ _ |- _ ] => apply (f_equal (fun f => f x)) in H;
-                                               apply eq_iff in H
-               end;
-        solve [ sets0 ]
-      end.
-
-Tactic Notation "sets" := sets'.
-
-Module SetLemmas.
-  Lemma setminus_empty_subtr : forall {A} (s : set A),
-      s \setminus {} = s.
-  Proof. sets. Qed.
-
-  Lemma setminus_empty_minu : forall {A} (s : set A),
-      {} \setminus s = {}.
-  Proof. sets. Qed.
-
-  Lemma setminus_self : forall {A} (s : set A),
-      s \setminus s = {}.
-  Proof. sets. Qed.
-
-  Lemma setminus_other : forall {A} (s1 s2 : set A),
-      s1 \cap s2 = {} -> s1 \setminus s2 = s1.
-  Proof. sets. Qed.
-
-  Lemma setminus_distr_subtr : forall {A} (s1 s2 s3 : set A),
-      (s1 \cup s2) \setminus s3 = (s1 \setminus s3) \cup (s2 \setminus s3).
-  Proof. sets. Qed.
-
-  Lemma setminus_distr_minu : forall {A} (s1 s2 s3 : set A),
-      s1 \setminus (s2 \cup s3) = (s1 \setminus s2) \cap (s1 \setminus s3).
-  Proof. sets. Qed.
-
-  Lemma union_self : forall {A} (s : set A),
-      s \cup s = s.
-  Proof. sets. Qed.
-
-  Lemma  union_self_thru : forall {A} (s1 s2 : set A), s1 \cup (s1 \cup s2) = s1 \cup s2.
-  Proof. sets. Qed.
-
-  Lemma union_empty_r : forall {A} (s : set A),
-      s \cup {} = s.
-  Proof. sets. Qed.
-
-  Lemma union_empty_l : forall {A} (s : set A),
-      {} \cup s = s.
-  Proof. sets. Qed.
-
-  Lemma intersect_self : forall {A} (s : set A),
-      s \cap s = s.
-  Proof. sets. Qed.
-
-  Lemma intersect_empty_r : forall {A} (s : set A),
-      s \cap {} = {}.
-  Proof. sets. Qed.
-
-  Lemma intersect_empty_l : forall {A} (s : set A),
-      {} \cap s = {}.
-  Proof. sets. Qed.
-End SetLemmas.
-
 Module Tacs.
-  Import SetLemmas.
-
-  Ltac simpl_sets1 disj_tac :=
-    match goal with
-    | [|- context[?s' \cup ?s']] =>
-      rewrite union_self
-        with (s := s')
-    | [|- context[?s1' \cup (?s1' \cup ?s2')]] =>
-      rewrite union_self_thru
-        with (s1 := s1') (s2 := s2')
-    | [|- context[?s' \cup {}]] =>
-      rewrite union_empty_r
-        with (s := s')
-    | [|- context[{} \cup ?s']] =>
-      rewrite union_empty_l
-        with (s := s')
-    | [|- context[?s' \cap ?s']] =>
-      rewrite intersect_self
-        with (s := s')
-    | [|- context[?s' \cap {}]] =>
-      rewrite intersect_empty_r
-        with (s := s')
-    | [|- context[{} \cap ?s']] =>
-      rewrite intersect_empty_l
-        with (s := s')
-    | [|- context[?s' \setminus ?s']] =>
-      rewrite setminus_self
-        with (s := s')
-    | [|- context[?s' \setminus {}]] =>
-      rewrite setminus_empty_subtr
-        with (s := s')
-    | [|- context[{} \setminus ?s']] =>
-      rewrite setminus_empty_minu
-        with (s := s')
-    | [|- context[(?s1' \cup ?s2') \setminus ?s3']] =>
-      rewrite setminus_distr_subtr
-        with (s1 := s1') (s2 := s2') (s3 := s3')
-    | [|- context[?s1' \setminus (?s2' \cup ?s3')]] =>
-      rewrite setminus_distr_minu
-        with (s1 := s1') (s2 := s2') (s3 := s3')
-    | [|- context[?s1' \setminus ?s2']] =>
-      rewrite setminus_other
-        with (s1 := s1') (s2 := s2') by disj_tac
-    end.
-
-  Ltac sets_invert :=
-    repeat match goal with
-           | [H : (_ \cup _) _ |- _] => invert H
-           | [H : (_ \cap _) _ |- _] => invert H
-           | [H : [_ | _] _ |- _] => invert H
-           | [H : (_ \setminus _) _ |- _] => invert H
-           | [H : _ \in _ |- _] => invert H
-           | [H : (complement _) _ |- _] => invert H
-           | [H : { } _ |- _] => invert H
-           | [H : { _ } _ |- _] => invert H
-           | [H : _ \/ False |- _ ] => destruct H; [ | contradiction]
-           end.
-
-  Ltac case_lookup H :=
-    match type of H with
-    | ?m $? ?k = Some ?v =>
-      let t := type of v in
-      repeat match m with
-             | context[add ?k' ?v' _ ] =>
-               let t' := type of v'
-               in unify t t'
-                  ; match goal with
-                    | [e : k = k' |- _] => fail 2
-                    | [n : k <> k' |- _] => fail 2
-                    | _ => destruct (k ==n k')
-                    end
-             end
-      ; subst
-      ; simpl in *
-      ; clean_map_lookups
-      ; simpl in *
-    end.
-
-  Lemma map_sym : forall {v} (m : NatMap.t v) k1 k2 v1 v2,
-      k1 <> k2
-      -> m $+ (k1, v1) $+ (k2, v2) = m $+ (k2, v2) $+ (k1, v1).
-  Proof. intros; maps_equal. Qed.
 
   Ltac reorder_usrs n :=
     repeat match n with
@@ -1362,9 +882,6 @@ Module Tacs.
                    by auto
              end
            end.
-
-  Tactic Notation "simpl_sets" := repeat (simpl_sets1 ltac:(shelve)).
-  Tactic Notation "simpl_sets" tactic(disj_tac) := repeat (simpl_sets1 ltac:(disj_tac)).
 
   Tactic Notation "ifnot" tactic(t) "at" int_or_var(lvl) := tryif t then fail lvl else idtac.
   Tactic Notation "ifnot" tactic(t) := ifnot t at 0.
@@ -1407,39 +924,6 @@ End Tacs.
 Import Tacs.
 
 Module Gen.
-  Import
-    SetLemmas.
-
-  #[export] Hint Unfold oneStepClosure oneStepClosure_current oneStepClosure_new : osc.
-
-  Lemma oneStepClosure_grow : forall state (sys : trsys state) (inv1 inv2 : state -> Prop),
-      (forall st st', inv1 st -> sys.(Step) st st' -> inv2 st')
-      -> oneStepClosure sys inv1 (inv1 \cup inv2).
-  Proof. sets; repeat autounfold with osc in *; propositional; eauto. Qed.
-
-  Lemma msc_step_alt : forall {state} (sys : trsys state) wl wl' inv inv',
-      oneStepClosure_new sys wl wl'
-      -> wl' \cap (wl \cup inv) = { }
-      -> multiStepClosure sys ((inv \cup wl) \cup wl') wl' inv'
-      -> multiStepClosure sys (inv \cup wl) wl inv'.
-  Proof.
-    Ltac uf := repeat autounfold with osc in *.
-    intros.
-    apply MscStep with (inv'0 := (wl \cup wl')).
-    - uf; sets; firstorder.
-    - replace ((inv \cup wl) \cup (wl \cup wl'))
-        with (inv \cup wl \cup wl') by sets.
-      replace (((wl \cup wl') \setminus (inv \cup wl)))
-        with wl' by sets.
-      assumption.
-  Qed.
-
-  Lemma in_empty_map_contra : (forall {t} x, Map.In (elt := t) x $0 -> False).
-  Proof. propositional. invert H. invert H0. Qed.
-
-  Lemma incl_empty_empty : (forall {t}, @incl t [] []).
-  Proof. cbv; auto. Qed.
-
   #[export] Hint Resolve
        incl_empty_empty : core.
 
@@ -1463,13 +947,25 @@ Module Gen.
       concrete iproc p; invert H
     end.
 
-  Ltac simplify :=
-    repeat (unifyTails);
-    repeat match goal with
-           | [ H : True |- _ ] => clear H
-           end;
-    repeat progress (simpl in *; intros; try autorewrite with core in *);
-                     repeat (normalize_set || doSubtract).
+  Ltac case_lookup H :=
+    match type of H with
+    | ?m $? ?k = Some ?v =>
+      let t := type of v in
+      repeat match m with
+             | context[add ?k' ?v' _ ] =>
+               let t' := type of v'
+               in unify t t'
+                  ; match goal with
+                    | [e : k = k' |- _] => fail 2
+                    | [n : k <> k' |- _] => fail 2
+                    | _ => destruct (k ==n k')
+                    end
+             end
+      ; subst
+      ; simpl in *
+      ; clean_map_lookups
+      ; simpl in *
+    end.
 
   Ltac infer_istep :=
     match goal with
@@ -1479,64 +975,6 @@ Module Gen.
     end.
 
   Ltac istep := repeat ((repeat concrete_isteps); try infer_istep).
-
-  Ltac incorp :=
-    let rec preconditions acc :=
-        (match goal with
-         | [H : ?P |- _] =>
-           match type of P with
-           | Prop =>
-             match eval hnf in acc with
-             | context[P] => fail 1
-             | _ =>
-               let acc' := eval hnf in (P /\ acc)
-                 in preconditions acc'
-             end
-           end
-         | _ => acc
-         end)
-    in let rec existentialize p :=
-           (match goal with
-            | [x : ?A |- _] =>
-              match type of A with
-              | Prop => fail 1
-              | _ =>
-                match A with
-                | ((RealWorld.universe _ _) * (IdealWorld.universe _) * bool)%type =>
-                  fail 2
-                | _  =>
-                  match p with
-                  | context[x] =>
-                    match eval pattern x in p with
-                    | ?g _ =>
-                      let p' := (eval hnf in (exists y : A, g y))
-                      in existentialize p'
-                    end
-                  end
-                end
-              end
-            | _ => p
-            end)
-       in let conds := (preconditions True) in
-          match goal with
-          | [|- ?i ?v] =>
-            is_evar i
-            ; let lp := constr:(exists x , conds /\ x = v) in
-              let p := fresh "p" in
-              let p' := fresh "p'" in
-              let x := fresh "x" in
-              assert (p : lp) by (eexists; intuition eauto)
-              ; destruct p as [x p']
-              ; let lp' := type of p'
-                in clear p'
-                   ; let lp'' := existentialize lp'
-                     in match eval pattern x in lp'' with
-                        | ?f _ =>
-                          clear x
-                          ; let scomp := (eval simpl in [e | (f e)])
-                            in instantiate (1 := (scomp \cup _))
-                        end
-          end.
 
   Ltac solve_returns_align1 :=
     match goal with
@@ -1559,7 +997,7 @@ Module Gen.
   Ltac idealUnivSilentStep uid :=
     eapply IdealWorld.LStepUser with (u_id := uid)
     ; simpl
-    ; [ solve [ clean_map_lookups; trivial ]
+    ; [ solve [ simple_clean_maps; trivial ]
       | solve [ idealUserSilentStep ]
       ].
 
@@ -1602,40 +1040,48 @@ Module Gen.
         ; trivial
       | [ H : _ $+ (?k1,_) $? ?kid = Some _  |- context [ ?kid ] ] =>
         is_var kid
-        ; destruct (k1 ==n kid); subst; clean_map_lookups
+        ; destruct (k1 ==n kid); subst; simple_clean_maps
       | [ |- context [ $0 $? _ ]] =>
         rewrite lookup_empty_none
       (* | [ |- _ $? _ = _ ] => *)
       | [ |- context [ _ $? _ = _ ] ] =>
-        progress clean_map_lookups
+        progress (
+            repeat ( (rewrite add_eq_o by trivial)           
+                     || (rewrite add_neq_o by congruence)
+                     || (rewrite lookup_empty_none) ))
+        (* progress simple_clean_maps *)
       | [ |- _ -> _ ] => intros
       | [ |- _ ] => ( progress simpl ) || ( progress hnf )
+      end.
+
+  Ltac doRealStep :=
+    repeat 
+      match goal with
+      | [ |- RealWorld.step_user _ _ (_,RealWorld.Bind (RealWorld.Return _) _) _ ] =>
+        apply RealWorld.StepBindProceed
+      | [ |- RealWorld.step_user _ _ (_,RealWorld.Bind _ _) _ ] =>
+        apply RealWorld.StepBindRecur
+      | [ |- RealWorld.step_user _ _ (_,_,?cs,?gks,_,_,_,_,_,_,?cmd) _ ] =>
+        match cmd with
+        | RealWorld.SignEncrypt _ _ _ _ =>
+          eapply RealWorld.StepEncrypt with (c_id := next_key cs)
+        | RealWorld.Sign _ _ _ =>
+          eapply RealWorld.StepSign with (c_id := next_key cs)
+        | RealWorld.GenerateKey _ _ => 
+          eapply RealWorld.StepGenerateKey with (k_id := next_key gks)
+        | _ => econstructor
+        end
       end.
   
   Ltac solve_indexedRealStep :=
     repeat (match goal with [ |- exists _ , _ ] => eexists end)
     ; econstructor; [
-      solve [ simpl; clean_map_lookups; trivial ]
-    | autounfold; unfold RealWorld.build_data_step; simpl;
-      repeat ( match goal with
-               | [ |- RealWorld.step_user _ _ _ _ ] => solve [ eapply RealWorld.StepBindProceed; eauto ]
-               | [ |- RealWorld.step_user _ _ _ _ ] => eapply RealWorld.StepBindRecur; eauto
-               | [ |- RealWorld.step_user _ _ (_,_,?cs,?gks,_,_,_,_,_,_,?cmd) _ ] =>
-                 match cmd with
-                 | RealWorld.SignEncrypt _ _ _ _ =>
-                   eapply RealWorld.StepEncrypt with (c_id := next_key cs)
-                 | RealWorld.Sign _ _ _ =>
-                   eapply RealWorld.StepSign with (c_id := next_key cs)
-                 | RealWorld.GenerateKey _ _ => 
-                   eapply RealWorld.StepGenerateKey with (k_id := next_key gks)
-                 | _ => econstructor
-                 end
-               end
-             )
-      ; trivial (* take a first pass to get the simple stuff *)
-      ; repeat (solve_real_step_stuff1; trivial)
-      ; eauto
-
+      solve [ simpl; simple_clean_maps; trivial ]
+    | solve [ autounfold; unfold RealWorld.build_data_step; simpl
+              ; doRealStep
+              ; trivial (* take a first pass to get the simple stuff *)
+              ; repeat (solve_real_step_stuff1; trivial)
+              ; eauto ]
     | reflexivity ].
 
   Ltac find_indexed_real_step usrs uid :=
@@ -1674,118 +1120,57 @@ Module Gen.
         ))
     end.
 
-  Ltac invert_commutes :=
-    match goal with
-    | [ H : commutes (RealWorld.Recv _) _ |- _ ] => invert H
-    | [ H : commutes (RealWorld.Send _ _) _ |- _ ] => invert H
-    | [ H : commutes _ _ |- _ ] => fail 2
-    end.
+  (* Lemma sstep_inv_silent : *)
+  (*   forall A B (U U' : RealWorld.universe A B) uid U__i b st', *)
+  (*     indexedRealStep uid Silent U U' *)
+  (*     -> (forall uid' U', uid' > uid -> ~ indexedRealStep uid' Silent U U') *)
+  (*     -> stepSS (U,U__i,b) st' *)
+  (*     -> exists U__r, *)
+  (*         indexedModelStep uid (U,U__i,b) (U__r,U__i,b) *)
+  (*         /\ indexedRealStep uid Silent U U__r *)
+  (*         /\ st' = (U__r,U__i,b). *)
+  (* Proof. *)
+  (*   intros. *)
+  (*   invert H1; repeat equality1. *)
+  (*   destruct (u_id ==n uid); subst. *)
+  (*   - invert H2; clear_mislabeled_steps; clean_map_lookups. *)
+  (*     invert H5; clear_mislabeled_steps. *)
+  (*     eexists; eauto 8. *)
+  (*   - invert H2. *)
+  (*     + invert H5; try solve [ clear_mislabeled_steps ]. *)
+  (*       apply not_eq in n; split_ors. *)
+  (*       * assert (uid > u_id) as GT by lia. *)
+  (*         specialize (H4 _ U' GT); contradiction. *)
+  (*       * assert (u_id > uid) as GT by lia. *)
+  (*         specialize (H0 _ ru' GT); contradiction. *)
+  (*     + eapply H3 in H; contradiction. *)
+  (* Qed. *)
 
-  Ltac non_commuter uid :=
-    exists uid; eexists; repeat simple apply conj; [
-        congruence
-      | solve [ autounfold; simpl; clean_map_lookups; trivial ]
-      | solve [ intros; simpl; trivial] ].
+  (* Lemma sstep_inv_labeled : *)
+  (*   forall A B st st' ru, *)
+  (*     (forall uid U', ~ @indexedRealStep A B uid Silent ru U') *)
+  (*     -> @stepSS A B st st' *)
+  (*     -> labels_align st *)
+  (*     -> forall ru' iu iu' b b', *)
+  (*         st = (ru,iu,b) *)
+  (*         -> st' = (ru',iu',b') *)
+  (*         -> b = b' *)
+  (*           /\ (exists uid iu0 ra ia,  *)
+  (*                 indexedRealStep uid (Action ra) ru ru' *)
+  (*                 /\ (indexedIdealStep uid Silent) ^* iu iu0 *)
+  (*                 /\ indexedIdealStep uid (Action ia) iu0 iu' *)
+  (*                 /\ action_matches (RealWorld.all_ciphers ru) (RealWorld.all_keys ru) (uid,ra) ia). *)
+  (* Proof. *)
+  (*   intros; subst. *)
+  (*   invert H0; clear_mislabeled_steps. *)
+  (*   repeat equality1. *)
 
-  Ltac non_commuter_all uids :=
-    match uids with
-    | [] => fail 2
-    | (?uid :: ?uids') => (non_commuter uid) || (non_commuter_all uids')
-    end.
+  (*   invert H2. *)
+  (*   specialize (H u_id U'); simpl in *; contradiction. *)
 
-  Ltac non_commuters := non_commuter_all [0;1;2;3;4;5].
-
-  Ltac discharge_nextStep2 :=
-    repeat 
-      match goal with
-      | [ H : (forall _ _, ~ indexedRealStep ?uid _ ?ru _)
-            \/ (exists _ _, ?uid <> _ /\ _ $? _ = Some _ /\ (forall _, ?sums $? _ = Some _ -> commutes ?proto _ -> False))
-          |- _ ] => split_ex; exfalso; destruct H
-      | [ H : (forall _ _, ~ indexedRealStep ?uid _ ?ru _), ARG : indexedRealStep ?uid _ ?ru _ |- _ ] =>
-        eapply H in ARG; contradiction
-      | [ H : summarize_univ ?ru ?sums, 
-         ARG : (forall _, ?sums $? ?uid = Some _ -> commutes _ _),
-         USR :  _ $? ?uid = Some _
-          |- _ ] =>
-        specialize (H _ _ {| sending_to := { } |} USR); split_ex
-      | [ H : ?sums $? ?uid = Some _,
-          COMM : (forall _, ?sums $? ?uid = Some _ -> commutes _ _)
-          |- _ ] =>
-        specialize (COMM _ H); simpl in COMM; contradiction
-      end.
-
-  Lemma upper_users_cant_step_rewrite :
-    forall A B (U : RealWorld.universe A B) uid,
-      (forall uid' ud' U', U.(RealWorld.users) $? uid' = Some ud' -> uid' > uid -> ~ indexedRealStep uid' Silent U U')
-      -> (forall uid' U', uid' > uid -> ~ indexedRealStep uid' Silent U U').
-  Proof.
-    intros * H * INEQ.
-    unfold not; intros IRS.
-    invert IRS; eauto.
-    eapply H; eauto.
-  Qed.
-
-  Lemma indexedModelStep_user_step :
-    forall t__hon t__adv uid ru ru' iu iu' b b',
-      @indexedModelStep t__hon t__adv uid (ru,iu,b) (ru',iu',b')
-      -> (indexedRealStep uid Silent ru ru' /\ iu = iu' /\ b = b')
-        \/ (exists a, indexedRealStep uid (Action a) ru ru')
-  .
-  Proof.
-    induct 1; eauto 8.
-  Qed.
-
-  Lemma sstep_inv_silent :
-    forall A B (U U' : RealWorld.universe A B) uid U__i b st',
-      indexedRealStep uid Silent U U'
-      -> (forall uid' U', uid' > uid -> ~ indexedRealStep uid' Silent U U')
-      -> stepSS (U,U__i,b) st'
-      -> exists U__r,
-          indexedModelStep uid (U,U__i,b) (U__r,U__i,b)
-          /\ indexedRealStep uid Silent U U__r
-          /\ st' = (U__r,U__i,b).
-  Proof.
-    intros.
-    invert H1; repeat equality1.
-    destruct (u_id ==n uid); subst.
-    - invert H2; clear_mislabeled_steps; clean_map_lookups.
-      invert H5; clear_mislabeled_steps.
-      eexists; eauto 8.
-    - invert H2.
-      + invert H5; try solve [ clear_mislabeled_steps ].
-        apply not_eq in n; split_ors.
-        * assert (uid > u_id) as GT by lia.
-          specialize (H4 _ U' GT); contradiction.
-        * assert (u_id > uid) as GT by lia.
-          specialize (H0 _ ru' GT); contradiction.
-      + eapply H3 in H; contradiction.
-  Qed.
-
-  Lemma sstep_inv_labeled :
-    forall A B st st' ru,
-      (forall uid U', ~ @indexedRealStep A B uid Silent ru U')
-      -> @stepSS A B st st'
-      -> labels_align st
-      -> forall ru' iu iu' b b',
-          st = (ru,iu,b)
-          -> st' = (ru',iu',b')
-          -> b = b'
-            /\ (exists uid iu0 ra ia, 
-                  indexedRealStep uid (Action ra) ru ru'
-                  /\ (indexedIdealStep uid Silent) ^* iu iu0
-                  /\ indexedIdealStep uid (Action ia) iu0 iu'
-                  /\ action_matches (RealWorld.all_ciphers ru) (RealWorld.all_keys ru) (uid,ra) ia).
-  Proof.
-    intros; subst.
-    invert H0; clear_mislabeled_steps.
-    repeat equality1.
-
-    invert H2.
-    specialize (H u_id U'); simpl in *; contradiction.
-
-    invert H5; try contradiction; eauto 12.
-    clear_mislabeled_steps.
-  Qed.
+  (*   invert H5; try contradiction; eauto 12. *)
+  (*   clear_mislabeled_steps. *)
+  (* Qed. *)
 
   Ltac rstep :=
     repeat (autounfold
@@ -1799,8 +1184,6 @@ Module Gen.
                 | [ H : forall _ _ _ _, _ -> _ -> _ -> _ -> _ <-> _ |- _ ] => clear H
                 | [ H : (forall _ _ _, indexedRealStep _ _ ?ru _ -> exists _ _ _, (indexedIdealStep _ _) ^* ?iu _ /\ _) |- _ ] =>
                   clear H
-                | [ H : summarize_univ _ _ |- _ ] => clear H
-
                 | [H : indexedRealStep _ _ _ _ |- _ ] =>
                   invert H
                 | [H : RealWorld.step_universe _ ?u _ _ |- _] =>
@@ -1855,224 +1238,70 @@ Module Gen.
         ; subst; split_ex
   .
 
-  Ltac inv_stepSS1 :=
-    match goal with
-    | [ H : stepSS (?U,_,_) _ |- _ ] =>
-      match U with
-      | {| RealWorld.users := ?usrs |} =>
-        find_silent U usrs
-      end
+  (* Ltac inv_stepSS1 := *)
+  (*   match goal with *)
+  (*   | [ H : stepSS (?U,_,_) _ |- _ ] => *)
+  (*     match U with *)
+  (*     | {| RealWorld.users := ?usrs |} => *)
+  (*       find_silent U usrs *)
+  (*     end *)
 
-    | [ STEP : stepSS (?U,_,_) _
-      , IRS : indexedRealStep ?uid Silent ?U _
-      , P : (forall _ _, _ > ?uid -> _)
-        |- _ ] =>
+  (*   | [ STEP : stepSS (?U,_,_) _ *)
+  (*     , IRS : indexedRealStep ?uid Silent ?U _ *)
+  (*     , P : (forall _ _, _ > ?uid -> _) *)
+  (*       |- _ ] => *)
 
-      pose proof (sstep_inv_silent IRS P STEP)
-      ; clear STEP IRS P
-      ; split_ex
-      ; subst
+  (*     pose proof (sstep_inv_silent IRS P STEP) *)
+  (*     ; clear STEP IRS P *)
+  (*     ; split_ex *)
+  (*     ; subst *)
 
-    | [ STEP : stepSS (?ru,?iu,?b) _
-      , P : (forall _ _, ~ indexedRealStep _ Silent _  _)
-        |- _ ] =>
+  (*   | [ STEP : stepSS (?ru,?iu,?b) _ *)
+  (*     , P : (forall _ _, ~ indexedRealStep _ Silent _  _) *)
+  (*       |- _ ] => *)
 
-      progress ( unfold not in P )
+  (*     progress ( unfold not in P ) *)
 
-    | [ STEP : stepSS (?ru,?iu,?b) (_,_,_)
-      , P : (forall _ _, indexedRealStep _ Silent _ _ -> False)
-        |- _ ] =>
+  (*   | [ STEP : stepSS (?ru,?iu,?b) (_,_,_) *)
+  (*     , P : (forall _ _, indexedRealStep _ Silent _ _ -> False) *)
+  (*       |- _ ] => *)
 
-      concrete ru
-      ; match goal with
-        | [ LA : labels_align (?ru,?iu,?b) |- _ ] =>
-          pose proof (sstep_inv_labeled P STEP LA eq_refl eq_refl )
-          ; split_ex; subst
-          ; clear STEP P LA
+  (*     concrete ru *)
+  (*     ; match goal with *)
+  (*       | [ LA : labels_align (?ru,?iu,?b) |- _ ] => *)
+  (*         pose proof (sstep_inv_labeled P STEP LA eq_refl eq_refl ) *)
+  (*         ; split_ex; subst *)
+  (*         ; clear STEP P LA *)
 
-        | _ =>
-          idtac "proving alignment 4"
-          ; assert (labels_align (ru,iu,b)) by ((repeat prove_alignment1); eauto)
-        end
+  (*       | _ => *)
+  (*         idtac "proving alignment 4" *)
+  (*         ; assert (labels_align (ru,iu,b)) by ((repeat prove_alignment1); eauto) *)
+  (*       end *)
 
-    | [ STEP : stepSS ?st ?st'
-      , P : (forall _ _, indexedRealStep _ Silent _ _ -> False)
-        |- _ ] =>
+  (*   | [ STEP : stepSS ?st ?st' *)
+  (*     , P : (forall _ _, indexedRealStep _ Silent _ _ -> False) *)
+  (*       |- _ ] => *)
 
-      match st with
-      | (_,_,_) => idtac
-      | _ => destruct st as [[?ru ?iu] ?b]
-      end
-      ; match st' with
-        | (_,_,_) => idtac
-        | _ => destruct st' as [[?ru' ?iu'] ?b']
-        end
+  (*     match st with *)
+  (*     | (_,_,_) => idtac *)
+  (*     | _ => destruct st as [[?ru ?iu] ?b] *)
+  (*     end *)
+  (*     ; match st' with *)
+  (*       | (_,_,_) => idtac *)
+  (*       | _ => destruct st' as [[?ru' ?iu'] ?b'] *)
+  (*       end *)
 
-    | [ H : stepSS (?U,_,_) _ |- _ ] =>
-      match U with
-      | {| RealWorld.users := ?usrs |} =>
-        find_silent U usrs
-      end
+  (*   | [ H : stepSS (?U,_,_) _ |- _ ] => *)
+  (*     match U with *)
+  (*     | {| RealWorld.users := ?usrs |} => *)
+  (*       find_silent U usrs *)
+  (*     end *)
         
-    | [ IMS : indexedModelStep ?uid (?U,_,_) _
-      , IRS : indexedRealStep ?uid _ ?U _ 
-        |- _ ] => clear IMS
+  (*   | [ IMS : indexedModelStep ?uid (?U,_,_) _ *)
+  (*     , IRS : indexedRealStep ?uid _ ?U _  *)
+  (*       |- _ ] => clear IMS *)
 
-    end.
-
-  Ltac step_model1 :=
-    match goal with
-    | [H : Step _ _ _ |- _] =>
-      simpl in H
-    | [H : exists _, _ |- _] =>
-      destruct H; split_ex; subst (* invert H; propositional; subst *)
-    | [ H : nextAction _ _ |- _ ] =>
-      progress (simpl in H)
-    | [ H : nextAction ?cmd1 ?cmd2 |- _ ] =>
-      is_var cmd2;
-      match cmd1 with (* doubt this is general enough *)
-      | (RealWorld.protocol ?ud) => concrete ud || fail 1
-      | _ => concrete cmd1
-      end; invert H
-
-    | [ H : O.max_elt _ = Some _ |- _ ] => 
-      unfold O.max_elt in H; simpl in H; invert H
-    | [H : In _ $0 |- _] =>
-      apply in_empty_map_contra in H; contradiction
-      (* invert H *)
-    | [H : Raw.PX.MapsTo _ _ $0 |- _] =>
-      invert H
-    | [H : (existT _ _ _) = (existT _ _ _) |- _] =>
-      invert H
-
-    | [ S : step ?st ?st' |- _ ] =>
-      concrete st; is_var st';
-      match st' with
-      | (_,_,_) => fail 2
-      | (?f,_) => destruct f as [?ru ?iu]
-      | _ => destruct st' as [[?ru ?iu] ?b]
-      end
-    | [ S : step ?st _ |- _ ] =>
-      concrete st;
-      match goal with
-      | [ LA : labels_align ?st |- _ ] =>
-        eapply label_align_step_split in S; (reflexivity || eauto 2); split_ex; split_ors; split_ex; subst
-      | _ =>
-        idtac "proving alignment 1"; assert (labels_align st) by ((repeat prove_alignment1); eauto)
-      end
-    | [ S : stepC ?st _ |- _ ] =>
-      concrete st; invert S
-
-    | [ H : nextStep _ _ _ |- _ ] => invert H
-    | [ S : indexedModelStep ?uid ?st _ |- _ ] =>
-      concrete st;
-      match goal with
-      | [ LA : labels_align ?st |- _ ] =>
-        eapply label_align_indexedModelStep_split in S; (reflexivity || eauto 2); split_ex; split_ors; split_ex; subst
-      | _ =>
-        idtac "proving alignment 2"; assert (labels_align st) by ((repeat prove_alignment1); eauto)
-      end
-    | [ H : (forall _ _, ~ indexedRealStep ?uid _ ?ru _)
-          \/ (exists _ _, ?uid <> _ /\ _ $? _ = Some _ /\ (forall _, ?sums $? _ = Some _ -> commutes ?proto _ -> False))
-      , S : summarize_univ ?ru ?sums
-        |- _ ] =>
-      ( (assert (exists lbl ru', indexedRealStep uid lbl ru ru') by solve_indexedRealStep )
-      ; (assert (exists uid2 ud2, uid <> uid2
-                           /\ ru.(RealWorld.users) $? uid2 = Some ud2
-                           /\ (forall s, sums $? uid2 = Some s -> commutes proto s)) by non_commuters ))
-      ; discharge_nextStep2 (* clear this goal since the preconditions weren't satisfied *)
-    end.
-
-  Ltac gen_val_typ t :=
-    match t with
-    | Nat    => constr:(0)
-    | Bool   => constr:(true)
-    | Unit   => constr:(tt)
-    | Access => constr:((0,false))
-    | (TPair ?t1 ?t2) =>
-      let v1 := gen_val_typ t1 in
-      let v2 := gen_val_typ t2
-      in constr:((v1,v2))
-                  
-    end.
-
-  Ltac gen_msg t :=
-    match t with
-    | Access => let v := gen_val_typ Access in constr:(message.Permission v)
-    | Nat    => let v := gen_val_typ Nat in constr:(message.Content v)
-    | (TPair ?t1 ?t2) =>
-      let m1 := gen_msg t1 in
-      let m2 := gen_msg t2 in
-      constr:(message.MsgPair m1 m2)
-    end.
-
-  Ltac gen_crypto t :=
-    let m := gen_msg t in constr:(Content m).
-
-  Ltac gen_val_cmd_typ ct :=
-    match ct with
-    | Base ?t    => gen_val_typ t
-    | Message ?t => gen_msg t
-    | Crypto ?t  => gen_crypto t
-    | UPair ?t1 ?t2 =>
-      let v1 := gen_val_cmd_typ t1 in
-      let v2 := gen_val_cmd_typ t2 in constr:((v1,v2))
-    end.
-
-  (* We have to be careful here when inverting the model checking terms.  If we run injection
-   * on universes which only differ in their protocols, it seems that this fact gets erased.
-   * I am not entirely sure why this happens.  For this reason, we carefully do the inversions
-   * here manually rather than running injection.
-   * 
-   *)
-  Ltac univ_equality_discr :=
-    discriminate ||
-    match goal with
-    | [ H : RealWorld.Bind _ _ = RealWorld.Bind _ _ |- _ ] =>
-      apply invert_bind_eq in H; split_ex
-    | [ H1 : ?x = ?y1, H2 : ?x = ?y2 |- _ ] =>
-      rewrite H1 in H2
-      ; clear H1
-    | [ H1 : ?x = ?y1, H2 : ?y2 = ?x |- _ ] =>
-      rewrite H1 in H2
-      ; clear H1
-    | [ H : (?x1,?y1) = (?x2,?y2) |- _ ] =>
-      apply tuple_eq_inv in H; split_ex; subst
-    | [ H : {| users := _ |} = {| users := _ |} |- _ ] =>
-      apply split_real_univ_fields in H; split_ex
-    | [ H : Some _ = Some _ |- _ ] =>
-      apply some_eq_inv in H; split_ex; subst
-    | [ H : {| key_heap := _ |} = {| key_heap := _ |} |- _ ] =>
-      apply split_real_user_data_fields in H; split_ex; subst
-    | [ H : _ $+ (_,_) = _ |- _ ] =>
-      apply map_eq_fields_eq in H; clean_map_lookups
-    | [ H : << ?t >> -> _ = _ |- _ ] =>
-      let vt := gen_val_cmd_typ t
-      in specialize (H vt)
-    end.
-
-  Ltac tidy :=
-    autounfold
-    ; intros
-    ; sets_invert
-    ; propositional
-    ; subst
-    ; clean_map_lookups
-    ; subst
-    ; idtac "discriminating univ - tidy"
-    ; repeat (
-          univ_equality_discr
-          (* equality has to run after univ equality discrimination because equality1 uses injeection
-           * which isn't always safe to use on universes.  See comment on univ_equality_discr 
-           *)
-          || equality1   
-          || inv_stepSS1
-          || step_model1
-        )
-    ; idtac "discriminating univ - tidy done"
-  .
-
-  Ltac s := simpl in *.
+  (*   end. *)
 
   Ltac cleanup :=
     repeat (
@@ -2136,130 +1365,6 @@ Module Gen.
           | [ |- context [_ $k++ $0] ] => rewrite !merge_perms_right_identity 
           end
       ).
-
-  Ltac close :=
-    match goal with
-    | [|- [_ | _] (?ru, ?iu, _)] =>
-      concrete ru
-      ; concrete iuniv iu
-      ; tidy
-      (* ; repeat( progress (subst; cleanup) ) *)
-      ; repeat eexists
-      ; propositional
-      ; solve[ eauto
-             | canonicalize users
-               ; repeat univ_equality1 ]
-    | [|- (?inv1 \cup ?inv2) (?ru, ?iu, _)] =>
-      concrete inv1
-      ; concrete ru
-      ; concrete iuniv iu
-      ; solve[ idtac "trying left"; left; close
-             | idtac "left fails; trying right"; right; close
-             | idtac "something is horribly wrong" (* prevent an infinite loop *)
-             ]
-    | [|- ?inv (?ru, ?iu, _)] =>
-      is_evar inv
-      ; concrete ru
-      ; concrete iuniv iu
-      ; repeat equality1
-      ; solve_concrete_maps
-      ; canonicalize users
-      ; clean_context
-      ; repeat( progress (subst; cleanup) )
-      (* ; cleanup *)
-      ; NatMap.clean_map_lookups
-      ; ChMaps.ChMap.clean_map_lookups
-      ; incorp
-      ; solve[ close ]
-    end.
-
-  Ltac gen1' :=
-    simplify
-    ; tidy
-    ; idtac "rstep start"
-    ; rstep
-    ; idtac "istep start"
-    ; istep
-    ; idtac "istep done"
-    ; subst
-    ; canonicalize users
-    ; idtac "close start"
-    ; repeat close
-    ; idtac "close done".
-
-  Locate intersect_empty_l.
-
-  Ltac normalize_set_arg s :=
-    match s with
-    | context[@union ?A ?X ?Y] =>
-      quote (@union A X Y) (@nil A)
-            ltac:(fun e env =>
-                    change (@union A X Y) with (interp_setexpr env e));
-      rewrite <- normalize_setexpr_ok; sets_cbv
-    end.
-
-  Ltac gen1 :=
-    match goal with
-    | [|- multiStepClosure _ _ { } _] =>
-      eapply MscDone
-    | [|- multiStepClosure _ {(_,_,_)} {(_,_,_)} _] =>
-      eapply MscStep
-      ; [ solve[ apply oneStepClosure_grow; repeat gen1' ]
-        | simplify; simpl_sets (sets; tidy)]
-    | [|- multiStepClosure _ (?pr \cup ?wl) ?wl _] =>
-      progress ( normalize_set_arg pr ; normalize_set_arg wl )
-    | [|- multiStepClosure _ (_ \cup ?wl) ?wl _] =>
-      eapply msc_step_alt
-      ; [ solve[ unfold oneStepClosure_new; repeat gen1' ]
-        | solve[ idtac "proving empty intersection"
-                 ; simplify
-                 ; sets
-                 ; split_ex
-                 ; propositional
-                 ; idtac "preparing to discriminate universes"
-                 (* equality has to run after univ equality discrimination because equality1 uses injeection
-                  * which isn't always safe to use on universes.  See comment on univ_equality_discr 
-                  *)
-                 ; repeat (univ_equality_discr || equality1)
-                 ; idtac "universes discriminated"
-               | eapply intersect_empty_l]
-        | rewrite ?union_empty_r ]
-    end.
-
-  (* Use this to generate the invariant *)
-  Ltac gen := repeat gen1.
-
-  Ltac discr_sets :=
-    simplify
-    ; sets
-    ; split_ex
-
-    (* equality has to run after univ equality discrimination because equality1 uses injeection
-     * which isn't always safe to use on universes.  See comment on univ_equality_discr 
-     *)
-    ; repeat (univ_equality_discr || equality1).
-
-  Ltac dedup_worklist wl k :=
-    let rec dedup_wl acc wl :=
-        idtac "iterating";
-        match wl with
-        | ?s1 \cup ?s2 =>
-          ( assert ( acc \cap s1 = { } ) by discr_sets
-            ; dedup_wl (acc \cup s1) s2 )
-          || dedup_wl acc s2
-        | ?s => 
-          ( assert ( acc \cap s = { } ) by discr_sets
-            ; k (acc \cup s) )
-          || k acc
-        end
-
-    in idtac "wl";
-       match wl with
-       | { } \cup ?s  => dedup_worklist s k
-       | ?s1 \cup ?s2 => dedup_wl s1 s2
-       | ?s1          => k s1
-       end.
-
 End Gen.
                      
 (* Helps with initial universe state proofs *)
@@ -2272,4 +1377,3 @@ Ltac focus_user :=
       | RealWorld.user_data _ => idtac
       end; destruct (k1 ==n k2); subst; clean_map_lookups
     end.
-

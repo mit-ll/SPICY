@@ -24,25 +24,15 @@ From SPICY Require Import
 From SPICY Require
      IdealWorld.
 
-From Frap Require
-     Sets.
+From Frap Require Import
+     Invariant
+.
+
+From Frap Require Sets.
 
 Import RealWorld.RealWorldNotations.
 
 Set Implicit Arguments.
-
-Definition adversary_is_lame {B : type} (b : << Base B >>) (adv : user_data B) : Prop :=
-    adv.(key_heap) = $0
-  /\ adv.(msg_heap) = []
-  /\ adv.(c_heap) = []
-  /\ lameAdv b adv.
-
-Definition universe_starts_sane {A B : type} (b : << Base B >>) (U : universe A B) : Prop :=
-  let honestk := findUserKeys U.(users)
-  in  (forall u_id u, U.(users) $? u_id = Some u -> u.(RealWorld.msg_heap) = [])
-      /\ ciphers_honestly_signed honestk U.(RealWorld.all_ciphers)
-      /\ keys_honest honestk U.(RealWorld.all_keys)
-      /\ adversary_is_lame b U.(adversary).
 
 (* 
  * Our definition of a Safe Protocol.  For now, we assume a pretty boring initial
@@ -77,7 +67,7 @@ End SafeProtocol.
 Module AdversarySafeProtocol ( Proto : SafeProtocol ).
   Import Proto.
 
-  #[export] Hint Resolve
+  #[local] Hint Resolve
        R_silent_simulates
        R_loud_simulates
        R_honest_actions_safe
@@ -92,7 +82,7 @@ Module AdversarySafeProtocol ( Proto : SafeProtocol ).
     intuition eauto.
   Qed.
 
-  #[export] Hint Resolve proto_lamely_refines : core.
+  #[local] Hint Resolve proto_lamely_refines : core.
 
   Lemma proto_starts_ok : universe_starts_ok U__r.
   Proof.
@@ -103,7 +93,7 @@ Module AdversarySafeProtocol ( Proto : SafeProtocol ).
     intuition eauto.
   Qed.
 
-  #[export] Hint Resolve proto_starts_ok : core.
+  #[local] Hint Resolve proto_starts_ok : core.
 
   Theorem protocol_with_adversary_could_generate_spec :
     forall U__ra advcode acts__r,
@@ -119,151 +109,6 @@ Module AdversarySafeProtocol ( Proto : SafeProtocol ).
   Qed.
   
 End AdversarySafeProtocol.
-
-Section SafeProtocolLemmas.
-
-  Import RealWorld.
-
-  Lemma adversary_is_lame_adv_univ_ok_clauses :
-    forall A B (U : universe A B) b,
-      universe_starts_sane b U
-      -> permission_heap_good U.(all_keys) U.(adversary).(key_heap)
-      /\ message_queues_ok U.(all_ciphers) U.(users) U.(all_keys)
-      /\ adv_cipher_queue_ok U.(all_ciphers) U.(users) U.(adversary).(c_heap)
-      /\ adv_message_queue_ok U.(users) U.(all_ciphers) U.(all_keys) U.(adversary).(msg_heap)
-      /\ adv_no_honest_keys (findUserKeys U.(users)) U.(adversary).(key_heap).
-  Proof.
-    unfold universe_starts_sane, adversary_is_lame; intros; split_ands.
-    repeat match goal with
-           | [ H : _ (adversary _) = _ |- _ ] => rewrite H; clear H
-           end.
-    repeat (simple apply conj); try solve [ econstructor; clean_map_lookups; eauto ].
-
-    - unfold message_queues_ok.
-      rewrite Forall_natmap_forall; intros.
-      specialize (H _ _ H2); rewrite H; econstructor.
-    - unfold adv_no_honest_keys; intros.
-      cases (findUserKeys (users U) $? k_id); eauto.
-      destruct b0; eauto.
-      right; right; apply conj; eauto.
-      clean_map_lookups.
-
-      Unshelve.
-      exact (MkCryptoKey 1 Encryption SymKey).
-  Qed.
-
-End SafeProtocolLemmas.
-
-Import Sets.
-Module Foo <: EMPTY.
-End Foo.
-Module Import SN := SetNotations(Foo).
-
-Definition ModelState {t__hon t__adv : type} := (RealWorld.universe t__hon t__adv * IdealWorld.universe t__hon * bool)%type.
-
-Definition safety {t__hon t__adv} (st : @ModelState t__hon t__adv) : Prop :=
-  let '(ru, iu, b) := st
-  in  honest_cmds_safe ru.
-
-Definition labels_align {t__hon t__adv} (st : @ModelState t__hon t__adv) : Prop :=
-  let '(ru, iu, b) := st
-  in  forall uid ru' ra,
-      indexedRealStep uid (Action ra) ru ru'
-      -> exists ia iu' iu'',
-        (indexedIdealStep uid Silent) ^* iu iu'
-        /\ indexedIdealStep uid (Action ia) iu' iu''
-        /\ action_matches ru.(RealWorld.all_ciphers) ru.(RealWorld.all_keys) (uid,ra) ia.
-
-Definition returns_align {t__hon t__adv} (st : @ModelState t__hon t__adv) : Prop :=
-  let '(ru, iu, b) := st
-  in (forall uid lbl ru', indexedRealStep uid lbl ru ru' -> False)
-     -> forall uid ud__r r__r,
-      ru.(RealWorld.users) $? uid = Some ud__r
-      -> ud__r.(RealWorld.protocol) = RealWorld.Return r__r
-      -> exists (iu' : IdealWorld.universe t__hon) ud__i r__i,
-          istepSilent ^* iu iu'
-          /\ iu'.(IdealWorld.users) $? uid = Some ud__i
-          /\ ud__i.(IdealWorld.protocol) = IdealWorld.Return r__i
-          /\ Rret_val_to_val r__r = Iret_val_to_val r__i.
-
-Inductive step {t__hon t__adv : type} :
-    @ModelState t__hon t__adv 
-  -> @ModelState t__hon t__adv
-  -> Prop :=
-| RealSilent : forall ru ru' suid iu b,
-    RealWorld.step_universe suid ru Silent ru'
-    -> step (ru, iu, b) (ru', iu, b)
-| BothLoud : forall uid ru ru' iu iu' iu'' ra ia b,
-    indexedRealStep uid (Action ra) ru ru'
-    -> (indexedIdealStep uid Silent) ^* iu iu'
-    -> indexedIdealStep uid (Action ia) iu' iu''
-    -> action_matches ru.(all_ciphers) ru.(all_keys) (uid,ra) ia
-    -> labels_align (ru, iu, b)
-    -> step (ru, iu, b) (ru', iu'', b)
-| MisalignedCanStep : forall uid ru ru' iu iu' iu'' ra ia b,
-    indexedRealStep uid (Action ra) ru ru'
-    -> (indexedIdealStep uid Silent) ^* iu iu'
-    -> indexedIdealStep uid (Action ia) iu' iu''
-    -> ~ labels_align (ru, iu, b)
-    -> step (ru, iu, b) (ru', iu'', false)
-| MisalignedCantStep : forall uid ru ru' iu iu' ra b,
-    indexedRealStep uid (Action ra) ru ru'
-    -> (indexedIdealStep uid Silent) ^* iu iu'
-    -> (forall lbl iu'', indexedIdealStep uid lbl iu' iu'' -> False)
-    -> ~ labels_align (ru, iu, b)
-    -> step (ru, iu, b) (ru', iu, false)
-.
-
-Inductive indexedModelStep {t__hon t__adv : type} (uid : user_id) :
-    @ModelState t__hon t__adv 
-  -> @ModelState t__hon t__adv
-  -> Prop :=
-| RealSilenti : forall ru ru' iu b,
-    indexedRealStep uid Silent ru ru'
-    -> indexedModelStep uid (ru, iu, b) (ru', iu, b)
-| BothLoudi : forall ru ru' iu iu' iu'' ra ia b,
-    indexedRealStep uid (Action ra) ru ru'
-    -> (indexedIdealStep uid Silent) ^* iu iu'
-    -> indexedIdealStep uid (Action ia) iu' iu''
-    -> action_matches ru.(all_ciphers) ru.(all_keys) (uid,ra) ia
-    -> labels_align (ru, iu, b)
-    -> indexedModelStep uid (ru, iu, b) (ru', iu'', b)
-| MisalignedCanStepi : forall ru ru' iu iu' iu'' ra ia b,
-    indexedRealStep uid (Action ra) ru ru'
-    -> (indexedIdealStep uid Silent) ^* iu iu'
-    -> indexedIdealStep uid (Action ia) iu' iu''
-    -> ~ labels_align (ru, iu, b)
-    -> indexedModelStep uid (ru, iu, b) (ru', iu'', false)
-| MisalignedCantStepi : forall ru ru' iu iu' ra b,
-    indexedRealStep uid (Action ra) ru ru'
-    -> (indexedIdealStep uid Silent) ^* iu iu'
-    -> (forall lbl iu'', indexedIdealStep uid lbl iu' iu'' -> False)
-    -> ~ labels_align (ru, iu, b)
-    -> indexedModelStep uid (ru, iu, b) (ru', iu, false)
-.
-
-Lemma indexedModelStep_step :
-  forall t__hon t__adv uid st st',
-    @indexedModelStep t__hon t__adv uid st st'
-    -> step st st'.
-Proof.
-  intros.
-  invert H; [
-    econstructor 1
-  | econstructor 2
-  | econstructor 3
-  | econstructor 4 ]; eauto.
-
-  invert H0; econstructor; eauto.
-Qed.
-
-Definition alignment {t__hon t__adv} (st : @ModelState t__hon t__adv) : Prop :=
-  snd st = true
-  /\ labels_align st.
-
-Definition TrS {t__hon t__adv} (ru0 : RealWorld.universe t__hon t__adv) (iu0 : IdealWorld.universe t__hon) :=
-  {| Initial := {(ru0, iu0, true)};
-     Step    := @step t__hon t__adv |}.
 
 Module Type AutomatedSafeProtocol.
 
@@ -355,7 +200,7 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
   Lemma returns_align_inv : invariantFor SYS returns_align.
   Proof. eapply invariant_weaken; [ apply safe_invariant | firstorder idtac]. Qed.
   
-  #[export] Hint Resolve safety_inv labels_align_inv returns_align_inv : core.
+  #[local] Hint Resolve safety_inv labels_align_inv returns_align_inv : core.
 
   Definition reachable_from := (fun ru iu ru' iu' b b' => SYS.(Step)^* (ru, iu, b) (ru', iu', b')).
   Definition reachable := (fun ru iu => reachable_from ru0 iu0 ru iu).
@@ -426,7 +271,7 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
     intros; eauto using always_lame'.
   Qed.
 
-  #[export] Hint Resolve always_lame : safe.
+  #[local] Hint Resolve always_lame : safe.
 
   Lemma lame_adv_no_impact_silent_step' :
     forall A B C u_id bd bd',
@@ -583,7 +428,7 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
     econstructor 1; eauto.
   Qed.
 
-  #[export] Hint Constructors action_matches : safe.
+  #[local] Hint Constructors action_matches : safe.
   
   Lemma action_matches_adv_change :
     forall {t1 t2} (U U' : RealWorld.universe t1 t2) a__r a__i,
@@ -699,7 +544,7 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
     unfold safety in *; eauto with safe.
   Qed.
 
-  #[export] Hint Resolve simsilent simlabeled sim_final simsafe : safe.
+  #[local] Hint Resolve simsilent simlabeled sim_final simsafe : safe.
 
   Lemma proto_lamely_refines :
     refines (lameAdv b) ru0 iu0.
@@ -719,7 +564,7 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
       intuition eauto with safe.
   Qed.
 
-  #[export] Hint Resolve proto_lamely_refines : safe.
+  #[local] Hint Resolve proto_lamely_refines : safe.
 
   Lemma proto_starts_ok : universe_starts_ok ru0.
   Proof.
@@ -730,7 +575,7 @@ Module ProtocolSimulates (Proto : AutomatedSafeProtocol).
     intuition eauto.
   Qed.
 
-  #[export] Hint Resolve proto_starts_ok : safe.
+  #[local] Hint Resolve proto_starts_ok : safe.
 
   Theorem protocol_with_adversary_could_generate_spec :
     forall U__ra advcode acts__r,
