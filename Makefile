@@ -33,7 +33,7 @@ lib: CoqMakefile
 			       src/ModelCheck/InvariantSearch.vo
 
 test: lib
-	$(eval TS := "protocols/Verification/PGPSecure.vo protocols/Verification/PGPSecure2.vo")
+	$(eval TS := "protocols/Verification/PGPSecure.vo")
 	$(MAKE) -f CoqMakefile pretty-timed TGTS=$(TS)
 
 test-protos: lib
