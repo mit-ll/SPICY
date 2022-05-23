@@ -1866,7 +1866,11 @@ Module SSProtocolSimulates (Proto : AutomatedSafeProtocolSS).
           iCouldGenerate iu0 acts__i
           /\ traceMatches acts__r acts__i.
   Proof.
-    eauto using SSSimulates.protocol_with_adversary_could_generate_spec.
+    pose proof U_good as L; unfold universe_starts_sane, adversary_is_lame in L; split_ands.
+    pose proof SSSimulates.proto_starts_ok.
+    pose proof SSSimulates.proto_lamely_refines.
+    eapply refines_could_generate; eauto.
   Qed.
 
 End SSProtocolSimulates.
+
