@@ -13,7 +13,7 @@ Some good places to start to get a feel for the formalized languages and main sa
 
 * src/IdealWorld.v -- formalization of the Ideal World language.
 * src/RealWorld.v -- formalization of the Real World language.
-* src/Simulation.v -- development of our simulation statements between the Ideal and Real worlds (the actual simulation definitions can be found in the "Simulation" section).
+* src/Simulation.v -- development of our simulation statements between the Ideal and Real worlds (the actual simulation definitions can be found in the "Simulation" section).  Also included here is the predicate which encodes the "best practice rules", called `honest_cmds_safe` (leveraging `next_cmd_safe` for most of the actual work).
 * src/AdversarySafety.v -- the main theorems and lemmas stating the safety result.
 
 The main safety results within AdversarySafety warrant some further discussion.
@@ -31,6 +31,8 @@ Using the above library code, we have verified several exemplar protocols.
 * protocols/SecureDNS.v (protocol impl) and protocols/Verification/SecureDNSSecure.v (correctness proof) -- describes a protocol similar in spirit to (but much simplified) Daniel Bernstein's DNSCurve for encrypted DNS.
 * protocols/AvgSalary.v and protocols/Verification/AvgSalarySecure.v -- describes a simple aggregation service, interesting because it involves more than two parties.
 * protocols/NetAuth.v and protocols/Verification/NetAuthSecure.v -- describes a network authentication protocol by a trusted third party showing an alternative way of bootstrapping trusted keys
+
+Finally, it may not be obvious how the protocol proofs link back to the main correctness result (`refines_could_generate`).  Note that the protocol proofs are proofs that each protocol implementation, along with its starting state (pre-shared keys, channels, etc.) conforms to a module type (`AutomatedSafeProtocolSS`).  That module type is enough to link the proofs to the overall safety result.  If you look in `src/ModelCheck/SilentStepElimination`, you find towards the end that protocols implementing `AutomatedSafeProtocolSS` can be proven to demonstrate `protocol_with_adversary_could_generate_spec`, which states the same trace inclusion condition as the main result.
 
 ## Setup
 
