@@ -56,10 +56,10 @@ Now, whenever you want to install a new version, just do:
 ```bash
 opam update
 
-opam switch create coq-8.13.2 ocaml-base-compiler.4.11.1
+opam switch create coq-8.15.1 ocaml-base-compiler.4.13.1
 
-opam install coq.8.13.2
-opam pin add coq 8.13.2
+opam install coq.8.15.1
+opam pin add coq 8.15.1
 ```
 
 ### Compiling Project

@@ -204,15 +204,15 @@ Proof.
     generalize (H37 _ _  H5); intros; context_map_rewrites; trivial.
     
   - eexists.
-    eapply StepEncrypt with (c_id0 := next_key cs''); clean_map_lookups; eauto.
+    eapply StepEncrypt with (c_id := next_key cs''); clean_map_lookups; eauto.
     eapply next_key_not_in; eauto.
 
   - eexists.
-    eapply StepSign with (c_id0 := next_key cs''); clean_map_lookups; eauto.
+    eapply StepSign with (c_id := next_key cs''); clean_map_lookups; eauto.
     eapply next_key_not_in; eauto.
 
   - eexists.
-    eapply StepGenerateKey with (k_id0 := next_key gks''); clean_map_lookups; eauto.
+    eapply StepGenerateKey with (k_id := next_key gks''); clean_map_lookups; eauto.
     eapply next_key_not_in; eauto.
     Unshelve.
     auto.
@@ -497,7 +497,7 @@ Proof.
     ; intros
     ; clean_map_lookups.
     
-    eapply StepEncrypt with (c_id0 := next_key cs''); clean_map_lookups; eauto.
+    eapply StepEncrypt with (c_id := next_key cs''); clean_map_lookups; eauto.
     eapply next_key_not_in; eauto.
 
   - eexists.
@@ -531,7 +531,7 @@ Proof.
     ; clean_map_lookups.
 
     eexists.
-    eapply StepSign with (c_id0 := next_key cs''); clean_map_lookups; eauto.
+    eapply StepSign with (c_id := next_key cs''); clean_map_lookups; eauto.
     eapply next_key_not_in; eauto.
 
   - keys_and_permissions_prop.
@@ -553,7 +553,7 @@ Proof.
 
   - eexists.
     
-    eapply StepGenerateKey with (k_id0 := next_key gks''); clean_map_lookups; eauto.
+    eapply StepGenerateKey with (k_id := next_key gks''); clean_map_lookups; eauto.
     eapply next_key_not_in; eauto.
 
     Unshelve.
@@ -752,14 +752,14 @@ Proof.
       dt x
       ; eapply H4
       ; econstructor 1; eauto
-      ; eapply StepUser with (u_id0 := uid)
+      ; eapply StepUser with (u_id := uid)
       ; unfold build_data_step, buildUniverse; simpl
       ; eauto.
 
       dt x0
       ; eapply H4
       ; econstructor 1; eauto
-      ; eapply StepUser with (u_id0 := uid)
+      ; eapply StepUser with (u_id := uid)
       ; unfold build_data_step, buildUniverse; simpl
       ; eauto.
 

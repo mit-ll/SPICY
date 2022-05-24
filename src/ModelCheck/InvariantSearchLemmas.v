@@ -163,7 +163,7 @@ Proof.
     split_ex; eauto.
     dt x.
     eexists; econstructor; eauto.
-  - eexists; eapply StepEncrypt with (c_id0 := next_key cs''); eauto using Maps.next_key_not_in
+  - eexists; eapply StepEncrypt with (c_id := next_key cs''); eauto using Maps.next_key_not_in
     ; process_stuff.
     
   - eexists; econstructor; trivial.
@@ -171,11 +171,11 @@ Proof.
     process_stuff; split_ors; clean_map_lookups; eauto.
     process_stuff; split_ors; clean_map_lookups; eauto.
     all: eauto.
-  - eexists; eapply StepSign with (c_id0 := next_key cs''); eauto using Maps.next_key_not_in
+  - eexists; eapply StepSign with (c_id := next_key cs''); eauto using Maps.next_key_not_in
     ; process_stuff.
   - eexists; econstructor; eauto
     ; process_stuff.
-  - eexists; eapply StepGenerateKey with (k_id0 := next_key gks''); eauto using Maps.next_key_not_in.
+  - eexists; eapply StepGenerateKey with (k_id := next_key gks''); eauto using Maps.next_key_not_in.
 
     Unshelve.
     auto.

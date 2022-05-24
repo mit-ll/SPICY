@@ -753,8 +753,9 @@ Section CommutationLemmas.
         generalize NA; intros NACMD2
         ; eapply step_na_not_return in NA; eauto; split_ex; subst; try congruence
         ; eapply syntactically_safe_na in SS; eauto; split_ex
-        ; eapply commutes_sound_recur_cmd1' with (cmd2 := cmd1) (cmd3 := c) in STEP; eauto
+        ; eapply commutes_sound_recur_cmd1' with (cmd1 := cmd1) (cmd2 := c) in STEP; eauto
       end.
+    
 
     all: setup u_id1 cmd1; split_ex; subst;
         (do 10 eexists); repeat simple apply conj; try reflexivity; eauto.
@@ -1067,7 +1068,7 @@ Section TimeMeasures.
       eapply IHboundRunningTimeUniv in H3; split_ex; eauto.
       eexists; repeat simple apply conj; eauto.
       rewrite <- Nat.add_sub_assoc by lia.
-      eapply BrtRecur with (uid1 := uid); eauto.
+      eapply BrtRecur with (uid := uid); eauto.
       clean_map_lookups; trivial.
 
       assert (RW : us $- uid0 $- uid = us $- uid $- uid0).
@@ -1114,7 +1115,7 @@ Section TimeMeasures.
 
       specialize (IHboundRunningTimeUniv _ ARG); clear ARG.
 
-      eapply BrtRecur with (uid0 := uid) (u0 := x); try assumption.
+      eapply BrtRecur with (uid := uid) (u := x); try assumption.
       rewrite <- H5; assumption.
       eapply IHboundRunningTimeUniv; intros; eauto.
 
@@ -1538,11 +1539,11 @@ Proof.
      (* both users creating ciphers *)
      step_usr_id uid1; clean_map_lookups; (do 11 eexists);
        match goal with
-       | [ |- context [ cs $+ (?cid,?c) ]] => eapply StepEncrypt with (c_id0 := next_key (cs $+ (cid,c)))
+       | [ |- context [ cs $+ (?cid,?c) ]] => eapply StepEncrypt with (c_id := next_key (cs $+ (cid,c)))
        end; clean_map_lookups; eauto using next_key_not_in.
      step_usr_id uid1; clean_map_lookups; (do 11 eexists);
        match goal with
-       | [ |- context [ cs $+ (?cid,?c) ]] => eapply StepEncrypt with (c_id0 := next_key (cs $+ (cid,c)))
+       | [ |- context [ cs $+ (?cid,?c) ]] => eapply StepEncrypt with (c_id := next_key (cs $+ (cid,c)))
        end; clean_map_lookups; eauto using next_key_not_in.
 
     step_usr_id uid1; clean_map_lookups.
@@ -1570,11 +1571,11 @@ Proof.
 
     (do 11 eexists).
       match goal with
-      | [ |- context [ cs $+ (?cid,?c) ]] => eapply StepSign with (c_id0 := next_key (cs $+ (cid,c)))
+      | [ |- context [ cs $+ (?cid,?c) ]] => eapply StepSign with (c_id := next_key (cs $+ (cid,c)))
       end; clean_map_lookups; eauto using next_key_not_in.
     (do 11 eexists).
       match goal with
-      | [ |- context [ cs $+ (?cid,?c) ]] => eapply StepSign with (c_id0 := next_key (cs $+ (cid,c)))
+      | [ |- context [ cs $+ (?cid,?c) ]] => eapply StepSign with (c_id := next_key (cs $+ (cid,c)))
       end; clean_map_lookups; eauto using next_key_not_in.
 
     eapply IHsummarize in H7; eauto.
@@ -1598,7 +1599,7 @@ Proof.
 
     (do 11 eexists).
       match goal with
-      | [ |- context [ gks $+ (?kid,?k) ]] => eapply StepGenerateKey with (k_id0 := next_key (gks $+ (kid,k)))
+      | [ |- context [ gks $+ (?kid,?k) ]] => eapply StepGenerateKey with (k_id := next_key (gks $+ (kid,k)))
       end; clean_map_lookups; eauto using next_key_not_in.
 
     eapply IHsummarize in H7; eauto.
@@ -2226,7 +2227,7 @@ Proof.
       2 : {
         intros.
         destruct (uid0 ==n u_id2); subst; clean_map_lookups; eauto.
-        destruct userData2; eapply step_back_into_other_user with (u_id3 := u_id2) in H12; eauto.
+        destruct userData2; eapply step_back_into_other_user with (u_id2 := u_id2) in H12; eauto.
         split_ors; split_ex; eauto.
       }
       split_ex; subst.
@@ -2286,7 +2287,7 @@ Proof.
       2 : {
         intros.
         destruct (uid0 ==n u_id2); subst; clean_map_lookups; eauto.
-        destruct userData2; eapply step_back_into_other_user with (u_id3 := u_id2) in H16; eauto.
+        destruct userData2; eapply step_back_into_other_user with (u_id2 := u_id2) in H16; eauto.
         split_ors; split_ex; eauto.
       }
       split_ex; subst.
@@ -2360,7 +2361,7 @@ Proof.
       2 : {
         intros.
         destruct (uid0 ==n u_id2); subst; clean_map_lookups; eauto.
-        destruct userData2; eapply step_back_into_other_user with (u_id3 := u_id2) in H15; eauto.
+        destruct userData2; eapply step_back_into_other_user with (u_id2 := u_id2) in H15; eauto.
         split_ors; split_ex; eauto.
       }
       split_ex; subst.
@@ -2414,7 +2415,7 @@ Proof.
       2 : {
         intros.
         destruct (uid0 ==n u_id2); subst; clean_map_lookups; eauto.
-        destruct userData2; eapply step_back_into_other_user with (u_id3 := u_id2) in H15; eauto.
+        destruct userData2; eapply step_back_into_other_user with (u_id2 := u_id2) in H15; eauto.
         split_ors; split_ex; eauto.
       }
       split_ex; subst.

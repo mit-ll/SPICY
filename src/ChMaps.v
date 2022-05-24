@@ -93,7 +93,7 @@ End ChannelType.
 
 Definition combine (ch1 ch2 : channel_id) :=
   match (ch1, ch2) with
-  | (Single n, Single n') => if n <? n'
+  | (Single n, Single n') => if Nat.ltb n n'
                             then Some (Intersection n' n)
                             else Some (Intersection n n')
   | _ => None

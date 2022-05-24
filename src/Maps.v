@@ -531,10 +531,10 @@ Module MyOrderedMap (OT : UsualOrderedType).
     Proof.
       intros.
       rewrite Forall_natmap_forall in *; intros.
-      assert (P v) by (eapply H with (k0:=k); clean_map_lookups; trivial).
+      assert (P v) by (eapply H with (k:=k); clean_map_lookups; trivial).
       split; auto; intros.
       destruct (eq_dec k k0); subst; clean_map_lookups; eauto.
-      eapply H with (k0:=k0); clean_map_lookups; trivial.
+      eapply H with (k:=k0); clean_map_lookups; trivial.
     Qed.
 
   End MapPredicates.

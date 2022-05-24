@@ -551,7 +551,7 @@ Section SingleAdversarySimulates.
           eapply clean_messages_list_in_safe in H8; split_ex.
           eapply H7 in H8; split_ex; eauto 8.
 
-      - eapply StepSend with (rec_u0 := {| key_heap := clean_key_permissions (findUserKeys usrs) rec_u.(key_heap)
+      - eapply StepSend with (rec_u := {| key_heap := clean_key_permissions (findUserKeys usrs) rec_u.(key_heap)
                                          ; protocol := rec_u.(protocol)
                                          ; msg_heap := clean_messages (findUserKeys usrs) cs' (Some rec_u_id) rec_u.(from_nons) rec_u.(msg_heap)
                                          ; c_heap   := rec_u.(c_heap)
@@ -2111,17 +2111,17 @@ Section SingleAdversarySimulates.
         apply H0 in H5; split_ors; xx; eauto.
 
       - xx.
-        eexists; eapply StepEncrypt with (c_id0 := next_key cs0); eauto.
+        eexists; eapply StepEncrypt with (c_id := next_key cs0); eauto.
         clean_map_lookups; apply next_key_not_in; trivial.
         xx; eauto.
 
       - xx.
-        eexists; eapply StepSign with (c_id0 := next_key cs0); eauto.
+        eexists; eapply StepSign with (c_id := next_key cs0); eauto.
         clean_map_lookups; apply next_key_not_in; trivial.
         xx; eauto.
 
       - xx.
-        eexists; eapply StepGenerateKey with (k_id0 := next_key gks0); eauto.
+        eexists; eapply StepGenerateKey with (k_id := next_key gks0); eauto.
         clean_map_lookups; apply next_key_not_in; trivial.
 
         Unshelve.
@@ -2562,14 +2562,14 @@ Section SingleAdversarySimulates.
 
     intuition idtac.
     - rewrite strip_adv_simpl_peel_same_as_strip_adv in *.
-      eapply simulates_with_adversary_silent with (b0 := b); eauto.
+      eapply simulates_with_adversary_silent with (b := b); eauto.
 
     - eapply simulates_with_adversary_labeled; eauto.
 
     - subst.
       unfold honest_actions_safe; intros.
 
-      apply honest_cmds_safe_advuniv with (b0:=b).
+      apply honest_cmds_safe_advuniv with (b:=b).
       eapply H__honactsafe;
         eauto using ok_universe_strip_adversary_still_ok.
 
@@ -2577,7 +2577,7 @@ Section SingleAdversarySimulates.
       unfold ri_final_actions_align in *; intros.
       
       rewrite strip_adv_simpl_peel_same_as_strip_adv
-      , strip_adversary_same_as_peel_strip_simpl with (b0 := b) in H3.
+      , strip_adversary_same_as_peel_strip_simpl with (b := b) in H3.
 
       assert (universe_ok (strip_adversary_univ U__r0 b)) as UOK__stripped
           by eauto using ok_universe_strip_adversary_still_ok.
@@ -2773,7 +2773,7 @@ Proof.
       destruct STEPPED as [U__i' STEPPED]; split_ands.
 
     rewrite strip_adv_simpl_peel_same_as_strip_adv in H7.
-    rewrite strip_adversary_same_as_peel_strip_simpl with (b0:=b) in H7.
+    rewrite strip_adversary_same_as_peel_strip_simpl with (b:=b) in H7.
     remember (fun (ur : RealWorld.simpl_universe A) (ui : IdealWorld.universe A) => R (strip_adversary_simpl ur) ui) as R'.
     assert (R' (RealWorld.peel_adv U') U__i') as INR' by (subst; eauto).
 
@@ -2794,7 +2794,7 @@ Proof.
       destruct STEPPED as [U__i'' STEPPPED]; split_ands.
 
     rewrite strip_adv_simpl_peel_same_as_strip_adv in H10.
-    rewrite strip_adversary_same_as_peel_strip_simpl with (b0:=b) in H10.
+    rewrite strip_adversary_same_as_peel_strip_simpl with (b:=b) in H10.
     remember (fun (ur : RealWorld.simpl_universe A) (ui : IdealWorld.universe A) => R (strip_adversary_simpl ur) ui) as R'.
 
     assert (R' (RealWorld.peel_adv U') U__i'') as INR' by (subst; eauto).
@@ -2802,7 +2802,7 @@ Proof.
     rewrite HeqR'.
     rewrite <- strip_adversary_same_as_peel_strip_simpl
           , strip_adv_simpl_strip_adv_idempotent
-          , strip_adversary_same_as_peel_strip_simpl with (b0:=b).
+          , strip_adversary_same_as_peel_strip_simpl with (b:=b).
     rewrite strip_adv_simpl_peel_same_as_strip_adv in H6; assumption.
 
     assert (universe_ok (strip_adversary_univ U b))
